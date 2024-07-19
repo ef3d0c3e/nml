@@ -1,11 +1,37 @@
 [package]
-name = "rust_learn"
+name = "nml"
 version = "0.1.0"
 edition = "2021"
+license = "GNU AGPL3"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "nml"
+path = "src/main.rs"
+
+[[bin]]
+name = "nmlls"
+path = "src/server.rs"
+
+[profile.profiling]
+inherits = "release"
+debug = true
 
 [dependencies]
-crossbeam-utils = "0.8.19"
-files = "2.2.3"
+ariadne = "0.4.1"
+dashmap = "6.0.1"
+downcast-rs = "1.2.1"
+getopts = "0.2.21"
+lazy_static = "1.5.0"
+lsp-server = "0.7.6"
+lsp-types = "0.97.0"
+mlua = { version = "0.9.9", features = ["lua54", "vendored"] }
 regex = "1.10.3"
+rusqlite = "0.31.0"
+rust-crypto = "0.2.36"
+serde = "1.0.204"
+serde_json = "1.0.120"
+syntect = "5.2.0"
+tokio = { version = "1.38.1", features = ["macros", "rt-multi-thread", "io-std"]}
+
+tower-lsp = "0.20.0"
+unicode-segmentation = "1.11.0"

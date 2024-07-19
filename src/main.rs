@@ -1,110 +1,110 @@
+#![feature(char_indices_offset)]
+mod document;
+mod compiler;
 mod parser;
-use self::parser::rule::SyntaxRule;
-use self::parser::section::SectionRule;
-mod files;
-use self::files::file::File;
-use self::files::cursor::Cursor;
-mod syntax;
-use syntax::element::Element;
-use syntax::element::Text;
+mod elements;
+mod lua;
+mod cache;
+
+use std::{env, rc::Rc};
+
+use compiler::compiler::Compiler;
+use getopts::Options;
+use parser::{langparser::LangParser, parser::Parser};
+
+use crate::parser::source::SourceFile;
+extern crate getopts;
+
+fn print_usage(program: &str, opts: Options) {
+    let brief = format!("Usage: {} -i FILE [options]", program);
+    print!("{}", opts.usage(&brief));
+}
+
+fn print_version()
+{
+	print!("NML -- Not a Markup Language
+Copyright (c) 2024
+NML is licensed under the GNU Affero General Public License version 3 (AGPLv3),
+under the terms of the Free Software Foundation <https://www.gnu.org/licenses/agpl-3.0.en.html>.
+
+This program is free software; you may modify and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+NML version: 0.4\n");
+}
 
 fn main() {
-    let file = File::new(String::from("./test.nml"));
-    let mut cursor = Cursor::new(&file).unwrap();
-    cursor.position = 5;
+    let args: Vec<String> = env::args().collect();
+    let program = args[0].clone();
 
-    let rule_se = SectionRule::new();
-    let (token, res) = rule_se.on_match(&cursor).unwrap();
-    println!("{}", res.elements.len());
+	let mut opts = Options::new();
+	opts.optopt("i", "", "Input file", "FILE");
+	opts.optopt("d", "database", "Cache database location", "PATH");
+	opts.optmulti("z", "debug", "Debug options", "OPTS");
+	opts.optflag("h", "help", "Print this help menu");
+	opts.optflag("v", "version", "Print program version and licenses");
+
+	let matches = match opts.parse(&args[1..]) {
+		Ok(m) => { m }
+		Err(f) => { panic!("{}", f.to_string()) }
+	};
+	if matches.opt_present("v")
+	{
+		print_version();
+		return;
+	}
+	if matches.opt_present("h") {
+		print_usage(&program, opts);
+		return;
+	}
+	if !matches.opt_present("i") {
+		print_usage(&program, opts);
+		return;
+	}
+
+	let input = matches.opt_str("i").unwrap();
+	let debug_opts = matches.opt_strs("z");
+	let db_path = matches.opt_str("d");
+
+	let parser = LangParser::default();
+
+	// Parse
+	let source = SourceFile::new(input.to_string(), None).unwrap();
+	let doc = parser.parse(Rc::new(source), None);
+
+	if debug_opts.contains(&"ast".to_string())
+	{
+		println!("-- BEGIN AST DEBUGGING --");
+		doc.content.borrow().iter().for_each(|elem| {
+			println!("{}", (elem).to_string())
+		});
+		println!("-- END AST DEBUGGING --");
+	}
 
 
-    /*
-    let re_sections = regex::Regex::new(r"(?:^|\n)(#{1,})(\*|\+)((?:\t| ){0,})(.*)").unwrap();
+	if debug_opts.contains(&"ref".to_string())
+	{
+		println!("-- BEGIN REFERENCES DEBUGGING --");
+		let sc = doc.scope.borrow();
+		sc.referenceable.iter().for_each(|(name, pos)| {
+			println!(" - {name}: `{:#?}`", doc.content.borrow()[*pos]);
+		});
+		println!("-- END REFERENCES DEBUGGING --");
+	}
+	if debug_opts.contains(&"var".to_string())
+	{
+		println!("-- BEGIN VARIABLES DEBUGGING --");
+		let sc = doc.scope.borrow();
+		sc.variables.iter().for_each(|(_name, var)| {
+			println!(" - `{:#?}`", var);
+		});
+		println!("-- END VARIABLES DEBUGGING --");
+	}
 
-    //let mut validators = Vec::<Box<dyn GroupValidator>>::new();
-    let f = File::new(Box::new(std::path::Path::new("./test.nml")));
-    let content = std::fs::read_to_string(*f.path).unwrap();
-    
-    let grammar = vec![re_sections];
-    let mut positions = [0usize; 1];
 
-    let mut i = 0;
-    while i < content.len()
-    {
-        // Update every positions
-        for k in 0..grammar.len()
-        {
-            let rule = &grammar[k];
-            let position = &mut positions[k];
-            if *position == std::usize::MAX { continue };
+	let compiler = Compiler::new(compiler::compiler::Target::HTML, db_path);
+	let out = compiler.compile(&doc);
 
-            match rule.find_at(&content, i)
-            {
-                Some(mat) => *position = mat.start(),
-                None => *position = std::usize::MAX,
-            }
-            println!("{position}");
-        }
-
-        // Gets closest match
-        let mut next_position = std::usize::MAX;
-        let mut closest_match = std::usize::MAX;
-        for k in 0..grammar.len()
-        {
-            if positions[k] >= next_position { continue; }
-
-            next_position = positions[k];
-            closest_match = k;
-        }
-
-        println!("Unmatched: {}", &content[i..next_position]);
-
-        // No matches left
-        if closest_match == std::usize::MAX
-        {
-            println!("Done");
-            break;
-        }
-
-        // Extract matches from rule
-        i = next_position; // Set to begining of match
-        let mat = &grammar[closest_match].captures_at(&content, i).unwrap(); // Capture match
-        for m in 0..mat.len()
-        {
-            match mat.get(m)
-            {
-                Some(s) => { 
-                    println!("Group {m}: `{}`", s.as_str());
-                },
-                None => println!("Group {m}: None"),
-            }
-        }
-
-        i += mat.get(0).unwrap().len(); // Add match length
-        println!("Left={}", &content[i..]);
-        println!("pos={i}");
-
-        let mut s = String::new();
-        std::io::stdin().read_line(&mut s).expect("Did not enter a correct string");
-    }
-    */
-    
-
-    
-    /*
-    validators.push(Box::new(StringValidator::new("Depth".to_string(), |_group| -> ValidationStatus {
-        ValidationStatus::Ok()
-    })));
-    validators.push(Box::new(StringValidator::new("Index Type".to_string(), |group| -> ValidationStatus {
-        match group
-        {
-            "" => ValidationStatus::Ok(),
-            "*" => ValidationStatus::Ok(),
-            _ => ValidationStatus::Error("")
-        }
-        ValidationStatus::Ok()
-    })));
-    */
-    //let _sec_rule = SyntaxRule::new("Section".to_string(), r"(?m)(?:^|\n)(#{1,})(\\*|\\+)((?:\t| ){0,})(.*)", validators).unwrap();
+	std::fs::write("a.html", out).unwrap();
 }
 
