@@ -8,7 +8,7 @@ use crate::document::document::Document;
 use super::{parser::Parser, source::Source};
 
 /// Scope for state objects
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq, PartialOrd, Debug)]
 pub enum Scope
 {
 	/// Global state
@@ -31,7 +31,15 @@ pub trait State: Downcast
 }
 impl_downcast!(State);
 
+impl core::fmt::Debug for dyn State
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "State{{Scope: {:#?}}}", self.scope())
+    }
+}
+
 /// Object owning all the states
+#[derive(Debug)]
 pub struct StateHolder
 {
 	data: HashMap<String, Rc<RefCell<dyn State>>>

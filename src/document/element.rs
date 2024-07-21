@@ -63,33 +63,3 @@ pub trait ReferenceableElement : Element {
     /// Reference name
 	fn reference_name(&self) -> Option<&String>;
 }
-
-#[derive(Debug)]
-pub struct Text
-{
-    location: Token,
-	content: String,
-}
-
-impl Text
-{
-	pub fn new(location: Token, content: String) -> Text
-	{
-		Text {
-            location: location,
-			content: content
-		}
-	}
-}
-
-impl Element for Text
-{
-    fn location(&self) -> &Token { &self.location }
-    fn kind(&self) -> ElemKind { ElemKind::Inline }
-	fn element_name(&self) -> &'static str { "Text" }
-    fn to_string(&self) -> String { format!("{self:#?}") }
-
-    fn compile(&self, compiler: &Compiler, _document: &Document) -> Result<String, String> {
-        Ok(compiler.sanitize(self.content.as_str()))
-    }
-}

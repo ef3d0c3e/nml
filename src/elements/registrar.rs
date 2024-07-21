@@ -1,6 +1,6 @@
 use crate::parser::parser::Parser;
 
-use super::{code::CodeRule, comment::CommentRule, import::ImportRule, link::LinkRule, list::ListRule, paragraph::ParagraphRule, raw::RawRule, script::ScriptRule, section::SectionRule, style::StyleRule, tex::TexRule, variable::{VariableRule, VariableSubstitutionRule}};
+use super::{code::CodeRule, comment::CommentRule, import::ImportRule, link::LinkRule, list::ListRule, paragraph::ParagraphRule, raw::RawRule, script::ScriptRule, section::SectionRule, style::StyleRule, tex::TexRule, text::TextRule, variable::{VariableRule, VariableSubstitutionRule}};
 
 
 pub fn register<P: Parser>(parser: &mut P)
@@ -19,4 +19,5 @@ pub fn register<P: Parser>(parser: &mut P)
     parser.add_rule(Box::new(StyleRule::new()), None);
     parser.add_rule(Box::new(SectionRule::new()), None);
     parser.add_rule(Box::new(LinkRule::new()), None);
+    parser.add_rule(Box::new(TextRule::default()), None);
 }

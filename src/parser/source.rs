@@ -2,6 +2,7 @@ use std::{fs, ops::Range, rc::Rc};
 use core::fmt::Debug;
 
 use downcast_rs::{impl_downcast, Downcast};
+use serde::{Deserialize, Serialize};
 
 /// Trait for source content
 pub trait Source: Downcast
@@ -69,6 +70,15 @@ impl SourceFile
             }),
 		}
     }
+
+	pub fn with_content(path: String, content: String, location: Option<Token>) -> Self
+	{
+		Self {
+			location: location,
+			path: path,
+			content: content,
+		}
+	}
 }
 
 impl Source for SourceFile

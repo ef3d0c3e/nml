@@ -1,3 +1,4 @@
+use mlua::{Function, Lua};
 use regex::{Captures, Regex};
 use crate::{compiler::compiler::{Compiler, Target}, document::element::{ElemKind, Element}, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, state::State}};
 use ariadne::{Fmt, Label, Report, ReportKind};
@@ -182,4 +183,6 @@ impl RegexRule for StyleRule
 		return result;
 	}
 
+	// TODO
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

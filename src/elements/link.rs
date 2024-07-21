@@ -1,4 +1,6 @@
+use mlua::{Function, Lua};
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use crate::parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, util};
 use ariadne::{Report, Fmt, Label, ReportKind};
 use crate::{compiler::compiler::{Compiler, Target}, document::{document::Document, element::{ElemKind, Element}}};
@@ -146,4 +148,7 @@ impl RegexRule for LinkRule {
 
         return result;
 	}
+
+	// TODO
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

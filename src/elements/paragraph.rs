@@ -1,6 +1,7 @@
 use std::{any::Any, ops::Range, rc::Rc};
 
 use ariadne::Report;
+use mlua::{Function, Lua};
 use regex::Regex;
 
 use crate::{compiler::compiler::{Compiler, Target}, document::{document::Document, element::{ElemKind, Element}}, parser::{parser::Parser, rule::Rule, source::{Cursor, Source, Token}}};
@@ -124,4 +125,7 @@ impl Rule for ParagraphRule
 
 		(end_cursor, Vec::new())
     }
+
+	// TODO
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

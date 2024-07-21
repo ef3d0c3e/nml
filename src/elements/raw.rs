@@ -1,3 +1,4 @@
+use mlua::{Function, Lua};
 use regex::{Captures, Regex};
 use crate::{compiler::compiler::Compiler, document::element::{ElemKind, Element}, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, util::{self, Property, PropertyParser}}};
 use ariadne::{Fmt, Label, Report, ReportKind};
@@ -161,4 +162,7 @@ impl RegexRule for RawRule
 
         reports
     }
+
+	// TODO
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

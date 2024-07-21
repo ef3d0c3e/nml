@@ -1,3 +1,4 @@
+use mlua::{Function, Lua};
 use regex::{Captures, Regex};
 use crate::parser::{parser::Parser, rule::RegexRule, source::{Source, Token}};
 use ariadne::{Report, Label, ReportKind};
@@ -78,4 +79,6 @@ impl RegexRule for CommentRule {
 
         return reports;
 	}
+
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

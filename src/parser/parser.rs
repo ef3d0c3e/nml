@@ -1,7 +1,5 @@
 use std::any::Any;
-use std::cell::{Ref, RefCell, RefMut};
-use std::collections::{HashMap, HashSet};
-use std::ops::Range;
+use std::cell::{Ref, RefMut};
 use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -11,8 +9,9 @@ use super::state::StateHolder;
 use crate::document::document::Document;
 use crate::document::element::Element;
 use ariadne::Color;
-use crate::lua::kernel::{Kernel, KernelHolder};
+use crate::lua::kernel::KernelHolder;
 
+#[derive(Debug)]
 pub struct ReportColors
 {
 	pub error: Color,

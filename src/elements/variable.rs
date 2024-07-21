@@ -1,3 +1,4 @@
+use mlua::{Function, Lua};
 use regex::Regex;
 use crate::parser::{parser::{Parser, ReportColors}, rule::RegexRule, source::{Source, Token}};
 use ariadne::{Report, Fmt, Label, ReportKind};
@@ -19,7 +20,6 @@ impl VariableRule {
             ]
         }
 	}
-
 
     pub fn make_variable(&self, colors: &ReportColors, location: Token, kind: usize, name: String, value: String) -> Result<Rc<dyn Variable>, String>
     {
@@ -88,6 +88,8 @@ impl RegexRule for VariableRule {
 	fn name(&self) -> &'static str { "Variable" }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
+
+
 
 	fn on_regex_match(&self, _: usize, parser: &dyn Parser, document: &Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>
 	{
@@ -197,6 +199,9 @@ impl RegexRule for VariableRule {
 
         return result;
 	}
+
+	// TODO
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }
 
 pub struct VariableSubstitutionRule
@@ -326,4 +331,7 @@ impl RegexRule for VariableSubstitutionRule
 
         return result;
     }
+
+	// TODO
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

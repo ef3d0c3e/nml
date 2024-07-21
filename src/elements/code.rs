@@ -2,6 +2,7 @@ use std::{collections::HashMap, ops::Range, rc::Rc, sync::Once};
 
 use ariadne::{Fmt, Label, Report, ReportKind};
 use crypto::{digest::Digest, sha2::Sha512};
+use mlua::{Function, Lua};
 use regex::{Captures, Regex};
 use syntect::{easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet};
 
@@ -387,4 +388,7 @@ impl RegexRule for CodeRule
 
 		reports
     }
+
+	// TODO
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

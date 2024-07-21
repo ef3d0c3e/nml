@@ -2,6 +2,7 @@ use std::{io::{Read, Write}, ops::Range, process::{Command, Stdio}, rc::Rc, sync
 
 use ariadne::{Fmt, Label, Report, ReportKind};
 use crypto::{digest::Digest, sha2::Sha512};
+use mlua::{Function, Lua};
 use regex::{Captures, Regex};
 
 use crate::{cache::cache::{Cached, CachedError}, compiler::compiler::{Compiler, Target}, document::{document::Document, element::{ElemKind, Element}}, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, util}};
@@ -260,4 +261,7 @@ impl RegexRule for TexRule
 
 		reports
     }
+
+	// TODO
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

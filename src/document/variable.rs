@@ -1,6 +1,6 @@
 use std::{path::PathBuf, rc::Rc};
-use crate::parser::{parser::Parser, source::{Source, Token, VirtualSource}};
-use super::{document::Document, element::Text};
+use crate::{elements::text::Text, parser::{parser::Parser, source::{Source, Token, VirtualSource}}};
+use super::{document::Document};
 
 
 // TODO enforce to_string(from_string(to_string())) == to_string()

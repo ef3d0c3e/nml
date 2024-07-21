@@ -1,6 +1,7 @@
 use super::parser::Parser;
 use super::source::{Cursor, Source, Token};
 use ariadne::Report;
+use mlua::{Function, Lua};
 use crate::document::document::Document;
 
 use std::any::Any;
@@ -14,6 +15,15 @@ pub trait Rule {
 	fn next_match(&self, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)>;
 	/// Callback when rule matches
 	fn on_match(&self, parser: &dyn Parser, document: &Document, cursor: Cursor, match_data: Option<Box<dyn Any>>) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>);
+	/// Export bindings to lua
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)>;
+}
+
+impl core::fmt::Debug for dyn Rule
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Rule{{{}}}", self.name())
+    }
 }
 
 /*
@@ -64,6 +74,8 @@ pub trait RegexRule
 
 	/// Callback on regex rule match
 	fn on_regex_match(&self, index: usize, parser: &dyn Parser, document: &Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>;
+
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)>;
 }
 
 impl<T: RegexRule> Rule for T {
@@ -100,4 +112,6 @@ impl<T: RegexRule> Rule for T {
 		let token_end = token.end();
 		return (cursor.at(token_end), self.on_regex_match(*index, parser, document, token, captures));
 	}
+
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { self.lua_bindings(lua) }
 }

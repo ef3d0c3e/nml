@@ -45,6 +45,15 @@ pub trait Cached
 			.map(|_| ())
 	}
 
+	/// Attempts to retrieve a cached element from the compilation database
+	/// or create it (and insert it), if it doesn't exist
+	///
+	/// # Error
+	///
+	/// Will return an error if the database connection(s) fail,
+	/// or if not cached, an error from the generator [`f`]
+	///
+	/// Note that on error, [`f`] may still have been called
 	fn cached<E, F>(&self, con: &mut Connection, f: F)
 		-> Result<<Self as Cached>::Value, CachedError<E>>
 	where

@@ -1,24 +1,28 @@
+use mlua::{Function, Lua};
 use regex::{Captures, Regex};
-use crate::{document::element::Text, lua::kernel::{Kernel, KernelHolder}, parser::{parser::{Parser, ReportColors}, rule::RegexRule, source::{Source, Token, VirtualSource}, util}};
+use crate::{lua::kernel::{Kernel, KernelContext, KernelHolder}, parser::{parser::{Parser, ReportColors}, rule::RegexRule, source::{Source, Token, VirtualSource}, util}};
 use ariadne::{Fmt, Label, Report, ReportKind};
 use crate::document::document::Document;
 use std::{ops::Range, rc::Rc};
 
+use super::text::Text;
+
 pub struct ScriptRule
 {
 	re: [Regex; 2],
-	eval_kinds: [(&'static str, &'static str); 2]
+	eval_kinds: [(&'static str, &'static str); 3]
 }
 
 impl ScriptRule {
 	pub fn new() -> Self {
 		Self {
             re: [
-				Regex::new(r"(?:^|\n)@<(?:(.*)\n?)((?:\\.|[^\[\]\\])*?)(?:\n?)>@").unwrap(),
-				Regex::new(r"%<([^\s[:alpha:]])?(?:\[(.*?)\])?((?:\\.|[^\[\]\\])*?)(?:\n?)>%").unwrap()
+				Regex::new(r"(?:^|\n)@<(?:(.*)\n?)((?:\\.|[^\\\\])*?)(?:\n?)>@").unwrap(),
+				Regex::new(r"%<([^\s[:alpha:]])?(?:\[(.*?)\])?((?:\\.|[^\\\\])*?)(?:\n?)>%").unwrap()
 			],
 			eval_kinds: [
-				("", "Eval to text"),
+				("", "Eval"),
+				("\"", "Eval to text"),
 				("!", "Eval and parse"),
 			]
         }
@@ -87,7 +91,7 @@ impl RegexRule for ScriptRule
 			})
 			.unwrap_or("main");
 		let kernel = parser.get_kernel(kernel_name).unwrap_or_else(|| {
-			parser.insert_kernel(kernel_name.to_string(), Kernel::new())
+			parser.insert_kernel(kernel_name.to_string(), Kernel::new(parser))
 		});
 
 		let kernel_data = matches.get(if index == 0 {2} else {3})
@@ -115,15 +119,16 @@ impl RegexRule for ScriptRule
 			format!("{}#{}:lua_kernel@{kernel_name}", token.source().name(), matches.get(0).unwrap().start()),
 			util::process_escaped('\\', ">@", kernel_content)
 		)) as Rc<dyn Source>;
-		
-		let chunk = kernel.lua.load(source.content())
-			.set_name(kernel_name);
-		if index == 0 // @< ... >@ -> Exec
+
+		let execute = |lua: &Lua|
 		{
-			match chunk.exec()
+			let chunk = lua.load(source.content())	
+				.set_name(kernel_name);
+
+			if index == 0 // Exec
 			{
-				Ok(_) => {},
-				Err(e) => {
+				if let Err(e) = chunk.exec()
+				{
 					reports.push(
 						Report::build(ReportKind::Error, source.clone(), 0)
 						.with_message("Invalid kernel code")
@@ -132,70 +137,99 @@ impl RegexRule for ScriptRule
 							.with_message(format!("Kernel execution failed:\n{}", e.to_string()))
 							.with_color(parser.colors().error))
 						.finish());
-						}
+					return reports;
+				}
 			}
-		}
-		else if index == 1 // %< ... >% -> Eval
-		{
-			let kind = match matches.get(1) {
-				None => 0,
-				Some(kind) => {
-					match self.validate_kind(parser.colors(), kind.as_str())
+			else // Eval
+			{
+				// Validate kind
+				let kind = match matches.get(1) {
+					None => 0,
+					Some(kind) => {
+						match self.validate_kind(parser.colors(), kind.as_str())
+						{
+							Ok(kind) => kind,
+							Err(msg) => {
+								reports.push(
+									Report::build(ReportKind::Error, token.source(), kind.start())
+									.with_message("Invalid kernel code kind")
+									.with_label(
+										Label::new((token.source(), kind.range()))
+										.with_message(msg)
+										.with_color(parser.colors().error))
+									.finish());
+								return reports;
+							}
+						}
+					}
+				};
+				
+				if kind == 0 // Eval
+				{
+					if let Err(e) = chunk.eval::<()>()
 					{
-						Ok(kind) => kind,
-						Err(msg) => {
+						reports.push(
+							Report::build(ReportKind::Error, source.clone(), 0)
+							.with_message("Invalid kernel code")
+							.with_label(
+								Label::new((source.clone(), 0..source.content().len()))
+								.with_message(format!("Kernel evaluation failed:\n{}", e.to_string()))
+								.with_color(parser.colors().error))
+							.finish());
+					}
+				}
+				else // Eval to string
+				{
+					match chunk.eval::<String>()
+					{
+						Ok(result) => {
+							if kind == 1 // Eval to text
+							{
+								if !result.is_empty()
+								{
+									parser.push(document, Box::new(Text::new(
+										Token::new(1..source.content().len(), source.clone()),
+										util::process_text(document, result.as_str()),
+									)));
+								}
+							}
+							else if kind == 2 // Eval and Parse
+							{
+								let parse_source = Rc::new(VirtualSource::new(
+										Token::new(0..source.content().len(), source.clone()),
+										format!("parse({})", source.name()),
+										result
+								)) as Rc<dyn Source>;
+
+								parser.parse_into(parse_source, document);
+							}
+						},
+						Err(e) => {
 							reports.push(
-								Report::build(ReportKind::Error, token.source(), kind.start())
-								.with_message("Invalid kernel code kind")
+								Report::build(ReportKind::Error, source.clone(), 0)
+								.with_message("Invalid kernel code")
 								.with_label(
-									Label::new((token.source(), kind.range()))
-									.with_message(msg)
+									Label::new((source.clone(), 0..source.content().len()))
+									.with_message(format!("Kernel evaluation failed:\n{}", e.to_string()))
 									.with_color(parser.colors().error))
 								.finish());
-							return reports;
 						}
 					}
-				}
-			};
-
-			match chunk.eval::<String>()
-			{
-				Ok(result) => {
-					if kind == 0 // Eval to text
-					{
-						if !result.is_empty()
-						{
-							parser.push(document, Box::new(Text::new(
-							Token::new(1..source.content().len(), source.clone()),
-							util::process_text(document, result.as_str()),
-							)));
-						}
-					}
-					else if kind == 1 // Eval and Parse
-					{
-						let parse_source = Rc::new(VirtualSource::new(
-							Token::new(0..source.content().len(), source.clone()),
-							format!("parse({})", source.name()),
-							result
-						)) as Rc<dyn Source>;
-						//println!("SRC={parse_source:#?}, {}", parse_source.content());
-
-						parser.parse_into(parse_source, document);
-					}
-				},
-				Err(e) => {
-					reports.push(
-						Report::build(ReportKind::Error, source.clone(), 0)
-						.with_message("Invalid kernel code")
-						.with_label(
-							Label::new((source.clone(), 0..source.content().len()))
-							.with_message(format!("Kernel evaluation failed:\n{}", e.to_string()))
-							.with_color(parser.colors().error))
-						.finish());
 				}
 			}
-		}
 
-        reports
+			reports
+		};
+
+		let ctx = KernelContext {
+			location: Token::new(0..source.content().len(), source.clone()),
+			parser,
+			document
+		};
+
+		kernel.run_with_context(ctx, execute)
     }
+
+	// TODO
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

@@ -2,6 +2,7 @@ use std::{any::Any, cell::Ref, ops::Range, rc::Rc};
 
 use crate::{compiler::compiler::{Compiler, Target}, document::{document::Document, element::{ElemKind, Element}}, parser::{parser::Parser, rule::Rule, source::{Cursor, Source, Token, VirtualSource}}};
 use ariadne::{Label, Report, ReportKind};
+use mlua::{Function, Lua};
 use regex::Regex;
 
 use super::paragraph::Paragraph;
@@ -332,4 +333,7 @@ impl Rule for ListRule
 
 		(end_cursor, reports)
 	}
+
+	// TODO
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

@@ -1,4 +1,5 @@
 pub mod registrar;
+pub mod text;
 pub mod comment;
 pub mod paragraph;
 pub mod variable;

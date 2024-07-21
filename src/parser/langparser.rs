@@ -2,11 +2,12 @@ use std::{cell::{RefCell, RefMut}, collections::{HashMap, HashSet}, ops::Range, 
 
 use ariadne::{Label, Report};
 
-use crate::{document::{document::Document, element::{ElemKind, Element, Text}}, elements::{paragraph::Paragraph, registrar::register}, lua::kernel::{Kernel, KernelHolder}, parser::source::{SourceFile, VirtualSource}};
+use crate::{document::{document::Document, element::{ElemKind, Element}}, elements::{paragraph::Paragraph, registrar::register, text::Text}, lua::kernel::{Kernel, KernelHolder}, parser::source::{SourceFile, VirtualSource}};
 
 use super::{parser::{Parser, ReportColors}, rule::Rule, source::{Cursor, Source, Token}, state::StateHolder, util};
 
 /// Parser for the language
+#[derive(Debug)]
 pub struct LangParser
 {
 	rules: Vec<Box<dyn Rule>>,
@@ -30,8 +31,9 @@ impl LangParser
 			kernels: RefCell::new(HashMap::new()),
 		};
 		register(&mut s);
+
 		s.kernels.borrow_mut()
-			.insert("main".to_string(), Kernel::new());
+			.insert("main".to_string(), Kernel::new(&s));
 		s
 	}
 

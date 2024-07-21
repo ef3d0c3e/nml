@@ -1,3 +1,4 @@
+use mlua::{Function, Lua};
 use regex::Regex;
 use crate::parser::{parser::{Parser, ReportColors}, rule::RegexRule, source::{Source, SourceFile, Token}};
 use ariadne::{Report, Fmt, Label, ReportKind};
@@ -152,4 +153,6 @@ impl RegexRule for ImportRule {
 
         return result;
 	}
+
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }

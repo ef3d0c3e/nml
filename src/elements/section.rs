@@ -1,23 +1,17 @@
+use mlua::{Error::BadArgument, Function, Lua};
 use regex::Regex;
-use crate::{compiler::compiler::Target, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}}};
+use crate::{compiler::compiler::Target, lua::kernel::CTX, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}}};
 use ariadne::{Report, Fmt, Label, ReportKind};
 use crate::{compiler::compiler::Compiler, document::{document::Document, element::{ElemKind, Element, ReferenceableElement}}};
-use std::{ops::Range, rc::Rc};
+use std::{ops::Range, rc::Rc, sync::Arc};
 
 #[derive(Debug)]
 pub struct Section {
-    location: Token,
-	title: String, // Section title
-	depth: usize, // Section depth
-	kind: u8, // Section kind, e.g numbered, unnumbred, ...
-	reference: Option<String>, // Section reference name
-}
-
-impl Section
-{
-    pub fn new(location: Token, title: String, depth: usize, kind: u8, reference: Option<String>) -> Self {
-        Self { location: location, title, depth, kind, reference }
-    }
+    pub(self) location: Token,
+	pub(self) title: String, // Section title
+	pub(self) depth: usize, // Section depth
+	pub(self) kind: u8, // Section kind, e.g numbered, unnumbred, ...
+	pub(self) reference: Option<String>, // Section reference name
 }
 
 impl Element for Section
@@ -194,15 +188,50 @@ impl RegexRule for SectionRule {
 		};
 
         parser.push(document, Box::new(
-            Section::new(
-				token.clone(),
-                section_name,
-                section_depth,
-                section_kind,
-                section_refname
-            )
+            Section {
+				location: token.clone(),
+                title: section_name,
+                depth: section_depth,
+                kind: section_kind,
+                reference: section_refname
+            }
         ));
 
         return result;
+	}
+
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)>
+	{
+		let mut bindings = vec![];
+
+		bindings.push(("push".to_string(), lua.create_function(
+			|_, (title, depth, kind, reference) : (String, usize, String, Option<String>)| {
+			let kind = match kind.as_str() {
+				"*+" | "+*" => section_kind::NO_NUMBER | section_kind::NO_TOC,
+				"*" => section_kind::NO_NUMBER,
+				"+" => section_kind::NO_TOC,
+				"" => section_kind::NONE,
+				_ => return Err(BadArgument {
+						to: Some("push".to_string()),
+						pos: 3,
+						name: Some("kind".to_string()),
+						cause: Arc::new(mlua::Error::external(
+									format!("Unknown section kind specified")))})
+			};
+
+			CTX.with_borrow(|ctx| ctx.as_ref().map(|ctx| {
+				ctx.parser.push(ctx.document, Box::new(Section {
+					location: ctx.location.clone(),
+					title,
+					depth,
+					kind,
+					reference
+				}));
+			}));
+
+			Ok(())
+		}).unwrap()));
+		
+		bindings
 	}
 }
