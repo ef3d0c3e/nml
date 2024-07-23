@@ -115,11 +115,11 @@ pub trait Parser: KernelHolder
 	}
 
 	/// Add an [`Element`] to the [`Document`]
-	fn push<'a>(&self, doc: &'a Document<'a>, elem: Box<dyn Element>);
+	fn push<'a>(&self, doc: &dyn Document, elem: Box<dyn Element>);
 
 	/// Parse [`Source`] into a new [`Document`]
-	fn parse<'a>(&self, source: Rc<dyn Source>, parent: Option<&'a Document<'a>>) -> Document<'a>;
+	fn parse<'a>(&self, source: Rc<dyn Source>, parent: Option<&'a dyn Document<'a>>) -> Box<dyn Document<'a>+'a>;
 
 	/// Parse [`Source`] into an already existing [`Document`]
-	fn parse_into<'a>(&self, source: Rc<dyn Source>, document: &'a Document<'a>);
+	fn parse_into<'a>(&self, source: Rc<dyn Source>, document: &'a dyn Document<'a>);
 }

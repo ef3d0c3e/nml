@@ -75,26 +75,27 @@ fn main() {
 	if debug_opts.contains(&"ast".to_string())
 	{
 		println!("-- BEGIN AST DEBUGGING --");
-		doc.content.borrow().iter().for_each(|elem| {
+		doc.content().borrow().iter().for_each(|elem| {
 			println!("{}", (elem).to_string())
 		});
 		println!("-- END AST DEBUGGING --");
 	}
 
 
-	if debug_opts.contains(&"ref".to_string())
-	{
-		println!("-- BEGIN REFERENCES DEBUGGING --");
-		let sc = doc.scope.borrow();
-		sc.referenceable.iter().for_each(|(name, pos)| {
-			println!(" - {name}: `{:#?}`", doc.content.borrow()[*pos]);
-		});
-		println!("-- END REFERENCES DEBUGGING --");
-	}
+	// TODO
+	//if debug_opts.contains(&"ref".to_string())
+	//{
+	//	println!("-- BEGIN REFERENCES DEBUGGING --");
+	//	let sc = doc.scope.borrow();
+	//	sc.referenceable.iter().for_each(|(name, pos)| {
+	//		println!(" - {name}: `{:#?}`", doc.content.borrow()[*pos]);
+	//	});
+	//	println!("-- END REFERENCES DEBUGGING --");
+	//}
 	if debug_opts.contains(&"var".to_string())
 	{
 		println!("-- BEGIN VARIABLES DEBUGGING --");
-		let sc = doc.scope.borrow();
+		let sc = doc.scope().borrow();
 		sc.variables.iter().for_each(|(_name, var)| {
 			println!(" - `{:#?}`", var);
 		});
@@ -103,7 +104,7 @@ fn main() {
 
 
 	let compiler = Compiler::new(compiler::compiler::Target::HTML, db_path);
-	let out = compiler.compile(&doc);
+	let out = compiler.compile(doc.as_ref());
 
 	std::fs::write("a.html", out).unwrap();
 }

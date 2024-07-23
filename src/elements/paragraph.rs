@@ -54,7 +54,7 @@ impl Element for Paragraph
 
     fn to_string(&self) -> String { format!("{:#?}", self)  }
 
-    fn compile(&self, compiler: &Compiler, document: &Document) -> Result<String, String> {
+    fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		if self.content.is_empty() { return Ok(String::new()) }
 
         match compiler.target()
@@ -109,7 +109,7 @@ impl Rule for ParagraphRule
 			.and_then(|m| Some((m.start(), Box::new([false;0]) as Box<dyn Any>)) )
     }
 
-    fn on_match(&self, parser: &dyn Parser, document: &Document, cursor: Cursor, _match_data: Option<Box<dyn Any>>)
+    fn on_match(&self, parser: &dyn Parser, document: &dyn Document, cursor: Cursor, _match_data: Option<Box<dyn Any>>)
 		-> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
 
 		let end_cursor = match self.re.captures_at(cursor.source.content(), cursor.pos)

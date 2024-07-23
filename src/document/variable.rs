@@ -1,6 +1,6 @@
 use std::{path::PathBuf, rc::Rc};
 use crate::{elements::text::Text, parser::{parser::Parser, source::{Source, Token, VirtualSource}}};
-use super::{document::Document};
+use super::document::Document;
 
 
 // TODO enforce to_string(from_string(to_string())) == to_string()
@@ -15,7 +15,7 @@ pub trait Variable
 	/// Converts variable to a string
 	fn to_string(&self) -> String;
 
-    fn parse<'a>(&self, location: Token, parser: &dyn Parser, document: &'a Document);
+    fn parse<'a>(&self, location: Token, parser: &dyn Parser, document: &'a dyn Document<'a>);
 }
 
 impl core::fmt::Debug for dyn Variable
@@ -52,7 +52,7 @@ impl Variable for BaseVariable
 
     fn to_string(&self) -> String { self.value.clone() }
 
-    fn parse<'a>(&self, _location: Token, parser: &dyn Parser, document: &'a Document) {
+    fn parse<'a>(&self, _location: Token, parser: &dyn Parser, document: &'a dyn Document<'a>) {
 		let source = Rc::new(VirtualSource::new(
 				self.location().clone(),
 			self.name().to_string(),
@@ -90,12 +90,12 @@ impl Variable for PathVariable
 
     fn to_string(&self) -> String { self.path.to_str().unwrap().to_string() }
 
-    fn parse<'a>(&self, location: Token, parser: &dyn Parser, document: &'a Document){
-		// TODO: Avoid copying the location twice...
+    fn parse<'a>(&self, location: Token, parser: &dyn Parser, document: &'a dyn Document) {
+		// TODO: Avoid copying the content...
 		// Maybe create a special VirtualSource where the `content()` method
 		// calls `Variable::to_string()`
 		let source = Rc::new(VirtualSource::new(
-			location.clone(),
+			location,
 			self.name().to_string(),
 			self.to_string()));
 

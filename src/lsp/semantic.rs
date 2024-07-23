@@ -71,20 +71,36 @@ pub fn semantic_token_from_document(document: &Document) -> Vec<SemanticToken>
 		source: source.clone()
 	};
 
-	document.content.borrow()
-		.iter()
-		.for_each(|elem| {
-			if let Some(paragraph) = elem.downcast_ref::<Paragraph>()
-			{
-				paragraph.content
-					.iter()
-					.for_each(|elem| provide(&mut semantic_tokens, &mut cursor, elem));
-			}
-			else
-			{
-				provide(&mut semantic_tokens, &mut cursor, elem);
-			}
-		});
+	semantic_tokens.push(SemanticToken {
+		delta_line: 1,
+		delta_start: 1,
+		length: 5,
+		token_type: 0,
+		token_modifiers_bitset: 0,
+	});
+
+	semantic_tokens.push(SemanticToken {
+		delta_line: 1,
+		delta_start: 1,
+		length: 5,
+		token_type: 1,
+		token_modifiers_bitset: 0,
+	});
+
+	//document.content.borrow()
+	//	.iter()
+	//	.for_each(|elem| {
+	//		if let Some(paragraph) = elem.downcast_ref::<Paragraph>()
+	//		{
+	//			paragraph.content
+	//				.iter()
+	//				.for_each(|elem| provide(&mut semantic_tokens, &mut cursor, elem));
+	//		}
+	//		else
+	//		{
+	//			provide(&mut semantic_tokens, &mut cursor, elem);
+	//		}
+	//	});
 
 	semantic_tokens
 }

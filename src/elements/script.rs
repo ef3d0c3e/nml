@@ -1,8 +1,7 @@
 use mlua::{Function, Lua};
 use regex::{Captures, Regex};
-use crate::{lua::kernel::{Kernel, KernelContext, KernelHolder}, parser::{parser::{Parser, ReportColors}, rule::RegexRule, source::{Source, Token, VirtualSource}, util}};
+use crate::{document::document::Document, lua::kernel::{Kernel, KernelContext, KernelHolder}, parser::{parser::{Parser, ReportColors}, rule::RegexRule, source::{Source, Token, VirtualSource}, util}};
 use ariadne::{Fmt, Label, Report, ReportKind};
-use crate::document::document::Document;
 use std::{ops::Range, rc::Rc};
 
 use super::text::Text;
@@ -18,7 +17,7 @@ impl ScriptRule {
 		Self {
             re: [
 				Regex::new(r"(?:^|\n)@<(?:(.*)\n?)((?:\\.|[^\\\\])*?)(?:\n?)>@").unwrap(),
-				Regex::new(r"%<([^\s[:alpha:]])?(?:\[(.*?)\])?((?:\\.|[^\\\\])*?)(?:\n?)>%").unwrap()
+				Regex::new(r"%<(?:\[(.*?)\])?([^\s[:alpha:]])?((?:\\.|[^\\\\])*?)(?:\n?)>%").unwrap()
 			],
 			eval_kinds: [
 				("", "Eval"),
@@ -60,11 +59,11 @@ impl RegexRule for ScriptRule
 
     fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-    fn on_regex_match(&self, index: usize, parser: &dyn Parser, document: &Document, token: Token, matches: Captures)
+    fn on_regex_match<'a>(&self, index: usize, parser: &dyn Parser, document: &'a dyn Document<'a>, token: Token, matches: Captures)
 		-> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
 
-		let kernel_name = match matches.get(if index == 0 {1} else {2}) {
+		let kernel_name = match matches.get(1) {
 			None => "main".to_string(),
 			Some(name) => {
 				match ScriptRule::validate_kernel_name(parser.colors(), name.as_str())
@@ -84,13 +83,7 @@ impl RegexRule for ScriptRule
 				}
 			}
 		};
-		let kernel_name = matches.get(if index == 0 {1} else {2})
-			.and_then(|name| {
-				let trimmed = name.as_str().trim_start().trim_end();
-				(!trimmed.is_empty()).then_some(trimmed)
-			})
-			.unwrap_or("main");
-		let kernel = parser.get_kernel(kernel_name).unwrap_or_else(|| {
+		let kernel = parser.get_kernel(kernel_name.as_str()).unwrap_or_else(|| {
 			parser.insert_kernel(kernel_name.to_string(), Kernel::new(parser))
 		});
 
@@ -143,7 +136,7 @@ impl RegexRule for ScriptRule
 			else // Eval
 			{
 				// Validate kind
-				let kind = match matches.get(1) {
+				let kind = match matches.get(2) {
 					None => 0,
 					Some(kind) => {
 						match self.validate_kind(parser.colors(), kind.as_str())

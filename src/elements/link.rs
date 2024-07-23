@@ -1,5 +1,5 @@
 use mlua::{Function, Lua};
-use regex::Regex;
+use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use crate::parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, util};
 use ariadne::{Report, Fmt, Label, ReportKind};
@@ -26,7 +26,7 @@ impl Element for Link
     fn kind(&self) -> ElemKind { ElemKind::Inline }
     fn element_name(&self) -> &'static str { "Link" }
     fn to_string(&self) -> String { format!("{self:#?}") }
-    fn compile(&self, compiler: &Compiler, _document: &Document) -> Result<String, String> {
+    fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
         match compiler.target()
         {
             Target::HTML => {
@@ -51,7 +51,7 @@ pub struct LinkRule {
 
 impl LinkRule {
 	pub fn new() -> Self {
-		Self { re: [Regex::new(r"(?:^|\n)```(.*?)(?:,(.*))?\n((?:\\.|[^\[\]\\])*?)```").unwrap()] }
+		Self { re: [Regex::new(r"\[((?:\\.|[^\\\\])*?)\]\(((?:\\.|[^\\\\])*?)\)").unwrap()] }
 	}
 }
 
@@ -60,8 +60,8 @@ impl RegexRule for LinkRule {
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 
-	fn on_regex_match(&self, _: usize, parser: &dyn Parser, document: &Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>
-	{
+    fn on_regex_match<'a>(&self, _: usize, parser: &dyn Parser, document: &'a dyn Document, token: Token, matches: Captures)
+		-> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut result = vec![];
         let link_name = match matches.get(1)
         {

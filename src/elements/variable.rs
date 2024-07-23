@@ -1,8 +1,8 @@
 use mlua::{Function, Lua};
 use regex::Regex;
-use crate::parser::{parser::{Parser, ReportColors}, rule::RegexRule, source::{Source, Token}};
+use crate::{document::document::Document, parser::{parser::{Parser, ReportColors}, rule::RegexRule, source::{Source, Token}}};
 use ariadne::{Report, Fmt, Label, ReportKind};
-use crate::document::{document::Document, variable::{BaseVariable, PathVariable, Variable}};
+use crate::document::variable::{BaseVariable, PathVariable, Variable};
 use std::{ops::Range, rc::Rc};
 
 pub struct VariableRule {
@@ -91,7 +91,7 @@ impl RegexRule for VariableRule {
 
 
 
-	fn on_regex_match(&self, _: usize, parser: &dyn Parser, document: &Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>
+	fn on_regex_match<'a>(&self, _: usize, parser: &dyn Parser, document: &'a dyn Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>
 	{
 		let mut result = vec![];
         // [Optional] variable kind
@@ -223,7 +223,7 @@ impl RegexRule for VariableSubstitutionRule
 
     fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-    fn on_regex_match(&self, _index: usize, parser: &dyn Parser, document: &Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+    fn on_regex_match<'a>(&self, _index: usize, parser: &dyn Parser, document: &'a dyn Document<'a>, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut result = vec![];
 
         let variable = match matches.get(1)
@@ -307,27 +307,13 @@ impl RegexRule for VariableSubstitutionRule
                             .finish());
                         return result;
                     }
-                    Some((_, var)) => var,
+                    Some(var) => var,
                 }
             },
             _ => panic!("Unknown error")
         };
 
 		variable.parse(token, parser, document);
-		//let parsed = variable.parse(
-		//	token,
-		//	parser,
-		//	document
-		//);
-		////document.merge(parsed, None);
-		//parsed.content.borrow_mut()
-		//	.drain(..)
-		//	.for_each(|elem| parser.push(document, elem));
-		//parser.push(document, )
-
-		// TODO: Full rework of document
-		// parser shound parse into previous document, and not into a new document
-		// This should prevent having to sue `recurse: bool` in the last_element getters
 
         return result;
     }

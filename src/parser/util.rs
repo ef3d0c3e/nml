@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{document::{document::Document, element::ElemKind}, elements::paragraph::Paragraph};
+use crate::{document::{document::{Document, DocumentAccessors}, element::ElemKind}, elements::paragraph::Paragraph};
 
 /// Processes text for escape characters and paragraphing
-pub fn process_text(document: &Document, content: &str) -> String
+pub fn process_text(document: &dyn Document, content: &str) -> String
 {
 	let mut escaped = false;
 	let mut newlines = 0usize; // Consecutive newlines
@@ -30,7 +30,7 @@ pub fn process_text(document: &Document, content: &str) -> String
 					}
 				}
 				None => {
-					if document.last_element::<Paragraph>(false)
+					if document.last_element::<Paragraph>()
 						.and_then(|par| par.find_back(|e| e.kind() != ElemKind::Invisible)
 						.and_then(|e| Some(e.kind() == ElemKind::Inline)))
 							.unwrap_or(false)
@@ -65,7 +65,7 @@ pub fn process_text(document: &Document, content: &str) -> String
 			// Content begins with whitespace
 			if prev.is_none()
 			{
-				if document.last_element::<Paragraph>(false).is_some()
+				if document.last_element::<Paragraph>().is_some()
 				{
 					return (out+g, Some(g));
 				}

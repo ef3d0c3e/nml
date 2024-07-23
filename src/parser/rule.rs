@@ -14,7 +14,7 @@ pub trait Rule {
 	/// Finds the next match starting from [`cursor`]
 	fn next_match(&self, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)>;
 	/// Callback when rule matches
-	fn on_match(&self, parser: &dyn Parser, document: &Document, cursor: Cursor, match_data: Option<Box<dyn Any>>) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>);
+	fn on_match<'a>(&self, parser: &dyn Parser, document: &'a (dyn Document<'a>+'a), cursor: Cursor, match_data: Option<Box<dyn Any>>) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>);
 	/// Export bindings to lua
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)>;
 }
@@ -73,7 +73,7 @@ pub trait RegexRule
 	fn regexes(&self) -> &[regex::Regex];
 
 	/// Callback on regex rule match
-	fn on_regex_match(&self, index: usize, parser: &dyn Parser, document: &Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>;
+	fn on_regex_match<'a>(&self, index: usize, parser: &dyn Parser, document: &'a (dyn Document<'a>+'a), token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>;
 
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)>;
 }
@@ -100,7 +100,7 @@ impl<T: RegexRule> Rule for T {
 			(pos, Box::new(id) as Box<dyn Any>));
 	}
 
-	fn on_match(&self, parser: &dyn Parser, document: &Document, cursor: Cursor, match_data: Option<Box<dyn Any>>)
+	fn on_match<'a>(&self, parser: &dyn Parser, document: &'a (dyn Document<'a>+'a), cursor: Cursor, match_data: Option<Box<dyn Any>>)
 		-> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
 		let content = cursor.source.content();
 		let index = unsafe { match_data.unwrap_unchecked().downcast::<usize>().unwrap_unchecked() };

@@ -1,8 +1,8 @@
 use mlua::{Function, Lua};
 use regex::{Captures, Regex};
-use crate::parser::{parser::Parser, rule::RegexRule, source::{Source, Token}};
+use crate::{document::document::Document, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}}};
 use ariadne::{Report, Label, ReportKind};
-use crate::{compiler::compiler::Compiler, document::{document::Document, element::{ElemKind, Element}}};
+use crate::{compiler::compiler::Compiler, document::element::{ElemKind, Element}};
 use std::{ops::Range, rc::Rc};
 
 #[derive(Debug)]
@@ -24,7 +24,7 @@ impl Element for Comment
     fn kind(&self) -> ElemKind { ElemKind::Invisible }
     fn element_name(&self) -> &'static str { "Comment" }
     fn to_string(&self) -> String { format!("{self:#?}") }
-    fn compile(&self, _compiler: &Compiler, _document: &Document)
+    fn compile(&self, _compiler: &Compiler, _document: &dyn Document)
 		-> Result<String, String> {
 		Ok("".to_string())
     }
@@ -45,7 +45,7 @@ impl RegexRule for CommentRule {
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 
-	fn on_regex_match(&self, _: usize, parser: &dyn Parser, document: &Document, token: Token, matches: Captures)
+    fn on_regex_match<'a>(&self, _: usize, parser: &dyn Parser, document: &'a dyn Document, token: Token, matches: Captures)
 		-> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
 
@@ -73,7 +73,7 @@ impl RegexRule for CommentRule {
         parser.push(document, Box::new(
             Comment::new(
 				token.clone(),
-                content
+	            content
             )
         ));
 

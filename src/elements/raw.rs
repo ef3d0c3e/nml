@@ -1,15 +1,14 @@
-use mlua::{Function, Lua};
+use mlua::{Error::BadArgument, Function, Lua};
 use regex::{Captures, Regex};
-use crate::{compiler::compiler::Compiler, document::element::{ElemKind, Element}, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, util::{self, Property, PropertyParser}}};
+use crate::{compiler::compiler::Compiler, document::{document::Document, element::{ElemKind, Element}}, lua::kernel::CTX, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, util::{self, Property, PropertyParser}}};
 use ariadne::{Fmt, Label, Report, ReportKind};
-use crate::document::document::Document;
-use std::{collections::HashMap, ops::Range, rc::Rc, str::FromStr};
+use std::{collections::HashMap, ops::Range, rc::Rc, str::FromStr, sync::Arc};
 
 #[derive(Debug)]
 struct Raw {
-	location: Token,
-	kind: ElemKind,
-	content: String,
+	pub(self) location: Token,
+	pub(self) kind: ElemKind,
+	pub(self) content: String,
 }
 
 impl Raw {
@@ -26,7 +25,7 @@ impl Element for Raw {
 
     fn to_string(&self) -> String { format!("{self:#?}") }
 
-    fn compile(&self, compiler: &Compiler, _document: &Document) -> Result<String, String> {
+    fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		Ok(self.content.clone())
     }
 }
@@ -59,7 +58,7 @@ impl RegexRule for RawRule
 
     fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-    fn on_regex_match(&self, _index: usize, parser: &dyn Parser, document: &Document, token: Token, matches: Captures)
+    fn on_regex_match(&self, _index: usize, parser: &dyn Parser, document: &dyn Document, token: Token, matches: Captures)
 		-> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
 
@@ -154,15 +153,43 @@ impl RegexRule for RawRule
 			}
 		};
 
-		parser.push(document, Box::new(Raw::new(
-			token.clone(),
-			raw_kind,
-			raw_content
-		)));
+		parser.push(document, Box::new(Raw {
+			location: token.clone(),
+			kind: raw_kind,
+			content: raw_content
+		}));
 
         reports
     }
 
-	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
+    fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+		let mut bindings = vec![];
+
+		bindings.push(("push".to_string(), lua.create_function(
+			|_, (kind, content): (String, String)| {
+			// Validate kind
+			let kind = match ElemKind::from_str(kind.as_str())
+			{
+				Ok(kind) => kind,
+				Err(e) => return Err(BadArgument {
+						to: Some("push".to_string()),
+						pos: 1,
+						name: Some("kind".to_string()),
+						cause: Arc::new(mlua::Error::external(
+									format!("Wrong section kind specified: {e}")))})
+			};
+
+			CTX.with_borrow(|ctx| ctx.as_ref().map(|ctx| {
+				ctx.parser.push(ctx.document, Box::new(Raw {
+					location: ctx.location.clone(),
+					kind,
+					content,
+				}));
+			}));
+
+			Ok(())
+		}).unwrap()));
+		
+		bindings
+    }
 }

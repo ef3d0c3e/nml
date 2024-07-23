@@ -1,8 +1,8 @@
 use mlua::{Error::BadArgument, Function, Lua};
 use regex::Regex;
-use crate::{compiler::compiler::Target, lua::kernel::CTX, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}}};
+use crate::{compiler::compiler::Target, document::document::Document, lua::kernel::CTX, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}}};
 use ariadne::{Report, Fmt, Label, ReportKind};
-use crate::{compiler::compiler::Compiler, document::{document::Document, element::{ElemKind, Element, ReferenceableElement}}};
+use crate::{compiler::compiler::Compiler, document::element::{ElemKind, Element, ReferenceableElement}};
 use std::{ops::Range, rc::Rc, sync::Arc};
 
 #[derive(Debug)]
@@ -21,7 +21,7 @@ impl Element for Section
     fn element_name(&self) -> &'static str { "Section" }
     fn to_string(&self) -> String { format!("{self:#?}") }
     fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
-    fn compile(&self, compiler: &Compiler, _document: &Document) -> Result<String, String> {
+    fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
         match compiler.target()
         {
             Target::HTML => {
@@ -61,7 +61,7 @@ impl RegexRule for SectionRule {
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 
-	fn on_regex_match(&self, _: usize, parser: &dyn Parser, document: &Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>
+	fn on_regex_match(&self, _: usize, parser: &dyn Parser, document: &dyn Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>
 	{
 		let mut result = vec![];
 		let section_depth = match matches.get(1)
@@ -89,6 +89,7 @@ impl RegexRule for SectionRule {
 		// [Optional] Reference name
 		let section_refname = matches.get(2).map_or_else(|| None,
 			|refname| {
+				/* TODO: Wait for reference rework
 				// Check for duplicate reference
 				if let Some((ref_doc, reference)) = document.get_reference(refname.as_str())
 				{
@@ -112,6 +113,7 @@ impl RegexRule for SectionRule {
 						.with_note(format!("Previous reference was overwritten"))
 						.finish());
 				}
+				*/
 			Some(refname.as_str().to_string())
 		});
 

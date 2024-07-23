@@ -123,7 +123,7 @@ impl Element for Tex {
 
     fn to_string(&self) -> String { format!("{self:#?}") }
 
-    fn compile(&self, compiler: &Compiler, document: &Document)
+    fn compile(&self, compiler: &Compiler, document: &dyn Document)
 		-> Result<String, String> {
 
 		match compiler.target() {
@@ -136,18 +136,18 @@ impl Element for Tex {
 					}
 				});
 
-				let exec = document.get_variable(format!("tex.{}.exec", self.env))
-					.map_or("latex2svg".to_string(), |(_, var)| var.to_string());
+				let exec = document.get_variable(format!("tex.{}.exec", self.env).as_str())
+					.map_or("latex2svg".to_string(), |var| var.to_string());
 				// FIXME: Because fontsize is passed as an arg, verify that it cannot be used to execute python/shell code
-				let fontsize = document.get_variable(format!("tex.{}.fontsize", self.env))
-					.map_or("12".to_string(), |(_, var)| var.to_string());
-				let preamble = document.get_variable(format!("tex.{}.preamble", self.env))
-					.map_or("".to_string(), |(_, var)| var.to_string());
+				let fontsize = document.get_variable(format!("tex.{}.fontsize", self.env).as_str())
+					.map_or("12".to_string(), |var| var.to_string());
+				let preamble = document.get_variable(format!("tex.{}.preamble", self.env).as_str())
+					.map_or("".to_string(), |var| var.to_string());
 				let prepend = if self.block == TexKind::Inline { "".to_string() }
 				else
 				{
-					document.get_variable(format!("tex.{}.block_prepend", self.env))
-						.map_or("".to_string(), |(_, var)| var.to_string()+"\n")
+					document.get_variable(format!("tex.{}.block_prepend", self.env).as_str())
+						.map_or("".to_string(), |var| var.to_string()+"\n")
 				};
 
 				let latex = match self.block
@@ -205,7 +205,7 @@ impl RegexRule for TexRule
 
     fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-    fn on_regex_match(&self, index: usize, parser: &dyn Parser, document: &Document, token: Token, matches: Captures)
+    fn on_regex_match(&self, index: usize, parser: &dyn Parser, document: &dyn Document, token: Token, matches: Captures)
 		-> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
 

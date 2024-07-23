@@ -174,7 +174,7 @@ impl Element for Code {
 
     fn to_string(&self) -> String { format!("{self:#?}") }
 
-    fn compile(&self, compiler: &Compiler, _document: &Document)
+    fn compile(&self, compiler: &Compiler, _document: &dyn Document)
 		-> Result<String, String> {
 
 		match compiler.target()
@@ -226,7 +226,7 @@ impl CodeRule {
 		Self {
 			re: [
 				Regex::new(r"(?:^|\n)```(?:\[((?:\\.|[^\\\\])*?)\])?(.*?)(?:,(.*))?\n((?:\\(?:.|\n)|[^\\\\])*?)```").unwrap(),
-				Regex::new(r"``(?:\[((?:\\.|[^\[\]\\])*?)\])?(?:(.*)(?:\n|,))?((?:\\(?:.|\n)|[^\\\\])*?)``").unwrap(),
+				Regex::new(r"``(?:\[((?:\\.|[^\[\]\\])*?)\])?(?:(.*?)(?:\n|,))?((?:\\(?:.|\n)|[^\\\\])*?)``").unwrap(),
 			],
 			properties: PropertyParser::new(props)
 		}
@@ -239,7 +239,7 @@ impl RegexRule for CodeRule
 
     fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-    fn on_regex_match(&self, index: usize, parser: &dyn Parser, document: &Document, token: Token, matches: Captures)
+    fn on_regex_match<'a>(&self, index: usize, parser: &dyn Parser, document: &'a dyn Document, token: Token, matches: Captures)
 		-> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
 
@@ -328,7 +328,7 @@ impl RegexRule for CodeRule
 		}
 
 		let theme = document.get_variable("code.theme")
-			.and_then(|(_doc, var)| Some(var.to_string()));
+			.and_then(|var| Some(var.to_string()));
 
 		if index == 0 // Block
 		{

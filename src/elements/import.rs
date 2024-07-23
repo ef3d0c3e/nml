@@ -1,8 +1,7 @@
 use mlua::{Function, Lua};
-use regex::Regex;
-use crate::parser::{parser::{Parser, ReportColors}, rule::RegexRule, source::{Source, SourceFile, Token}};
+use regex::{Captures, Regex};
+use crate::{document::document::{DocumentAccessors, Document}, parser::{parser::{Parser, ReportColors}, rule::RegexRule, source::{Source, SourceFile, Token}}};
 use ariadne::{Report, Fmt, Label, ReportKind};
-use crate::document::document::Document;
 use std::{ops::Range, rc::Rc};
 
 use super::paragraph::Paragraph;
@@ -35,8 +34,8 @@ impl RegexRule for ImportRule {
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 
-	fn on_regex_match(&self, _: usize, parser: &dyn Parser, document: &Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>
-	{
+    fn on_regex_match<'a>(&self, _: usize, parser: &dyn Parser, document: &'a dyn Document<'a>, token: Token, matches: Captures)
+		-> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut result = vec![];
 
         // Path
@@ -138,13 +137,11 @@ impl RegexRule for ImportRule {
 			}
 		};
 
-		// TODO
-        let import_doc = parser.parse(import, Some(&document));
-
-        document.merge(import_doc, Some(&import_as));
+		let import_doc = parser.parse(import, Some(document));
+		document.merge(import_doc.content(), import_doc.scope(), Some(&import_as));
 
 		// Close paragraph
-		if document.last_element::<Paragraph>(false).is_some()
+		if document.last_element::<Paragraph>().is_some()
 		{
 			parser.push(document, Box::new(Paragraph::new(
 				Token::new(token.end()..token.end(), token.source())

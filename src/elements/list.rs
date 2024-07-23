@@ -1,6 +1,6 @@
 use std::{any::Any, cell::Ref, ops::Range, rc::Rc};
 
-use crate::{compiler::compiler::{Compiler, Target}, document::{document::Document, element::{ElemKind, Element}}, parser::{parser::Parser, rule::Rule, source::{Cursor, Source, Token, VirtualSource}}};
+use crate::{compiler::compiler::{Compiler, Target}, document::{document::{Document, DocumentAccessors}, element::{ElemKind, Element}}, parser::{parser::Parser, rule::Rule, source::{Cursor, Source, Token, VirtualSource}}};
 use ariadne::{Label, Report, ReportKind};
 use mlua::{Function, Lua};
 use regex::Regex;
@@ -57,7 +57,7 @@ impl Element for List
 
     fn to_string(&self) -> String { format!("{self:#?}") }
 
-    fn compile(&self, compiler: &Compiler, document: &Document) -> Result<String, String> {
+    fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		match compiler.target()
 		{
 			Target::HTML => {
@@ -196,10 +196,11 @@ impl ListRule {
 
 	}
 
-	fn parse_depth(depth: &str, document: &Document) -> Vec<(bool, usize)>
+	fn parse_depth(depth: &str, document: &dyn Document) -> Vec<(bool, usize)>
 	{
 		let mut parsed = vec![];
-		let prev_entry = document.last_element::<List>(true)
+		// FIXME: Previous iteration used to recursively retrieve the list indent
+		let prev_entry = document.last_element::<List>()
 			.and_then(|list| Ref::filter_map(list, |m| m.entries.last() ).ok() )
 			.and_then(|entry| Ref::filter_map(entry, |e| Some(&e.numbering)).ok() );
 
@@ -246,7 +247,8 @@ impl Rule for ListRule
 			|m| Some((m.start(), Box::new([false;0]) as Box<dyn Any>)) )
 	}
 
-	fn on_match<'a>(&self, parser: &dyn Parser, document: &'a Document<'a>, cursor: Cursor, _match_data: Option<Box<dyn Any>>) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+	fn on_match<'a>(&self, parser: &dyn Parser, document: &'a dyn Document<'a>, cursor: Cursor, _match_data: Option<Box<dyn Any>>)
+		-> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
 		let mut reports = vec![];
 		let content = cursor.source.content();
 		let (end_cursor, numbering, source) = match self.start_re.captures_at(content, cursor.pos) {
@@ -310,8 +312,8 @@ impl Rule for ListRule
 			},
 		};
 
-        let parsed_entry = parser.parse(Rc::new(source), Some(&document));
-		let mut parsed_paragraph = parsed_entry.last_element_mut::<Paragraph>(false).unwrap(); // Extract content from paragraph
+        let parsed_entry = parser.parse(Rc::new(source), Some(document));
+		let mut parsed_paragraph = parsed_entry.last_element_mut::<Paragraph>().unwrap(); // Extract content from paragraph
 		let entry = ListEntry::new(
 			Token::new(cursor.pos..end_cursor.pos, cursor.source.clone()),
 			numbering,
@@ -319,14 +321,14 @@ impl Rule for ListRule
 		);
 
 		// Ger previous list, if none insert a new list
-		let mut list = match document.last_element_mut::<List>(false)
+		let mut list = match document.last_element_mut::<List>()
 		{
 			Some(last) => last,
 			None => {
 				parser.push(document,
 					Box::new(List::new(
 							Token::new(cursor.pos..end_cursor.pos, cursor.source.clone()))));
-				document.last_element_mut::<List>(false).unwrap()
+				document.last_element_mut::<List>().unwrap()
 			}
 		};
 		list.push(entry);

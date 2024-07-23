@@ -1,8 +1,8 @@
-use std::{cell::{RefCell, RefMut}, collections::{HashMap, HashSet}, ops::Range, rc::Rc};
+use std::{cell::{Ref, RefCell, RefMut}, collections::{HashMap, HashSet}, ops::Range, rc::Rc};
 
 use ariadne::{Label, Report};
 
-use crate::{document::{document::Document, element::{ElemKind, Element}}, elements::{paragraph::Paragraph, registrar::register, text::Text}, lua::kernel::{Kernel, KernelHolder}, parser::source::{SourceFile, VirtualSource}};
+use crate::{document::{document::{DocumentAccessors, Document}, element::{ElemKind, Element}, langdocument::LangDocument}, elements::{paragraph::Paragraph, registrar::register, text::Text}, lua::kernel::{Kernel, KernelHolder}, parser::source::{SourceFile, VirtualSource}};
 
 use super::{parser::{Parser, ReportColors}, rule::Rule, source::{Cursor, Source, Token}, state::StateHolder, util};
 
@@ -132,14 +132,14 @@ impl Parser for LangParser
 	fn state_mut(&self) -> std::cell::RefMut<'_, StateHolder> { self.state.borrow_mut() }
 
 	/// Add an [`Element`] to the [`Document`]
-	fn push<'a>(&self, doc: &'a Document<'a>, elem: Box<dyn Element>)
+	fn push<'a>(&self, doc: &dyn Document, elem: Box<dyn Element>)
 	{
 		if elem.kind() == ElemKind::Inline || elem.kind() == ElemKind::Invisible
 		{
-			let mut paragraph = doc.last_element_mut::<Paragraph>(false)
+			let mut paragraph = doc.last_element_mut::<Paragraph>()
 				.or_else(|| {
 					doc.push(Box::new(Paragraph::new(elem.location().clone())));
-					doc.last_element_mut::<Paragraph>(false)
+					doc.last_element_mut::<Paragraph>()
 				}).unwrap();
 
 			paragraph.push(elem);
@@ -147,20 +147,20 @@ impl Parser for LangParser
 		else
 		{
 			// Process paragraph events
-			if doc.last_element_mut::<Paragraph>(false)
+			if doc.last_element::<Paragraph>()
 				.is_some_and(|_| true)
 			{
 				self.handle_reports(doc.source(),
-				self.state_mut().on_scope_end(self, &doc, super::state::Scope::PARAGRAPH));
+				self.state_mut().on_scope_end(self, doc, super::state::Scope::PARAGRAPH));
 			}
 
 			doc.push(elem);
 		}
 	}
 
-	fn parse<'a>(&self, source: Rc<dyn Source>, parent: Option<&'a Document<'a>>) -> Document<'a>
+	fn parse<'a>(&self, source: Rc<dyn Source>, parent: Option<&'a dyn Document<'a>>) -> Box<dyn Document<'a>+'a>
 	{
-		let doc = Document::new(source.clone(), parent);
+		let doc = LangDocument::new(source.clone(), parent);
 		let mut matches = Vec::new();
 		for _ in 0..self.rules.len() {
 			matches.push((0usize, None));
@@ -169,10 +169,10 @@ impl Parser for LangParser
 		let content = source.content();
 		let mut cursor = Cursor::new(0usize, doc.source()); // Cursor in file
 
-		if parent.is_some() // Terminate parent's paragraph state
+		if let Some(parent) = parent // Terminate parent's paragraph state
 		{
-			self.handle_reports(parent.as_ref().unwrap().source(),
-			self.state_mut().on_scope_end(self, parent.as_ref().unwrap(), super::state::Scope::PARAGRAPH));
+			self.handle_reports(parent.source(),
+			self.state_mut().on_scope_end(self, parent, super::state::Scope::PARAGRAPH));
 		}
 	
 		loop
@@ -193,7 +193,8 @@ impl Parser for LangParser
 			{
 
 				// Rule callback
-				let (new_cursor, reports) = (*rule).on_match(self, &doc, rule_pos, match_data);
+				let dd: &'a dyn Document = unsafe {std::mem::transmute(&doc as &dyn Document)};
+				let (new_cursor, reports) = rule.on_match(self, dd, rule_pos, match_data);
 
 				self.handle_reports(doc.source(), reports);
 
@@ -210,10 +211,10 @@ impl Parser for LangParser
 		self.handle_reports(doc.source(),
 			self.state_mut().on_scope_end(self, &doc, super::state::Scope::DOCUMENT));
 		
-		return doc;
+		return Box::new(doc);
 	}
 
-	fn parse_into<'a>(&self, source: Rc<dyn Source>, document: &'a Document<'a>)
+	fn parse_into<'a>(&self, source: Rc<dyn Source>, document: &'a dyn Document<'a>)
 	{
 		let mut matches = Vec::new();
 		for _ in 0..self.rules.len() {
@@ -228,10 +229,10 @@ impl Parser for LangParser
 			let (rule_pos, rule, match_data) = self.update_matches(&cursor, &mut matches);
 
 			// Unmatched content
-			let text_content = util::process_text(&document, &content.as_str()[cursor.pos..rule_pos.pos]);
+			let text_content = util::process_text(document, &content.as_str()[cursor.pos..rule_pos.pos]);
 			if !text_content.is_empty()
 			{
-				self.push(&document, Box::new(Text::new(
+				self.push(document, Box::new(Text::new(
 							Token::new(cursor.pos..rule_pos.pos, source.clone()),
 							text_content
 				)));
@@ -240,7 +241,7 @@ impl Parser for LangParser
 			if let Some(rule) = rule
 			{
 				// Rule callback
-				let (new_cursor, reports) = (*rule).on_match(self, &document, rule_pos, match_data);
+				let (new_cursor, reports) = (*rule).on_match(self, document, rule_pos, match_data);
 
 				self.handle_reports(document.source(), reports);
 

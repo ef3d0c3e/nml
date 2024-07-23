@@ -8,16 +8,19 @@ use super::element::Element;
 use super::variable::Variable;
 
 
+// TODO: Referenceable rework
+// Usize based referencing is not an acceptable method
+// if we want to support deltas for the lsp
 #[derive(Debug)]
 pub struct Scope {
     /// List of all referenceable elements in current scope.
-    /// All elements in this should return a non empty 
+    /// All elements in this should return a non empty
 	pub referenceable: HashMap<String, usize>,
 	pub variables: HashMap<String, Rc<dyn Variable>>,
 }
 
 impl Scope {
-	fn new() -> Self {
+	pub fn new() -> Self {
 		Self {
 			referenceable: HashMap::new(),
 			variables: HashMap::new(),
@@ -54,113 +57,82 @@ impl Scope {
     }
 }
 
-#[derive(Debug)]
-pub struct Document<'a> {
-	source: Rc<dyn Source>,
-	parent: Option<&'a Document<'a>>, /// Document's parent
+pub trait Document<'a>: core::fmt::Debug
+{
+	/// Gets the document [`Source`]
+	fn source(&self) -> Rc<dyn Source>;
 
-	// FIXME: Render these fields private
-	pub content: RefCell<Vec<Box<dyn Element>>>,
-	pub scope: RefCell<Scope>,
-}
+	/// Gets the document parent (if it exists)
+	fn parent(&self) -> Option<&'a dyn Document<'a>>;
 
-impl<'a> Document<'a>  {
-	pub fn new(source: Rc<dyn Source>, parent: Option<&'a Document<'a>>) -> Self
+	/// Gets the document content
+	/// The content is essentially the AST for the document
+	fn content(&self) -> &RefCell<Vec<Box<dyn Element>>>;
+
+	/// Gets the document [`Scope`]
+	fn scope(&self) -> &RefCell<Scope>;
+
+	/// Pushes a new element into the document's content
+	fn push(&self, elem: Box<dyn Element>)
 	{
-		Self {
-			source: source,
-			parent: parent,
-			content: RefCell::new(Vec::new()),
-			scope: RefCell::new(Scope::new()),
-		}
+		// TODO: RefTable
+
+		self.content()
+			.borrow_mut()
+			.push(elem);
 	}
 
-	pub fn source(&self) -> Rc<dyn Source> { self.source.clone() }
 
-    pub fn parent(&self) -> Option<&Document> { self.parent }
-
-    /// Push an element [`elem`] to content. [`in_paragraph`] is true if a paragraph is active
-	pub fn push(&self, elem: Box<dyn Element>)
+	/*
+	fn last_element(&'a self, recurse: bool) -> Option<Ref<'_, dyn Element>>
 	{
-        // Add index of current element to scope's reference table
-        if let Some(referenceable) = elem.as_referenceable()
-        {
-            // Only add if referenceable holds a reference
-            if let Some(ref_name) = referenceable.reference_name()
-            {
-                self.scope.borrow_mut().referenceable.insert(ref_name.clone(), self.content.borrow().len());
-            }
-        }
-
-		self.content.borrow_mut().push(elem);
-	}
-
-	pub fn last_element<T: Element>(&self, recurse: bool) -> Option<Ref<'_, T>>
-	{
-		let elem = Ref::filter_map(self.content.borrow(),
+		let elem = Ref::filter_map(self.content().borrow(),
 		|content| content.last()
-			.and_then(|last| last.downcast_ref::<T>())).ok();
+			.and_then(|last| last.downcast_ref::<Element>())
+		).ok();
+
 
 		if elem.is_some() || !recurse { return elem }
 
-		match self.parent
+		match self.parent()
 		{
 			None => None,
 			Some(parent) => parent.last_element(true),
 		}
 	}
 
-	pub fn last_element_mut<T: Element>(&self, recurse: bool) -> Option<RefMut<'_, T>>
+	fn last_element_mut(&'a self, recurse: bool) -> Option<RefMut<'_, dyn Element>>
 	{
-		let elem = RefMut::filter_map(self.content.borrow_mut(),
-		|content| content.last_mut()
-			.and_then(|last| last.downcast_mut::<T>())).ok();
+		let elem = RefMut::filter_map(self.content().borrow_mut(),
+		|content| content.last_mut()).ok();
 
 		if elem.is_some() || !recurse { return elem }
 
-		match self.parent
+		match self.parent()
 		{
 			None => None,
 			Some(parent) => parent.last_element_mut(true),
 		}
 	}
+	*/
 
-	pub fn get_reference(&self, ref_name: &str) -> Option<(&Document<'a>, std::cell::Ref<'_, Box<dyn Element>>)> {
-		match self.scope.borrow().referenceable.get(ref_name) {
-			// Return if found
-			Some(elem) => {
-                return Some((&self,
-                    std::cell::Ref::map(self.content.borrow(),
-                    |m| &m[*elem])))
-            },
-
-			// Continue search recursively
-			None => match self.parent {
-				Some(parent) => return parent.get_reference(ref_name),
-
-				// Not found
-				None => return None,
-			}
-		}
-	}
-
-    pub fn add_variable(&self, variable: Rc<dyn Variable>)
+    fn add_variable(&self, variable: Rc<dyn Variable>)
     {
-        self.scope.borrow_mut().variables.insert(
+        self.scope().borrow_mut().variables.insert(
             variable.name().to_string(),
             variable);
     }
 
-    pub fn get_variable<S: AsRef<str>>(&self, name: S) -> Option<(&Document<'a>, Rc<dyn Variable>)>
+    fn get_variable(&self, name: &str) -> Option<Rc<dyn Variable>>
     {
-        match self.scope.borrow().variables.get(name.as_ref())
+        match self.scope().borrow().variables.get(name)
         {
             Some(variable) => {
-                return Some((&self, variable.clone()));
+                return Some(variable.clone());
             },
 
 			// Continue search recursively
-            None => match self.parent {
+            None => match self.parent() {
                 Some(parent) => return parent.get_variable(name),
 
                 // Not found
@@ -169,16 +141,16 @@ impl<'a> Document<'a>  {
         }
     }
 
-	pub fn remove_variable<S: AsRef<str>>(&self, name: S) -> Option<(&Document<'a>, Rc<dyn Variable>)>
+	fn remove_variable(&self, name: &str) -> Option<Rc<dyn Variable>>
 	{
-        match self.scope.borrow_mut().variables.remove(name.as_ref())
+        match self.scope().borrow_mut().variables.remove(name)
         {
             Some(variable) => {
-                return Some((&self, variable.clone()));
+                return Some(variable.clone());
             },
 
 			// Continue search recursively
-            None => match self.parent {
+            None => match self.parent() {
                 Some(parent) => return parent.remove_variable(name),
 
                 // Not found
@@ -188,23 +160,44 @@ impl<'a> Document<'a>  {
 	}
 
     /// Merges [`other`] into [`self`]
-    pub fn merge(&self, other: Document, merge_as: Option<&String>)
+    fn merge(&self, content: &RefCell<Vec<Box<dyn Element>>>, scope: &RefCell<Scope>, merge_as: Option<&String>)
     {
 		match merge_as
 		{
-			Some(merge_as)	=> self.scope.borrow_mut()
+			Some(merge_as)	=> self.scope().borrow_mut()
 				.merge(
-					&mut *other.scope.borrow_mut(),
+					&mut *scope.borrow_mut(),
 					merge_as,
-					self.content.borrow().len()+1),
+					self.content().borrow().len()+1),
 			_ => {},
 		}
 
         // Content
-        self.content.borrow_mut().extend((other.content.borrow_mut())
+        self.content().borrow_mut().extend((content.borrow_mut())
             .drain(..)
             .map(|value| value));
     }
 }
 
+pub trait DocumentAccessors<'a>
+{
+	fn last_element<T: Element>(&self) -> Option<Ref<'_, T>>;
+	fn last_element_mut<T: Element>(&self) -> Option<RefMut<'_, T>>;
+}
 
+impl<'a> DocumentAccessors<'a> for dyn Document<'a> + '_
+{
+	fn last_element<T: Element>(&self) -> Option<Ref<'_, T>>
+	{
+		Ref::filter_map(self.content().borrow(),
+		|content| content.last()
+			.and_then(|last| last.downcast_ref::<T>())).ok()
+	}
+
+	fn last_element_mut<T: Element>(&self) -> Option<RefMut<'_, T>>
+	{
+		RefMut::filter_map(self.content().borrow_mut(),
+		|content| content.last_mut()
+			.and_then(|last| last.downcast_mut::<T>())).ok()
+	}
+}

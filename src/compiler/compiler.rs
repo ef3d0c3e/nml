@@ -62,12 +62,12 @@ impl Compiler
 		}
 	}
 
-	pub fn header(&self, document: &Document) -> String
+	pub fn header(&self, document: &dyn Document) -> String
 	{
-		pub fn get_variable_or_error(document: &Document, var_name: &'static str) -> Option<Rc<dyn Variable>>
+		pub fn get_variable_or_error(document: &dyn Document, var_name: &'static str) -> Option<Rc<dyn Variable>>
 		{
 			document.get_variable(var_name)
-				.and_then(|(_, var)| Some(var))
+				.and_then(|var| Some(var))
 				.or_else(|| {
 					println!("Missing variable `{var_name}` in {}", document.source().name());
 					None
@@ -85,7 +85,7 @@ impl Compiler
 					result += format!("<title>{}</title>", self.sanitize(page_title.to_string())).as_str();
 				}
 
-				if let Some((_, css)) = document.get_variable("html.css")
+				if let Some(css) = document.get_variable("html.css")
 				{
 					result += format!("<link rel=\"stylesheet\" href=\"{}\">", self.sanitize(css.to_string())).as_str();
 				}
@@ -101,7 +101,7 @@ impl Compiler
 		result
 	}
 
-	pub fn footer(&self, _document: &Document) -> String
+	pub fn footer(&self, _document: &dyn Document) -> String
 	{
 		let mut result = String::new();
 		match self.target()
@@ -116,10 +116,10 @@ impl Compiler
 		result
 	}
 	
-	pub fn compile(&self, document: &Document) -> String
+	pub fn compile(&self, document: &dyn Document) -> String
 	{
 		let mut out = String::new();
-		let borrow = document.content.borrow();
+		let borrow = document.content().borrow();
 
 		// Header
 		out += self.header(document).as_str();

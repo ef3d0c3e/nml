@@ -1,19 +1,19 @@
-use std::{cell::{RefCell, RefMut}, rc::Rc};
+use std::cell::{RefCell, RefMut};
 
-use mlua::{Error, FromLua, Lua, UserData, UserDataMethods};
+use mlua::Lua;
 
 use crate::{document::document::Document, parser::{parser::Parser, source::Token}};
 
-pub struct KernelContext<'a>
+pub struct KernelContext<'a, 'b>
 {
 	pub location: Token,
 	pub parser: &'a dyn Parser,
-	pub document: &'a Document<'a>,
+	pub document: &'b dyn Document<'b>,
 	//pub parser: &'a dyn Parser,
 }
 
 thread_local! {
-    pub static CTX: RefCell<Option<KernelContext<'static>>> = RefCell::new(None);
+    pub static CTX: RefCell<Option<KernelContext<'static, 'static>>> = RefCell::new(None);
 }
 
 #[derive(Debug)]
@@ -23,7 +23,6 @@ pub struct Kernel
 }
 
 impl Kernel {
-
 	// TODO: Take parser as arg and 
 	// iterate over the rules
 	// to find export the bindings (if some)

@@ -27,7 +27,7 @@ pub trait State: Downcast
 	fn scope(&self) -> Scope;
 
 	/// Callback called when state goes out of scope
-	fn on_remove<'a>(&self, parser: &dyn Parser, document: &Document) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>>;
+	fn on_remove<'a>(&self, parser: &dyn Parser, document: &dyn Document) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>>;
 }
 impl_downcast!(State);
 
@@ -70,7 +70,7 @@ impl StateHolder
 			.map_or(None, |st| Some(st.clone()))
 	}
 
-	pub fn on_scope_end(&mut self, parser: &dyn Parser, document: &Document, scope: Scope) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>
+	pub fn on_scope_end(&mut self, parser: &dyn Parser, document: &dyn Document, scope: Scope) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>
 	{
 		let mut result = vec![];
 		

@@ -48,7 +48,7 @@ pub trait Element: Downcast
     fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { None }
 
     /// Compiles element
-    fn compile(&self, compiler: &Compiler, document: &Document) -> Result<String, String>;
+    fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String>;
 }
 impl_downcast!(Element);
 

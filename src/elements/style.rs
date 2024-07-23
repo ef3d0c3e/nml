@@ -1,8 +1,7 @@
 use mlua::{Function, Lua};
 use regex::{Captures, Regex};
-use crate::{compiler::compiler::{Compiler, Target}, document::element::{ElemKind, Element}, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, state::State}};
+use crate::{compiler::compiler::{Compiler, Target}, document::{document::{DocumentAccessors, Document}, element::{ElemKind, Element}}, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, state::State}};
 use ariadne::{Fmt, Label, Report, ReportKind};
-use crate::document::document::Document;
 use crate::parser::state::Scope;
 use std::{cell::RefCell, ops::Range, rc::Rc};
 use lazy_static::lazy_static;
@@ -29,7 +28,7 @@ impl Element for Style
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Section" }
 	fn to_string(&self) -> String { format!("{self:#?}") }
-	fn compile(&self, compiler: &Compiler, _document: &Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		match compiler.target()
 		{
 			Target::HTML => {
@@ -66,7 +65,7 @@ impl State for StyleState
 {
 	fn scope(&self) -> Scope { Scope::PARAGRAPH }
 
-	fn on_remove<'a>(&self, parser: &dyn Parser, document: &Document) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>> {
+	fn on_remove<'a>(&self, parser: &dyn Parser, document: &dyn Document) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>> {
 		let mut result = Vec::new();
 		self.toggled
 			.iter()
@@ -80,7 +79,7 @@ impl State for StyleState
 
 			//let active_range = range.start .. paragraph.location().end()-1;
 
-			let paragraph = document.last_element::<Paragraph>(false).unwrap();
+			let paragraph = document.last_element::<Paragraph>().unwrap();
 			let paragraph_end = paragraph.content.last()
 				.and_then(|last| Some((last.location().source(), last.location().end()-1 .. last.location().end())))
 				.unwrap();
@@ -145,7 +144,7 @@ impl RegexRule for StyleRule
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-	fn on_regex_match(&self, index: usize, parser: &dyn Parser, document: &Document, token: Token, _matches: Captures) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
+	fn on_regex_match(&self, index: usize, parser: &dyn Parser, document: &dyn Document, token: Token, _matches: Captures) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
 		let result = vec![];
 
 		let query = parser.state().query(&STATE_NAME);
