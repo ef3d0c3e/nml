@@ -51,9 +51,9 @@ impl Backend {
 		let parser = LangParser::default();
 		let doc = parser.parse(Rc::new(source), None);
 		
-		let semantic_tokens = semantic_token_from_document(&doc);
-        self.semantic_token_map
-            .insert(params.uri.to_string(), semantic_tokens);
+		//let semantic_tokens = semantic_token_from_document(&doc);
+        //self.semantic_token_map
+        //    .insert(params.uri.to_string(), semantic_tokens);
 	}
 }
 

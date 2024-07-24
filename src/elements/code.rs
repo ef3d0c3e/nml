@@ -6,7 +6,7 @@ use mlua::{Function, Lua};
 use regex::{Captures, Regex};
 use syntect::{easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet};
 
-use crate::{cache::cache::{Cached, CachedError}, compiler::compiler::{Compiler, Target}, document::{document::Document, element::{ElemKind, Element}}, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, util::{self, Property, PropertyParser}}};
+use crate::{cache::cache::{Cached, CachedError}, compiler::compiler::{Compiler, Target}, document::{document::Document, element::{ElemKind, Element}}, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, util::{self, Property, PropertyMapError, PropertyParser}}};
 use lazy_static::lazy_static;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -341,18 +341,32 @@ impl RegexRule for CodeRule
 				|prop, value| value.parse::<usize>().map_err(|e| (prop, e)))
 			{
 				Ok((_prop, offset)) => offset,
-				Err((prop, e)) => {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Invalid Code Property")
-						.with_label(
-							Label::new((token.source().clone(), token.start()+1..token.end()))
-							.with_message(format!("Property `line_offset: {}` cannot be converted: {}",
-									prop.fg(parser.colors().info),
-									e.fg(parser.colors().error)))
-							.with_color(parser.colors().warning))
-						.finish());
-						return reports;
+				Err(e) => match e {
+					PropertyMapError::ParseError((prop, err)) => {
+						reports.push(
+							Report::build(ReportKind::Error, token.source(), token.start())
+							.with_message("Invalid Code Property")
+							.with_label(
+								Label::new((token.source().clone(), token.start()+1..token.end()))
+								.with_message(format!("Property `line_offset: {}` cannot be converted: {}",
+										prop.fg(parser.colors().info),
+										err.fg(parser.colors().error)))
+								.with_color(parser.colors().warning))
+							.finish());
+							return reports;
+					},
+					PropertyMapError::NotFoundError(err) => {
+						reports.push(
+							Report::build(ReportKind::Error, token.source(), token.start())
+							.with_message("Invalid Code Property")
+							.with_label(
+								Label::new((token.source().clone(), token.start()+1..token.end()))
+								.with_message(format!("Property `{}` doesn't exist",
+										err.fg(parser.colors().info)))
+								.with_color(parser.colors().warning))
+							.finish());
+							return reports;
+					}
 				}
 			};
 

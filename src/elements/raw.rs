@@ -1,6 +1,6 @@
 use mlua::{Error::BadArgument, Function, Lua};
 use regex::{Captures, Regex};
-use crate::{compiler::compiler::Compiler, document::{document::Document, element::{ElemKind, Element}}, lua::kernel::CTX, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, util::{self, Property, PropertyParser}}};
+use crate::{compiler::compiler::Compiler, document::{document::Document, element::{ElemKind, Element}}, lua::kernel::CTX, parser::{parser::Parser, rule::RegexRule, source::{Source, Token}, util::{self, Property, PropertyMapError, PropertyParser}}};
 use ariadne::{Fmt, Label, Report, ReportKind};
 use std::{collections::HashMap, ops::Range, rc::Rc, str::FromStr, sync::Arc};
 
@@ -138,18 +138,32 @@ impl RegexRule for RawRule
 			|prop, value| ElemKind::from_str(value.as_str()).map_err(|e| (prop, e)))
 		{
 			Ok((_prop, kind)) => kind,
-			Err((prop, e)) => {
-				reports.push(
-					Report::build(ReportKind::Error, token.source(), token.start())
-					.with_message("Invalid Raw Code Property")
-					.with_label(
-						Label::new((token.source().clone(), token.range.clone()))
-						.with_message(format!("Property `kind: {}` cannot be converted: {}",
-								prop.fg(parser.colors().info),
-								e.fg(parser.colors().error)))
-						.with_color(parser.colors().warning))
-					.finish());
-					return reports;
+			Err(e) => match e {
+				PropertyMapError::ParseError((prop, err)) => {
+					reports.push(
+						Report::build(ReportKind::Error, token.source(), token.start())
+						.with_message("Invalid Raw Code Property")
+						.with_label(
+							Label::new((token.source().clone(), token.range.clone()))
+							.with_message(format!("Property `kind: {}` cannot be converted: {}",
+									prop.fg(parser.colors().info),
+									err.fg(parser.colors().error)))
+							.with_color(parser.colors().warning))
+						.finish());
+						return reports;
+				},
+				PropertyMapError::NotFoundError(err) => {
+					reports.push(
+						Report::build(ReportKind::Error, token.source(), token.start())
+						.with_message("Invalid Code Property")
+						.with_label(
+							Label::new((token.source().clone(), token.start()+1..token.end()))
+							.with_message(format!("Property `{}` doesn't exist",
+									err.fg(parser.colors().info)))
+							.with_color(parser.colors().warning))
+						.finish());
+						return reports;
+				}
 			}
 		};
 

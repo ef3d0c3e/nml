@@ -101,32 +101,7 @@ impl Parser for LangParser
 	fn colors(&self) -> &ReportColors { &self.colors }
 
 	fn rules(&self) -> &Vec<Box<dyn Rule>> { &self.rules }
-	fn add_rule(&mut self, rule: Box<dyn Rule>, after: Option<&'static str>)
-	{
-		// Error on duplicate rule
-		let rule_name = (*rule).name();
-		self.rules.iter().for_each(|rule| {
-			if (*rule).name() != rule_name { return; }
-		
-			panic!("Attempted to introduce duplicate rule: `{rule_name}`");
-		});
-
-		match after
-		{
-			Some(name) => {
-				let before = self.rules.iter()
-					.enumerate()
-					.find(|(_pos, r)| (r).name() == name);
-
-				match before
-				{
-					Some((pos, _)) => self.rules.insert(pos+1, rule),
-					_ => panic!("Unable to find rule named `{name}`, to insert rule `{}` after it", rule.name())
-				}
-			}
-			_ => self.rules.push(rule)
-		}
-	}
+    fn rules_mut(&mut self) -> &mut Vec<Box<dyn Rule>> { &mut self.rules }
 
 	fn state(&self) -> std::cell::Ref<'_, StateHolder> { self.state.borrow() }
 	fn state_mut(&self) -> std::cell::RefMut<'_, StateHolder> { self.state.borrow_mut() }

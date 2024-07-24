@@ -59,7 +59,7 @@ pub fn provide(semantic_tokens: &mut Vec<SemanticToken>, cursor: &mut LineCursor
 	}
 }
 
-pub fn semantic_token_from_document(document: &Document) -> Vec<SemanticToken>
+pub fn semantic_token_from_document(document: &dyn Document) -> Vec<SemanticToken>
 {
 	let mut semantic_tokens = vec![];
 

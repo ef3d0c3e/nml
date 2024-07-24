@@ -48,7 +48,39 @@ pub trait Parser: KernelHolder
 	fn colors(&self) -> &ReportColors;
 
 	fn rules(&self) -> &Vec<Box<dyn Rule>>;
-	fn add_rule(&mut self, rule: Box<dyn Rule>, after: Option<&'static str>);
+	fn rules_mut(&mut self) -> &mut Vec<Box<dyn Rule>>;
+
+	fn add_rule(&mut self, rule: Box<dyn Rule>, after: Option<&'static str>) -> Result<(), String>
+	{
+		// Error on duplicate rule
+		let rule_name = (*rule).name();
+		if let Err(e) = self.rules().iter().try_for_each(|rule| {
+			if (*rule).name() != rule_name { return Ok(()); }
+		
+			return Err(format!("Attempted to introduce duplicate rule: `{rule_name}`"));
+		})
+		{
+			return Err(e)
+		}
+
+		match after
+		{
+			Some(name) => {
+				let before = self.rules().iter()
+					.enumerate()
+					.find(|(_pos, r)| (r).name() == name);
+
+				match before
+				{
+					Some((pos, _)) => self.rules_mut().insert(pos+1, rule),
+					_ => return Err(format!("Unable to find rule named `{name}`, to insert rule `{}` after it", rule.name()))
+				}
+			}
+			_ => self.rules_mut().push(rule)
+		}
+
+		Ok(())
+	}
 
 	fn state(&self) -> Ref<'_, StateHolder>;
 	fn state_mut(&self) -> RefMut<'_, StateHolder>;

@@ -1,6 +1,6 @@
-use std::rc::Rc;
+use std::{cell::{RefCell, RefMut}, collections::HashMap, rc::Rc};
 
-use crate::parser::source::{Cursor, Source};
+use crate::{document::{document::Document, element::Element}, lua::kernel::{Kernel, KernelHolder}, parser::{parser::{Parser, ReportColors}, rule::Rule, source::{Cursor, Source}, state::StateHolder}};
 
 #[derive(Debug, Clone)]
 pub struct LineCursor
@@ -56,26 +56,6 @@ impl LineCursor
 				//eprintln!("({}, {c:#?}) ({} {})", self.pos, self.line, self.line_pos);
 				prev = Some(c);
 			}
-
-			/*
-			self.source.content()
-				.as_str()[start..pos+1]
-				.char_indices()
-				.for_each(|(at, c)| {
-					self.pos = at+start;
-
-					if c == '\n'
-					{
-						self.line += 1;
-						self.line_pos = 0;
-					}
-					else
-					{
-						self.line_pos += c.len_utf8();
-					}
-
-				});
-			*/
 		}
 		else if pos < self.pos
 		{
@@ -112,5 +92,55 @@ impl From<&LineCursor> for Cursor
 			pos: value.pos,
 			source: value.source.clone()
 		}
+    }
+}
+
+#[derive(Debug)]
+pub struct LsParser
+{
+	rules: Vec<Box<dyn Rule>>,
+	colors: ReportColors,
+
+	// Parser state
+	pub state: RefCell<StateHolder>,
+	pub kernels: RefCell<HashMap<String, Kernel>>,
+}
+
+impl Parser for LsParser
+{
+    fn colors(&self) -> &ReportColors { &self.colors }
+    fn rules(&self) -> &Vec<Box<dyn Rule>> { &self.rules }
+    fn rules_mut(&mut self) -> &mut Vec<Box<dyn Rule>> { &mut self.rules }
+
+	fn state(&self) -> std::cell::Ref<'_, StateHolder> { self.state.borrow() }
+	fn state_mut(&self) -> std::cell::RefMut<'_, StateHolder> { self.state.borrow_mut() }
+
+    fn push<'a>(&self, doc: &dyn Document, elem: Box<dyn Element>) {
+        todo!()
+    }
+
+    fn parse<'a>(&self, source: Rc<dyn Source>, parent: Option<&'a dyn Document<'a>>) -> Box<dyn Document<'a>+'a> {
+        todo!()
+    }
+
+    fn parse_into<'a>(&self, source: Rc<dyn Source>, document: &'a dyn Document<'a>) {
+        todo!()
+    }
+}
+
+impl KernelHolder for LsParser
+{
+    fn get_kernel(&self, name: &str)
+		-> Option<RefMut<'_, Kernel>> {
+		RefMut::filter_map(self.kernels.borrow_mut(),
+		|map| map.get_mut(name)).ok()
+    }
+
+    fn insert_kernel(&self, name: String, kernel: Kernel)
+		-> RefMut<'_, Kernel> {
+			//TODO do not get
+		self.kernels.borrow_mut()
+			.insert(name.clone(), kernel);
+		self.get_kernel(name.as_str()).unwrap()
     }
 }
