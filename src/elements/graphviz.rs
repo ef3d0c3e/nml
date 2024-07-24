@@ -1,11 +1,6 @@
 use std::collections::HashMap;
-use std::io::Read;
-use std::io::Write;
 use std::ops::Range;
-use std::process::Command;
-use std::process::Stdio;
 use std::rc::Rc;
-use std::str::FromStr;
 use std::sync::Once;
 
 use crate::parser::util::Property;
@@ -19,10 +14,7 @@ use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use graphviz_rust::cmd::Format;
 use graphviz_rust::cmd::Layout;
-use graphviz_rust::exec;
 use graphviz_rust::exec_dot;
-use graphviz_rust::parse;
-use graphviz_rust::printer::PrinterContext;
 use mlua::Function;
 use mlua::Lua;
 use regex::Captures;
@@ -129,6 +121,7 @@ impl Element for Graphviz {
 						}
 					}
 				});
+				// TODO: Format svg in a div
 
 				if let Some(mut con) = compiler.cache() {
 					match self.cached(&mut con, |s| s.dot_to_svg()) {

@@ -95,7 +95,7 @@ impl Element for List
 						match_stack(&mut result, &ent.numbering);
 						result.push_str("<li>");
 						match ent.content.iter().enumerate()
-							.try_for_each(|(idx, elem)| { 
+							.try_for_each(|(_idx, elem)| {
 								match elem.compile(compiler, document) {
 									Err(e) => Err(e),
 									Ok(s) => { result.push_str(s.as_str()); Ok(()) }

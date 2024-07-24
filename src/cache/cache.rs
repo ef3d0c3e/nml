@@ -1,29 +1,13 @@
-use std::{error::Error, path::PathBuf};
+use rusqlite::types::FromSql;
+use rusqlite::Connection;
+use rusqlite::ToSql;
 
-use rusqlite::{types::FromSql, Connection, Params, ToSql};
-
-struct Cache {
-	con: Connection
-}
-
-impl Cache {
-    fn new(file: PathBuf) -> Result<Self, String> {
-		match Connection::open(file)
-		{
-			Err(e) => return Err(format!("Could not connect to cache database: {}", e.to_string())),
-			Ok(con) => Ok(Self { con })
-		}
-    }
-}
-
-pub enum CachedError<E>
-{
+pub enum CachedError<E> {
 	SqlErr(rusqlite::Error),
-	GenErr(E)
+	GenErr(E),
 }
 
-pub trait Cached
-{
+pub trait Cached {
 	type Key;
 	type Value;
 
@@ -39,10 +23,8 @@ pub trait Cached
 
 	fn key(&self) -> <Self as Cached>::Key;
 
-	fn init(con: &mut Connection) -> Result<(), rusqlite::Error>
-	{
-		con.execute(<Self as Cached>::sql_table(), ())
-			.map(|_| ())
+	fn init(con: &mut Connection) -> Result<(), rusqlite::Error> {
+		con.execute(<Self as Cached>::sql_table(), ()).map(|_| ())
 	}
 
 	/// Attempts to retrieve a cached element from the compilation database
@@ -54,53 +36,50 @@ pub trait Cached
 	/// or if not cached, an error from the generator [`f`]
 	///
 	/// Note that on error, [`f`] may still have been called
-	fn cached<E, F>(&self, con: &mut Connection, f: F)
-		-> Result<<Self as Cached>::Value, CachedError<E>>
+	fn cached<E, F>(
+		&self,
+		con: &mut Connection,
+		f: F,
+	) -> Result<<Self as Cached>::Value, CachedError<E>>
 	where
 		<Self as Cached>::Key: ToSql,
 		<Self as Cached>::Value: FromSql + ToSql,
 		F: FnOnce(&Self) -> Result<<Self as Cached>::Value, E>,
-    {
+	{
 		let key = self.key();
 
 		// Find in cache
-		let mut query = match con.prepare(<Self as Cached>::sql_get_query())
-		{
+		let mut query = match con.prepare(<Self as Cached>::sql_get_query()) {
 			Ok(query) => query,
-			Err(e) => return Err(CachedError::SqlErr(e))
+			Err(e) => return Err(CachedError::SqlErr(e)),
 		};
 
-		let value = query.query_row([&key], |row|
-		{
-			Ok(row.get_unwrap::<_, <Self as Cached>::Value>(0))
-		}).ok();
+		let value = query
+			.query_row([&key], |row| {
+				Ok(row.get_unwrap::<_, <Self as Cached>::Value>(0))
+			})
+			.ok();
 
-		if let Some(value) = value
-		{
+		if let Some(value) = value {
 			// Found in cache
-			return Ok(value)
-		}
-		else
-		{
+			return Ok(value);
+		} else {
 			// Compute a value
-			let value = match f(&self)
-			{
+			let value = match f(&self) {
 				Ok(val) => val,
-				Err(e) => return Err(CachedError::GenErr(e))
+				Err(e) => return Err(CachedError::GenErr(e)),
 			};
 
 			// Try to insert
-			let mut query = match con.prepare(<Self as Cached>::sql_insert_query())
-			{
+			let mut query = match con.prepare(<Self as Cached>::sql_insert_query()) {
 				Ok(query) => query,
-				Err(e) => return Err(CachedError::SqlErr(e))
+				Err(e) => return Err(CachedError::SqlErr(e)),
 			};
 
-			match query.execute((&key, &value))
-			{
+			match query.execute((&key, &value)) {
 				Ok(_) => Ok(value),
-				Err(e) => Err(CachedError::SqlErr(e))
+				Err(e) => Err(CachedError::SqlErr(e)),
 			}
 		}
-    }
+	}
 }
