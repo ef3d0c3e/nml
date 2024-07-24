@@ -114,6 +114,8 @@ impl Parser for LsParser
 
 	fn state(&self) -> std::cell::Ref<'_, StateHolder> { self.state.borrow() }
 	fn state_mut(&self) -> std::cell::RefMut<'_, StateHolder> { self.state.borrow_mut() }
+	
+	fn has_error(&self) -> bool { true }
 
     fn push<'a>(&self, doc: &dyn Document, elem: Box<dyn Element>) {
         todo!()

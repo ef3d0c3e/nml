@@ -2,13 +2,10 @@ use std::collections::HashMap;
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{
-	document::{
-		document::{Document, DocumentAccessors},
-		element::ElemKind,
-	},
-	elements::paragraph::Paragraph,
-};
+use crate::document::document::Document;
+use crate::document::document::DocumentAccessors;
+use crate::document::element::ElemKind;
+use crate::elements::paragraph::Paragraph;
 
 /// Processes text for escape characters and paragraphing
 pub fn process_text(document: &dyn Document, content: &str) -> String {
@@ -360,11 +357,12 @@ impl PropertyParser {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		document::langdocument::LangDocument,
-		elements::{comment::Comment, style::Style, text::Text},
-		parser::source::{SourceFile, Token},
-	};
+	use crate::document::langdocument::LangDocument;
+	use crate::elements::comment::Comment;
+	use crate::elements::style::Style;
+	use crate::elements::text::Text;
+	use crate::parser::source::SourceFile;
+	use crate::parser::source::Token;
 	use std::rc::Rc;
 
 	#[test]
@@ -387,6 +385,13 @@ mod tests {
 		let tok = Token::new(0..0, source);
 		doc.push(Box::new(Paragraph::new(tok.clone())));
 
+		// Comments are ignored (kind => Invisible)
+		(&doc as &dyn Document)
+			.last_element_mut::<Paragraph>()
+			.unwrap()
+			.push(Box::new(Comment::new(tok.clone(), "COMMENT".to_string())));
+		assert_eq!(process_text(&doc, "\na"), "a");
+
 		// A space is appended as previous element is inline
 		(&doc as &dyn Document)
 			.last_element_mut::<Paragraph>()
@@ -398,13 +403,6 @@ mod tests {
 			.last_element_mut::<Paragraph>()
 			.unwrap()
 			.push(Box::new(Style::new(tok.clone(), 0, false)));
-		assert_eq!(process_text(&doc, "\na"), " a");
-
-		// Comments are ignored (kind => Invisible)
-		(&doc as &dyn Document)
-			.last_element_mut::<Paragraph>()
-			.unwrap()
-			.push(Box::new(Comment::new(tok.clone(), "COMMENT".to_string())));
 		assert_eq!(process_text(&doc, "\na"), " a");
 	}
 

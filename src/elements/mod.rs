@@ -11,4 +11,5 @@ pub mod section;
 pub mod link;
 pub mod code;
 pub mod tex;
+pub mod graphviz;
 pub mod raw;

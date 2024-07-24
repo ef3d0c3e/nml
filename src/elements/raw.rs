@@ -158,7 +158,7 @@ impl RegexRule for RawRule
 						.with_message("Invalid Code Property")
 						.with_label(
 							Label::new((token.source().clone(), token.start()+1..token.end()))
-							.with_message(format!("Property `{}` doesn't exist",
+							.with_message(format!("Property `{}` is missing",
 									err.fg(parser.colors().info)))
 							.with_color(parser.colors().warning))
 						.finish());

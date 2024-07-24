@@ -1,8 +1,11 @@
 use super::parser::Parser;
-use super::source::{Cursor, Source, Token};
-use ariadne::Report;
-use mlua::{Function, Lua};
+use super::source::Cursor;
+use super::source::Source;
+use super::source::Token;
 use crate::document::document::Document;
+use ariadne::Report;
+use mlua::Function;
+use mlua::Lua;
 
 use std::any::Any;
 use std::ops::Range;
@@ -14,16 +17,21 @@ pub trait Rule {
 	/// Finds the next match starting from [`cursor`]
 	fn next_match(&self, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)>;
 	/// Callback when rule matches
-	fn on_match<'a>(&self, parser: &dyn Parser, document: &'a (dyn Document<'a>+'a), cursor: Cursor, match_data: Option<Box<dyn Any>>) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>);
+	fn on_match<'a>(
+		&self,
+		parser: &dyn Parser,
+		document: &'a (dyn Document<'a> + 'a),
+		cursor: Cursor,
+		match_data: Option<Box<dyn Any>>,
+	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>);
 	/// Export bindings to lua
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)>;
 }
 
-impl core::fmt::Debug for dyn Rule
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for dyn Rule {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "Rule{{{}}}", self.name())
-    }
+	}
 }
 
 /*
@@ -38,7 +46,7 @@ pub trait RegexRule: Rule
 }
 
 impl<T: RegexRule> Rule for T {
-    fn name(&self) -> &'static str { RegexRule::name(self) }
+	fn name(&self) -> &'static str { RegexRule::name(self) }
 
 	/// Finds the next match starting from [`cursor`]
 	fn next_match<'a>(&self, cursor: &'a Cursor) -> Option<usize>
@@ -65,53 +73,78 @@ impl<T: RegexRule> Rule for T {
 }
 */
 
-pub trait RegexRule
-{
+pub trait RegexRule {
 	fn name(&self) -> &'static str;
 
 	/// Returns the rule's regexes
 	fn regexes(&self) -> &[regex::Regex];
 
 	/// Callback on regex rule match
-	fn on_regex_match<'a>(&self, index: usize, parser: &dyn Parser, document: &'a (dyn Document<'a>+'a), token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>;
+	fn on_regex_match<'a>(
+		&self,
+		index: usize,
+		parser: &dyn Parser,
+		document: &'a (dyn Document<'a> + 'a),
+		token: Token,
+		matches: regex::Captures,
+	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>;
 
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)>;
 }
 
 impl<T: RegexRule> Rule for T {
-	fn name(&self) -> &'static str { RegexRule::name(self) }
-
-	/// Finds the next match starting from [`cursor`]
-	fn next_match(&self, cursor: &Cursor)
-		-> Option<(usize, Box<dyn Any>)> {
-		let content = cursor.source.content();
-        let mut found: Option<(usize, usize)> = None;
-        self.regexes().iter().enumerate().for_each(|(id, re)| {
-            if let Some(m) = re.find_at(content.as_str(), cursor.pos)
-            {
-                found = found
-					.and_then(|(f_pos, f_id)|
-						if f_pos > m.start() { Some((m.start(), id)) } else { Some((f_pos, f_id)) } )
-					.or(Some((m.start(), id)));
-            }
-        });
-
-        return found.map(|(pos, id)|
-			(pos, Box::new(id) as Box<dyn Any>));
+	fn name(&self) -> &'static str {
+		RegexRule::name(self)
 	}
 
-	fn on_match<'a>(&self, parser: &dyn Parser, document: &'a (dyn Document<'a>+'a), cursor: Cursor, match_data: Option<Box<dyn Any>>)
-		-> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+	/// Finds the next match starting from [`cursor`]
+	fn next_match(&self, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		let content = cursor.source.content();
-		let index = unsafe { match_data.unwrap_unchecked().downcast::<usize>().unwrap_unchecked() };
+		let mut found: Option<(usize, usize)> = None;
+		self.regexes().iter().enumerate().for_each(|(id, re)| {
+			if let Some(m) = re.find_at(content.as_str(), cursor.pos) {
+				found = found
+					.and_then(|(f_pos, f_id)| {
+						if f_pos > m.start() {
+							Some((m.start(), id))
+						} else {
+							Some((f_pos, f_id))
+						}
+					})
+					.or(Some((m.start(), id)));
+			}
+		});
+
+		return found.map(|(pos, id)| (pos, Box::new(id) as Box<dyn Any>));
+	}
+
+	fn on_match<'a>(
+		&self,
+		parser: &dyn Parser,
+		document: &'a (dyn Document<'a> + 'a),
+		cursor: Cursor,
+		match_data: Option<Box<dyn Any>>,
+	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+		let content = cursor.source.content();
+		let index = unsafe {
+			match_data
+				.unwrap_unchecked()
+				.downcast::<usize>()
+				.unwrap_unchecked()
+		};
 		let re = &self.regexes()[*index];
 
 		let captures = re.captures_at(content.as_str(), cursor.pos).unwrap();
 		let token = Token::new(captures.get(0).unwrap().range(), cursor.source.clone());
 
 		let token_end = token.end();
-		return (cursor.at(token_end), self.on_regex_match(*index, parser, document, token, captures));
+		return (
+			cursor.at(token_end),
+			self.on_regex_match(*index, parser, document, token, captures),
+		);
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { self.lua_bindings(lua) }
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+		self.lua_bindings(lua)
+	}
 }
