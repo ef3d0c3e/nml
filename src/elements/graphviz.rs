@@ -38,6 +38,7 @@ struct Graphviz {
 	pub location: Token,
 	pub dot: String,
 	pub layout: Layout,
+	pub width: String,
 	pub caption: Option<String>,
 }
 
@@ -66,9 +67,13 @@ impl Graphviz {
 		) {
 			Ok(svg) => {
 				let out = String::from_utf8_lossy(svg.as_slice());
-				let split_at = out.find("<!-- Generated").unwrap(); // Remove svg header
+				let svg_start = out.find("<svg").unwrap(); // Remove svg header
+				let split_at = out.split_at(svg_start).1.find('\n').unwrap();
 
-				out.split_at(split_at).1.to_string()
+				let mut result = format!("<svg width=\"{}\"", self.width);
+				result.push_str(out.split_at(svg_start+split_at).1);
+
+				result
 			}
 			Err(e) => return Err(format!("Unable to execute dot: {e}")),
 		};
@@ -159,6 +164,14 @@ impl GraphRule {
 				true,
 				"Graphviz layout engine see <https://graphviz.org/docs/layouts/>".to_string(),
 				Some("dot".to_string()),
+			),
+		);
+		props.insert(
+			"width".to_string(),
+			Property::new(
+				true,
+				"SVG width".to_string(),
+				Some("100%".to_string()),
 			),
 		);
 		Self {
@@ -314,6 +327,36 @@ impl RegexRule for GraphRule {
 			},
 		};
 
+		// FIXME: You can escape html, make sure we escape single "
+		// Property "width"
+		let graph_width = match properties.get("width", |_, value| -> Result<String, ()> {
+			Ok(value.clone())
+		}) {
+			Ok((_, kind)) => kind,
+			Err(e) => match e {
+				PropertyMapError::NotFoundError(err) => {
+					reports.push(
+						Report::build(ReportKind::Error, token.source(), token.start())
+							.with_message("Invalid Graph Property")
+							.with_label(
+								Label::new((
+									token.source().clone(),
+									token.start() + 1..token.end(),
+								))
+								.with_message(format!(
+									"Property `{}` is missing",
+									err.fg(parser.colors().info)
+								))
+								.with_color(parser.colors().warning),
+							)
+							.finish(),
+					);
+					return reports;
+				}
+				_ => panic!("Unknown error")
+			},
+		};
+
 		// TODO: Caption
 
 		parser.push(
@@ -322,6 +365,7 @@ impl RegexRule for GraphRule {
 				location: token,
 				dot: graph_content,
 				layout: graph_layout,
+				width: graph_width,
 				caption: None,
 			}),
 		);
