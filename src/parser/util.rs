@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -6,6 +7,9 @@ use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::elements::paragraph::Paragraph;
+
+use super::parser::Parser;
+use super::source::Source;
 
 /// Processes text for escape characters and paragraphing
 pub fn process_text(document: &dyn Document, content: &str) -> String {
@@ -129,6 +133,26 @@ pub fn process_escaped<S: AsRef<str>>(escape: char, token: &'static str, content
 	processed
 }
 
+/// Parses source into a single paragraph
+/// If source contains anything but a single paragraph, an error is returned
+pub fn parse_paragraph<'a>(
+	parser: &dyn Parser,
+	source: Rc<dyn Source>,
+	document: &'a dyn Document<'a>,
+) -> Result<Box<Paragraph>, &'static str> {
+	let parsed = parser.parse(source.clone(), Some(document));
+	if parsed.content().borrow().len() > 1 {
+		return Err("Parsed document contains more than a single paragraph");
+	} else if parsed.content().borrow().len() == 0 {
+		return Err("Parser document is empty");
+	} else if parsed.last_element::<Paragraph>().is_none() {
+		return Err("Parsed element is not a paragraph");
+	}
+
+	let paragraph = parsed.content().borrow_mut().pop().unwrap();
+	Ok(paragraph.downcast::<Paragraph>().unwrap())
+}
+
 #[derive(Debug)]
 pub struct Property {
 	required: bool,
@@ -210,9 +234,7 @@ pub struct PropertyParser {
 }
 
 impl PropertyParser {
-	pub fn new(properties: HashMap<String, Property>) -> Self {
-		Self { properties }
-	}
+	pub fn new(properties: HashMap<String, Property>) -> Self { Self { properties } }
 
 	/// Attempts to build a default propertymap
 	///

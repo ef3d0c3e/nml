@@ -314,10 +314,7 @@ impl RegexRule for GraphRule {
 									token.source().clone(),
 									token.start() + 1..token.end(),
 								))
-								.with_message(format!(
-									"Property `{}` is missing",
-									err.fg(parser.colors().info)
-								))
+								.with_message(err)
 								.with_color(parser.colors().warning),
 							)
 							.finish(),

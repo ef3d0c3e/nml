@@ -6,6 +6,7 @@ use super::graphviz::GraphRule;
 use super::import::ImportRule;
 use super::link::LinkRule;
 use super::list::ListRule;
+use super::media::MediaRule;
 use super::paragraph::ParagraphRule;
 use super::raw::RawRule;
 use super::script::ScriptRule;
@@ -28,6 +29,7 @@ pub fn register<P: Parser>(parser: &mut P) {
 	parser.add_rule(Box::new(CodeRule::new()), None).unwrap();
 	parser.add_rule(Box::new(TexRule::new()), None).unwrap();
 	parser.add_rule(Box::new(GraphRule::new()), None).unwrap();
+	parser.add_rule(Box::new(MediaRule::new()), None).unwrap();
 
 	parser.add_rule(Box::new(StyleRule::new()), None).unwrap();
 	parser.add_rule(Box::new(SectionRule::new()), None).unwrap();
