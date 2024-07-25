@@ -130,14 +130,14 @@ impl Element for Media {
 			Target::HTML => {
 				let mut result = String::new();
 
-				result.push_str("<div class=\"medium\">");
 				let width = self
 					.width
 					.as_ref()
-					.map_or(String::new(), |w| format!(r#" width="{w}""#));
+					.map_or(String::new(), |w| format!(r#" style="width:{w};""#));
+				result.push_str(format!(r#"<div class="medium" {width}>"#).as_str());
 				match self.media_type {
 					MediaType::IMAGE => result.push_str(
-						format!(r#"<a href="{0}"><img src="{0}"{width}></a>"#, self.uri).as_str(),
+						format!(r#"<a href="{0}"><img src="{0}"></a>"#, self.uri).as_str(),
 					),
 					MediaType::VIDEO => todo!(),
 					MediaType::AUDIO => todo!(),
