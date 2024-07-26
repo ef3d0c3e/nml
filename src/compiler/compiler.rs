@@ -7,7 +7,6 @@ use rusqlite::Connection;
 
 use crate::document::document::Document;
 use crate::document::document::ElemReference;
-use crate::document::element::ReferenceableElement;
 use crate::document::variable::Variable;
 
 #[derive(Clone, Copy)]
@@ -62,7 +61,7 @@ impl Compiler {
 			// Insert new ref
 			let index = map
 				.iter()
-				.fold(0, |max, (name, value)| std::cmp::max(max, *value));
+				.fold(0, |max, (_, value)| std::cmp::max(max, *value));
 			map.insert(refname.clone(), index + 1);
 			index + 1
 		}
