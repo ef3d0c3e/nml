@@ -11,12 +11,12 @@ Some features requires external dependencies to work.
 We ship a modified version of `latex2svg` by Matthias C. Hormann.
 The modified program can be found in [third/latex2svg](third/latex2svg) and is licensed under MIT.
 
-The installation instructions specified on [latex2svg's repository](https://github.com/Moonbase59/latex2svg).
+The installation instructions can be found on [latex2svg's repository](https://github.com/Moonbase59/latex2svg).
 
 ## Graphviz rendering
 
-To render Graphviz graph `[graph]...[/graph]`
-You need to install the `dot` program from [Graphviz](https://graphviz.org/) in order to render graphs.
+To render Graphviz graph (i.e `[graph]...[/graph]`),
+you need to install the `dot` program from [Graphviz](https://graphviz.org/).
 
 ## Lua kernels
 
@@ -36,6 +36,8 @@ cargo build --release --bin nml
  - [x] Graphviz rendering
  - [x] Media
  - [ ] References
+ - [ ] Navigation
+ - [ ] Cross-Document references
  - [ ] Complete Lua api
  - [ ] Documentation
  - [ ] Table

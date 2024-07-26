@@ -10,6 +10,7 @@ use regex::Regex;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::document::document::Document;
+use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::parser::Parser;
@@ -27,26 +28,12 @@ use crate::parser::source::Token;
 // Which would need to be reworked
 #[derive(Debug)]
 pub struct Paragraph {
-	location: Token,
+	pub location: Token,
 	pub content: Vec<Box<dyn Element>>,
 }
 
 impl Paragraph {
-	pub fn new(location: Token) -> Self {
-		Self {
-			location,
-			content: Vec::new(),
-		}
-	}
-
 	pub fn is_empty(&self) -> bool { self.content.is_empty() }
-
-	pub fn push(&mut self, elem: Box<dyn Element>) {
-		if elem.location().source() == self.location().source() {
-			self.location.range = self.location.start()..elem.location().end();
-		}
-		self.content.push(elem);
-	}
 
 	pub fn find_back<P: FnMut(&&Box<dyn Element + 'static>) -> bool>(
 		&self,
@@ -102,6 +89,20 @@ impl Element for Paragraph {
 			Target::LATEX => todo!("Unimplemented compiler"),
 		}
 	}
+
+	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
+}
+
+impl ContainerElement for Paragraph {
+	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.content }
+
+	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
+		if elem.location().source() == self.location().source() {
+			self.location.range = self.location.start()..elem.location().end();
+		}
+		self.content.push(elem);
+		Ok(())
+	}
 }
 
 pub struct ParagraphRule {
@@ -139,10 +140,10 @@ impl Rule for ParagraphRule {
 
 		parser.push(
 			document,
-			Box::new(Paragraph::new(Token::new(
-				cursor.pos..end_cursor.pos,
-				cursor.source.clone(),
-			))),
+			Box::new(Paragraph {
+				location: Token::new(cursor.pos..end_cursor.pos, cursor.source.clone()),
+				content: Vec::new(),
+			}),
 		);
 
 		(end_cursor, Vec::new())

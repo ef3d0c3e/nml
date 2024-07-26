@@ -144,7 +144,7 @@ pub fn parse_paragraph<'a>(
 	if parsed.content().borrow().len() > 1 {
 		return Err("Parsed document contains more than a single paragraph");
 	} else if parsed.content().borrow().len() == 0 {
-		return Err("Parser document is empty");
+		return Err("Parsed document is empty");
 	} else if parsed.last_element::<Paragraph>().is_none() {
 		return Err("Parsed element is not a paragraph");
 	}
@@ -347,6 +347,7 @@ impl PropertyParser {
 				escaped = 0;
 			}
 		}
+		(0..escaped).for_each(|_| value.push('\\'));
 		if !in_name && value.trim_end().trim_start().is_empty() {
 			return Err("Expected a value after last `=`".to_string());
 		} else if name.is_empty() || value.is_empty() {
@@ -379,6 +380,7 @@ impl PropertyParser {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::document::element::ContainerElement;
 	use crate::document::langdocument::LangDocument;
 	use crate::elements::comment::Comment;
 	use crate::elements::style::Style;
@@ -405,7 +407,10 @@ mod tests {
 		assert_eq!(process_text(&doc, "\na"), "a");
 
 		let tok = Token::new(0..0, source);
-		doc.push(Box::new(Paragraph::new(tok.clone())));
+		doc.push(Box::new(Paragraph {
+			location: tok.clone(),
+			content: Vec::new(),
+		}));
 
 		// Comments are ignored (kind => Invisible)
 		(&doc as &dyn Document)

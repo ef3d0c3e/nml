@@ -10,6 +10,7 @@ use ariadne::Report;
 
 use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
+use crate::document::element::ContainerElement;
 use crate::document::element::DocumentEnd;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
@@ -119,23 +120,13 @@ impl LangParser {
 }
 
 impl Parser for LangParser {
-	fn colors(&self) -> &ReportColors {
-		&self.colors
-	}
+	fn colors(&self) -> &ReportColors { &self.colors }
 
-	fn rules(&self) -> &Vec<Box<dyn Rule>> {
-		&self.rules
-	}
-	fn rules_mut(&mut self) -> &mut Vec<Box<dyn Rule>> {
-		&mut self.rules
-	}
+	fn rules(&self) -> &Vec<Box<dyn Rule>> { &self.rules }
+	fn rules_mut(&mut self) -> &mut Vec<Box<dyn Rule>> { &mut self.rules }
 
-	fn state(&self) -> std::cell::Ref<'_, StateHolder> {
-		self.state.borrow()
-	}
-	fn state_mut(&self) -> std::cell::RefMut<'_, StateHolder> {
-		self.state.borrow_mut()
-	}
+	fn state(&self) -> std::cell::Ref<'_, StateHolder> { self.state.borrow() }
+	fn state_mut(&self) -> std::cell::RefMut<'_, StateHolder> { self.state.borrow_mut() }
 
 	fn has_error(&self) -> bool { *self.err_flag.borrow() }
 
@@ -145,7 +136,10 @@ impl Parser for LangParser {
 			let mut paragraph = doc
 				.last_element_mut::<Paragraph>()
 				.or_else(|| {
-					doc.push(Box::new(Paragraph::new(elem.location().clone())));
+					doc.push(Box::new(Paragraph {
+						location: elem.location().clone(),
+						content: Vec::new(),
+					}));
 					doc.last_element_mut::<Paragraph>()
 				})
 				.unwrap();
@@ -228,9 +222,13 @@ impl Parser for LangParser {
 				.on_scope_end(self, &doc, super::state::Scope::DOCUMENT),
 		);
 
-		self.push(&doc, Box::new(DocumentEnd(
-			Token::new(doc.source().content().len()..doc.source().content().len(), doc.source())
-		)));
+		self.push(
+			&doc,
+			Box::new(DocumentEnd(Token::new(
+				doc.source().content().len()..doc.source().content().len(),
+				doc.source(),
+			))),
+		);
 
 		return Box::new(doc);
 	}

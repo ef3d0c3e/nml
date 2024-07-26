@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::io::Read;
 use std::io::Write;
 use std::ops::Range;
 use std::process::Command;
 use std::process::Stdio;
 use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::Once;
 
 use ariadne::Fmt;
@@ -15,6 +17,7 @@ use crypto::sha2::Sha512;
 use mlua::Function;
 use mlua::Lua;
 use regex::Captures;
+use regex::Match;
 use regex::Regex;
 
 use crate::cache::cache::Cached;
@@ -25,15 +28,32 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::util;
+use crate::parser::util::Property;
+use crate::parser::util::PropertyMap;
+use crate::parser::util::PropertyMapError;
+use crate::parser::util::PropertyParser;
 
 #[derive(Debug, PartialEq, Eq)]
 enum TexKind {
 	Block,
 	Inline,
+}
+
+impl FromStr for TexKind {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s {
+			"inline" => Ok(TexKind::Inline),
+			"block" => Ok(TexKind::Block),
+			_ => Err(format!("Unknown kind: {s}")),
+		}
+	}
 }
 
 impl From<&TexKind> for ElemKind {
@@ -47,30 +67,14 @@ impl From<&TexKind> for ElemKind {
 
 #[derive(Debug)]
 struct Tex {
-	location: Token,
-	block: TexKind,
-	env: String,
-	tex: String,
-	caption: Option<String>,
+	pub(self) location: Token,
+	pub(self) kind: TexKind,
+	pub(self) env: String,
+	pub(self) tex: String,
+	pub(self) caption: Option<String>,
 }
 
 impl Tex {
-	fn new(
-		location: Token,
-		block: TexKind,
-		env: String,
-		tex: String,
-		caption: Option<String>,
-	) -> Self {
-		Self {
-			location,
-			block,
-			env,
-			tex,
-			caption,
-		}
-	}
-
 	fn format_latex(fontsize: &String, preamble: &String, tex: &String) -> FormattedTex {
 		FormattedTex(format!(
 			r"\documentclass[{}pt,preview]{{standalone}}
@@ -127,13 +131,9 @@ impl Cached for FormattedTex {
 				svg    BLOB NOT NULL);"
 	}
 
-	fn sql_get_query() -> &'static str {
-		"SELECT svg FROM cached_tex WHERE digest = (?1)"
-	}
+	fn sql_get_query() -> &'static str { "SELECT svg FROM cached_tex WHERE digest = (?1)" }
 
-	fn sql_insert_query() -> &'static str {
-		"INSERT INTO cached_tex (digest, svg) VALUES (?1, ?2)"
-	}
+	fn sql_insert_query() -> &'static str { "INSERT INTO cached_tex (digest, svg) VALUES (?1, ?2)" }
 
 	fn key(&self) -> <Self as Cached>::Key {
 		let mut hasher = Sha512::new();
@@ -144,21 +144,13 @@ impl Cached for FormattedTex {
 }
 
 impl Element for Tex {
-	fn location(&self) -> &Token {
-		&self.location
-	}
+	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		(&self.block).into()
-	}
+	fn kind(&self) -> ElemKind { (&self.kind).into() }
 
-	fn element_name(&self) -> &'static str {
-		"LaTeX"
-	}
+	fn element_name(&self) -> &'static str { "LaTeX" }
 
-	fn to_string(&self) -> String {
-		format!("{self:#?}")
-	}
+	fn to_string(&self) -> String { format!("{self:#?}") }
 
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
@@ -172,6 +164,8 @@ impl Element for Tex {
 					}
 				});
 
+				// TODO: Do something with the caption
+
 				let exec = document
 					.get_variable(format!("tex.{}.exec", self.env).as_str())
 					.map_or("latex2svg".to_string(), |var| var.to_string());
@@ -182,7 +176,7 @@ impl Element for Tex {
 				let preamble = document
 					.get_variable(format!("tex.{}.preamble", self.env).as_str())
 					.map_or("".to_string(), |var| var.to_string());
-				let prepend = if self.block == TexKind::Inline {
+				let prepend = if self.kind == TexKind::Inline {
 					"".to_string()
 				} else {
 					document
@@ -190,7 +184,7 @@ impl Element for Tex {
 						.map_or("".to_string(), |var| var.to_string() + "\n")
 				};
 
-				let latex = match self.block {
+				let latex = match self.kind {
 					TexKind::Inline => {
 						Tex::format_latex(&fontsize, &preamble, &format!("${{{}}}$", self.tex))
 					}
@@ -218,27 +212,82 @@ impl Element for Tex {
 
 pub struct TexRule {
 	re: [Regex; 2],
+	properties: PropertyParser,
 }
 
 impl TexRule {
 	pub fn new() -> Self {
+		let mut props = HashMap::new();
+		props.insert(
+			"env".to_string(),
+			Property::new(
+				true,
+				"Tex environment".to_string(),
+				Some("main".to_string()),
+			),
+		);
+		props.insert(
+			"kind".to_string(),
+			Property::new(false, "Element display kind".to_string(), None),
+		);
+		props.insert(
+			"caption".to_string(),
+			Property::new(false, "Latex caption".to_string(), None),
+		);
 		Self {
 			re: [
-				Regex::new(r"\$\|(?:\[(.*)\])?(?:((?:\\.|[^\\\\])*?)\|\$)?").unwrap(),
-				Regex::new(r"\$(?:\[(.*)\])?(?:((?:\\.|[^\\\\])*?)\$)?").unwrap(),
+				Regex::new(r"\$\|(?:\[((?:\\.|[^\\\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\|\$)?").unwrap(),
+				Regex::new(r"\$(?:\[((?:\\.|[^\\\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\$)?").unwrap(),
 			],
+			properties: PropertyParser::new(props),
+		}
+	}
+
+	fn parse_properties(
+		&self,
+		colors: &ReportColors,
+		token: &Token,
+		m: &Option<Match>,
+	) -> Result<PropertyMap, Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+		match m {
+			None => match self.properties.default() {
+				Ok(properties) => Ok(properties),
+				Err(e) => Err(
+					Report::build(ReportKind::Error, token.source(), token.start())
+						.with_message("Invalid Tex Properties")
+						.with_label(
+							Label::new((token.source().clone(), token.range.clone()))
+								.with_message(format!("Tex is missing required property: {e}"))
+								.with_color(colors.error),
+						)
+						.finish(),
+				),
+			},
+			Some(props) => {
+				let processed =
+					util::process_escaped('\\', "]", props.as_str().trim_start().trim_end());
+				match self.properties.parse(processed.as_str()) {
+					Err(e) => Err(
+						Report::build(ReportKind::Error, token.source(), props.start())
+							.with_message("Invalid Tex Properties")
+							.with_label(
+								Label::new((token.source().clone(), props.range()))
+									.with_message(e)
+									.with_color(colors.error),
+							)
+							.finish(),
+					),
+					Ok(properties) => Ok(properties),
+				}
+			}
 		}
 	}
 }
 
 impl RegexRule for TexRule {
-	fn name(&self) -> &'static str {
-		"Tex"
-	}
+	fn name(&self) -> &'static str { "Tex" }
 
-	fn regexes(&self) -> &[regex::Regex] {
-		&self.re
-	}
+	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
 	fn on_regex_match(
 		&self,
@@ -249,12 +298,6 @@ impl RegexRule for TexRule {
 		matches: Captures,
 	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
-
-		let tex_env = matches
-			.get(1)
-			.and_then(|env| Some(env.as_str().trim_start().trim_end()))
-			.and_then(|env| (!env.is_empty()).then_some(env))
-			.unwrap_or("main");
 
 		let tex_content = match matches.get(2) {
 			// Unterminated `$`
@@ -298,28 +341,155 @@ impl RegexRule for TexRule {
 			}
 		};
 
-		// TODO: Caption
+		// Properties
+		let properties = match self.parse_properties(parser.colors(), &token, &matches.get(1)) {
+			Ok(pm) => pm,
+			Err(report) => {
+				reports.push(report);
+				return reports;
+			}
+		};
+
+		// Tex kind
+		let tex_kind = match properties.get("kind", |prop, value| {
+			TexKind::from_str(value.as_str()).map_err(|e| (prop, e))
+		}) {
+			Ok((_prop, kind)) => kind,
+			Err(e) => match e {
+				PropertyMapError::ParseError((prop, err)) => {
+					reports.push(
+						Report::build(ReportKind::Error, token.source(), token.start())
+							.with_message("Invalid Tex Property")
+							.with_label(
+								Label::new((token.source().clone(), token.range.clone()))
+									.with_message(format!(
+										"Property `kind: {}` cannot be converted: {}",
+										prop.fg(parser.colors().info),
+										err.fg(parser.colors().error)
+									))
+									.with_color(parser.colors().warning),
+							)
+							.finish(),
+					);
+					return reports;
+				}
+				PropertyMapError::NotFoundError(err) => {
+					if index == 1 {
+						TexKind::Inline
+					} else {
+						TexKind::Block
+					}
+				}
+			},
+		};
+
+		// Caption
+		let caption = properties
+			.get("caption", |_, value| -> Result<String, ()> {
+				Ok(value.clone())
+			})
+			.ok()
+			.and_then(|(_, value)| Some(value));
+
+		// Environ
+		let tex_env = properties
+			.get("env", |_, value| -> Result<String, ()> {
+				Ok(value.clone())
+			})
+			.ok()
+			.and_then(|(_, value)| Some(value))
+			.unwrap();
 
 		parser.push(
 			document,
-			Box::new(Tex::new(
-				token,
-				if index == 1 {
-					TexKind::Inline
-				} else {
-					TexKind::Block
-				},
-				tex_env.to_string(),
-				tex_content,
-				None,
-			)),
+			Box::new(Tex {
+				location: token,
+				kind: tex_kind,
+				env: tex_env.to_string(),
+				tex: tex_content,
+				caption,
+			}),
 		);
 
 		reports
 	}
 
 	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
-		vec![]
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::parser::langparser::LangParser;
+	use crate::parser::source::SourceFile;
+
+	use super::*;
+
+	#[test]
+	fn tex_block() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+$[kind=block, caption=Some\, text\\] 1+1=2	$
+$|[env=another] Non Math \LaTeX|$
+$[kind=block,env=another] e^{i\pi}=-1$
+			"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let compiler = Compiler::new(Target::HTML, None);
+		let doc = parser.parse(source, None);
+
+		let borrow = doc.content().borrow();
+		let found = borrow
+			.iter()
+			.filter_map(|e| e.downcast_ref::<Tex>())
+			.collect::<Vec<_>>();
+
+		assert_eq!(found[0].tex, "1+1=2");
+		assert_eq!(found[0].env, "main");
+		assert_eq!(found[0].caption, Some("Some, text\\".to_string()));
+		assert_eq!(found[1].tex, "Non Math \\LaTeX");
+		assert_eq!(found[1].env, "another");
+		assert_eq!(found[2].tex, "e^{i\\pi}=-1");
+		assert_eq!(found[2].env, "another");
+	}
+
+	#[test]
+	fn tex_inline() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+$[ caption=Some\, text\\] 1+1=2	$
+$|[env=another, kind=inline  ,   caption = Enclosed \].  ] Non Math \LaTeX|$
+$[env=another] e^{i\pi}=-1$
+			"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let compiler = Compiler::new(Target::HTML, None);
+		let doc = parser.parse(source, None);
+
+		let borrow = doc.content().borrow();
+		let found = borrow
+			.first()
+			.unwrap()
+			.as_container()
+			.unwrap()
+			.contained()
+			.iter()
+			.filter_map(|e| e.downcast_ref::<Tex>())
+			.collect::<Vec<_>>();
+
+		assert_eq!(found[0].tex, "1+1=2");
+		assert_eq!(found[0].env, "main");
+		assert_eq!(found[0].caption, Some("Some, text\\".to_string()));
+		assert_eq!(found[1].tex, "Non Math \\LaTeX");
+		assert_eq!(found[1].env, "another");
+		assert_eq!(found[1].caption, Some("Enclosed ].".to_string()));
+		assert_eq!(found[2].tex, "e^{i\\pi}=-1");
+		assert_eq!(found[2].env, "another");
 	}
 }
