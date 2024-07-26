@@ -68,6 +68,7 @@ impl From<&TexKind> for ElemKind {
 #[derive(Debug)]
 struct Tex {
 	pub(self) location: Token,
+	pub(self) mathmode: bool,
 	pub(self) kind: TexKind,
 	pub(self) env: String,
 	pub(self) tex: String,
@@ -176,7 +177,7 @@ impl Element for Tex {
 				let preamble = document
 					.get_variable(format!("tex.{}.preamble", self.env).as_str())
 					.map_or("".to_string(), |var| var.to_string());
-				let prepend = if self.kind == TexKind::Inline {
+				let prepend = if self.mathmode {
 					"".to_string()
 				} else {
 					document
@@ -184,11 +185,10 @@ impl Element for Tex {
 						.map_or("".to_string(), |var| var.to_string() + "\n")
 				};
 
-				let latex = match self.kind {
-					TexKind::Inline => {
-						Tex::format_latex(&fontsize, &preamble, &format!("${{{}}}$", self.tex))
-					}
-					_ => Tex::format_latex(&fontsize, &preamble, &format!("{prepend}{}", self.tex)),
+				let latex = if self.mathmode {
+					Tex::format_latex(&fontsize, &preamble, &format!("${{{}}}$", self.tex))
+				} else {
+					Tex::format_latex(&fontsize, &preamble, &format!("{prepend}{}", self.tex))
 				};
 
 				if let Some(mut con) = compiler.cache() {
@@ -236,7 +236,8 @@ impl TexRule {
 		);
 		Self {
 			re: [
-				Regex::new(r"\$\|(?:\[((?:\\.|[^\\\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\|\$)?").unwrap(),
+				Regex::new(r"\$\|(?:\[((?:\\.|[^\\\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\|\$)?")
+					.unwrap(),
 				Regex::new(r"\$(?:\[((?:\\.|[^\\\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\$)?").unwrap(),
 			],
 			properties: PropertyParser::new(props),
@@ -403,6 +404,7 @@ impl RegexRule for TexRule {
 		parser.push(
 			document,
 			Box::new(Tex {
+				mathmode: index == 1,
 				location: token,
 				kind: tex_kind,
 				env: tex_env.to_string(),
