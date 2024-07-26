@@ -16,8 +16,10 @@ use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
+use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::document::element::ReferenceableElement;
 use crate::document::references::validate_refname;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -54,35 +56,21 @@ impl FromStr for MediaType {
 }
 
 #[derive(Debug)]
-struct MediaGroup {
+struct Media {
 	pub(self) location: Token,
-	pub(self) media: Vec<Media>,
+	pub(self) media: Vec<Box<dyn Element>>,
 }
 
-impl MediaGroup {
-	fn push(&mut self, media: Media) -> Result<(), String> {
-		if self.location.source() != media.location.source() {
-			return Err(format!(
-				"Attempted to insert media from {} into MediaGroup from {}",
-				self.location.source(),
-				media.location.source()
-			));
-		}
-
-		self.location.range = self.location.start()..media.location.end();
-		self.media.push(media);
-		Ok(())
-	}
-}
-
-impl Element for MediaGroup {
+impl Element for Media {
 	fn location(&self) -> &Token { &self.location }
 
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 
-	fn element_name(&self) -> &'static str { "Media Group" }
+	fn element_name(&self) -> &'static str { "Media" }
 
 	fn to_string(&self) -> String { format!("{self:#?}") }
+
+	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
 
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
@@ -105,8 +93,30 @@ impl Element for MediaGroup {
 	}
 }
 
+impl ContainerElement for Media {
+	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.media }
+
+	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
+		let medium = match elem.downcast_ref::<Medium>() {
+			Some(medium) => medium,
+			None => return Err("Attempted to insert invalid element into Media".to_string()),
+		};
+		if self.location.source() != medium.location.source() {
+			return Err(format!(
+				"Attempted to insert medium from {} into medium from {}",
+				self.location.source(),
+				medium.location.source()
+			));
+		}
+
+		self.location.range = self.location.start()..medium.location.end();
+		self.media.push(elem);
+		Ok(())
+	}
+}
+
 #[derive(Debug)]
-struct Media {
+struct Medium {
 	pub(self) location: Token,
 	pub(self) reference: String,
 	pub(self) uri: String,
@@ -116,14 +126,16 @@ struct Media {
 	pub(self) description: Option<Paragraph>,
 }
 
-impl Element for Media {
+impl Element for Medium {
 	fn location(&self) -> &Token { &self.location }
 
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 
-	fn element_name(&self) -> &'static str { "Media" }
+	fn element_name(&self) -> &'static str { "Medium" }
 
 	fn to_string(&self) -> String { format!("{self:#?}") }
+
+	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
@@ -142,7 +154,19 @@ impl Element for Media {
 					MediaType::VIDEO => todo!(),
 					MediaType::AUDIO => todo!(),
 				}
-				result.push_str(format!(r#"<p class="medium-refname">{}</p>"#, "TODO").as_str());
+
+				let caption = self
+					.caption
+					.as_ref()
+					.and_then(|cap| Some(format!(" {}", compiler.sanitize(cap.as_str()))))
+					.unwrap_or(String::new());
+
+				// Reference
+				let elemref = document.get_reference(self.reference.as_str()).unwrap();
+				let refcount = compiler.reference_id(document, elemref);
+				result.push_str(
+					format!(r#"<p class="medium-refname">({refcount}){caption}</p>"#).as_str(),
+				);
 				if let Some(paragraph) = self.description.as_ref() {
 					match paragraph.compile(compiler, document) {
 						Ok(res) => result.push_str(res.as_str()),
@@ -156,6 +180,12 @@ impl Element for Media {
 			_ => todo!(""),
 		}
 	}
+}
+
+impl ReferenceableElement for Medium {
+	fn reference_name(&self) -> Option<&String> { Some(&self.reference) }
+
+	fn refcount_key(&self) -> &'static str { "medium" }
 }
 
 pub struct MediaRule {
@@ -177,6 +207,10 @@ impl MediaRule {
 		props.insert(
 			"width".to_string(),
 			Property::new(false, "Override for the media width".to_string(), None),
+		);
+		props.insert(
+			"caption".to_string(),
+			Property::new(false, "Medium caption".to_string(), None),
 		);
 		Self {
 			re: [RegexBuilder::new(
@@ -366,6 +400,13 @@ impl RegexRule for MediaRule {
 			.ok()
 			.and_then(|(_, s)| Some(s));
 
+		let caption = properties
+			.get("caption", |_, value| -> Result<String, ()> {
+				Ok(value.clone())
+			})
+			.ok()
+			.and_then(|(_, value)| Some(value));
+
 		let description = match matches.get(4) {
 			Some(content) => {
 				let source = Rc::new(VirtualSource::new(
@@ -399,31 +440,30 @@ impl RegexRule for MediaRule {
 			None => panic!("Unknown error"),
 		};
 
-		// TODO: caption
-		let mut group = match document.last_element_mut::<MediaGroup>() {
+		let mut group = match document.last_element_mut::<Media>() {
 			Some(group) => group,
 			None => {
 				parser.push(
 					document,
-					Box::new(MediaGroup {
+					Box::new(Media {
 						location: token.clone(),
 						media: vec![],
 					}),
 				);
 
-				document.last_element_mut::<MediaGroup>().unwrap()
+				document.last_element_mut::<Media>().unwrap()
 			}
 		};
 
-		if let Err(err) = group.push(Media {
+		if let Err(err) = group.push(Box::new(Medium {
 			location: token.clone(),
 			reference: refname,
 			uri,
 			media_type,
 			width,
-			caption: None,
+			caption,
 			description,
-		}) {
+		})) {
 			reports.push(
 				Report::build(ReportKind::Error, token.source(), token.start())
 					.with_message("Invalid Media")

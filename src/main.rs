@@ -85,16 +85,15 @@ fn main() {
 		println!("-- END AST DEBUGGING --");
 	}
 
-	// TODO
-	//if debug_opts.contains(&"ref".to_string())
-	//{
-	//	println!("-- BEGIN REFERENCES DEBUGGING --");
-	//	let sc = doc.scope.borrow();
-	//	sc.referenceable.iter().for_each(|(name, pos)| {
-	//		println!(" - {name}: `{:#?}`", doc.content.borrow()[*pos]);
-	//	});
-	//	println!("-- END REFERENCES DEBUGGING --");
-	//}
+	if debug_opts.contains(&"ref".to_string())
+	{
+		println!("-- BEGIN REFERENCES DEBUGGING --");
+		let sc = doc.scope().borrow();
+		sc.referenceable.iter().for_each(|(name, reference)| {
+			println!(" - {name}: `{:#?}`", doc.get_from_reference(reference));
+		});
+		println!("-- END REFERENCES DEBUGGING --");
+	}
 	if debug_opts.contains(&"var".to_string()) {
 		println!("-- BEGIN VARIABLES DEBUGGING --");
 		let sc = doc.scope().borrow();

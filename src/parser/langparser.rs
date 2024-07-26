@@ -10,6 +10,7 @@ use ariadne::Report;
 
 use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
+use crate::document::element::DocumentEnd;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::langdocument::LangDocument;
@@ -226,6 +227,10 @@ impl Parser for LangParser {
 			self.state_mut()
 				.on_scope_end(self, &doc, super::state::Scope::DOCUMENT),
 		);
+
+		self.push(&doc, Box::new(DocumentEnd(
+			Token::new(doc.source().content().len()..doc.source().content().len(), doc.source())
+		)));
 
 		return Box::new(doc);
 	}

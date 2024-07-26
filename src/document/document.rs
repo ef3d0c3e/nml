@@ -7,16 +7,22 @@ use std::rc::Rc;
 use crate::parser::source::Source;
 
 use super::element::Element;
+use super::element::ReferenceableElement;
 use super::variable::Variable;
 
-// TODO: Referenceable rework
-// Usize based referencing is not an acceptable method
-// if we want to support deltas for the lsp
+#[derive(Debug, Clone, Copy)]
+pub enum ElemReference {
+	Direct(usize),
+
+	// Reference nested inside another element, e.g [`Paragraph`] or [`Media`]
+	Nested(usize, usize),
+}
+
 #[derive(Debug)]
 pub struct Scope {
 	/// List of all referenceable elements in current scope.
 	/// All elements in this should return a non empty
-	pub referenceable: HashMap<String, usize>,
+	pub referenceable: HashMap<String, ElemReference>,
 	pub variables: HashMap<String, Rc<dyn Variable>>,
 }
 
@@ -32,12 +38,16 @@ impl Scope {
 		match merge_as.is_empty() {
 			true => {
 				// References
-				self.referenceable.extend(
-					other
-						.referenceable
-						.drain()
-						.map(|(name, idx)| (name, idx + ref_offset)),
-				);
+				self.referenceable.extend(other.referenceable.drain().map(
+					|(name, idx)| match idx {
+						ElemReference::Direct(index) => {
+							(name, ElemReference::Direct(index + ref_offset))
+						}
+						ElemReference::Nested(index, sub_index) => {
+							(name, ElemReference::Nested(index + ref_offset, sub_index))
+						}
+					},
+				));
 
 				// Variables
 				self.variables
@@ -45,12 +55,18 @@ impl Scope {
 			}
 			false => {
 				// References
-				self.referenceable.extend(
-					other
-						.referenceable
-						.drain()
-						.map(|(name, idx)| (format!("{merge_as}.{name}"), idx + ref_offset)),
-				);
+				self.referenceable.extend(other.referenceable.drain().map(
+					|(name, idx)| match idx {
+						ElemReference::Direct(index) => (
+							format!("{merge_as}.{name}"),
+							ElemReference::Direct(index + ref_offset),
+						),
+						ElemReference::Nested(index, sub_index) => (
+							format!("{merge_as}.{name}"),
+							ElemReference::Nested(index + ref_offset, sub_index),
+						),
+					},
+				));
 
 				// Variables
 				self.variables.extend(
@@ -80,43 +96,40 @@ pub trait Document<'a>: core::fmt::Debug {
 
 	/// Pushes a new element into the document's content
 	fn push(&self, elem: Box<dyn Element>) {
-		// TODO: RefTable
+		if let Some(refname) = elem
+			.as_referenceable()
+			.and_then(|reference| reference.reference_name())
+		{
+			self.scope().borrow_mut().referenceable.insert(
+				refname.clone(),
+				ElemReference::Direct(self.content().borrow().len()),
+			);
+		} else if let Some(container) = self
+			.content()
+			.borrow()
+			.last()
+			.and_then(|elem| elem.as_container())
+		{
+			// This is a hack that works thanks to the fact that at document end, a [`DocumentEnd`] elem is pushed
+			container
+				.contained()
+				.iter()
+				.enumerate()
+				.for_each(|(sub_idx, elem)| {
+					if let Some(refname) = elem
+						.as_referenceable()
+						.and_then(|reference| reference.reference_name())
+					{
+						self.scope().borrow_mut().referenceable.insert(
+							refname.clone(),
+							ElemReference::Nested(self.content().borrow().len() - 1, sub_idx),
+						);
+					}
+				});
+		}
 
 		self.content().borrow_mut().push(elem);
 	}
-
-	/*
-	fn last_element(&'a self, recurse: bool) -> Option<Ref<'_, dyn Element>>
-	{
-		let elem = Ref::filter_map(self.content().borrow(),
-		|content| content.last()
-			.and_then(|last| last.downcast_ref::<Element>())
-		).ok();
-
-
-		if elem.is_some() || !recurse { return elem }
-
-		match self.parent()
-		{
-			None => None,
-			Some(parent) => parent.last_element(true),
-		}
-	}
-
-	fn last_element_mut(&'a self, recurse: bool) -> Option<RefMut<'_, dyn Element>>
-	{
-		let elem = RefMut::filter_map(self.content().borrow_mut(),
-		|content| content.last_mut()).ok();
-
-		if elem.is_some() || !recurse { return elem }
-
-		match self.parent()
-		{
-			None => None,
-			Some(parent) => parent.last_element_mut(true),
-		}
-	}
-	*/
 
 	fn add_variable(&self, variable: Rc<dyn Variable>) {
 		self.scope()
@@ -141,27 +154,11 @@ pub trait Document<'a>: core::fmt::Debug {
 		}
 	}
 
-	/*
-	fn remove_variable(&self, name: &str) -> Option<Rc<dyn Variable>>
-	{
-		match self.scope().borrow_mut().variables.remove(name)
-		{
-			Some(variable) => {
-				return Some(variable.clone());
-			},
-
-			// Continue search recursively
-			None => match self.parent() {
-				Some(parent) => return parent.remove_variable(name),
-
-				// Not found
-				None => return None,
-			}
-		}
-	}
-	*/
-
 	/// Merges [`other`] into [`self`]
+	///
+	/// # Parameters
+	///
+	/// If [`merge_as`] is None, references and variables from the other document are not merged into self
 	fn merge(
 		&self,
 		content: &RefCell<Vec<Box<dyn Element>>>,
@@ -181,6 +178,36 @@ pub trait Document<'a>: core::fmt::Debug {
 		self.content()
 			.borrow_mut()
 			.extend((content.borrow_mut()).drain(..).map(|value| value));
+	}
+
+	fn get_reference(&self, refname: &str) -> Option<ElemReference> {
+		self.scope()
+			.borrow()
+			.referenceable
+			.get(refname)
+			.and_then(|reference| Some(*reference))
+	}
+
+	fn get_from_reference(
+		&self,
+		reference: &ElemReference,
+	) -> Option<Ref<'_, dyn ReferenceableElement>> {
+		match reference {
+			ElemReference::Direct(idx) => Ref::filter_map(self.content().borrow(), |content| {
+				content.get(*idx).and_then(|elem| elem.as_referenceable())
+			})
+			.ok(),
+			ElemReference::Nested(idx, sub_idx) => {
+				Ref::filter_map(self.content().borrow(), |content| {
+					content
+						.get(*idx)
+						.and_then(|elem| elem.as_container())
+						.and_then(|container| container.contained().get(*sub_idx))
+						.and_then(|elem| elem.as_referenceable())
+				})
+				.ok()
+			}
+		}
 	}
 }
 
