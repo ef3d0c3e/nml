@@ -128,7 +128,7 @@ pub fn process_escaped<S: AsRef<str>>(escape: char, token: &'static str, content
 		}
 	}
 	// Add trailing escapes
-	(0..escaped).for_each(|_| processed.push('\\'));
+	(0..escaped / 2).for_each(|_| processed.push('\\'));
 
 	processed
 }
@@ -458,6 +458,8 @@ mod tests {
 			process_escaped('\\', "]", "Unescaped \\\\\\\\]"),
 			"Unescaped \\\\\\\\]".to_string()
 		);
+		assert_eq!(process_escaped('\\', ")", "A\\)B\\"), "A)B".to_string(),);
+		assert_eq!(process_escaped('\\', ")", "A\\)B\\\\"), "A)B\\".to_string(),);
 	}
 
 	#[test]

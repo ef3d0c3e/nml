@@ -273,3 +273,35 @@ impl RegexRule for RawRule {
 		bindings
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::compiler::compiler::Target;
+	use crate::parser::langparser::LangParser;
+	use crate::parser::source::SourceFile;
+
+	#[test]
+	fn raw_tests() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+Break{?[kind=block]<RAW>?}NewParagraph
+				"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let compiler = Compiler::new(Target::HTML, None);
+		let doc = parser.parse(source, None);
+
+		let borrow = doc.content().borrow();
+		let found = borrow
+			.iter()
+			.filter_map(|e| e.downcast_ref::<Raw>())
+			.collect::<Vec<_>>();
+
+		assert_eq!(found[0].compile(&compiler, &*doc), Ok("<RAW>".to_string()));
+		//assert_eq!(found[1].compile(&compiler, &*doc), Ok("<RAW>".to_string()));
+	}
+}

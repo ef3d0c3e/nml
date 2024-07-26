@@ -37,7 +37,7 @@ use crate::parser::util::PropertyParser;
 use super::paragraph::Paragraph;
 use super::reference::Reference;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MediaType {
 	IMAGE,
 	VIDEO,
@@ -148,14 +148,15 @@ impl Element for Medium {
 					.width
 					.as_ref()
 					.map_or(String::new(), |w| format!(r#" style="width:{w};""#));
-				result.push_str(format!(r#"<div class="medium" {width}>"#).as_str());
-				match self.media_type {
-					MediaType::IMAGE => result.push_str(
-						format!(r#"<a href="{0}"><img src="{0}"></a>"#, self.uri).as_str(),
-					),
-					MediaType::VIDEO => todo!(),
-					MediaType::AUDIO => todo!(),
-				}
+				result.push_str(format!(r#"<div class="medium"{width}>"#).as_str());
+				result += match self.media_type {
+					MediaType::IMAGE =>
+						format!(r#"<a href="{0}"><img src="{0}"></a>"#, self.uri),
+					MediaType::VIDEO =>
+						format!(r#"<video controls{width}><source src="{0}"></video>"#, self.uri),
+					MediaType::AUDIO =>
+						format!(r#"<audio controls src="{0}"{width}></audio>"#, self.uri),
+				}.as_str();
 
 				let caption = self
 					.caption
@@ -311,6 +312,8 @@ impl MediaRule {
 		match filename.split_at(sep + 1).1.to_ascii_lowercase().as_str() {
 			"png" | "apng" | "avif" | "gif" | "webp" | "svg" | "bmp" | "jpg" | "jpeg" | "jfif"
 			| "pjpeg" | "pjp" => Some(MediaType::IMAGE),
+			"mp4" | "m4v" | "webm" | "mov" => Some(MediaType::VIDEO),
+			"mp3" | "ogg" | "flac" | "wav" => Some(MediaType::AUDIO),
 			_ => None,
 		}
 	}
@@ -353,7 +356,7 @@ impl RegexRule for MediaRule {
 			matches.get(2).unwrap(),
 			MediaRule::validate_uri(matches.get(2).unwrap().as_str()),
 		) {
-			(_, Ok(uri)) => uri.to_string(),
+			(_, Ok(uri)) => util::process_escaped('\\', ")", uri),
 			(m, Err(err)) => {
 				reports.push(
 					Report::build(ReportKind::Error, token.source(), m.start())
@@ -514,6 +517,9 @@ impl RegexRule for MediaRule {
 
 #[cfg(test)]
 mod tests {
+	use crate::parser::langparser::LangParser;
+	use crate::parser::source::SourceFile;
+
 	use super::*;
 
 	#[test]
@@ -526,5 +532,35 @@ mod tests {
 			r"![refname](some p\)ath...\\)[some propert\]ies\\\\] some description\\nanother line"
 		));
 		assert!(re.is_match_at("![r1](uri1)[props1] desc1\n![r2](uri2)[props2] desc2", 26));
+	}
+
+	#[test]
+	fn element_test() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+![ref1](  image.png )[width = 200px, caption = Caption\,] Description
+![ref2]( ur\)i\\)[type=audio]
+				"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let doc = parser.parse(source, None);
+
+		let borrow = doc.content().borrow();
+		let group = borrow.first().as_ref().unwrap().as_container().unwrap();
+
+		let first = group.contained()[0].downcast_ref::<Medium>().unwrap();
+		assert_eq!(first.reference, "ref1");
+		assert_eq!(first.uri, "image.png");
+		assert_eq!(first.media_type, MediaType::IMAGE);
+		assert_eq!(first.width, Some("200px".to_string()));
+		assert_eq!(first.caption, Some("Caption,".to_string()));
+
+		let second = group.contained()[1].downcast_ref::<Medium>().unwrap();
+		assert_eq!(second.reference, "ref2");
+		assert_eq!(second.uri, "ur)i\\");
+		assert_eq!(second.media_type, MediaType::AUDIO);
 	}
 }
