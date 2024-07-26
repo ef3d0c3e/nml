@@ -40,7 +40,7 @@ impl Compiler {
 
 	/// Inserts or get a reference id for the compiled document
 	///
-	/// # Parameters
+	/// # Parameters
 	/// - [`reference`] The reference to get or insert
 	pub fn reference_id<'a>(&self, document: &'a dyn Document, reference: ElemReference) -> usize {
 		let mut borrow = self.reference_count.borrow_mut();
