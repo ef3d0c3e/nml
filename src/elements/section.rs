@@ -52,6 +52,16 @@ impl ReferenceableElement for Section {
 	fn reference_name(&self) -> Option<&String> { self.reference.as_ref() }
 
 	fn refcount_key(&self) -> &'static str { "section" }
+
+	fn compile_reference(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		reference: &super::reference::Reference,
+		refid: usize,
+	) -> Result<String, String> {
+		todo!()
+	}
 }
 
 pub struct SectionRule {

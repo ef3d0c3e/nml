@@ -21,6 +21,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::document::references::validate_refname;
+use crate::parser::parser::Parser;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -34,6 +35,7 @@ use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
 
 use super::paragraph::Paragraph;
+use super::reference::Reference;
 
 #[derive(Debug)]
 pub enum MediaType {
@@ -186,6 +188,32 @@ impl ReferenceableElement for Medium {
 	fn reference_name(&self) -> Option<&String> { Some(&self.reference) }
 
 	fn refcount_key(&self) -> &'static str { "medium" }
+
+	fn compile_reference(
+		&self,
+		compiler: &Compiler,
+		_document: &dyn Document,
+		reference: &Reference,
+		refid: usize,
+	) -> Result<String, String> {
+		match compiler.target() {
+			Target::HTML => {
+				let caption = reference
+					.caption()
+					.map_or(format!("({refid})"), |cap| cap.clone());
+
+				// TODO Handle other kind of media
+				match self.media_type {
+					MediaType::IMAGE => Ok(format!(
+						r#"<a class="medium-ref">{caption}<img src="{}"></a>"#,
+						self.uri
+					)),
+					_ => todo!(""),
+				}
+			}
+			_ => todo!(""),
+		}
+	}
 }
 
 pub struct MediaRule {
@@ -296,7 +324,7 @@ impl RegexRule for MediaRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		parser: &dyn crate::parser::parser::Parser,
+		parser: &dyn Parser,
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
@@ -305,7 +333,7 @@ impl RegexRule for MediaRule {
 
 		let refname = match (
 			matches.get(1).unwrap(),
-			validate_refname(matches.get(1).unwrap().as_str()),
+			validate_refname(document, matches.get(1).unwrap().as_str(), true),
 		) {
 			(_, Ok(refname)) => refname.to_string(),
 			(m, Err(err)) => {

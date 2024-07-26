@@ -14,3 +14,4 @@ pub mod tex;
 pub mod graphviz;
 pub mod raw;
 pub mod media;
+pub mod reference;

@@ -85,8 +85,7 @@ fn main() {
 		println!("-- END AST DEBUGGING --");
 	}
 
-	if debug_opts.contains(&"ref".to_string())
-	{
+	if debug_opts.contains(&"ref".to_string()) {
 		println!("-- BEGIN REFERENCES DEBUGGING --");
 		let sc = doc.scope().borrow();
 		sc.referenceable.iter().for_each(|(name, reference)| {

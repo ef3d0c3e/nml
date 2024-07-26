@@ -16,6 +16,7 @@ use super::tex::TexRule;
 use super::text::TextRule;
 use super::variable::VariableRule;
 use super::variable::VariableSubstitutionRule;
+use super::reference::ReferenceRule;
 
 pub fn register<P: Parser>(parser: &mut P) {
 	parser.add_rule(Box::new(CommentRule::new()), None).unwrap();
@@ -35,4 +36,5 @@ pub fn register<P: Parser>(parser: &mut P) {
 	parser.add_rule(Box::new(SectionRule::new()), None).unwrap();
 	parser.add_rule(Box::new(LinkRule::new()), None).unwrap();
 	parser.add_rule(Box::new(TextRule::default()), None).unwrap();
+	parser.add_rule(Box::new(ReferenceRule::new()), None).unwrap();
 }
