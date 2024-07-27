@@ -18,6 +18,7 @@ pub enum Target {
 pub struct Compiler {
 	target: Target,
 	cache: Option<RefCell<Connection>>,
+	// TODO:
 	reference_count: RefCell<HashMap<String, HashMap<String, usize>>>,
 }
 

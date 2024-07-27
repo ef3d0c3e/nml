@@ -144,7 +144,7 @@ impl Parser for LangParser {
 				})
 				.unwrap();
 
-			paragraph.push(elem);
+			paragraph.push(elem).unwrap();
 		} else {
 			// Process paragraph events
 			if doc.last_element::<Paragraph>().is_some_and(|_| true) {
