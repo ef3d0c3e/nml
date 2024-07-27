@@ -41,6 +41,15 @@ enum CodeKind {
 	Inline,
 }
 
+impl From<&CodeKind> for ElemKind {
+	fn from(value: &CodeKind) -> Self {
+		match value {
+			CodeKind::FullBlock | CodeKind::MiniBlock => ElemKind::Block,
+			CodeKind::Inline => ElemKind::Inline,
+		}
+	}
+}
+
 #[derive(Debug)]
 struct Code {
 	location: Token,
@@ -73,12 +82,19 @@ impl Code {
 		}
 	}
 
-	fn highlight_html(&self, compiler: &Compiler) -> Result<String, String> {
+	pub fn get_syntaxes() -> &'static SyntaxSet {
 		lazy_static! {
 			static ref syntax_set: SyntaxSet = SyntaxSet::load_defaults_newlines();
+		}
+
+		&syntax_set
+	}
+
+	fn highlight_html(&self, compiler: &Compiler) -> Result<String, String> {
+		lazy_static! {
 			static ref theme_set: ThemeSet = ThemeSet::load_defaults();
 		}
-		let syntax = match syntax_set.find_syntax_by_name(self.language.as_str()) {
+		let syntax = match Code::get_syntaxes().find_syntax_by_name(self.language.as_str()) {
 			Some(syntax) => syntax,
 			None => {
 				return Err(format!(
@@ -116,7 +132,7 @@ impl Code {
 
 				// Code
 				result += "</td><td class=\"code-block-line\"><pre>";
-				match h.highlight_line(line, &syntax_set) {
+				match h.highlight_line(line, Code::get_syntaxes()) {
 					Err(e) => {
 						return Err(format!(
 							"Error highlighting line `{line}`: {}",
@@ -151,7 +167,7 @@ impl Code {
 			for line in self.code.split(|c| c == '\n') {
 				result += "<tr><td class=\"code-block-line\"><pre>";
 				// Code
-				match h.highlight_line(line, &syntax_set) {
+				match h.highlight_line(line, Code::get_syntaxes()) {
 					Err(e) => {
 						return Err(format!(
 							"Error highlighting line `{line}`: {}",
@@ -181,7 +197,7 @@ impl Code {
 			result += "</table></div></div>";
 		} else if self.block == CodeKind::Inline {
 			result += "<a class=\"inline-code\"><code>";
-			match h.highlight_line(self.code.as_str(), &syntax_set) {
+			match h.highlight_line(self.code.as_str(), Code::get_syntaxes()) {
 				Err(e) => {
 					return Err(format!(
 						"Error highlighting line `{}`: {}",
@@ -242,13 +258,7 @@ impl Cached for Code {
 impl Element for Code {
 	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		if self.block == CodeKind::Inline {
-			ElemKind::Inline
-		} else {
-			ElemKind::Block
-		}
-	}
+	fn kind(&self) -> ElemKind { (&self.block).into() }
 
 	fn element_name(&self) -> &'static str { "Code Block" }
 
@@ -376,11 +386,11 @@ impl RegexRule for CodeRule {
 		let code_lang = match matches.get(2) {
 			None => "Plain Text".to_string(),
 			Some(lang) => {
-				let code_lang = lang.as_str().trim_end().trim_start().to_string();
+				let code_lang = lang.as_str().trim_start().trim_end().to_string();
 				if code_lang.is_empty() {
 					reports.push(
 						Report::build(ReportKind::Error, token.source(), lang.start())
-							.with_message("Missing code language")
+							.with_message("Missing Code Language")
 							.with_label(
 								Label::new((token.source().clone(), lang.range()))
 									.with_message("No language specified")
@@ -391,8 +401,26 @@ impl RegexRule for CodeRule {
 
 					return reports;
 				}
+				if Code::get_syntaxes()
+					.find_syntax_by_name(code_lang.as_str())
+					.is_none()
+				{
+					reports.push(
+						Report::build(ReportKind::Error, token.source(), lang.start())
+							.with_message("Unknown Code Language")
+							.with_label(
+								Label::new((token.source().clone(), lang.range()))
+									.with_message(format!(
+										"Language `{}` cannot be found",
+										code_lang.fg(parser.colors().info)
+									))
+									.with_color(parser.colors().error),
+							)
+							.finish(),
+					);
 
-				// TODO: validate language
+					return reports;
+				}
 
 				code_lang
 			}
@@ -517,4 +545,94 @@ impl RegexRule for CodeRule {
 
 	// TODO
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::parser::langparser::LangParser;
+	use crate::parser::source::SourceFile;
+
+	#[test]
+	fn code_block() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+```[line_offset=32] C, Some Code...
+static int INT32_MIN = 0x80000000;
+```
+``Rust
+fn fact(n: usize) -> usize
+{
+	match n
+	{
+		0 | 1 => 1,
+		_ => n * fact(n-1)
+	}
+}
+``"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		//let compiler = Compiler::new(Target::HTML, None);
+		let doc = parser.parse(source, None);
+
+		let borrow = doc.content().borrow();
+		let found = borrow
+			.iter()
+			.filter_map(|e| e.downcast_ref::<Code>())
+			.collect::<Vec<_>>();
+
+		assert_eq!(found[0].block, CodeKind::FullBlock);
+		assert_eq!(found[0].language, "C");
+		assert_eq!(found[0].name, Some("Some Code...".to_string()));
+		assert_eq!(found[0].code, "static int INT32_MIN = 0x80000000;");
+		assert_eq!(found[0].line_offset, 32);
+
+		assert_eq!(found[1].block, CodeKind::MiniBlock);
+		assert_eq!(found[1].language, "Rust");
+		assert_eq!(found[1].name, None);
+		assert_eq!(found[1].code, "fn fact(n: usize) -> usize\n{\n\tmatch n\n\t{\n\t\t0 | 1 => 1,\n\t\t_ => n * fact(n-1)\n\t}\n}");
+		assert_eq!(found[1].line_offset, 1);
+	}
+
+	#[test]
+	fn code_inline() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+``C, int fact(int n)``
+``Plain Text, Text in a code block!``
+			"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		//let compiler = Compiler::new(Target::HTML, None);
+		let doc = parser.parse(source, None);
+
+		let borrow = doc.content().borrow();
+		let found = borrow
+			.first()
+			.unwrap()
+			.as_container()
+			.unwrap()
+			.contained()
+			.iter()
+			.filter_map(|e| e.downcast_ref::<Code>())
+			.collect::<Vec<_>>();
+
+		assert_eq!(found[0].block, CodeKind::Inline);
+		assert_eq!(found[0].language, "C");
+		assert_eq!(found[0].name, None);
+		assert_eq!(found[0].code, "int fact(int n)");
+		assert_eq!(found[0].line_offset, 1);
+
+		assert_eq!(found[1].block, CodeKind::Inline);
+		assert_eq!(found[1].language, "Plain Text");
+		assert_eq!(found[1].name, None);
+		assert_eq!(found[1].code, "Text in a code block!");
+		assert_eq!(found[1].line_offset, 1);
+	}
 }

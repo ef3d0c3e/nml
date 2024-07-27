@@ -440,7 +440,6 @@ $[kind=block,env=another] e^{i\pi}=-1$
 			None,
 		));
 		let parser = LangParser::default();
-		let compiler = Compiler::new(Target::HTML, None);
 		let doc = parser.parse(source, None);
 
 		let borrow = doc.content().borrow();
@@ -471,7 +470,6 @@ $[env=another] e^{i\pi}=-1$
 			None,
 		));
 		let parser = LangParser::default();
-		let compiler = Compiler::new(Target::HTML, None);
 		let doc = parser.parse(source, None);
 
 		let borrow = doc.content().borrow();
