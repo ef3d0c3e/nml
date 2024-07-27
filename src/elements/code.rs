@@ -24,6 +24,7 @@ use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -544,7 +545,104 @@ impl RegexRule for CodeRule {
 	}
 
 	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+		let mut bindings = vec![];
+		bindings.push((
+			"push_inline".to_string(),
+			lua.create_function(|_, (language, content): (String, String)| {
+				CTX.with_borrow(|ctx| {
+					ctx.as_ref().map(|ctx| {
+						let theme = ctx
+							.document
+							.get_variable("code.theme")
+							.and_then(|var| Some(var.to_string()));
+
+						ctx.parser.push(
+							ctx.document,
+							Box::new(Code {
+								location: ctx.location.clone(),
+								block: CodeKind::Inline,
+								language,
+								name: None,
+								code: content,
+								theme,
+								line_offset: 1,
+							}),
+						);
+					})
+				});
+
+				Ok(())
+			})
+			.unwrap(),
+		));
+
+		bindings.push((
+			"push_miniblock".to_string(),
+			lua.create_function(
+				|_, (language, content, line_offset): (String, String, Option<usize>)| {
+					CTX.with_borrow(|ctx| {
+						ctx.as_ref().map(|ctx| {
+							let theme = ctx
+								.document
+								.get_variable("code.theme")
+								.and_then(|var| Some(var.to_string()));
+
+							ctx.parser.push(
+								ctx.document,
+								Box::new(Code {
+									location: ctx.location.clone(),
+									block: CodeKind::MiniBlock,
+									language,
+									name: None,
+									code: content,
+									theme,
+									line_offset: line_offset.unwrap_or(1),
+								}),
+							);
+						})
+					});
+
+					Ok(())
+				},
+			)
+			.unwrap(),
+		));
+
+		bindings.push((
+			"push_block".to_string(),
+			lua.create_function(
+				|_, (language, name, content, line_offset): (String, Option<String>, String, Option<usize>)| {
+					CTX.with_borrow(|ctx| {
+						ctx.as_ref().map(|ctx| {
+							let theme = ctx
+								.document
+								.get_variable("code.theme")
+								.and_then(|var| Some(var.to_string()));
+
+							ctx.parser.push(
+								ctx.document,
+								Box::new(Code {
+									location: ctx.location.clone(),
+									block: CodeKind::FullBlock,
+									language,
+									name,
+									code: content,
+									theme,
+									line_offset: line_offset.unwrap_or(1),
+								}),
+							);
+						})
+					});
+
+					Ok(())
+				},
+			)
+			.unwrap(),
+		));
+
+		bindings
+	}
 }
 
 #[cfg(test)]
@@ -561,6 +659,7 @@ mod tests {
 ```[line_offset=32] C, Some Code...
 static int INT32_MIN = 0x80000000;
 ```
+%<nml.code.push_block("Lua", "From Lua", "print(\"Hello, World!\")", nil)>%
 ``Rust
 fn fact(n: usize) -> usize
 {
@@ -570,7 +669,9 @@ fn fact(n: usize) -> usize
 		_ => n * fact(n-1)
 	}
 }
-``"#
+``
+%<nml.code.push_miniblock("Bash", "NUM=$(($RANDOM % 10))", 18)>%
+"#
 			.to_string(),
 			None,
 		));
@@ -590,11 +691,23 @@ fn fact(n: usize) -> usize
 		assert_eq!(found[0].code, "static int INT32_MIN = 0x80000000;");
 		assert_eq!(found[0].line_offset, 32);
 
-		assert_eq!(found[1].block, CodeKind::MiniBlock);
-		assert_eq!(found[1].language, "Rust");
-		assert_eq!(found[1].name, None);
-		assert_eq!(found[1].code, "fn fact(n: usize) -> usize\n{\n\tmatch n\n\t{\n\t\t0 | 1 => 1,\n\t\t_ => n * fact(n-1)\n\t}\n}");
+		assert_eq!(found[1].block, CodeKind::FullBlock);
+		assert_eq!(found[1].language, "Lua");
+		assert_eq!(found[1].name, Some("From Lua".to_string()));
+		assert_eq!(found[1].code, "print(\"Hello, World!\")");
 		assert_eq!(found[1].line_offset, 1);
+
+		assert_eq!(found[2].block, CodeKind::MiniBlock);
+		assert_eq!(found[2].language, "Rust");
+		assert_eq!(found[2].name, None);
+		assert_eq!(found[2].code, "fn fact(n: usize) -> usize\n{\n\tmatch n\n\t{\n\t\t0 | 1 => 1,\n\t\t_ => n * fact(n-1)\n\t}\n}");
+		assert_eq!(found[2].line_offset, 1);
+
+		assert_eq!(found[3].block, CodeKind::MiniBlock);
+		assert_eq!(found[3].language, "Bash");
+		assert_eq!(found[3].name, None);
+		assert_eq!(found[3].code, "NUM=$(($RANDOM % 10))");
+		assert_eq!(found[3].line_offset, 18);
 	}
 
 	#[test]
@@ -604,6 +717,7 @@ fn fact(n: usize) -> usize
 			r#"
 ``C, int fact(int n)``
 ``Plain Text, Text in a code block!``
+%<nml.code.push_inline("C++", "std::vector<std::vector<int>> u;")>%
 			"#
 			.to_string(),
 			None,
@@ -634,5 +748,11 @@ fn fact(n: usize) -> usize
 		assert_eq!(found[1].name, None);
 		assert_eq!(found[1].code, "Text in a code block!");
 		assert_eq!(found[1].line_offset, 1);
+
+		assert_eq!(found[2].block, CodeKind::Inline);
+		assert_eq!(found[2].language, "C++");
+		assert_eq!(found[2].name, None);
+		assert_eq!(found[2].code, "std::vector<std::vector<int>> u;");
+		assert_eq!(found[2].line_offset, 1);
 	}
 }
