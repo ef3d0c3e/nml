@@ -11,6 +11,10 @@ use std::process::ExitCode;
 use std::rc::Rc;
 
 use compiler::compiler::Compiler;
+use compiler::compiler::Target;
+use compiler::navigation::create_navigation;
+use compiler::navigation::Navigation;
+use document::document::Document;
 use getopts::Options;
 use parser::langparser::LangParser;
 use parser::parser::Parser;
@@ -38,15 +42,41 @@ NML version: 0.4\n"
 	);
 }
 
-fn process(
-	parser: &LangParser,
-	db_path: &Option<String>,
-	input: &String,
+fn compile(
+	target: Target,
+	doc: &Box<dyn Document>,
 	output: &String,
-	debug_opts: &Vec<String>,
+	db_path: &Option<String>,
+	navigation: &Navigation,
 	multi_mode: bool,
 ) -> bool {
-	println!("Processing {input}...");
+	let compiler = Compiler::new(target, db_path.clone());
+
+	// Get output from file
+	if multi_mode {
+		let out_file = match doc.get_variable("compiler.output") {
+			None => {
+				eprintln!("Missing required variable `compiler.output` for multifile mode");
+				return false;
+			}
+			Some(var) => output.clone() + "/" + var.to_string().as_str(),
+		};
+
+		let out = compiler.compile(navigation, doc.as_ref());
+		std::fs::write(out_file, out).is_ok()
+	} else {
+		let out = compiler.compile(navigation, doc.as_ref());
+		std::fs::write(output, out).is_ok()
+	}
+}
+
+fn parse(
+	input: &String,
+	debug_opts: &Vec<String>,
+) -> Result<Box<dyn Document<'static>>, String> {
+	println!("Parsing {input}...");
+	let parser = LangParser::default();
+
 	// Parse
 	let source = SourceFile::new(input.to_string(), None).unwrap();
 	let doc = parser.parse(Rc::new(source), None);
@@ -78,28 +108,10 @@ fn process(
 	}
 
 	if parser.has_error() {
-		println!("Compilation aborted due to errors while parsing");
-		return false;
+		return Err("Parsing failed aborted due to errors while parsing".to_string())
 	}
 
-	let compiler = Compiler::new(compiler::compiler::Target::HTML, db_path.clone());
-
-	// Get output from file
-	if multi_mode {
-		let out_file = match doc.get_variable("compiler.output") {
-			None => {
-				eprintln!("Missing required variable `compiler.output` for multifile mode");
-				return false;
-			}
-			Some(var) => output.clone() + "/" + var.to_string().as_str(),
-		};
-
-		let out = compiler.compile(doc.as_ref());
-		std::fs::write(out_file, out).is_ok()
-	} else {
-		let out = compiler.compile(doc.as_ref());
-		std::fs::write(output, out).is_ok()
-	}
+	Ok(doc)
 }
 
 fn main() -> ExitCode {
@@ -164,7 +176,8 @@ fn main() -> ExitCode {
 
 	let debug_opts = matches.opt_strs("z");
 	let db_path = matches.opt_str("d");
-	let parser = LangParser::default();
+
+	let mut docs = vec![];
 
 	if input_meta.is_dir() {
 		if db_path.is_none() {
@@ -208,14 +221,44 @@ fn main() -> ExitCode {
 				continue;
 			}
 
-			if !process(&parser, &db_path, &path, &output, &debug_opts, true) {
-				eprintln!("Processing aborted");
-				return ExitCode::FAILURE;
+			match parse(&path, &debug_opts)
+			{
+				Ok(doc) => docs.push(doc),
+				Err(e) => {
+					eprintln!("{e}");
+					return ExitCode::FAILURE;
+				}
 			}
 		}
 	} else {
-		if !process(&parser, &db_path, &input, &output, &debug_opts, false) {
-			eprintln!("Processing aborted");
+		match parse(&input, &debug_opts)
+		{
+			Ok(doc) => docs.push(doc),
+			Err(e) => {
+				eprintln!("{e}");
+				return ExitCode::FAILURE;
+			}
+		}
+	}
+
+	// Build navigation
+	let navigation = match create_navigation(&docs)
+	{
+		Ok(nav) => nav,
+		Err(e) => {
+			eprintln!("{e}");
+			return ExitCode::FAILURE;
+		}
+	};
+
+	println!("{navigation:#?}");
+
+	let multi_mode = input_meta.is_dir();
+	for doc in docs
+	{
+		if !compile(Target::HTML, &doc, &output, &db_path, &navigation, multi_mode)
+		{
+			eprintln!("Compilation failed, processing aborted");
 			return ExitCode::FAILURE;
 		}
 	}

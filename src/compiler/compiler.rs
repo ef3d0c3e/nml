@@ -9,6 +9,9 @@ use crate::document::document::Document;
 use crate::document::document::ElemReference;
 use crate::document::variable::Variable;
 
+use super::navigation::NavEntry;
+use super::navigation::Navigation;
+
 #[derive(Clone, Copy)]
 pub enum Target {
 	HTML,
@@ -18,8 +21,8 @@ pub enum Target {
 pub struct Compiler {
 	target: Target,
 	cache: Option<RefCell<Connection>>,
-	// TODO:
 	reference_count: RefCell<HashMap<String, HashMap<String, usize>>>,
+	// TODO: External references, i.e resolved later
 }
 
 impl Compiler {
@@ -130,37 +133,71 @@ impl Compiler {
 		result
 	}
 
+	pub fn navigation(&self, navigation: &Navigation, document: &dyn Document) -> String
+	{
+		let mut result = String::new();
+		match self.target()
+		{
+			Target::HTML => {
+				result += r#"<ul id="navbar">"#;
+
+				fn process(result: &mut String, name: &String, ent: &NavEntry, depth: usize)
+				{
+					let ent_path = ent.path.as_ref()
+						.map_or("#".to_string(),|path| path.clone());
+					result.push_str(format!(r#"<li><a href="{ent_path}">{name}</a></li>"#).as_str());
+
+					if let Some(children) = ent.children.as_ref()
+					{
+						result.push_str("<ul>");
+						for (name, ent) in children
+						{
+							process(result, name, ent, depth+1);
+						}
+						result.push_str("</ul>");
+					}
+				}
+
+				for (name, ent) in &navigation.entries
+				{
+					process(&mut result, name, ent, 0);
+				}
+				
+
+				result += r#"</ul>"#;
+			},
+			_ => todo!("")
+		}
+		result
+	}
+
 	pub fn footer(&self, _document: &dyn Document) -> String {
 		let mut result = String::new();
 		match self.target() {
 			Target::HTML => {
 				result += "</body></html>";
 			}
-			Target::LATEX => {}
+			Target::LATEX => todo!("")
 		}
 		result
 	}
 
-	pub fn compile(&self, document: &dyn Document) -> String {
+	pub fn compile(&self, navigation: &Navigation, document: &dyn Document) -> String {
 		let mut out = String::new();
 		let borrow = document.content().borrow();
 
 		// Header
 		out += self.header(document).as_str();
 
+		// Navigation
+		out += self.navigation(navigation, document).as_str();
+
 		// Body
 		for i in 0..borrow.len() {
 			let elem = &borrow[i];
-			//let prev = match i
-			//{
-			//	0 => None,
-			//	_ => borrow.get(i-1),
-			//};
-			//let next = borrow.get(i+1);
 
 			match elem.compile(self, document) {
 				Ok(result) => {
-					//println!("Elem: {}\nCompiled to: {result}", elem.to_string());
 					out.push_str(result.as_str())
 				}
 				Err(err) => println!("Unable to compile element: {err}\n{}", elem.to_string()),
