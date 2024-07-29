@@ -39,7 +39,7 @@ impl Element for Text {
 	fn to_string(&self) -> String { format!("{self:#?}") }
 
 	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
-		Ok(compiler.sanitize(self.content.as_str()))
+		Ok(Compiler::sanitize(compiler.target(), self.content.as_str()))
 	}
 }
 

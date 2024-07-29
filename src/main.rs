@@ -7,7 +7,6 @@ mod lua;
 mod parser;
 
 use std::env;
-use std::fs::OpenOptions;
 use std::io::BufWriter;
 use std::io::Write;
 use std::process::ExitCode;
@@ -18,7 +17,6 @@ use compiler::compiler::CompiledDocument;
 use compiler::compiler::Compiler;
 use compiler::compiler::Target;
 use compiler::navigation::create_navigation;
-use compiler::navigation::Navigation;
 use document::document::Document;
 use getopts::Options;
 use parser::langparser::LangParser;
@@ -275,7 +273,6 @@ fn main() -> ExitCode {
 			return ExitCode::FAILURE;
 		}
 	};
-	let compiled_navigation = navigation.compile(Target::HTML);
 
 	// Output
 	for doc in compiled {
@@ -290,15 +287,17 @@ fn main() -> ExitCode {
 			}
 		};
 
+		let nav = navigation.compile(Target::HTML, &doc);
+
 		let file = std::fs::File::create(output.clone() + "/" + out_path.as_str()).unwrap();
 		let mut writer = BufWriter::new(file);
 
 		write!(
 			writer,
 			"{}{}{}{}",
-			doc.header, compiled_navigation, doc.body, doc.footer
-		);
-		writer.flush();
+			doc.header, nav, doc.body, doc.footer
+		).unwrap();
+		writer.flush().unwrap();
 	}
 
 	return ExitCode::SUCCESS;

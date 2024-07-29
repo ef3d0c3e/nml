@@ -74,8 +74,8 @@ impl Compiler {
 		self.cache.as_ref().map(RefCell::borrow_mut)
 	}
 
-	pub fn sanitize<S: AsRef<str>>(&self, str: S) -> String {
-		match self.target {
+	pub fn sanitize<S: AsRef<str>>(target: Target, str: S) -> String {
+		match target {
 			Target::HTML => str
 				.as_ref()
 				.replace("&", "&amp;")
@@ -109,14 +109,14 @@ impl Compiler {
 				result += "<!DOCTYPE HTML><html><head>";
 				result += "<meta charset=\"UTF-8\">";
 				if let Some(page_title) = get_variable_or_error(document, "html.page_title") {
-					result += format!("<title>{}</title>", self.sanitize(page_title.to_string()))
+					result += format!("<title>{}</title>", Compiler::sanitize(self.target(), page_title.to_string()))
 						.as_str();
 				}
 
 				if let Some(css) = document.get_variable("html.css") {
 					result += format!(
 						"<link rel=\"stylesheet\" href=\"{}\">",
-						self.sanitize(css.to_string())
+						Compiler::sanitize(self.target(), css.to_string())
 					)
 					.as_str();
 				}

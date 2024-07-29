@@ -1,47 +1,73 @@
 use std::collections::HashMap;
 
+use crate::compiler::compiler::Compiler;
+
 use super::compiler::CompiledDocument;
 use super::compiler::Target;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct NavEntry {
-	pub(crate) name: String,
-	pub(crate) path: Option<String>,
-	pub(crate) children: Option<HashMap<String, NavEntry>>,
+	pub(self) entries: Vec<(String, String)>,
+	pub(self) children: HashMap<String, NavEntry>,
 }
 
-#[derive(Debug)]
-pub struct Navigation {
-	pub(crate) entries: HashMap<String, NavEntry>,
-}
+impl NavEntry {
+	// FIXME: Sanitize
+	pub fn compile(&self, target: Target, doc: &CompiledDocument) -> String {
+		let categories = vec![
+			doc.get_variable("nav.category").map_or("", |s| s.as_str()),
+			doc.get_variable("nav.subcategory")
+				.map_or("", |s| s.as_str()),
+		];
 
-impl Navigation {
-	pub fn compile(&self, target: Target) -> String {
 		let mut result = String::new();
 		match target {
 			Target::HTML => {
 				result += r#"<ul id="navbar">"#;
 
-				fn process(result: &mut String, name: &String, ent: &NavEntry, depth: usize) {
-					let ent_path = ent
-						.path
-						.as_ref()
-						.map_or("#".to_string(), |path| path.clone());
-					result
-						.push_str(format!(r#"<li><a href="{ent_path}">{name}</a></li>"#).as_str());
+				fn process(
+					target: Target,
+					categories: &Vec<&str>,
+					did_match: bool,
+					result: &mut String,
+					entry: &NavEntry,
+					depth: usize,
+				) {
+					// Orphans = Links
+					for (title, path) in &entry.entries {
+						result.push_str(
+							format!(
+								r#"<li><a href="{}">{}</a></li>"#,
+								Compiler::sanitize(target, path),
+								Compiler::sanitize(target, title)
+							)
+							.as_str(),
+						);
+					}
 
-					if let Some(children) = ent.children.as_ref() {
+					// Recurse
+					for (name, ent) in &entry.children {
+						let is_match = if did_match {
+							categories.get(depth) == Some(&name.as_str())
+						} else {
+							false || depth == 0
+						};
+						result.push_str("<li>");
+						result.push_str(
+							format!(
+								"<details{}><summary>{}</summary>",
+								["", " open"][is_match as usize],
+								Compiler::sanitize(target, name)
+							)
+							.as_str(),
+						);
 						result.push_str("<ul>");
-						for (name, ent) in children {
-							process(result, name, ent, depth + 1);
-						}
-						result.push_str("</ul>");
+						process(target, categories, is_match, result, ent, depth + 1);
+						result.push_str("</ul></details></li>");
 					}
 				}
 
-				for (name, ent) in &self.entries {
-					process(&mut result, name, ent, 0);
-				}
+				process(target, &categories, true, &mut result, self, 0);
 
 				result += r#"</ul>"#;
 			}
@@ -51,9 +77,10 @@ impl Navigation {
 	}
 }
 
-pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<Navigation, String> {
-	let mut nav = Navigation {
-		entries: HashMap::new(),
+pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<NavEntry, String> {
+	let mut nav = NavEntry {
+		entries: vec![],
+		children: HashMap::new(),
 	};
 
 	for doc in docs {
@@ -64,71 +91,60 @@ pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<Navigation, Str
 			.or(doc.get_variable("doc.title"));
 		let path = doc.get_variable("compiler.output");
 
-		let (cat, title, path) = match (cat, title, path) {
-			(Some(cat), Some(title), Some(path)) => (cat, title, path),
+		let (title, path) = match (title, path) {
+			(Some(title), Some(path)) => (title, path),
 			_ => {
-				println!("Skipping navigation generation for `{}`", doc.input);
+				eprintln!("Skipping navigation generation for `{}`, must have a defined `@nav.title` and `@compiler.output`", doc.input);
 				continue;
 			}
 		};
 
-		if let Some(subcat) = subcat {
-			// Get parent entry
-			let mut pent = match nav.entries.get_mut(cat.as_str()) {
-				Some(pent) => pent,
+		let pent = if let Some(subcat) = subcat {
+			let cat = match cat {
+				Some(cat) => cat,
 				None => {
-					// Create parent entry
-					nav.entries.insert(
-						cat.clone(),
-						NavEntry {
-							name: cat.clone(),
-							path: None,
-							children: Some(HashMap::new()),
-						},
+					eprintln!(
+						"Skipping `{}`: No `@nav.category`, but `@nav.subcategory` is set",
+						doc.input
 					);
-					nav.entries.get_mut(cat.as_str()).unwrap()
+					continue;
 				}
 			};
 
-			// Insert into parent
-			if let Some(previous) = pent.children.as_mut().unwrap().insert(
-				subcat.clone(),
-				NavEntry {
-					name: subcat.clone(),
-					path: Some(path.to_string()),
-					children: None,
-				},
-			) {
-				return Err(format!(
-					"Duplicate subcategory:\n{subcat}\nclashes with:\n{previous:#?}"
-				));
+			let mut cat_ent = match nav.children.get_mut(cat.as_str()) {
+				Some(cat_ent) => cat_ent,
+				None => {
+					// Insert
+					nav.children.insert(cat.clone(), NavEntry::default());
+					nav.children.get_mut(cat.as_str()).unwrap()
+				}
+			};
+
+			match cat_ent.children.get_mut(subcat.as_str()) {
+				Some(subcat_ent) => subcat_ent,
+				None => {
+					// Insert
+					cat_ent.children.insert(subcat.clone(), NavEntry::default());
+					cat_ent.children.get_mut(subcat.as_str()).unwrap()
+				}
+			}
+		} else if let Some(cat) = cat {
+			match nav.children.get_mut(cat.as_str()) {
+				Some(cat_ent) => cat_ent,
+				None => {
+					// Insert
+					nav.children.insert(cat.clone(), NavEntry::default());
+					nav.children.get_mut(cat.as_str()).unwrap()
+				}
 			}
 		} else {
-			// Get entry
-			let mut ent = match nav.entries.get_mut(cat.as_str()) {
-				Some(ent) => ent,
-				None => {
-					// Create parent entry
-					nav.entries.insert(
-						cat.clone(),
-						NavEntry {
-							name: cat.clone(),
-							path: None,
-							children: Some(HashMap::new()),
-						},
-					);
-					nav.entries.get_mut(cat.as_str()).unwrap()
-				}
-			};
+			&mut nav
+		};
 
-			if let Some(path) = ent.path.as_ref() {
-				return Err(format!(
-					"Duplicate category:\n{subcat:#?}\nwith previous path:\n{path}"
-				));
-			}
-			ent.path = Some(path.to_string());
-		}
+		pent.entries.push((title.clone(), path.clone()))
 	}
+
+	println!("{nav:#?}");
 
 	Ok(nav)
 }

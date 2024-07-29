@@ -117,7 +117,7 @@ impl Code {
 			if let Some(name) = &self.name {
 				result += format!(
 					"<div class=\"code-block-title\">{}</div>",
-					compiler.sanitize(name.as_str())
+					Compiler::sanitize(compiler.target(), name.as_str())
 				)
 				.as_str();
 			}
@@ -612,7 +612,13 @@ impl RegexRule for CodeRule {
 		bindings.push((
 			"push_block".to_string(),
 			lua.create_function(
-				|_, (language, name, content, line_offset): (String, Option<String>, String, Option<usize>)| {
+				|_,
+				 (language, name, content, line_offset): (
+					String,
+					Option<String>,
+					String,
+					Option<usize>,
+				)| {
 					CTX.with_borrow(|ctx| {
 						ctx.as_ref().map(|ctx| {
 							let theme = ctx

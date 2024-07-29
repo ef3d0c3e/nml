@@ -41,7 +41,7 @@ impl Element for Section {
 			Target::HTML => Ok(format!(
 				"<h{0}>{1}</h{0}>",
 				self.depth,
-				compiler.sanitize(self.title.as_str())
+				Compiler::sanitize(compiler.target(), self.title.as_str())
 			)),
 			Target::LATEX => Err("Unimplemented compiler".to_string()),
 		}

@@ -45,13 +45,13 @@ impl Element for Link {
 		match compiler.target() {
 			Target::HTML => Ok(format!(
 				"<a href=\"{}\">{}</a>",
-				compiler.sanitize(self.url.as_str()),
-				compiler.sanitize(self.name.as_str()),
+				Compiler::sanitize(compiler.target(), self.url.as_str()),
+				Compiler::sanitize(compiler.target(), self.name.as_str()),
 			)),
 			Target::LATEX => Ok(format!(
 				"\\href{{{}}}{{{}}}",
-				compiler.sanitize(self.url.as_str()),
-				compiler.sanitize(self.name.as_str()),
+				Compiler::sanitize(compiler.target(), self.url.as_str()),
+				Compiler::sanitize(compiler.target(), self.name.as_str()),
 			)),
 		}
 	}

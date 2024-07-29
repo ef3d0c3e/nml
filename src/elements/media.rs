@@ -150,18 +150,26 @@ impl Element for Medium {
 					.map_or(String::new(), |w| format!(r#" style="width:{w};""#));
 				result.push_str(format!(r#"<div class="medium"{width}>"#).as_str());
 				result += match self.media_type {
-					MediaType::IMAGE =>
-						format!(r#"<a href="{0}"><img src="{0}"></a>"#, self.uri),
-					MediaType::VIDEO =>
-						format!(r#"<video controls{width}><source src="{0}"></video>"#, self.uri),
-					MediaType::AUDIO =>
-						format!(r#"<audio controls src="{0}"{width}></audio>"#, self.uri),
-				}.as_str();
+					MediaType::IMAGE => format!(r#"<a href="{0}"><img src="{0}"></a>"#, self.uri),
+					MediaType::VIDEO => format!(
+						r#"<video controls{width}><source src="{0}"></video>"#,
+						self.uri
+					),
+					MediaType::AUDIO => {
+						format!(r#"<audio controls src="{0}"{width}></audio>"#, self.uri)
+					}
+				}
+				.as_str();
 
 				let caption = self
 					.caption
 					.as_ref()
-					.and_then(|cap| Some(format!(" {}", compiler.sanitize(cap.as_str()))))
+					.and_then(|cap| {
+						Some(format!(
+							" {}",
+							Compiler::sanitize(compiler.target(), cap.as_str())
+						))
+					})
 					.unwrap_or(String::new());
 
 				// Reference
