@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::document::document::Document;
+use super::compiler::CompiledDocument;
+use super::compiler::Target;
 
 #[derive(Debug)]
 pub struct NavEntry {
@@ -14,7 +15,43 @@ pub struct Navigation {
 	pub(crate) entries: HashMap<String, NavEntry>,
 }
 
-pub fn create_navigation(docs: &Vec<Box<dyn Document>>) -> Result<Navigation, String> {
+impl Navigation {
+	pub fn compile(&self, target: Target) -> String {
+		let mut result = String::new();
+		match target {
+			Target::HTML => {
+				result += r#"<ul id="navbar">"#;
+
+				fn process(result: &mut String, name: &String, ent: &NavEntry, depth: usize) {
+					let ent_path = ent
+						.path
+						.as_ref()
+						.map_or("#".to_string(), |path| path.clone());
+					result
+						.push_str(format!(r#"<li><a href="{ent_path}">{name}</a></li>"#).as_str());
+
+					if let Some(children) = ent.children.as_ref() {
+						result.push_str("<ul>");
+						for (name, ent) in children {
+							process(result, name, ent, depth + 1);
+						}
+						result.push_str("</ul>");
+					}
+				}
+
+				for (name, ent) in &self.entries {
+					process(&mut result, name, ent, 0);
+				}
+
+				result += r#"</ul>"#;
+			}
+			_ => todo!(""),
+		}
+		result
+	}
+}
+
+pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<Navigation, String> {
 	let mut nav = Navigation {
 		entries: HashMap::new(),
 	};
@@ -30,63 +67,57 @@ pub fn create_navigation(docs: &Vec<Box<dyn Document>>) -> Result<Navigation, St
 		let (cat, title, path) = match (cat, title, path) {
 			(Some(cat), Some(title), Some(path)) => (cat, title, path),
 			_ => {
-				println!(
-					"Skipping navigation generation for `{}`",
-					doc.source().name()
-				);
+				println!("Skipping navigation generation for `{}`", doc.input);
 				continue;
 			}
 		};
 
 		if let Some(subcat) = subcat {
 			// Get parent entry
-			let cat_name = cat.to_string();
-			let mut pent = match nav.entries.get_mut(cat_name.as_str()) {
+			let mut pent = match nav.entries.get_mut(cat.as_str()) {
 				Some(pent) => pent,
 				None => {
 					// Create parent entry
 					nav.entries.insert(
-						cat_name.clone(),
+						cat.clone(),
 						NavEntry {
-							name: cat_name.clone(),
+							name: cat.clone(),
 							path: None,
 							children: Some(HashMap::new()),
 						},
 					);
-					nav.entries.get_mut(cat_name.as_str()).unwrap()
+					nav.entries.get_mut(cat.as_str()).unwrap()
 				}
 			};
 
 			// Insert into parent
-			let subcat_name = subcat.to_string();
 			if let Some(previous) = pent.children.as_mut().unwrap().insert(
-				subcat_name.clone(),
+				subcat.clone(),
 				NavEntry {
-					name: subcat_name.clone(),
+					name: subcat.clone(),
 					path: Some(path.to_string()),
 					children: None,
 				},
 			) {
 				return Err(format!(
-					"Duplicate subcategory:\n{subcat:#?}\nclashes with:\n{previous:#?}"
+					"Duplicate subcategory:\n{subcat}\nclashes with:\n{previous:#?}"
 				));
 			}
 		} else {
 			// Get entry
-			let cat_name = cat.to_string();
-			let mut ent = match nav.entries.get_mut(cat_name.as_str()) {
+			let mut ent = match nav.entries.get_mut(cat.as_str()) {
 				Some(ent) => ent,
 				None => {
 					// Create parent entry
 					nav.entries.insert(
-						cat_name.clone(),
+						cat.clone(),
 						NavEntry {
-							name: cat_name.clone(),
+							name: cat.clone(),
 							path: None,
 							children: Some(HashMap::new()),
 						},
 					);
-					nav.entries.get_mut(cat_name.as_str()).unwrap()
+					nav.entries.get_mut(cat.as_str()).unwrap()
 				}
 			};
 

@@ -9,9 +9,6 @@ use crate::document::document::Document;
 use crate::document::document::ElemReference;
 use crate::document::variable::Variable;
 
-use super::navigation::NavEntry;
-use super::navigation::Navigation;
-
 #[derive(Clone, Copy)]
 pub enum Target {
 	HTML,
@@ -133,80 +130,128 @@ impl Compiler {
 		result
 	}
 
-	pub fn navigation(&self, navigation: &Navigation, document: &dyn Document) -> String
-	{
-		let mut result = String::new();
-		match self.target()
-		{
-			Target::HTML => {
-				result += r#"<ul id="navbar">"#;
-
-				fn process(result: &mut String, name: &String, ent: &NavEntry, depth: usize)
-				{
-					let ent_path = ent.path.as_ref()
-						.map_or("#".to_string(),|path| path.clone());
-					result.push_str(format!(r#"<li><a href="{ent_path}">{name}</a></li>"#).as_str());
-
-					if let Some(children) = ent.children.as_ref()
-					{
-						result.push_str("<ul>");
-						for (name, ent) in children
-						{
-							process(result, name, ent, depth+1);
-						}
-						result.push_str("</ul>");
-					}
-				}
-
-				for (name, ent) in &navigation.entries
-				{
-					process(&mut result, name, ent, 0);
-				}
-				
-
-				result += r#"</ul>"#;
-			},
-			_ => todo!("")
-		}
-		result
-	}
-
 	pub fn footer(&self, _document: &dyn Document) -> String {
 		let mut result = String::new();
 		match self.target() {
 			Target::HTML => {
 				result += "</body></html>";
 			}
-			Target::LATEX => todo!("")
+			Target::LATEX => todo!(""),
 		}
 		result
 	}
 
-	pub fn compile(&self, navigation: &Navigation, document: &dyn Document) -> String {
-		let mut out = String::new();
+	pub fn compile(&self, document: &dyn Document) -> CompiledDocument {
 		let borrow = document.content().borrow();
 
 		// Header
-		out += self.header(document).as_str();
-
-		// Navigation
-		out += self.navigation(navigation, document).as_str();
+		let header = self.header(document);
 
 		// Body
+		let mut body = String::new();
 		for i in 0..borrow.len() {
 			let elem = &borrow[i];
 
 			match elem.compile(self, document) {
-				Ok(result) => {
-					out.push_str(result.as_str())
-				}
+				Ok(result) => body.push_str(result.as_str()),
 				Err(err) => println!("Unable to compile element: {err}\n{}", elem.to_string()),
 			}
 		}
 
 		// Footer
-		out += self.footer(document).as_str();
+		let footer = self.footer(document);
 
-		out
+		// Variables
+		let variables = document
+			.scope()
+			.borrow_mut()
+			.variables
+			.iter()
+			.map(|(key, var)| (key.clone(), var.to_string()))
+			.collect::<HashMap<String, String>>();
+
+		CompiledDocument {
+			input: document.source().name().clone(),
+			mtime: 0,
+			variables,
+			header,
+			body,
+			footer,
+		}
+	}
+}
+
+#[derive(Debug)]
+pub struct CompiledDocument {
+	/// Input path relative to the input directory
+	pub input: String,
+	/// Modification time (i.e seconds since last epoch)
+	pub mtime: u64,
+
+	// TODO: Also store exported references
+	// so they can be referenced from elsewhere
+	// This will also require rebuilding in case some exported references have changed...
+	/// Variables exported to string, so they can be querried later
+	pub variables: HashMap<String, String>,
+
+	/// Compiled document's header
+	pub header: String,
+	/// Compiled document's body
+	pub body: String,
+	/// Compiled document's footer
+	pub footer: String,
+}
+
+impl CompiledDocument {
+	pub fn get_variable(&self, name: &str) -> Option<&String> { self.variables.get(name) }
+
+	fn sql_table() -> &'static str {
+		"CREATE TABLE IF NOT EXISTS compiled_documents (
+			input TEXT PRIMARY KEY,
+			mtime INTEGER NOT NULL,
+			variables TEXT NOT NULL,
+			header TEXT NOT NULL,
+			body TEXT NOT NULL,
+			footer TEXT NOT NULL
+		);"
+	}
+
+	fn sql_get_query() -> &'static str { "SELECT * FROM compiled_documents WHERE input = (?1)" }
+
+	fn sql_insert_query() -> &'static str {
+		"INSERT OR REPLACE INTO compiled_documents (input, mtime, variables, header, body, footer) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
+	}
+
+	pub fn init_cache(con: &Connection) -> Result<usize, rusqlite::Error> {
+		con.execute(Self::sql_table(), [])
+	}
+
+	pub fn from_cache(con: &Connection, input: &String) -> Option<Self> {
+		con.query_row(Self::sql_get_query(), [input], |row| {
+			Ok(CompiledDocument {
+				input: input.clone(),
+				mtime: row.get_unwrap::<_, u64>(1),
+				variables: serde_json::from_str(row.get_unwrap::<_, String>(2).as_str()).unwrap(),
+				header: row.get_unwrap::<_, String>(3),
+				body: row.get_unwrap::<_, String>(4),
+				footer: row.get_unwrap::<_, String>(5),
+			})
+		})
+		.ok()
+	}
+
+	/// Inserts [`CompiledDocument`] into cache
+	pub fn insert_cache(&self, con: &Connection) -> Result<usize, rusqlite::Error> {
+		con.execute(
+			Self::sql_insert_query(),
+			(
+				&self.input,
+				&self.mtime,
+				serde_json::to_string(&self.variables).unwrap(),
+				&self.header,
+				&self.body,
+				&self.footer,
+			),
+		)
 	}
 }

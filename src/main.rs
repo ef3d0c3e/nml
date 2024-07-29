@@ -7,9 +7,14 @@ mod lua;
 mod parser;
 
 use std::env;
+use std::fs::OpenOptions;
+use std::io::BufWriter;
+use std::io::Write;
 use std::process::ExitCode;
 use std::rc::Rc;
+use std::time::UNIX_EPOCH;
 
+use compiler::compiler::CompiledDocument;
 use compiler::compiler::Compiler;
 use compiler::compiler::Target;
 use compiler::navigation::create_navigation;
@@ -18,6 +23,7 @@ use document::document::Document;
 use getopts::Options;
 use parser::langparser::LangParser;
 use parser::parser::Parser;
+use rusqlite::Connection;
 use walkdir::WalkDir;
 
 use crate::parser::source::SourceFile;
@@ -42,38 +48,7 @@ NML version: 0.4\n"
 	);
 }
 
-fn compile(
-	target: Target,
-	doc: &Box<dyn Document>,
-	output: &String,
-	db_path: &Option<String>,
-	navigation: &Navigation,
-	multi_mode: bool,
-) -> bool {
-	let compiler = Compiler::new(target, db_path.clone());
-
-	// Get output from file
-	if multi_mode {
-		let out_file = match doc.get_variable("compiler.output") {
-			None => {
-				eprintln!("Missing required variable `compiler.output` for multifile mode");
-				return false;
-			}
-			Some(var) => output.clone() + "/" + var.to_string().as_str(),
-		};
-
-		let out = compiler.compile(navigation, doc.as_ref());
-		std::fs::write(out_file, out).is_ok()
-	} else {
-		let out = compiler.compile(navigation, doc.as_ref());
-		std::fs::write(output, out).is_ok()
-	}
-}
-
-fn parse(
-	input: &String,
-	debug_opts: &Vec<String>,
-) -> Result<Box<dyn Document<'static>>, String> {
+fn parse(input: &String, debug_opts: &Vec<String>) -> Result<Box<dyn Document<'static>>, String> {
 	println!("Parsing {input}...");
 	let parser = LangParser::default();
 
@@ -108,10 +83,67 @@ fn parse(
 	}
 
 	if parser.has_error() {
-		return Err("Parsing failed aborted due to errors while parsing".to_string())
+		return Err("Parsing failed aborted due to errors while parsing".to_string());
 	}
 
 	Ok(doc)
+}
+
+fn process(
+	target: Target,
+	files: Vec<String>,
+	db_path: &Option<String>,
+	debug_opts: &Vec<String>,
+) -> Result<Vec<CompiledDocument>, String> {
+	let mut compiled = vec![];
+
+	let con = db_path
+		.as_ref()
+		.map_or(Connection::open_in_memory(), |path| Connection::open(path))
+		.map_err(|err| format!("Unable to open connection to the database: {err}"))?;
+	CompiledDocument::init_cache(&con)
+		.map_err(|err| format!("Failed to initialize cached document table: {err}"))?;
+
+	for file in files {
+		let meta = std::fs::metadata(&file)
+			.map_err(|err| format!("Failed to get metadata for `{file}`: {err}"))?;
+
+		let modified = meta
+			.modified()
+			.map_err(|err| format!("Unable to query modification time for `{file}`: {err}"))?;
+
+		let parse_and_compile = || -> Result<CompiledDocument, String> {
+			// Parse
+			let doc = parse(&file, debug_opts)?;
+
+			// Compile
+			let compiler = Compiler::new(target, db_path.clone());
+			let mut compiled = compiler.compile(&*doc);
+
+			// Insert into cache
+			compiled.mtime = modified.duration_since(UNIX_EPOCH).unwrap().as_secs();
+			compiled.insert_cache(&con).map_err(|err| {
+				format!("Failed to insert compiled document from `{file}` into cache: {err}")
+			})?;
+
+			Ok(compiled)
+		};
+
+		let cdoc = match CompiledDocument::from_cache(&con, &file) {
+			Some(compiled) => {
+				if compiled.mtime < modified.duration_since(UNIX_EPOCH).unwrap().as_secs() {
+					parse_and_compile()?
+				} else {
+					compiled
+				}
+			}
+			None => parse_and_compile()?,
+		};
+
+		compiled.push(cdoc);
+	}
+
+	Ok(compiled)
 }
 
 fn main() -> ExitCode {
@@ -177,8 +209,7 @@ fn main() -> ExitCode {
 	let debug_opts = matches.opt_strs("z");
 	let db_path = matches.opt_str("d");
 
-	let mut docs = vec![];
-
+	let mut files = vec![];
 	if input_meta.is_dir() {
 		if db_path.is_none() {
 			eprintln!("Please specify a database (-d) for directory mode.");
@@ -221,46 +252,53 @@ fn main() -> ExitCode {
 				continue;
 			}
 
-			match parse(&path, &debug_opts)
-			{
-				Ok(doc) => docs.push(doc),
-				Err(e) => {
-					eprintln!("{e}");
-					return ExitCode::FAILURE;
-				}
-			}
+			files.push(path);
 		}
 	} else {
-		match parse(&input, &debug_opts)
-		{
-			Ok(doc) => docs.push(doc),
-			Err(e) => {
-				eprintln!("{e}");
-				return ExitCode::FAILURE;
-			}
-		}
+		files.push(input);
 	}
 
-	// Build navigation
-	let navigation = match create_navigation(&docs)
-	{
-		Ok(nav) => nav,
+	// Parse, compile using the cache
+	let compiled = match process(Target::HTML, files, &db_path, &debug_opts) {
+		Ok(compiled) => compiled,
 		Err(e) => {
 			eprintln!("{e}");
 			return ExitCode::FAILURE;
 		}
 	};
 
-	println!("{navigation:#?}");
-
-	let multi_mode = input_meta.is_dir();
-	for doc in docs
-	{
-		if !compile(Target::HTML, &doc, &output, &db_path, &navigation, multi_mode)
-		{
-			eprintln!("Compilation failed, processing aborted");
+	// Build navigation
+	let navigation = match create_navigation(&compiled) {
+		Ok(nav) => nav,
+		Err(e) => {
+			eprintln!("{e}");
 			return ExitCode::FAILURE;
 		}
+	};
+	let compiled_navigation = navigation.compile(Target::HTML);
+
+	// Output
+	for doc in compiled {
+		let out_path = match doc
+			.get_variable("compiler.output")
+			.or(input_meta.is_file().then_some(&output))
+		{
+			Some(path) => path.clone(),
+			None => {
+				eprintln!("Unable to get output file for `{}`", doc.input);
+				return ExitCode::FAILURE;
+			}
+		};
+
+		let file = std::fs::File::create(output.clone() + "/" + out_path.as_str()).unwrap();
+		let mut writer = BufWriter::new(file);
+
+		write!(
+			writer,
+			"{}{}{}{}",
+			doc.header, compiled_navigation, doc.body, doc.footer
+		);
+		writer.flush();
 	}
 
 	return ExitCode::SUCCESS;
