@@ -120,7 +120,7 @@ impl Compiler {
 					)
 					.as_str();
 				}
-				result += "</head><body>";
+				result += r#"</head><body><div id="layout">"#;
 
 				// TODO: TOC
 				// TODO: Author, Date, Title, Div
@@ -134,7 +134,7 @@ impl Compiler {
 		let mut result = String::new();
 		match self.target() {
 			Target::HTML => {
-				result += "</body></html>";
+				result += "</div></body></html>";
 			}
 			Target::LATEX => todo!(""),
 		}
@@ -148,7 +148,7 @@ impl Compiler {
 		let header = self.header(document);
 
 		// Body
-		let mut body = String::new();
+		let mut body = r#"<div id="content">"#.to_string();
 		for i in 0..borrow.len() {
 			let elem = &borrow[i];
 
@@ -157,6 +157,7 @@ impl Compiler {
 				Err(err) => println!("Unable to compile element: {err}\n{}", elem.to_string()),
 			}
 		}
+		body.push_str("</div>");
 
 		// Footer
 		let footer = self.footer(document);
