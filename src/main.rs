@@ -91,6 +91,7 @@ fn process(
 	target: Target,
 	files: Vec<String>,
 	db_path: &Option<String>,
+	force_rebuild: bool,
 	debug_opts: &Vec<String>,
 ) -> Result<Vec<CompiledDocument>, String> {
 	let mut compiled = vec![];
@@ -127,15 +128,19 @@ fn process(
 			Ok(compiled)
 		};
 
-		let cdoc = match CompiledDocument::from_cache(&con, &file) {
-			Some(compiled) => {
-				if compiled.mtime < modified.duration_since(UNIX_EPOCH).unwrap().as_secs() {
-					parse_and_compile()?
-				} else {
-					compiled
+		let cdoc = if force_rebuild {
+			parse_and_compile()?
+		} else {
+			match CompiledDocument::from_cache(&con, &file) {
+				Some(compiled) => {
+					if compiled.mtime < modified.duration_since(UNIX_EPOCH).unwrap().as_secs() {
+						parse_and_compile()?
+					} else {
+						compiled
+					}
 				}
+				None => parse_and_compile()?,
 			}
-			None => parse_and_compile()?,
 		};
 
 		compiled.push(cdoc);
@@ -152,6 +157,7 @@ fn main() -> ExitCode {
 	opts.optopt("i", "input", "Input path", "PATH");
 	opts.optopt("o", "output", "Output path", "PATH");
 	opts.optopt("d", "database", "Cache database location", "PATH");
+	opts.optflag("", "force-rebuild", "Force rebuilding of cached documents");
 	opts.optmulti("z", "debug", "Debug options", "OPTS");
 	opts.optflag("h", "help", "Print this help menu");
 	opts.optflag("v", "version", "Print program version and licenses");
@@ -204,8 +210,9 @@ fn main() -> ExitCode {
 		}
 	}
 
-	let debug_opts = matches.opt_strs("z");
 	let db_path = matches.opt_str("d");
+	let force_rebuild = matches.opt_present("force-rebuild");
+	let debug_opts = matches.opt_strs("z");
 
 	let mut files = vec![];
 	if input_meta.is_dir() {
@@ -257,7 +264,7 @@ fn main() -> ExitCode {
 	}
 
 	// Parse, compile using the cache
-	let compiled = match process(Target::HTML, files, &db_path, &debug_opts) {
+	let compiled = match process(Target::HTML, files, &db_path, force_rebuild, &debug_opts) {
 		Ok(compiled) => compiled,
 		Err(e) => {
 			eprintln!("{e}");
@@ -283,7 +290,7 @@ fn main() -> ExitCode {
 			Some(path) => path.clone(),
 			None => {
 				eprintln!("Unable to get output file for `{}`", doc.input);
-				return ExitCode::FAILURE;
+				continue;
 			}
 		};
 
@@ -292,11 +299,7 @@ fn main() -> ExitCode {
 		let file = std::fs::File::create(output.clone() + "/" + out_path.as_str()).unwrap();
 		let mut writer = BufWriter::new(file);
 
-		write!(
-			writer,
-			"{}{}{}{}",
-			doc.header, nav, doc.body, doc.footer
-		).unwrap();
+		write!(writer, "{}{}{}{}", doc.header, nav, doc.body, doc.footer).unwrap();
 		writer.flush().unwrap();
 	}
 

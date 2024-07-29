@@ -1,0 +1,20 @@
+@import docs/template.nml
+@compiler.output = lua.html
+@nav.title = Lua
+@nav.category = Lua
+@html.page_title = Documentation | Lua
+
+# Running lua code
+
+Running lua code is done using the following syntax: 
+``Lua, %<print("Hello World!")>%``
+
+## Lua to text
+To convert the return value of your lua code, append ``"`` at the start of your lua expression:
+ * ``Lua, %<"return "Hello World">%`` → %<"return "Hello World">%
+ * ``Lua, %<" "Hello, " .. "World">%`` → %<" "Hello, " .. "World">%
+
+## Parse lua string
+Additionnaly, you can output lua to be parsed by the document's parser. To do so, append ``!`` at the start of your lua expression:
+ * ``Lua, %<!"**" .. "Bold from lua?" .. "**">%`` → %<!"**" .. "Bold from lua?" .. "**">%
+ * ``Lua, %<!"[" .. "Link from Lua" .. "](#)">%`` → %<!"[" .. "Link from Lua" .. "](#)">%

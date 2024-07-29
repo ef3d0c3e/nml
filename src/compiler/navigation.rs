@@ -144,7 +144,5 @@ pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<NavEntry, Strin
 		pent.entries.push((title.clone(), path.clone()))
 	}
 
-	println!("{nav:#?}");
-
 	Ok(nav)
 }

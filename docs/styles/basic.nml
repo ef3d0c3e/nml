@@ -1,0 +1,31 @@
+@import docs/template.nml
+@compiler.output = basic.html
+@nav.title = Basic
+@nav.category = Styles
+@html.page_title = Documentation | Basic Styles
+
+# Basic styles
+## Bold
+
+Enclose text between two ``**`` to render it **bold**!
+ * ``**Bold text**`` → **Bold text**
+ * ``**Bold [link](#)**`` → **Bold [link](#)**
+
+## Italic
+
+Enclose text between two ``*`` to render it *italic*!
+ * ``*Italic text*`` → *Italic text*
+ * ``**Bold + *Italic***`` → **Bold + *Italic***
+
+## Underline
+
+Enclose text between two ``__`` to render it __underlined__!
+ * ``__Underlined text__`` → __Underlined text__
+ * ``__Underline + *Italic*__`` → __Underline + *Italic*__
+
+## Highlighted
+
+Enclose text between two `` ` `` to render it `overlined`!
+ * `` `Highlighted text` `` → `Highlighted text`
+ * `` `Highlight + **Bold**` `` → `Highlight + **Bold**`
+

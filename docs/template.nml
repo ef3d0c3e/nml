@@ -1,0 +1,8 @@
+@'html.css = style.css
+
+@tex.main.fontsize = 9
+@tex.main.preamble = \usepackage{xcolor, tikz, pgfplots} \\
+\usepgfplotslibrary{patchplots} \\
+\definecolor{__color1}{HTML}{d5d5d5} \\
+\everymath{\color{__color1}\displaystyle}
+@tex.main.block_prepend = \color{__color1}

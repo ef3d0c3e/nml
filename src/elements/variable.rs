@@ -13,7 +13,7 @@ pub struct VariableRule {
 impl VariableRule {
 	pub fn new() -> Self {
 		Self {
-            re: [Regex::new(r"(?:^|\n)@([^[:alpha:]])?(.*)=((?:\\\n|.)*)").unwrap()],
+            re: [Regex::new(r"(?:^|\n)@([^[:alpha:]])?(.*?)=((?:\\\n|.)*)").unwrap()],
             kinds: vec![
                 ("".into(), "Regular".into()),
                 ("'".into(), "Path".into())
@@ -88,8 +88,6 @@ impl RegexRule for VariableRule {
 	fn name(&self) -> &'static str { "Variable" }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
-
-
 
 	fn on_regex_match<'a>(&self, _: usize, parser: &dyn Parser, document: &'a dyn Document, token: Token, matches: regex::Captures) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>
 	{

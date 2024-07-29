@@ -1,0 +1,96 @@
+@import docs/template.nml
+@compiler.output = latex.html
+@nav.title = LaTeX
+@nav.category = External Tools
+@html.page_title = Documentation | LaTeX
+
+@LaTeX = $|[kind=inline]\LaTeX|$
+
+*Bring some %LaTeX% unto your document!*
+
+# Inline Math
+
+You can add inline math by enclosing %LaTeX% between two ``$``:
+ * ``$\lim_{n \to \infty} \Big(1 + \frac{1}{n}\Big)^n = e$`` → $\lim_{n \to \infty} \Big(1 + \frac{1}{n}\Big)^n = e$
+ * ``$\pi = \sqrt{\sum_{n=1}^\infty \frac{1}{n^2}}$`` → $\pi = \sqrt{\sum_{n=1}^\infty \frac{1}{n^2}}$
+
+You can make the %LaTeX% non inline by specifying `kind=block` in it's property: ``$[kind=block] 1+1=2$`` → $[kind=block] 1+1=2$
+*(notice how it's not inside a paragraph)*
+
+# Non Math LaTeX
+
+You can write %LaTeX% outside of %LaTeX%'s math environment, by enclosing your code between ``$|...|$``:
+``LaTeX,
+$|\begin{tikzpicture}
+	\begin{axis}
+	\addplot3[patch,patch refines=3,
+		shader=faceted interp,
+		patch type=biquadratic] 
+	table[z expr=x^2-y^2]
+	{
+		x  y
+		-2 -2
+		2  -2
+		2  2
+		-2 2
+		0  -2
+		2  0
+		0  2
+		-2 0
+		0  0
+	};
+	\end{axis}
+\end{tikzpicture}|$
+``
+Gives the following:
+
+$|\begin{tikzpicture}
+	\begin{axis}
+	\addplot3[patch,patch refines=3,
+		shader=faceted interp,
+		patch type=biquadratic]
+	table[z expr=x^2-y^2]
+	{
+		x  y
+		-2 -2
+		2  -2
+		2  2
+		-2 2
+		0  -2
+		2  0
+		0  2
+		-2 0
+		0  0
+	};
+	\end{axis}
+\end{tikzpicture}|$
+
+# LaTeX environment
+
+You can define multiple %LaTeX% environment, the default being `main`
+ * ``@tex.env.fontsize`` The fontsize (in pt) specified to `latex2svg` (default: `12`).
+ * ``@tex.env.preamble`` The preamble prepended to every %LaTeX% code.
+ * ``@tex.env.block_prepend`` Text to prepend to every non math %LaTeX% code.
+ * ``@tex.env.exec`` The `latex2svg` executable path, defaults to `latex2svg` (need to be in your `\$PATH`)
+Replace ``env`` with the name of the custom environment you wish to define.
+
+Here's a preamble to render %LaTeX% gray:
+``
+@tex.main.fontsize = 9
+@tex.main.preamble = \usepackage{xcolor} \\
+\usepgfplotslibrary{patchplots} \\
+\definecolor{__color1}{HTML}{d5d5d5} \\
+\everymath{\color{__color1}}
+@tex.main.block_prepend = \color{__color1}
+``
+
+To set the environment you wish to use for a particular %LaTeX% element, set the `env` property:
+ * ``$[env=main] 1+1 = 2$`` → $[env=main] 1+1 = 2$
+ * ``$[env=other] 1+1 = 2$`` → $[env=other] 1+1 = 2$
+
+
+# LaTeX cache
+
+%LaTeX% elements that have been successfully rendered to **svg** are stored in the cache database, to avoid processing them a second time.
+Note that this cache is shared between documents, so you don't need to reprocess them if they share the same environment.
+They are stored under the table named ``cached_tex``, if you modify the `env` all elements will be reprocessed which may take a while...

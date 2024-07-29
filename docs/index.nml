@@ -1,0 +1,6 @@
+@import docs/template.nml
+@compiler.output = index.html
+@nav.title = Documentation
+@html.page_title = Documentation | Index
+
+# Welcome to the NML documentation!
