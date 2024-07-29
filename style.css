@@ -7,6 +7,7 @@ body {
 	margin: 0 auto;
 }
 
+/* Styles */
 em {
 	padding-left: .1em;
 	padding-right: .1em;
@@ -19,14 +20,79 @@ em {
 	background-color: #191f26;
 }
 
-/* Styles */
-a.inline-code
-{
+a.inline-code {
 	padding-left: .1em;
 	padding-right: .1em;
 
 	border-radius: 1px;
 	background-color: #191f26;
+}
+
+/* Navbar */
+#navbar {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: max(16vw, 20ch);
+	overflow-y: auto;
+	position: absolute;
+    box-sizing: border-box;
+    overscroll-behavior-y: contain;
+
+    background-color: #161a26;
+	color: #aaa;
+
+    font-size: 0.9em;
+	font-weight: bold;
+}
+
+#navbar a {
+	color: #ffb454;
+
+	text-decoration: none;
+	font-weight: normal;
+}
+
+#navbar li {
+	display: block;
+	position: relative;
+	padding-left: 1em;
+	margin-left: 0em;
+}
+
+#navbar ul {
+	margin-left: 0em;
+	padding-left: 0;
+}
+
+#navbar summary{
+	display: block;
+	cursor: pointer;
+}
+
+#navbar summary::marker,
+#navbar summary::-webkit-details-marker{
+	display: none;
+}
+
+#navbar summary:focus{
+	outline: none;
+}
+
+#navbar summary:focus-visible{
+	outline: 1px dotted #000;
+}
+
+#navbar summary:before {
+    content: "+";
+    color: #ffb454;
+    float: left;
+    text-align: center;
+    width: 1em;
+}
+
+#navbar details[open] > summary:before {
+    content: "–";
 }
 
 /* Code blocks */
