@@ -91,9 +91,6 @@ impl Variable for PathVariable
     fn to_string(&self) -> String { self.path.to_str().unwrap().to_string() }
 
     fn parse<'a>(&self, location: Token, parser: &dyn Parser, document: &'a dyn Document) {
-		// TODO: Avoid copying the content...
-		// Maybe create a special VirtualSource where the `content()` method
-		// calls `Variable::to_string()`
 		let source = Rc::new(VirtualSource::new(
 			location,
 			self.name().to_string(),
@@ -105,42 +102,3 @@ impl Variable for PathVariable
         )));
     }
 }
-
-/*
-struct ConfigVariable<T>
-{
-	value: T,
-	name: String,
-
-	desc: String,
-	validator: Box<dyn Fn(&Self, &T) -> Option<&String>>,
-}
-
-impl<T> ConfigVariable<T>
-{
-	fn description(&self) -> &String { &self.desc }
-}
-
-impl<T> Variable for ConfigVariable<T>
-where T: FromStr + Display
-{
-	fn name(&self) -> &str { self.name.as_str() }
-
-	/// Parse variable from string, returns an error message on failure
-	fn from_string(&mut self, str: &str) -> Option<String> {
-		match str.parse::<T>()
-		{
-			Ok(value) => {
-				(self.validator)(self, &value).or_else(|| {
-                    self.value = value;
-                    None
-                })
-			},
-			Err(_) => return Some(format!("Unable to parse `{str}` into variable `{}`", self.name))
-		}
-	}
-
-	/// Converts variable to a string
-	fn to_string(&self) -> String { self.value.to_string() }
-}
-*/

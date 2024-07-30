@@ -227,10 +227,10 @@ impl CompiledDocument {
 		con.execute(Self::sql_table(), [])
 	}
 
-	pub fn from_cache(con: &Connection, input: &String) -> Option<Self> {
+	pub fn from_cache(con: &Connection, input: &str) -> Option<Self> {
 		con.query_row(Self::sql_get_query(), [input], |row| {
 			Ok(CompiledDocument {
-				input: input.clone(),
+				input: input.to_string(),
 				mtime: row.get_unwrap::<_, u64>(1),
 				variables: serde_json::from_str(row.get_unwrap::<_, String>(2).as_str()).unwrap(),
 				header: row.get_unwrap::<_, String>(3),

@@ -9,6 +9,7 @@ mod parser;
 use std::env;
 use std::io::BufWriter;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::rc::Rc;
 use std::time::UNIX_EPOCH;
@@ -46,7 +47,7 @@ NML version: 0.4\n"
 	);
 }
 
-fn parse(input: &String, debug_opts: &Vec<String>) -> Result<Box<dyn Document<'static>>, String> {
+fn parse(input: &str, debug_opts: &Vec<String>) -> Result<Box<dyn Document<'static>>, String> {
 	println!("Parsing {input}...");
 	let parser = LangParser::default();
 
@@ -89,12 +90,15 @@ fn parse(input: &String, debug_opts: &Vec<String>) -> Result<Box<dyn Document<'s
 
 fn process(
 	target: Target,
-	files: Vec<String>,
+	files: Vec<PathBuf>,
 	db_path: &Option<String>,
 	force_rebuild: bool,
 	debug_opts: &Vec<String>,
 ) -> Result<Vec<CompiledDocument>, String> {
 	let mut compiled = vec![];
+
+	let current_dir = std::env::current_dir()
+		.map_err(|err| format!("Unable to get the current working directory: {err}"))?;
 
 	let con = db_path
 		.as_ref()
@@ -105,15 +109,22 @@ fn process(
 
 	for file in files {
 		let meta = std::fs::metadata(&file)
-			.map_err(|err| format!("Failed to get metadata for `{file}`: {err}"))?;
+			.map_err(|err| format!("Failed to get metadata for `{file:#?}`: {err}"))?;
 
 		let modified = meta
 			.modified()
-			.map_err(|err| format!("Unable to query modification time for `{file}`: {err}"))?;
+			.map_err(|err| format!("Unable to query modification time for `{file:#?}`: {err}"))?;
+
+		// Move to file's directory
+		let file_parent_path = file
+			.parent()
+			.ok_or(format!("Failed to get parent path for `{file:#?}`"))?;
+		std::env::set_current_dir(file_parent_path)
+			.map_err(|err| format!("Failed to move to path `{file_parent_path:#?}`: {err}"))?;
 
 		let parse_and_compile = || -> Result<CompiledDocument, String> {
 			// Parse
-			let doc = parse(&file, debug_opts)?;
+			let doc = parse(file.to_str().unwrap(), debug_opts)?;
 
 			// Compile
 			let compiler = Compiler::new(target, db_path.clone());
@@ -122,7 +133,7 @@ fn process(
 			// Insert into cache
 			compiled.mtime = modified.duration_since(UNIX_EPOCH).unwrap().as_secs();
 			compiled.insert_cache(&con).map_err(|err| {
-				format!("Failed to insert compiled document from `{file}` into cache: {err}")
+				format!("Failed to insert compiled document from `{file:#?}` into cache: {err}")
 			})?;
 
 			Ok(compiled)
@@ -131,7 +142,7 @@ fn process(
 		let cdoc = if force_rebuild {
 			parse_and_compile()?
 		} else {
-			match CompiledDocument::from_cache(&con, &file) {
+			match CompiledDocument::from_cache(&con, file.to_str().unwrap()) {
 				Some(compiled) => {
 					if compiled.mtime < modified.duration_since(UNIX_EPOCH).unwrap().as_secs() {
 						parse_and_compile()?
@@ -145,6 +156,9 @@ fn process(
 
 		compiled.push(cdoc);
 	}
+
+	std::env::set_current_dir(current_dir)
+		.map_err(|err| format!("Failed to set current directory: {err}"))?;
 
 	Ok(compiled)
 }
@@ -208,25 +222,73 @@ fn main() -> ExitCode {
 				return ExitCode::FAILURE;
 			}
 		}
+	} else if std::fs::exists(&output).unwrap_or(false) {
+		let output_meta = match std::fs::metadata(&output) {
+			Ok(meta) => meta,
+			Err(e) => {
+				eprintln!("Unable to get metadata for output: `{output}`");
+				return ExitCode::FAILURE;
+			}
+		};
+
+		if output_meta.is_dir() {
+			eprintln!("Input `{input}` is a file, but output `{output}` is a directory");
+			return ExitCode::FAILURE;
+		}
 	}
 
-	let db_path = matches.opt_str("d");
+	let db_path = match matches.opt_str("d") {
+		Some(db) => {
+			if std::fs::exists(&db).unwrap_or(false) {
+				match std::fs::canonicalize(&db)
+					.map_err(|err| format!("Failed to cannonicalize database path `{db}`: {err}"))
+					.as_ref()
+					.map(|path| path.to_str())
+				{
+					Ok(Some(path)) => Some(path.to_string()),
+					Ok(None) => {
+						eprintln!("Failed to transform path to string `{db}`");
+						return ExitCode::FAILURE;
+					}
+					Err(err) => {
+						eprintln!("{err}");
+						return ExitCode::FAILURE;
+					}
+				}
+			} else
+			// Cannonicalize parent path, then append the database name
+			{
+				match std::fs::canonicalize(".")
+					.map_err(|err| {
+						format!("Failed to cannonicalize database parent path `{db}`: {err}")
+					})
+					.map(|path| path.join(&db))
+					.as_ref()
+					.map(|path| path.to_str())
+				{
+					Ok(Some(path)) => Some(path.to_string()),
+					Ok(None) => {
+						eprintln!("Failed to transform path to string `{db}`");
+						return ExitCode::FAILURE;
+					}
+					Err(err) => {
+						eprintln!("{err}");
+						return ExitCode::FAILURE;
+					}
+				}
+			}
+		}
+		None => None,
+	};
 	let force_rebuild = matches.opt_present("force-rebuild");
 	let debug_opts = matches.opt_strs("z");
 
 	let mut files = vec![];
 	if input_meta.is_dir() {
 		if db_path.is_none() {
-			eprintln!("Please specify a database (-d) for directory mode.");
+			eprintln!("Directory mode requires a database (-d)");
+			return ExitCode::FAILURE;
 		}
-
-		let input_it = match std::fs::read_dir(&input) {
-			Ok(it) => it,
-			Err(e) => {
-				eprintln!("Failed to read input directory `{input}`: {e}");
-				return ExitCode::FAILURE;
-			}
-		};
 
 		for entry in WalkDir::new(&input) {
 			if let Err(err) = entry {
@@ -257,10 +319,19 @@ fn main() -> ExitCode {
 				continue;
 			}
 
-			files.push(path);
+			files.push(std::fs::canonicalize(path).unwrap());
 		}
 	} else {
-		files.push(input);
+		// Single file mode
+		files.push(std::fs::canonicalize(input).unwrap());
+	}
+
+	// Check that all files have a valid unicode path
+	for file in &files {
+		if file.to_str().is_none() {
+			eprintln!("Invalid unicode for file: `{file:#?}`");
+			return ExitCode::FAILURE;
+		}
 	}
 
 	// Parse, compile using the cache
@@ -272,35 +343,50 @@ fn main() -> ExitCode {
 		}
 	};
 
-	// Build navigation
-	let navigation = match create_navigation(&compiled) {
-		Ok(nav) => nav,
-		Err(e) => {
-			eprintln!("{e}");
-			return ExitCode::FAILURE;
-		}
-	};
-
-	// Output
-	for doc in compiled {
-		let out_path = match doc
-			.get_variable("compiler.output")
-			.or(input_meta.is_file().then_some(&output))
-		{
-			Some(path) => path.clone(),
-			None => {
-				eprintln!("Unable to get output file for `{}`", doc.input);
-				continue;
+	if input_meta.is_dir()
+	// Batch mode
+	{
+		// Build navigation
+		let navigation = match create_navigation(&compiled) {
+			Ok(nav) => nav,
+			Err(e) => {
+				eprintln!("{e}");
+				return ExitCode::FAILURE;
 			}
 		};
 
-		let nav = navigation.compile(Target::HTML, &doc);
+		// Output
+		for doc in compiled {
+			let out_path = match doc
+				.get_variable("compiler.output")
+				.or(input_meta.is_file().then_some(&output))
+			{
+				Some(path) => path.clone(),
+				None => {
+					eprintln!("Unable to get output file for `{}`", doc.input);
+					continue;
+				}
+			};
 
-		let file = std::fs::File::create(output.clone() + "/" + out_path.as_str()).unwrap();
-		let mut writer = BufWriter::new(file);
+			let nav = navigation.compile(Target::HTML, &doc);
+			let file = std::fs::File::create(output.clone() + "/" + out_path.as_str()).unwrap();
 
-		write!(writer, "{}{}{}{}", doc.header, nav, doc.body, doc.footer).unwrap();
-		writer.flush().unwrap();
+			let mut writer = BufWriter::new(file);
+
+			write!(writer, "{}{}{}{}", doc.header, nav, doc.body, doc.footer).unwrap();
+			writer.flush().unwrap();
+		}
+	} else
+	// Single file
+	{
+		for doc in compiled {
+			let file = std::fs::File::create(output.clone()).unwrap();
+
+			let mut writer = BufWriter::new(file);
+
+			write!(writer, "{}{}{}", doc.header, doc.body, doc.footer).unwrap();
+			writer.flush().unwrap();
+		}
 	}
 
 	return ExitCode::SUCCESS;

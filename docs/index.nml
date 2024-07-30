@@ -1,4 +1,4 @@
-@import docs/template.nml
+@import template.nml
 @compiler.output = index.html
 @nav.title = Documentation
 @html.page_title = Documentation | Index

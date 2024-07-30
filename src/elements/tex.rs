@@ -165,8 +165,6 @@ impl Element for Tex {
 					}
 				});
 
-				// TODO: Do something with the caption
-
 				let exec = document
 					.get_variable(format!("tex.{}.exec", self.env).as_str())
 					.map_or("latex2svg".to_string(), |var| var.to_string());
@@ -191,7 +189,7 @@ impl Element for Tex {
 					Tex::format_latex(&fontsize, &preamble, &format!("{prepend}{}", self.tex))
 				};
 
-				if let Some(mut con) = compiler.cache() {
+				let mut result = if let Some(mut con) = compiler.cache() {
 					match latex.cached(&mut con, |s| s.latex_to_svg(&exec, &fontsize)) {
 						Ok(s) => Ok(s),
 						Err(e) => match e {
@@ -203,7 +201,22 @@ impl Element for Tex {
 					}
 				} else {
 					latex.latex_to_svg(&exec, &fontsize)
-				}
+				};
+
+				// Caption
+				result.map(|mut result| {
+					if let (Some(caption), Some(start)) = (&self.caption, result.find('>')) {
+						result.insert_str(
+							start + 1,
+							format!(
+								"<title>{}</title>",
+								Compiler::sanitize(Target::HTML, caption)
+							)
+							.as_str(),
+						);
+					}
+					result
+				})
 			}
 			_ => todo!("Unimplemented"),
 		}

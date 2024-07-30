@@ -1,10 +1,10 @@
-@import docs/template.nml
+@import ../template.nml
 @compiler.output = latex.html
 @nav.title = LaTeX
 @nav.category = External Tools
 @html.page_title = Documentation | LaTeX
 
-@LaTeX = $|[kind=inline]\LaTeX|$
+@LaTeX = $|[kind=inline, caption=LaTeX]\LaTeX|$
 
 *Bring some %LaTeX% unto your document!*
 
@@ -88,6 +88,12 @@ To set the environment you wish to use for a particular %LaTeX% element, set the
  * ``$[env=main] 1+1 = 2$`` → $[env=main] 1+1 = 2$
  * ``$[env=other] 1+1 = 2$`` → $[env=other] 1+1 = 2$
 
+# Properties
+ * ``env`` The %LaTeX% environment to use, defaults to `main`.
+ * ``kind`` The display kind of the rendered element:
+ *- `inline` (default for math mode) displays %LaTeX% as part of the current paragraph.
+ *- `block` (default for non math mode) display %LaTeX% on it's own line.
+ * ``caption`` Caption for accessibility, defaults to `none`.
 
 # LaTeX cache
 

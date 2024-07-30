@@ -1,4 +1,4 @@
-@import docs/template.nml
+@import ../template.nml
 @compiler.output = basic.html
 @nav.title = Basic
 @nav.category = Styles

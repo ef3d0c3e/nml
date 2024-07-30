@@ -1,4 +1,4 @@
-@import docs/template.nml
+@import ../template.nml
 @compiler.output = lua.html
 @nav.title = Lua
 @nav.category = Lua

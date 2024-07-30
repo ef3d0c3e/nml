@@ -1,4 +1,4 @@
-@import docs/template.nml
+@import ../template.nml
 @compiler.output = user-defined.html
 @nav.title = User-Defined
 @nav.category = Styles
