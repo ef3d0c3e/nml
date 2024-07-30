@@ -2,9 +2,19 @@ body {
 	background-color: #1b1b1d;
 	color: #c5c5c5;
 	font-family: sans-serif;
+	margin: 0;
+	padding: 0;
+}
 
-	max-width: 90ch;
+.layout {
+	display: flex;
+}
+
+.content {
+	max-width: 99ch;
 	margin: 0 auto;
+	padding: 0;
+	width: 100%;
 }
 
 /* Styles */
@@ -29,13 +39,18 @@ a.inline-code {
 }
 
 /* Navbar */
-#navbar {
+.navbar {
+	display: none;
+
     left: 0;
     top: 0;
     bottom: 0;
-    width: max(16vw, 20ch);
+    width: max(calc((100vw - 99ch) / 2 - 15vw), 24ch);
+	height: 100vh;
+	position: fixed;
+	margin-right: 1em;
+
 	overflow-y: auto;
-	position: absolute;
     box-sizing: border-box;
     overscroll-behavior-y: contain;
 
@@ -46,44 +61,53 @@ a.inline-code {
 	font-weight: bold;
 }
 
-#navbar a {
+@media (min-width: 130ch) {
+	.navbar {
+		display: block;
+	}
+	.container {
+		flex-direction: row;
+	}
+}
+
+.navbar a {
 	color: #ffb454;
 
 	text-decoration: none;
 	font-weight: normal;
 }
 
-#navbar li {
+.navbar li {
 	display: block;
 	position: relative;
 	padding-left: 1em;
 	margin-left: 0em;
 }
 
-#navbar ul {
+.navbar ul {
 	margin-left: 0em;
 	padding-left: 0;
 }
 
-#navbar summary{
+.navbar summary{
 	display: block;
 	cursor: pointer;
 }
 
-#navbar summary::marker,
-#navbar summary::-webkit-details-marker{
+.navbar summary::marker,
+.navbar summary::-webkit-details-marker{
 	display: none;
 }
 
-#navbar summary:focus{
+.navbar summary:focus{
 	outline: none;
 }
 
-#navbar summary:focus-visible{
+.navbar summary:focus-visible{
 	outline: 1px dotted #000;
 }
 
-#navbar summary:before {
+.navbar summary:before {
     content: "+";
     color: #ffb454;
     float: left;
@@ -91,7 +115,7 @@ a.inline-code {
     width: 1em;
 }
 
-#navbar details[open] > summary:before {
+.navbar details[open] > summary:before {
     content: "–";
 }
 

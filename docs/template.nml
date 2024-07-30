@@ -6,3 +6,22 @@
 \definecolor{__color1}{HTML}{d5d5d5} \\
 \everymath{\color{__color1}\displaystyle}
 @tex.main.block_prepend = \color{__color1}
+
+@<
+function make_doc(categories, title, page_title)
+	-- Navigation
+	nml.variable.insert("nav.title", title)
+	if categories[1] ~= nil
+	then
+		nml.variable.insert("nav.category", categories[1])
+		if categories[2] ~= nil
+		then
+			nml.variable.insert("nav.subcategory", categories[2])
+		end
+	end
+
+	-- HTML
+	nml.variable.insert("html.page_title", "NML | " .. page_title)
+	nml.variable.insert("compiler.output", page_title .. ".html")
+end
+>@

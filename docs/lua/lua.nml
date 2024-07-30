@@ -1,8 +1,5 @@
 @import ../template.nml
-@compiler.output = lua.html
-@nav.title = Lua
-@nav.category = Lua
-@html.page_title = Documentation | Lua
+%<make_doc({"Lua"}, "Lua", "Lua Basics")>%
 
 # Running lua code
 

@@ -1,7 +1,4 @@
 @import ../template.nml
-@compiler.output = user-defined.html
-@nav.title = User-Defined
-@nav.category = Styles
-@html.page_title = Documentation | User-Defined Styles
+%<make_doc({"Styles"}, "User-Defined", "User-Defined Styles")>%
 
 # TODO

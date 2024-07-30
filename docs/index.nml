@@ -1,6 +1,4 @@
 @import template.nml
-@compiler.output = index.html
-@nav.title = Documentation
-@html.page_title = Documentation | Index
+%<make_doc({}, "Index", "Index")>%
 
 # Welcome to the NML documentation!

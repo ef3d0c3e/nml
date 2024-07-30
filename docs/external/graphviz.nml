@@ -1,0 +1,32 @@
+@import ../template.nml
+%<make_doc({"External Tools"}, "Graphviz", "Graphvis")>%
+
+# Graphs from graphviz
+
+[graph]
+digraph {
+	bgcolor=transparent;
+
+	filelist [color=green, label="File List"];
+	doclist [color=green, label="Document List"];
+	iscached [shape=diamond, color=red, label="Cached?"];
+	parse [color=white, label=Parse];
+	compile [color=white, label=Compile];
+	cache [shape=box, color=blue, label=Cache];
+
+	edge [color=gray]
+	filelist -> iscached;
+	iscached -> cache[dir=both];
+	iscached -> doclist[label="+"];
+
+	iscached -> parse[label="No"];
+	parse -> compile;
+	compile -> cache[label="+"];
+	compile -> doclist[label="+"];
+
+	buildnav [color=white, label="Build Navigation"];
+	doclist -> buildnav;
+	output [color=white, label="Output"];
+	buildnav -> output;
+}
+[/graph]

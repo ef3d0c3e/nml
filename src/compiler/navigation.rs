@@ -23,7 +23,7 @@ impl NavEntry {
 		let mut result = String::new();
 		match target {
 			Target::HTML => {
-				result += r#"<div id="navbar"><ul>"#;
+				result += r#"<div class="navbar"><ul>"#;
 
 				fn process(
 					target: Target,

@@ -1,8 +1,5 @@
 @import ../template.nml
-@compiler.output = basic.html
-@nav.title = Basic
-@nav.category = Styles
-@html.page_title = Documentation | Basic Styles
+%<make_doc({"Styles"}, "Basic", "Basic Styles")>%
 
 # Basic styles
 ## Bold

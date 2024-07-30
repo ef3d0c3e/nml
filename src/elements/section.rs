@@ -38,11 +38,14 @@ impl Element for Section {
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
-			Target::HTML => Ok(format!(
-				"<h{0}>{1}</h{0}>",
+			Target::HTML => {
+				Ok(format!(
+				r#"<h{0} id="{1}">{2}</h{0}>"#,
 				self.depth,
+				Compiler::refname(compiler.target(), self.title.as_str()),
 				Compiler::sanitize(compiler.target(), self.title.as_str())
-			)),
+			))
+			},
 			Target::LATEX => Err("Unimplemented compiler".to_string()),
 		}
 	}
@@ -56,11 +59,27 @@ impl ReferenceableElement for Section {
 	fn compile_reference(
 		&self,
 		compiler: &Compiler,
-		document: &dyn Document,
+		_document: &dyn Document,
 		reference: &super::reference::Reference,
-		refid: usize,
+		_refid: usize,
 	) -> Result<String, String> {
-		todo!()
+		match compiler.target() {
+			Target::HTML => {
+				let caption = reference.caption().map_or(
+					format!(
+						"({})",
+						Compiler::sanitize(compiler.target(), self.title.as_str())
+					),
+					|cap| cap.clone(),
+				);
+
+				Ok(format!(
+					"<a class=\"section-ref\" href=\"#{}\">{caption}</a>",
+					Compiler::refname(compiler.target(), self.title.as_str())
+				))
+			}
+			_ => todo!(""),
+		}
 	}
 }
 

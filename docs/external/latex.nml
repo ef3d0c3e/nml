@@ -1,8 +1,5 @@
 @import ../template.nml
-@compiler.output = latex.html
-@nav.title = LaTeX
-@nav.category = External Tools
-@html.page_title = Documentation | LaTeX
+%<make_doc({"External Tools"}, "LaTeX", "LaTeX")>%
 
 @LaTeX = $|[kind=inline, caption=LaTeX]\LaTeX|$
 

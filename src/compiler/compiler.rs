@@ -38,6 +38,24 @@ impl Compiler {
 		}
 	}
 
+	/// Sanitizes text for a [`Target`]
+	pub fn sanitize<S: AsRef<str>>(target: Target, str: S) -> String {
+		match target {
+			Target::HTML => str
+				.as_ref()
+				.replace("&", "&amp;")
+				.replace("<", "&lt;")
+				.replace(">", "&gt;")
+				.replace("\"", "&quot;"),
+			_ => todo!("Sanitize not implemented"),
+		}
+	}
+
+	/// Gets a reference name
+	pub fn refname<S: AsRef<str>>(target: Target, str: S) -> String {
+		Self::sanitize(target, str).replace(' ', "_")
+	}
+
 	/// Inserts or get a reference id for the compiled document
 	///
 	/// # Parameters
@@ -74,18 +92,6 @@ impl Compiler {
 		self.cache.as_ref().map(RefCell::borrow_mut)
 	}
 
-	pub fn sanitize<S: AsRef<str>>(target: Target, str: S) -> String {
-		match target {
-			Target::HTML => str
-				.as_ref()
-				.replace("&", "&amp;")
-				.replace("<", "&lt;")
-				.replace(">", "&gt;")
-				.replace("\"", "&quot;"),
-			_ => todo!("Sanitize not implemented"),
-		}
-	}
-
 	pub fn header(&self, document: &dyn Document) -> String {
 		pub fn get_variable_or_error(
 			document: &dyn Document,
@@ -109,8 +115,11 @@ impl Compiler {
 				result += "<!DOCTYPE HTML><html><head>";
 				result += "<meta charset=\"UTF-8\">";
 				if let Some(page_title) = get_variable_or_error(document, "html.page_title") {
-					result += format!("<title>{}</title>", Compiler::sanitize(self.target(), page_title.to_string()))
-						.as_str();
+					result += format!(
+						"<title>{}</title>",
+						Compiler::sanitize(self.target(), page_title.to_string())
+					)
+					.as_str();
 				}
 
 				if let Some(css) = document.get_variable("html.css") {
@@ -120,7 +129,7 @@ impl Compiler {
 					)
 					.as_str();
 				}
-				result += r#"</head><body><div id="layout">"#;
+				result += r#"</head><body><div class="layout">"#;
 
 				// TODO: TOC
 				// TODO: Author, Date, Title, Div
@@ -148,7 +157,7 @@ impl Compiler {
 		let header = self.header(document);
 
 		// Body
-		let mut body = r#"<div id="content">"#.to_string();
+		let mut body = r#"<div class="content">"#.to_string();
 		for i in 0..borrow.len() {
 			let elem = &borrow[i];
 
