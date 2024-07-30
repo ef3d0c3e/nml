@@ -544,8 +544,7 @@ impl RegexRule for CodeRule {
 		reports
 	}
 
-	// TODO
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
 		let mut bindings = vec![];
 		bindings.push((
 			"push_inline".to_string(),
@@ -647,7 +646,7 @@ impl RegexRule for CodeRule {
 			.unwrap(),
 		));
 
-		bindings
+		Some(bindings)
 	}
 }
 

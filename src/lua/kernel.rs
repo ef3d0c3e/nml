@@ -34,15 +34,18 @@ impl Kernel {
 
 			for rule in parser.rules()
 			{
-				let table = lua.create_table().unwrap();
-				let name = rule.name().to_lowercase();
-
-				for (fun_name, fun) in rule.lua_bindings(&lua)
+				if let Some(bindings) = rule.lua_bindings(&lua)
 				{
-					table.set(fun_name, fun).unwrap();
-				}
+					let table = lua.create_table().unwrap();
+					let name = rule.name().to_lowercase();
 
-				nml_table.set(name, table).unwrap();
+					for (fun_name, fun) in bindings
+					{
+						table.set(fun_name, fun).unwrap();
+					}
+
+					nml_table.set(name, table).unwrap();
+				}
 			}
 			lua.globals().set("nml", nml_table).unwrap();
 		}

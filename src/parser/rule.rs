@@ -25,7 +25,7 @@ pub trait Rule {
 		match_data: Option<Box<dyn Any>>,
 	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>);
 	/// Export bindings to lua
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)>;
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>>;
 }
 
 impl core::fmt::Debug for dyn Rule {
@@ -89,7 +89,7 @@ pub trait RegexRule {
 		matches: regex::Captures,
 	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>;
 
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)>;
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>>;
 }
 
 impl<T: RegexRule> Rule for T {
@@ -144,7 +144,7 @@ impl<T: RegexRule> Rule for T {
 		);
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
 		self.lua_bindings(lua)
 	}
 }

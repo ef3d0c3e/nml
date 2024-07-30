@@ -61,7 +61,7 @@ impl Rule for TextRule {
 		panic!("Text cannot match");
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
 		let mut bindings = vec![];
 		bindings.push((
 			"push".to_string(),
@@ -83,6 +83,6 @@ impl Rule for TextRule {
 			.unwrap(),
 		));
 
-		bindings
+		Some(bindings)
 	}
 }

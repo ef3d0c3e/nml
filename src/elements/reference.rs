@@ -6,6 +6,8 @@ use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
+use mlua::Function;
+use mlua::Lua;
 use regex::Captures;
 use regex::Match;
 use regex::Regex;
@@ -205,7 +207,5 @@ impl RegexRule for ReferenceRule {
 		reports
 	}
 
-	fn lua_bindings<'lua>(&self, _lua: &'lua mlua::Lua) -> Vec<(String, mlua::Function<'lua>)> {
-		vec![]
-	}
+	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }

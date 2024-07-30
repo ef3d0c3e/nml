@@ -235,7 +235,7 @@ impl RegexRule for SectionRule {
 		return result;
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
 		let mut bindings = vec![];
 
 		bindings.push((
@@ -280,6 +280,6 @@ impl RegexRule for SectionRule {
 			.unwrap(),
 		));
 
-		bindings
+		Some(bindings)
 	}
 }
