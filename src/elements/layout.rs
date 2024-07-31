@@ -76,6 +76,32 @@ mod default_layouts {
 			}
 		}
 	}
+
+	#[derive(Debug)]
+	pub struct Split;
+
+	impl LayoutType for Split {
+		fn name(&self) -> &'static str { "Split" }
+
+		fn expects(&self) -> Range<usize> { 2..usize::MAX  }
+
+		fn compile(
+			&self,
+			token: LayoutToken,
+			_id: usize,
+			compiler: &Compiler,
+			_document: &dyn Document,
+		) -> Result<String, String> {
+			match compiler.target() {
+				Target::HTML => match token {
+					LayoutToken::BEGIN => Ok(r#"<div class="split-container"><div class="split">"#.to_string()),
+					LayoutToken::NEXT => Ok(r#"</div><div class="split">"#.to_string()),
+					LayoutToken::END => Ok(r#"</div></div>"#.to_string()),
+				},
+				_ => todo!(""),
+			}
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -158,6 +184,8 @@ impl LayoutRule {
 		let mut layouts: HashMap<String, Rc<dyn LayoutType>> = HashMap::new();
 		let layout_centered = default_layouts::Centered {};
 		layouts.insert(layout_centered.name().to_string(), Rc::new(layout_centered));
+		let layout_split = default_layouts::Split {};
+		layouts.insert(layout_split.name().to_string(), Rc::new(layout_split));
 
 		Self {
 			re: [
@@ -328,7 +356,7 @@ impl RegexRule for LayoutRule {
 				Some(last) => last,
 			};
 
-			if layout_type.expects().end >= tokens.len()
+			if layout_type.expects().end < tokens.len()
 			// Too many blocks
 			{
 				reports.push(
@@ -372,7 +400,7 @@ impl RegexRule for LayoutRule {
 				Some(last) => last,
 			};
 
-			if layout_type.expects().start < tokens.len()
+			if layout_type.expects().start > tokens.len()
 			// Not enough blocks
 			{
 				reports.push(
