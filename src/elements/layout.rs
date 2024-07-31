@@ -21,6 +21,7 @@ use mlua::Lua;
 use regex::Captures;
 use regex::Match;
 use regex::Regex;
+use regex::RegexBuilder;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -64,46 +65,10 @@ mod default_layouts {
 
 	use super::*;
 
-	#[derive(Debug, Default)]
-	pub struct Centered;
-
-	impl LayoutType for Centered {
-		fn name(&self) -> &'static str { "Centered" }
-
-		fn expects(&self) -> Range<usize> { 1..1 }
-
-		fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String> {
-			if !properties.is_empty() {
-				return Err(format!("Layout {} excepts no properties", self.name()));
-			}
-			Ok(None)
-		}
-
-		fn compile(
-			&self,
-			token: LayoutToken,
-			_id: usize,
-			_properties: &Option<Box<dyn Any>>,
-			compiler: &Compiler,
-			_document: &dyn Document,
-		) -> Result<String, String> {
-			match compiler.target() {
-				Target::HTML => match token {
-					LayoutToken::BEGIN => Ok(r#"<div class="centered">"#.to_string()),
-					LayoutToken::NEXT => panic!(),
-					LayoutToken::END => Ok(r#"</div>"#.to_string()),
-				},
-				_ => todo!(""),
-			}
-		}
-	}
-
 	#[derive(Debug)]
-	pub struct Split {
-		properties: PropertyParser,
-	}
+	pub struct Centered(PropertyParser);
 
-	impl Default for Split {
+	impl Default for Centered {
 		fn default() -> Self {
 			let mut properties = HashMap::new();
 			properties.insert(
@@ -115,22 +80,20 @@ mod default_layouts {
 				),
 			);
 
-			Self {
-				properties: PropertyParser { properties },
-			}
+			Self(PropertyParser { properties })
 		}
 	}
 
-	impl LayoutType for Split {
-		fn name(&self) -> &'static str { "Split" }
+	impl LayoutType for Centered {
+		fn name(&self) -> &'static str { "Centered" }
 
-		fn expects(&self) -> Range<usize> { 2..usize::MAX }
+		fn expects(&self) -> Range<usize> { 1..1 }
 
 		fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String> {
 			let props = if properties.is_empty() {
-				self.properties.default()
+				self.0.default()
 			} else {
-				self.properties.parse(properties)
+				self.0.parse(properties)
 			}
 			.map_err(|err| {
 				format!(
@@ -163,11 +126,90 @@ mod default_layouts {
 						.as_ref()
 						.unwrap()
 						.downcast_ref::<String>()
-						.unwrap().as_str()
-						{
-							"" => "".to_string(),
-							str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str))
-						};
+						.unwrap()
+						.as_str()
+					{
+						"" => "".to_string(),
+						str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
+					};
+					match token {
+						LayoutToken::BEGIN => Ok(format!(r#"<div class="centered"{style}>"#)),
+						LayoutToken::NEXT => panic!(),
+						LayoutToken::END => Ok(r#"</div>"#.to_string()),
+					}
+				}
+				_ => todo!(""),
+			}
+		}
+	}
+
+	#[derive(Debug)]
+	pub struct Split(PropertyParser);
+
+	impl Default for Split {
+		fn default() -> Self {
+			let mut properties = HashMap::new();
+			properties.insert(
+				"style".to_string(),
+				Property::new(
+					true,
+					"Additional style for the split".to_string(),
+					Some("".to_string()),
+				),
+			);
+
+			Self(PropertyParser { properties })
+		}
+	}
+
+	impl LayoutType for Split {
+		fn name(&self) -> &'static str { "Split" }
+
+		fn expects(&self) -> Range<usize> { 2..usize::MAX }
+
+		fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String> {
+			let props = if properties.is_empty() {
+				self.0.default()
+			} else {
+				self.0.parse(properties)
+			}
+			.map_err(|err| {
+				format!(
+					"Failed to parse properties for layout {}: {err}",
+					self.name()
+				)
+			})?;
+
+			let style = props
+				.get("style", |_, value| -> Result<String, ()> {
+					Ok(value.clone())
+				})
+				.map_err(|err| format!("Failed to parse style: {err:#?}"))
+				.map(|(_, value)| value)?;
+
+			Ok(Some(Box::new(style)))
+		}
+
+		fn compile(
+			&self,
+			token: LayoutToken,
+			_id: usize,
+			properties: &Option<Box<dyn Any>>,
+			compiler: &Compiler,
+			_document: &dyn Document,
+		) -> Result<String, String> {
+			match compiler.target() {
+				Target::HTML => {
+					let style = match properties
+						.as_ref()
+						.unwrap()
+						.downcast_ref::<String>()
+						.unwrap()
+						.as_str()
+					{
+						"" => "".to_string(),
+						str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
+					};
 					match token {
 						LayoutToken::BEGIN => Ok(format!(
 							r#"<div class="split-container"><div class="split"{style}>"#
@@ -225,12 +267,6 @@ impl State for LayoutState {
 			reports.push(
 				Report::build(ReportKind::Error, start.source(), start.start())
 					.with_message("Unterminated Layout")
-					//.with_label(
-					//	Label::new((document.source(), active_range.clone()))
-					//	.with_order(0)
-					//	.with_message(format!("Style {} is not terminated before the end of paragraph",
-					//	name.fg(parser.colors().info)))
-					//	.with_color(parser.colors().error))
 					.with_label(
 						Label::new((start.source(), start.range.start + 1..start.range.end))
 							.with_order(1)
@@ -271,9 +307,24 @@ impl LayoutRule {
 
 		Self {
 			re: [
-				Regex::new(r"(?:^|\n)#\+LAYOUT_BEGIN(?:\[((?:\\.|[^\\\\])*?)\])?(.*)").unwrap(),
-				Regex::new(r"(?:^|\n)#\+LAYOUT_NEXT(?:\[((?:\\.|[^\\\\])*?)\])?(?:$|\n)").unwrap(),
-				Regex::new(r"(?:^|\n)#\+LAYOUT_END(?:\[((?:\\.|[^\\\\])*?)\])?(?:$|\n)").unwrap(),
+				RegexBuilder::new(
+					r"(?:^|\n)(?:[^\S\n]*)#\+LAYOUT_BEGIN(?:\[((?:\\.|[^\\\\])*?)\])?(.*)",
+				)
+				.multi_line(true)
+				.build()
+				.unwrap(),
+				RegexBuilder::new(
+					r"(?:^|\n)(?:[^\S\n]*)#\+LAYOUT_NEXT(?:\[((?:\\.|[^\\\\])*?)\])?$",
+				)
+				.multi_line(true)
+				.build()
+				.unwrap(),
+				RegexBuilder::new(
+					r"(?:^|\n)(?:[^\S\n]*)#\+LAYOUT_END(?:\[((?:\\.|[^\\\\])*?)\])?$",
+				)
+				.multi_line(true)
+				.build()
+				.unwrap(),
 			],
 			layouts,
 		}
