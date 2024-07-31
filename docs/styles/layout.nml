@@ -1,0 +1,62 @@
+@import ../template.nml
+%<make_doc({"Styles"}, "Layouts", "Basic Layouts")>%
+
+# Layouts
+
+You can create layout blocks by using the following tokens:
+ * ``#+LAYOUT_BEGIN <layout_name>`` Starts layout `<layout_name>`
+ * ``#+LAYOUT_NEXT`` Advances layout to the next block
+ * ``#+LAYOUT_END`` Ends last created layout
+
+Here's an example of what you can do using layouts (with flashy colors for show):
+#+LAYOUT_BEGIN[style=background-color:#F00;flex:0.5] Split
+First
+	#+LAYOUT_BEGIN[style=background-color:#FF0] Centered
+		Second
+	#+LAYOUT_END
+#+LAYOUT_NEXT[style=background-color:#00F]
+	Third
+	#+LAYOUT_BEGIN[style=background-color:#0FF] Split
+		Fourth
+	#+LAYOUT_NEXT[style=background-color:#0F0]
+		Fifth
+	#+LAYOUT_END
+#+LAYOUT_END
+
+Given by the following code:
+```Plain Text
+#+LAYOUT_BEGIN[style=background-color:#F00;flex:0.5] Split
+First
+	#+LAYOUT_BEGIN[style=background-color:#FF0] Centered
+		Second
+	#+LAYOUT_END
+#+LAYOUT_NEXT[style=background-color:#00F]
+	Third
+	#+LAYOUT_BEGIN[style=background-color:#0FF] Split
+		Fourth
+	#+LAYOUT_NEXT[style=background-color:#0F0]
+		Fifth
+	#+LAYOUT_END
+#+LAYOUT_END
+```
+*(indentation is for readability)*
+
+# Available layouts
+## Centered
+
+Centered layout align text to the center of the current block.
+
+#### Style
+The ``Centered`` layout uses the `.centered` css class to center the text.
+
+#### Properties
+ * ``style`` Added css style to the div (defaults to none)
+
+## Split
+
+#### Style
+The ``Split`` layout uses the `.split-container` and `.split` css class to create the desired layout.
+If you wish to modify the relative width of the splits: add `style=flex: 0.5` in the properties, this makes the following split half the width of the other splits.
+
+#### Properties
+ * ``style`` Added css style to the div (defaults to none)
