@@ -4,11 +4,13 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::state::Scope;
 use crate::parser::state::State;
+use crate::parser::util::process_escaped;
 use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
@@ -17,7 +19,9 @@ use lazy_static::lazy_static;
 use mlua::Function;
 use mlua::Lua;
 use regex::Captures;
+use regex::Match;
 use regex::Regex;
+use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Range;
@@ -35,6 +39,9 @@ pub trait LayoutType: core::fmt::Debug {
 	/// Name of the layout
 	fn name(&self) -> &'static str;
 
+	/// Parses layout properties
+	fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String>;
+
 	/// Expected number of blocks
 	fn expects(&self) -> Range<usize>;
 
@@ -43,15 +50,21 @@ pub trait LayoutType: core::fmt::Debug {
 		&self,
 		token: LayoutToken,
 		id: usize,
+		properties: &Option<Box<dyn Any>>,
 		compiler: &Compiler,
 		document: &dyn Document,
 	) -> Result<String, String>;
 }
 
 mod default_layouts {
+	use std::any::Any;
+
+	use crate::parser::util::Property;
+	use crate::parser::util::PropertyParser;
+
 	use super::*;
 
-	#[derive(Debug)]
+	#[derive(Debug, Default)]
 	pub struct Centered;
 
 	impl LayoutType for Centered {
@@ -59,10 +72,18 @@ mod default_layouts {
 
 		fn expects(&self) -> Range<usize> { 1..1 }
 
+		fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String> {
+			if !properties.is_empty() {
+				return Err(format!("Layout {} excepts no properties", self.name()));
+			}
+			Ok(None)
+		}
+
 		fn compile(
 			&self,
 			token: LayoutToken,
 			_id: usize,
+			_properties: &Option<Box<dyn Any>>,
 			compiler: &Compiler,
 			_document: &dyn Document,
 		) -> Result<String, String> {
@@ -78,26 +99,83 @@ mod default_layouts {
 	}
 
 	#[derive(Debug)]
-	pub struct Split;
+	pub struct Split {
+		properties: PropertyParser,
+	}
+
+	impl Default for Split {
+		fn default() -> Self {
+			let mut properties = HashMap::new();
+			properties.insert(
+				"style".to_string(),
+				Property::new(
+					true,
+					"Additional style for the split".to_string(),
+					Some("".to_string()),
+				),
+			);
+
+			Self {
+				properties: PropertyParser { properties },
+			}
+		}
+	}
 
 	impl LayoutType for Split {
 		fn name(&self) -> &'static str { "Split" }
 
-		fn expects(&self) -> Range<usize> { 2..usize::MAX  }
+		fn expects(&self) -> Range<usize> { 2..usize::MAX }
+
+		fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String> {
+			let props = if properties.is_empty() {
+				self.properties.default()
+			} else {
+				self.properties.parse(properties)
+			}
+			.map_err(|err| {
+				format!(
+					"Failed to parse properties for layout {}: {err}",
+					self.name()
+				)
+			})?;
+
+			let style = props
+				.get("style", |_, value| -> Result<String, ()> {
+					Ok(value.clone())
+				})
+				.map_err(|err| format!("Failed to parse style: {err:#?}"))
+				.map(|(_, value)| value)?;
+
+			Ok(Some(Box::new(style)))
+		}
 
 		fn compile(
 			&self,
 			token: LayoutToken,
 			_id: usize,
+			properties: &Option<Box<dyn Any>>,
 			compiler: &Compiler,
 			_document: &dyn Document,
 		) -> Result<String, String> {
 			match compiler.target() {
-				Target::HTML => match token {
-					LayoutToken::BEGIN => Ok(r#"<div class="split-container"><div class="split">"#.to_string()),
-					LayoutToken::NEXT => Ok(r#"</div><div class="split">"#.to_string()),
-					LayoutToken::END => Ok(r#"</div></div>"#.to_string()),
-				},
+				Target::HTML => {
+					let style = match properties
+						.as_ref()
+						.unwrap()
+						.downcast_ref::<String>()
+						.unwrap().as_str()
+						{
+							"" => "".to_string(),
+							str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str))
+						};
+					match token {
+						LayoutToken::BEGIN => Ok(format!(
+							r#"<div class="split-container"><div class="split"{style}>"#
+						)),
+						LayoutToken::NEXT => Ok(format!(r#"</div><div class="split"{style}>"#)),
+						LayoutToken::END => Ok(r#"</div></div>"#.to_string()),
+					}
+				}
 				_ => todo!(""),
 			}
 		}
@@ -110,6 +188,7 @@ struct Layout {
 	pub(self) layout: Rc<dyn LayoutType>,
 	pub(self) id: usize,
 	pub(self) token: LayoutToken,
+	pub(self) properties: Option<Box<dyn Any>>,
 }
 
 impl Element for Layout {
@@ -118,7 +197,8 @@ impl Element for Layout {
 	fn element_name(&self) -> &'static str { "Layout" }
 	fn to_string(&self) -> String { format!("{self:#?}") }
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
-		self.layout.compile(self.token, self.id, compiler, document)
+		self.layout
+			.compile(self.token, self.id, &self.properties, compiler, document)
 	}
 }
 
@@ -182,18 +262,62 @@ pub struct LayoutRule {
 impl LayoutRule {
 	pub fn new() -> Self {
 		let mut layouts: HashMap<String, Rc<dyn LayoutType>> = HashMap::new();
-		let layout_centered = default_layouts::Centered {};
+
+		let layout_centered = default_layouts::Centered::default();
 		layouts.insert(layout_centered.name().to_string(), Rc::new(layout_centered));
-		let layout_split = default_layouts::Split {};
+
+		let layout_split = default_layouts::Split::default();
 		layouts.insert(layout_split.name().to_string(), Rc::new(layout_split));
 
 		Self {
 			re: [
-				Regex::new(r"(?:^|\n)#\+LAYOUT_BEGIN(.*)").unwrap(),
-				Regex::new(r"(?:^|\n)#\+LAYOUT_NEXT(?:$|\n)").unwrap(),
-				Regex::new(r"(?:^|\n)#\+LAYOUT_END(?:$|\n)").unwrap(),
+				Regex::new(r"(?:^|\n)#\+LAYOUT_BEGIN(?:\[((?:\\.|[^\\\\])*?)\])?(.*)").unwrap(),
+				Regex::new(r"(?:^|\n)#\+LAYOUT_NEXT(?:\[((?:\\.|[^\\\\])*?)\])?(?:$|\n)").unwrap(),
+				Regex::new(r"(?:^|\n)#\+LAYOUT_END(?:\[((?:\\.|[^\\\\])*?)\])?(?:$|\n)").unwrap(),
 			],
 			layouts,
+		}
+	}
+
+	pub fn parse_properties<'a>(
+		colors: &ReportColors,
+		token: &Token,
+		layout_type: Rc<dyn LayoutType>,
+		properties: Option<Match>,
+	) -> Result<Option<Box<dyn Any>>, Report<'a, (Rc<dyn Source>, Range<usize>)>> {
+		match properties {
+			None => match layout_type.parse_properties("") {
+				Ok(props) => Ok(props),
+				Err(err) => Err(
+					Report::build(ReportKind::Error, token.source(), token.start())
+						.with_message("Unable to parse layout properties")
+						.with_label(
+							Label::new((token.source(), token.range.clone()))
+								.with_message(err)
+								.with_color(colors.error),
+						)
+						.finish(),
+				),
+			},
+			Some(props) => {
+				let trimmed = props.as_str().trim_start().trim_end();
+				let content = process_escaped('\\', "]", trimmed);
+				match layout_type.parse_properties(content.as_str()) {
+					Ok(props) => Ok(props),
+					Err(err) => {
+						Err(
+							Report::build(ReportKind::Error, token.source(), props.start())
+								.with_message("Unable to parse layout properties")
+								.with_label(
+									Label::new((token.source(), props.range()))
+										.with_message(err)
+										.with_color(colors.error),
+								)
+								.finish(),
+						)
+					}
+				}
+			}
 		}
 	}
 }
@@ -235,7 +359,7 @@ impl RegexRule for LayoutRule {
 		if index == 0
 		// BEGIN_LAYOUT
 		{
-			match matches.get(1) {
+			match matches.get(2) {
 				None => {
 					reports.push(
 						Report::build(ReportKind::Error, token.source(), token.start())
@@ -276,11 +400,11 @@ impl RegexRule for LayoutRule {
 					{
 						reports.push(
 							Report::build(ReportKind::Error, token.source(), name.start())
-								.with_message("Empty Layout Name")
+								.with_message("Invalid Layout Name")
 								.with_label(
 									Label::new((token.source(), name.range()))
 										.with_message(format!(
-											"Missing a space before layout `{}`",
+											"Missing a space before layout name `{}`",
 											name.as_str().fg(parser.colors().highlight)
 										))
 										.with_color(parser.colors().error),
@@ -311,6 +435,20 @@ impl RegexRule for LayoutRule {
 						Some(layout_type) => layout_type,
 					};
 
+					// Parse properties
+					let properties = match LayoutRule::parse_properties(
+						parser.colors(),
+						&token,
+						layout_type.clone(),
+						matches.get(1),
+					) {
+						Ok(props) => props,
+						Err(rep) => {
+							reports.push(rep);
+							return reports;
+						}
+					};
+
 					parser.push(
 						document,
 						Box::new(Layout {
@@ -318,6 +456,7 @@ impl RegexRule for LayoutRule {
 							layout: layout_type.clone(),
 							id: 0,
 							token: LayoutToken::BEGIN,
+							properties,
 						}),
 					);
 
@@ -333,7 +472,7 @@ impl RegexRule for LayoutRule {
 			return reports;
 		}
 
-		let (id, token_type, layout_type) = if index == 1
+		let (id, token_type, layout_type, properties) = if index == 1
 		// LAYOUT_NEXT
 		{
 			let mut state_borrow = state.borrow_mut();
@@ -376,8 +515,27 @@ impl RegexRule for LayoutRule {
 				return reports;
 			}
 
+			// Parse properties
+			let properties = match LayoutRule::parse_properties(
+				parser.colors(),
+				&token,
+				layout_type.clone(),
+				matches.get(1),
+			) {
+				Ok(props) => props,
+				Err(rep) => {
+					reports.push(rep);
+					return reports;
+				}
+			};
+
 			tokens.push(token.clone());
-			(tokens.len() - 1, LayoutToken::NEXT, layout_type.clone())
+			(
+				tokens.len() - 1,
+				LayoutToken::NEXT,
+				layout_type.clone(),
+				properties,
+			)
 		} else {
 			// LAYOUT_END
 			let mut state_borrow = state.borrow_mut();
@@ -420,10 +578,24 @@ impl RegexRule for LayoutRule {
 				return reports;
 			}
 
+			// Parse properties
+			let properties = match LayoutRule::parse_properties(
+				parser.colors(),
+				&token,
+				layout_type.clone(),
+				matches.get(1),
+			) {
+				Ok(props) => props,
+				Err(rep) => {
+					reports.push(rep);
+					return reports;
+				}
+			};
+
 			let layout_type = layout_type.clone();
 			let id = tokens.len();
 			state.stack.pop();
-			(id, LayoutToken::END, layout_type)
+			(id, LayoutToken::END, layout_type, properties)
 		};
 
 		parser.push(
@@ -433,6 +605,7 @@ impl RegexRule for LayoutRule {
 				layout: layout_type,
 				id,
 				token: token_type,
+				properties,
 			}),
 		);
 

@@ -258,7 +258,7 @@ impl MediaRule {
 			.multi_line(true)
 			.build()
 			.unwrap()],
-			properties: PropertyParser::new(props),
+			properties: PropertyParser{ properties: props },
 		}
 	}
 

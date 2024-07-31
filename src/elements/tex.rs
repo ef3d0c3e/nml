@@ -253,7 +253,7 @@ impl TexRule {
 					.unwrap(),
 				Regex::new(r"\$(?:\[((?:\\.|[^\\\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\$)?").unwrap(),
 			],
-			properties: PropertyParser::new(props),
+			properties: PropertyParser{ properties: props },
 		}
 	}
 

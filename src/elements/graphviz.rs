@@ -179,7 +179,7 @@ impl GraphRule {
 				r"\[graph\](?:\[((?:\\.|[^\[\]\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\[/graph\])?",
 			)
 			.unwrap()],
-			properties: PropertyParser::new(props),
+			properties: PropertyParser{ properties: props },
 		}
 	}
 }

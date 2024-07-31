@@ -229,13 +229,12 @@ impl<'a> PropertyMap<'a> {
 	}
 }
 
+#[derive(Debug)]
 pub struct PropertyParser {
-	properties: HashMap<String, Property>,
+	pub properties: HashMap<String, Property>,
 }
 
 impl PropertyParser {
-	pub fn new(properties: HashMap<String, Property>) -> Self { Self { properties } }
-
 	/// Attempts to build a default propertymap
 	///
 	/// Returns an error if at least one [`Property`] is required and doesn't provide a default
@@ -271,7 +270,7 @@ impl PropertyParser {
 	/// properties.insert("width".to_string(),
 	/// 	Property::new(true, "Width of the element in em".to_string(), None));
 	///
-	/// let parser = PropertyParser::new(properties);
+	/// let parser = PropertyParser { properties };
 	/// let pm = parser.parse("width=15").unwrap();
 	///
 	/// assert_eq!(pm.get("width", |_, s| s.parse::<i32>()).unwrap().1, 15);
@@ -491,7 +490,7 @@ mod tests {
 			Property::new(false, "Weight in %".to_string(), Some("0.42".to_string())),
 		);
 
-		let parser = PropertyParser::new(properties);
+		let parser = PropertyParser { properties };
 		let pm = parser.parse("width=15,length=-10").unwrap();
 
 		// Ok
