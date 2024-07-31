@@ -39,7 +39,6 @@ struct Graphviz {
 	pub dot: String,
 	pub layout: Layout,
 	pub width: String,
-	pub caption: Option<String>,
 }
 
 fn layout_from_str(value: &str) -> Result<Layout, String> {
@@ -100,6 +99,7 @@ impl Cached for Graphviz {
 	fn key(&self) -> <Self as Cached>::Key {
 		let mut hasher = Sha512::new();
 		hasher.input((self.layout as usize).to_be_bytes().as_slice());
+		hasher.input(self.width.as_bytes());
 		hasher.input(self.dot.as_bytes());
 
 		hasher.result_str()
@@ -354,8 +354,6 @@ impl RegexRule for GraphRule {
 			},
 		};
 
-		// TODO: Caption
-
 		parser.push(
 			document,
 			Box::new(Graphviz {
@@ -363,7 +361,6 @@ impl RegexRule for GraphRule {
 				dot: graph_content,
 				layout: graph_layout,
 				width: graph_width,
-				caption: None,
 			}),
 		);
 

@@ -189,7 +189,7 @@ impl Element for Tex {
 					Tex::format_latex(&fontsize, &preamble, &format!("{prepend}{}", self.tex))
 				};
 
-				let mut result = if let Some(mut con) = compiler.cache() {
+				let result = if let Some(mut con) = compiler.cache() {
 					match latex.cached(&mut con, |s| s.latex_to_svg(&exec, &fontsize)) {
 						Ok(s) => Ok(s),
 						Err(e) => match e {
@@ -387,7 +387,7 @@ impl RegexRule for TexRule {
 					);
 					return reports;
 				}
-				PropertyMapError::NotFoundError(err) => {
+				PropertyMapError::NotFoundError(_) => {
 					if index == 1 {
 						TexKind::Inline
 					} else {

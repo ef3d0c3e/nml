@@ -33,16 +33,6 @@ struct Raw {
 	pub(self) content: String,
 }
 
-impl Raw {
-	fn new(location: Token, kind: ElemKind, content: String) -> Self {
-		Self {
-			location,
-			kind,
-			content,
-		}
-	}
-}
-
 impl Element for Raw {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { self.kind.clone() }

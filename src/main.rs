@@ -199,7 +199,7 @@ fn main() -> ExitCode {
 	let input_meta = match std::fs::metadata(&input) {
 		Ok(meta) => meta,
 		Err(e) => {
-			eprintln!("Unable to get metadata for input: `{input}`");
+			eprintln!("Unable to get metadata for input `{input}`: {e}");
 			return ExitCode::FAILURE;
 		}
 	};
@@ -218,7 +218,7 @@ fn main() -> ExitCode {
 		match std::fs::metadata(&output) {
 			Ok(_) => {}
 			Err(e) => {
-				eprintln!("Unable to get metadata for output: `{output}`");
+				eprintln!("Unable to get metadata for output `{output}`: {e}");
 				return ExitCode::FAILURE;
 			}
 		}
@@ -226,7 +226,7 @@ fn main() -> ExitCode {
 		let output_meta = match std::fs::metadata(&output) {
 			Ok(meta) => meta,
 			Err(e) => {
-				eprintln!("Unable to get metadata for output: `{output}`");
+				eprintln!("Unable to get metadata for output `{output}`: {e}");
 				return ExitCode::FAILURE;
 			}
 		};
@@ -302,7 +302,7 @@ fn main() -> ExitCode {
 					}
 				}
 				Err(e) => {
-					eprintln!("Faield to get metadata for `{entry:#?}`");
+					eprintln!("Faield to get metadata for `{entry:#?}`: {e}");
 					return ExitCode::FAILURE;
 				}
 			}
