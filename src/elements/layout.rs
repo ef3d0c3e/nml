@@ -673,7 +673,7 @@ mod tests {
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::source::SourceFile;
-use crate::validate_document;
+	use crate::validate_document;
 
 	use super::*;
 
@@ -703,29 +703,29 @@ use crate::validate_document;
 		let doc = parser.parse(source, None);
 
 		validate_document!(doc.content().borrow(), 0,
-			Layout { token == LayoutToken::Begin };
+			Layout { token == LayoutToken::Begin, id == 0 };
 			Paragraph {
 				Text { content == "A" };
 			};
-			Layout { token == LayoutToken::Begin };
+			Layout { token == LayoutToken::Begin, id == 0 };
 			Paragraph {
 				Text { content == "B" };
 			};
-			Layout { token == LayoutToken::End };
-			Layout { token == LayoutToken::Next };
+			Layout { token == LayoutToken::End, id == 1 };
+			Layout { token == LayoutToken::Next, id == 1 };
 			Paragraph {
 				Text { content == "C" };
 			};
-			Layout { token == LayoutToken::Begin };
+			Layout { token == LayoutToken::Begin, id == 0 };
 			Paragraph {
 				Text { content == "D" };
 			};
-			Layout { token == LayoutToken::Next };
+			Layout { token == LayoutToken::Next, id == 1 };
 			Paragraph {
 				Text { content == "E" };
 			};
-			Layout { token == LayoutToken::End };
-			Layout { token == LayoutToken::End };
+			Layout { token == LayoutToken::End, id == 2 };
+			Layout { token == LayoutToken::End, id == 2 };
 		);
 	}
 }

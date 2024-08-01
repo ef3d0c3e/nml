@@ -232,43 +232,60 @@ impl<'a> DocumentAccessors<'a> for dyn Document<'a> + '_ {
 	}
 }
 
-
 #[cfg(test)]
-pub mod tests
-{
-#[macro_export]
-macro_rules! validate_document {
-	($container:expr, $idx:expr,) => {};
-	($container:expr, $idx:expr, $t:ty; $($tail:tt)*) => {{
-		let elem = &$container[$idx];
-		assert!(elem.downcast_ref::<$t>().is_some(), "Invalid element at index {}, expected {}", $idx, stringify!($t));
-
-		validate_document!($container, ($idx+1), $($tail)*);
-	}};
-	($container:expr, $idx:expr, $t:ty { $($field:ident == $value:expr),* }; $($tail:tt)*) => {{
-		let elem = &$container[$idx];
-		assert!(elem.downcast_ref::<$t>().is_some(), "Invalid element at index {}, expected {}", $idx, stringify!($t));
-
-		$(
-			let val = &elem.downcast_ref::<$t>().unwrap().$field;
-			assert!(*val == $value, "Invalid field {} for {} at index {}, expected {:#?}, found {:#?}",
-				stringify!($field),
-				stringify!($t),
-				$idx,
-				$value,
-				val);
-		)*
+pub mod tests {
+	#[macro_export]
+	macro_rules! validate_document {
+		($container:expr, $idx:expr,) => {};
+		($container:expr, $idx:expr, $t:ty; $($tail:tt)*) => {{
+			let elem = &$container[$idx];
+			assert!(elem.downcast_ref::<$t>().is_some(), "Invalid element at index {}, expected {}, got: {elem:#?}", $idx, stringify!($t));
 
 			validate_document!($container, ($idx+1), $($tail)*);
-	}};
-	($container:expr, $idx:expr, $t:ty { $($ts:tt)* }; $($tail:tt)*) => {{
-		let elem = &$container[$idx];
-		assert!(elem.downcast_ref::<$t>().is_some(), "Invalid container element at index {}, expected {}", $idx, stringify!($t));
+		}};
+		($container:expr, $idx:expr, $t:ty { $($field:ident == $value:expr),* }; $($tail:tt)*) => {{
+			let elem = &$container[$idx];
+			assert!(elem.downcast_ref::<$t>().is_some(), "Invalid element at index {}, expected {}, got: {elem:#?}", $idx, stringify!($t));
 
-		let contained = elem.as_container().unwrap().contained();
-		validate_document!(contained, 0, $($ts)*);
+			$(
+				let val = &elem.downcast_ref::<$t>().unwrap().$field;
+				assert!(*val == $value, "Invalid field {} for {} at index {}, expected {:#?}, found {:#?}",
+					stringify!($field),
+					stringify!($t),
+					$idx,
+					$value,
+					val);
+			)*
 
-		validate_document!($container, ($idx+1), $($tail)*);
-	}};
-}
+			validate_document!($container, ($idx+1), $($tail)*);
+		}};
+		($container:expr, $idx:expr, $t:ty { $($ts:tt)* }; $($tail:tt)*) => {{
+			let elem = &$container[$idx];
+			assert!(elem.downcast_ref::<$t>().is_some(), "Invalid container element at index {}, expected {}", $idx, stringify!($t));
+
+			let contained = elem.as_container().unwrap().contained();
+			validate_document!(contained, 0, $($ts)*);
+
+			validate_document!($container, ($idx+1), $($tail)*);
+		}};
+		($container:expr, $idx:expr, $t:ty { $($field:ident == $value:expr),* } { $($ts:tt)* }; $($tail:tt)*) => {{
+			let elem = &$container[$idx];
+			assert!(elem.downcast_ref::<$t>().is_some(), "Invalid element at index {}, expected {}, got: {elem:#?}", $idx, stringify!($t));
+
+			$(
+				let val = &elem.downcast_ref::<$t>().unwrap().$field;
+				assert!(*val == $value, "Invalid field {} for {} at index {}, expected {:#?}, found {:#?}",
+					stringify!($field),
+					stringify!($t),
+					$idx,
+					$value,
+					val);
+			)*
+
+			let contained = elem.as_container().unwrap().contained();
+			validate_document!(contained, 0, $($ts)*);
+
+			validate_document!($container, ($idx+1), $($tail)*);
+		}};
+	}
 }

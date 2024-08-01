@@ -147,6 +147,8 @@ pub fn parse_paragraph<'a>(
 		return Err("Parsed document is empty");
 	} else if parsed.last_element::<Paragraph>().is_none() {
 		return Err("Parsed element is not a paragraph");
+	} else if parser.has_error() {
+		return Err("Parser error");
 	}
 
 	let paragraph = parsed.content().borrow_mut().pop().unwrap();

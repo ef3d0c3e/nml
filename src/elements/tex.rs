@@ -253,7 +253,7 @@ impl TexRule {
 					.unwrap(),
 				Regex::new(r"\$(?:\[((?:\\.|[^\\\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\$)?").unwrap(),
 			],
-			properties: PropertyParser{ properties: props },
+			properties: PropertyParser { properties: props },
 		}
 	}
 
@@ -435,8 +435,10 @@ impl RegexRule for TexRule {
 
 #[cfg(test)]
 mod tests {
+	use crate::elements::paragraph::Paragraph;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::source::SourceFile;
+	use crate::validate_document;
 
 	use super::*;
 
@@ -446,7 +448,7 @@ mod tests {
 			"".to_string(),
 			r#"
 $[kind=block, caption=Some\, text\\] 1+1=2	$
-$|[env=another] Non Math \LaTeX|$
+$|[env=another] Non Math \LaTeX |$
 $[kind=block,env=another] e^{i\pi}=-1$
 			"#
 			.to_string(),
@@ -455,19 +457,11 @@ $[kind=block,env=another] e^{i\pi}=-1$
 		let parser = LangParser::default();
 		let doc = parser.parse(source, None);
 
-		let borrow = doc.content().borrow();
-		let found = borrow
-			.iter()
-			.filter_map(|e| e.downcast_ref::<Tex>())
-			.collect::<Vec<_>>();
-
-		assert_eq!(found[0].tex, "1+1=2");
-		assert_eq!(found[0].env, "main");
-		assert_eq!(found[0].caption, Some("Some, text\\".to_string()));
-		assert_eq!(found[1].tex, "Non Math \\LaTeX");
-		assert_eq!(found[1].env, "another");
-		assert_eq!(found[2].tex, "e^{i\\pi}=-1");
-		assert_eq!(found[2].env, "another");
+		validate_document!(doc.content().borrow(), 0,
+			Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
+			Tex { mathmode == false, tex == "Non Math \\LaTeX", env == "another" };
+			Tex { mathmode == true, tex == "e^{i\\pi}=-1", env == "another" };
+		);
 	}
 
 	#[test]
@@ -485,24 +479,12 @@ $[env=another] e^{i\pi}=-1$
 		let parser = LangParser::default();
 		let doc = parser.parse(source, None);
 
-		let borrow = doc.content().borrow();
-		let found = borrow
-			.first()
-			.unwrap()
-			.as_container()
-			.unwrap()
-			.contained()
-			.iter()
-			.filter_map(|e| e.downcast_ref::<Tex>())
-			.collect::<Vec<_>>();
-
-		assert_eq!(found[0].tex, "1+1=2");
-		assert_eq!(found[0].env, "main");
-		assert_eq!(found[0].caption, Some("Some, text\\".to_string()));
-		assert_eq!(found[1].tex, "Non Math \\LaTeX");
-		assert_eq!(found[1].env, "another");
-		assert_eq!(found[1].caption, Some("Enclosed ].".to_string()));
-		assert_eq!(found[2].tex, "e^{i\\pi}=-1");
-		assert_eq!(found[2].env, "another");
+		validate_document!(doc.content().borrow(), 0,
+			Paragraph {
+				Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
+				Tex { mathmode == false, tex == "Non Math \\LaTeX", env == "another" };
+				Tex { mathmode == true, tex == "e^{i\\pi}=-1", env == "another" };
+			};
+		);
 	}
 }

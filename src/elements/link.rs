@@ -1,12 +1,14 @@
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::document::document::Document;
+use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::parser::Parser;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
+use crate::parser::source::VirtualSource;
 use crate::parser::util;
 use ariadne::Fmt;
 use ariadne::Label;
@@ -19,21 +21,15 @@ use regex::Regex;
 use std::ops::Range;
 use std::rc::Rc;
 
+use super::paragraph::Paragraph;
+
 #[derive(Debug)]
 pub struct Link {
-	location: Token,
-	name: String, // Link name
-	url: String,  // Link url
-}
-
-impl Link {
-	pub fn new(location: Token, name: String, url: String) -> Self {
-		Self {
-			location: location,
-			name,
-			url,
-		}
-	}
+	pub(self) location: Token,
+	/// Display content of link
+	pub(self) display: Paragraph,
+	/// Url of link
+	pub(self) url: String,
 }
 
 impl Element for Link {
@@ -41,19 +37,38 @@ impl Element for Link {
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Link" }
 	fn to_string(&self) -> String { format!("{self:#?}") }
-	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
-			Target::HTML => Ok(format!(
-				"<a href=\"{}\">{}</a>",
-				Compiler::sanitize(compiler.target(), self.url.as_str()),
-				Compiler::sanitize(compiler.target(), self.name.as_str()),
-			)),
-			Target::LATEX => Ok(format!(
-				"\\href{{{}}}{{{}}}",
-				Compiler::sanitize(compiler.target(), self.url.as_str()),
-				Compiler::sanitize(compiler.target(), self.name.as_str()),
-			)),
+			Target::HTML => {
+				let mut result = format!(
+					"<a href=\"{}\">",
+					Compiler::sanitize(compiler.target(), self.url.as_str())
+				);
+
+				result += self
+					.display
+					.compile(compiler, document)
+					.as_ref()
+					.map(|r| r.as_str())?;
+
+				result += "</a>";
+				Ok(result)
+			}
+			_ => todo!(""),
 		}
+	}
+
+	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
+}
+
+impl ContainerElement for Link {
+	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.display.content }
+
+	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
+		if elem.downcast_ref::<Link>().is_some() {
+			return Err("Tried to push a link inside of a link".to_string());
+		}
+		self.display.push(elem)
 	}
 }
 
@@ -78,47 +93,67 @@ impl RegexRule for LinkRule {
 		&self,
 		_: usize,
 		parser: &dyn Parser,
-		document: &'a dyn Document,
+		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
 	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
-		let mut result = vec![];
-		let link_name = match matches.get(1) {
-			Some(name) => {
-				if name.as_str().is_empty() {
-					result.push(
-						Report::build(ReportKind::Error, token.source(), name.start())
+		let mut reports = vec![];
+
+		let link_display = match matches.get(1) {
+			Some(display) => {
+				if display.as_str().is_empty() {
+					reports.push(
+						Report::build(ReportKind::Error, token.source(), display.start())
 							.with_message("Empty link name")
 							.with_label(
-								Label::new((token.source().clone(), name.range()))
+								Label::new((token.source().clone(), display.range()))
 									.with_message("Link name is empty")
 									.with_color(parser.colors().error),
 							)
 							.finish(),
 					);
-					return result;
+					return reports;
 				}
-				// TODO: process into separate document...
-				let text_content = util::process_text(document, name.as_str());
-
-				if text_content.as_str().is_empty() {
-					result.push(
-						Report::build(ReportKind::Error, token.source(), name.start())
+				let processed = util::process_escaped('\\', "]", display.as_str());
+				if processed.is_empty() {
+					reports.push(
+						Report::build(ReportKind::Error, token.source(), display.start())
 							.with_message("Empty link name")
 							.with_label(
-								Label::new((token.source(), name.range()))
+								Label::new((token.source(), display.range()))
 									.with_message(format!(
 										"Link name is empty. Once processed, `{}` yields `{}`",
-										name.as_str().fg(parser.colors().highlight),
-										text_content.as_str().fg(parser.colors().highlight),
+										display.as_str().fg(parser.colors().highlight),
+										processed.fg(parser.colors().highlight),
 									))
 									.with_color(parser.colors().error),
 							)
 							.finish(),
 					);
-					return result;
+					return reports;
 				}
-				text_content
+
+				let source = Rc::new(VirtualSource::new(
+					Token::new(display.range(), token.source()),
+					"Link Display".to_string(),
+					processed,
+				));
+				match util::parse_paragraph(parser, source, document) {
+					Err(err) => {
+						reports.push(
+							Report::build(ReportKind::Error, token.source(), display.start())
+								.with_message("Failed to parse link display")
+								.with_label(
+									Label::new((token.source(), display.range()))
+										.with_message(err.to_string())
+										.with_color(parser.colors().error),
+								)
+								.finish(),
+						);
+						return reports;
+					}
+					Ok(paragraph) => *paragraph,
+				}
 			}
 			_ => panic!("Empty link name"),
 		};
@@ -126,7 +161,7 @@ impl RegexRule for LinkRule {
 		let link_url = match matches.get(2) {
 			Some(url) => {
 				if url.as_str().is_empty() {
-					result.push(
+					reports.push(
 						Report::build(ReportKind::Error, token.source(), url.start())
 							.with_message("Empty link url")
 							.with_label(
@@ -136,12 +171,12 @@ impl RegexRule for LinkRule {
 							)
 							.finish(),
 					);
-					return result;
+					return reports;
 				}
 				let text_content = util::process_text(document, url.as_str());
 
 				if text_content.as_str().is_empty() {
-					result.push(
+					reports.push(
 						Report::build(ReportKind::Error, token.source(), url.start())
 							.with_message("Empty link url")
 							.with_label(
@@ -155,7 +190,7 @@ impl RegexRule for LinkRule {
 							)
 							.finish(),
 					);
-					return result;
+					return reports;
 				}
 				text_content
 			}
@@ -164,12 +199,55 @@ impl RegexRule for LinkRule {
 
 		parser.push(
 			document,
-			Box::new(Link::new(token.clone(), link_name, link_url)),
+			Box::new(Link {
+				location: token,
+				display: link_display,
+				url: link_url,
+			}),
 		);
 
-		return result;
+		return reports;
 	}
 
 	// TODO
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::elements::style::Style;
+use crate::elements::text::Text;
+	use crate::parser::langparser::LangParser;
+	use crate::parser::source::SourceFile;
+	use crate::validate_document;
+
+	use super::*;
+
+	#[test]
+	fn parser() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+Some [link](url).
+[**BOLD link**](another url)
+			"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let doc = parser.parse(source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Paragraph {
+				Text { content == "Some " };
+				Link { url == "url" } { Text { content == "link" }; };
+				Text { content == "." };
+				Link { url == "another url" } {
+					Style;
+					Text { content == "BOLD link" };
+					Style;
+				};
+			};
+		);
+	}
 }

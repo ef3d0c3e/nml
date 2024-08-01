@@ -6,7 +6,7 @@
 
 Enclose text between two ``**`` to render it **bold**!
  * ``**Bold text**`` → **Bold text**
- * ``**Bold [link](#)**`` → **Bold [link](#)**
+ * ``Bold [**link**](#)`` → Bold [**link**](#)
 
 ## Italic
 

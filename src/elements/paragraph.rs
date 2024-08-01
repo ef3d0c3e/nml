@@ -100,6 +100,9 @@ impl ContainerElement for Paragraph {
 		if elem.location().source() == self.location().source() {
 			self.location.range = self.location.start()..elem.location().end();
 		}
+		if elem.kind() == ElemKind::Block {
+			return Err("Attempted to push block element inside a paragraph".to_string());
+		}
 		self.content.push(elem);
 		Ok(())
 	}
@@ -151,4 +154,48 @@ impl Rule for ParagraphRule {
 
 	// TODO
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::elements::paragraph::Paragraph;
+	use crate::elements::text::Text;
+	use crate::parser::langparser::LangParser;
+	use crate::parser::source::SourceFile;
+	use crate::validate_document;
+
+	use super::*;
+
+	#[test]
+	fn parse() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+First paragraph
+Second line
+
+Second paragraph\
+<- literal \\n
+
+
+Last paragraph
+			"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let doc = parser.parse(source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Paragraph {
+				Text { content == "First paragraph Second line" };
+			};
+			Paragraph {
+				Text { content == "Second paragraph\n<- literal \\n" };
+			};
+			Paragraph {
+				Text { content == "Last paragraph " };
+			};
+		);
+	}
 }

@@ -222,3 +222,54 @@ impl RegexRule for StyleRule {
 	// TODO
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }
+
+#[cfg(test)]
+mod tests {
+	use crate::elements::text::Text;
+	use crate::parser::langparser::LangParser;
+	use crate::parser::source::SourceFile;
+	use crate::validate_document;
+
+	use super::*;
+
+	#[test]
+	fn parser() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+Some *style
+terminated here*
+
+**BOLD + *italic***
+__`UNDERLINE+EM`__
+"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let doc = parser.parse(source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Paragraph {
+				Text;
+				Style { kind == 1, close == false };
+				Text;
+				Style { kind == 1, close == true };
+			};
+			Paragraph {
+				Style { kind == 0, close == false }; // **
+				Text;
+				Style { kind == 1, close == false }; // *
+				Text;
+				Style { kind == 0, close == true }; // **
+				Style { kind == 1, close == true }; // *
+
+				Style { kind == 2, close == false }; // __
+				Style { kind == 3, close == false }; // `
+				Text;
+				Style { kind == 3, close == true }; // `
+				Style { kind == 2, close == true }; // __
+			};
+		);
+	}
+}
