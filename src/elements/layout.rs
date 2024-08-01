@@ -30,9 +30,9 @@ use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LayoutToken {
-	BEGIN,
-	NEXT,
-	END,
+	Begin,
+	Next,
+	End,
 }
 
 /// Represents the type of a layout
@@ -133,9 +133,9 @@ mod default_layouts {
 						str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
 					};
 					match token {
-						LayoutToken::BEGIN => Ok(format!(r#"<div class="centered"{style}>"#)),
-						LayoutToken::NEXT => panic!(),
-						LayoutToken::END => Ok(r#"</div>"#.to_string()),
+						LayoutToken::Begin => Ok(format!(r#"<div class="centered"{style}>"#)),
+						LayoutToken::Next => panic!(),
+						LayoutToken::End => Ok(r#"</div>"#.to_string()),
 					}
 				}
 				_ => todo!(""),
@@ -211,11 +211,11 @@ mod default_layouts {
 						str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
 					};
 					match token {
-						LayoutToken::BEGIN => Ok(format!(
+						LayoutToken::Begin => Ok(format!(
 							r#"<div class="split-container"><div class="split"{style}>"#
 						)),
-						LayoutToken::NEXT => Ok(format!(r#"</div><div class="split"{style}>"#)),
-						LayoutToken::END => Ok(r#"</div></div>"#.to_string()),
+						LayoutToken::Next => Ok(format!(r#"</div><div class="split"{style}>"#)),
+						LayoutToken::End => Ok(r#"</div></div>"#.to_string()),
 					}
 				}
 				_ => todo!(""),
@@ -506,7 +506,7 @@ impl RegexRule for LayoutRule {
 							location: token.clone(),
 							layout: layout_type.clone(),
 							id: 0,
-							token: LayoutToken::BEGIN,
+							token: LayoutToken::Begin,
 							properties,
 						}),
 					);
@@ -583,7 +583,7 @@ impl RegexRule for LayoutRule {
 			tokens.push(token.clone());
 			(
 				tokens.len() - 1,
-				LayoutToken::NEXT,
+				LayoutToken::Next,
 				layout_type.clone(),
 				properties,
 			)
@@ -646,7 +646,7 @@ impl RegexRule for LayoutRule {
 			let layout_type = layout_type.clone();
 			let id = tokens.len();
 			state.stack.pop();
-			(id, LayoutToken::END, layout_type, properties)
+			(id, LayoutToken::End, layout_type, properties)
 		};
 
 		parser.push(
@@ -665,4 +665,67 @@ impl RegexRule for LayoutRule {
 
 	// TODO
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::elements::paragraph::Paragraph;
+	use crate::elements::text::Text;
+	use crate::parser::langparser::LangParser;
+	use crate::parser::source::SourceFile;
+use crate::validate_document;
+
+	use super::*;
+
+	#[test]
+	fn parser() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+#+LAYOUT_BEGIN[style=A] Split
+	A
+	#+LAYOUT_BEGIN[style=B] Centered
+		B
+	#+LAYOUT_END
+#+LAYOUT_NEXT[style=C]
+	C
+	#+LAYOUT_BEGIN[style=D] Split
+		D
+	#+LAYOUT_NEXT[style=E]
+		E
+	#+LAYOUT_END
+#+LAYOUT_END
+"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let doc = parser.parse(source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Layout { token == LayoutToken::Begin };
+			Paragraph {
+				Text { content == "A" };
+			};
+			Layout { token == LayoutToken::Begin };
+			Paragraph {
+				Text { content == "B" };
+			};
+			Layout { token == LayoutToken::End };
+			Layout { token == LayoutToken::Next };
+			Paragraph {
+				Text { content == "C" };
+			};
+			Layout { token == LayoutToken::Begin };
+			Paragraph {
+				Text { content == "D" };
+			};
+			Layout { token == LayoutToken::Next };
+			Paragraph {
+				Text { content == "E" };
+			};
+			Layout { token == LayoutToken::End };
+			Layout { token == LayoutToken::End };
+		);
+	}
 }

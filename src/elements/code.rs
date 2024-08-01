@@ -665,7 +665,7 @@ mod tests {
 static int INT32_MIN = 0x80000000;
 ```
 %<nml.code.push_block("Lua", "From Lua", "print(\"Hello, World!\")", nil)>%
-``Rust
+``Rust,
 fn fact(n: usize) -> usize
 {
 	match n
@@ -681,7 +681,6 @@ fn fact(n: usize) -> usize
 			None,
 		));
 		let parser = LangParser::default();
-		//let compiler = Compiler::new(Target::HTML, None);
 		let doc = parser.parse(source, None);
 
 		let borrow = doc.content().borrow();

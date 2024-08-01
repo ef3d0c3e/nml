@@ -19,8 +19,8 @@ use crate::parser::source::Token;
 
 #[derive(Debug)]
 pub struct Text {
-	pub(self) location: Token,
-	pub(self) content: String,
+	pub location: Token,
+	pub content: String,
 }
 
 impl Text {
