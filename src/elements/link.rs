@@ -21,13 +21,11 @@ use regex::Regex;
 use std::ops::Range;
 use std::rc::Rc;
 
-use super::paragraph::Paragraph;
-
 #[derive(Debug)]
 pub struct Link {
 	pub(self) location: Token,
 	/// Display content of link
-	pub(self) display: Paragraph,
+	pub(self) display: Vec<Box<dyn Element>>,
 	/// Url of link
 	pub(self) url: String,
 }
@@ -45,11 +43,9 @@ impl Element for Link {
 					Compiler::sanitize(compiler.target(), self.url.as_str())
 				);
 
-				result += self
-					.display
-					.compile(compiler, document)
-					.as_ref()
-					.map(|r| r.as_str())?;
+				for elem in &self.display {
+					result += elem.compile(compiler, document)?.as_str();
+				}
 
 				result += "</a>";
 				Ok(result)
@@ -62,13 +58,14 @@ impl Element for Link {
 }
 
 impl ContainerElement for Link {
-	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.display.content }
+	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.display }
 
 	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
 		if elem.downcast_ref::<Link>().is_some() {
 			return Err("Tried to push a link inside of a link".to_string());
 		}
-		self.display.push(elem)
+		self.display.push(elem);
+		Ok(())
 	}
 }
 
@@ -152,7 +149,7 @@ impl RegexRule for LinkRule {
 						);
 						return reports;
 					}
-					Ok(paragraph) => *paragraph,
+					Ok(mut paragraph) => std::mem::replace(&mut paragraph.content, vec![]),
 				}
 			}
 			_ => panic!("Empty link name"),
@@ -215,6 +212,7 @@ impl RegexRule for LinkRule {
 
 #[cfg(test)]
 mod tests {
+	use crate::elements::paragraph::Paragraph;
 	use crate::elements::style::Style;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
