@@ -169,7 +169,7 @@ pub trait Document<'a>: core::fmt::Debug {
 			Some(merge_as) => self.scope().borrow_mut().merge(
 				&mut *scope.borrow_mut(),
 				merge_as,
-				self.content().borrow().len() + 1,
+				self.content().borrow().len(),
 			),
 			_ => {}
 		}

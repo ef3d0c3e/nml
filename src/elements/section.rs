@@ -34,7 +34,6 @@ impl Element for Section {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 	fn element_name(&self) -> &'static str { "Section" }
-	fn to_string(&self) -> String { format!("{self:#?}") }
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
@@ -140,10 +139,11 @@ impl RegexRule for SectionRule {
 		let section_refname = matches.get(2).map_or_else(
 			|| None,
 			|refname| {
-				/* TODO: Wait for reference rework
 				// Check for duplicate reference
-				if let Some((ref_doc, reference)) = document.get_reference(refname.as_str())
+				if let Some(elem_reference) = document.get_reference(refname.as_str())
 				{
+					let elem = document.get_from_reference(&elem_reference).unwrap();
+
 					result.push(
 						Report::build(ReportKind::Warning, token.source(), refname.start())
 						.with_message("Duplicate reference name")
@@ -151,20 +151,19 @@ impl RegexRule for SectionRule {
 							Label::new((token.source(), refname.range()))
 							.with_message(format!("Reference with name `{}` is already defined in `{}`",
 									refname.as_str().fg(parser.colors().highlight),
-									ref_doc.source().name().as_str().fg(parser.colors().highlight)))
+									elem.location().source().name().as_str().fg(parser.colors().highlight)))
 							.with_message(format!("`{}` conflicts with previously defined reference to {}",
 									refname.as_str().fg(parser.colors().highlight),
-									reference.element_name().fg(parser.colors().highlight)))
+									elem.element_name().fg(parser.colors().highlight)))
 							.with_color(parser.colors().warning))
 						.with_label(
-							Label::new((ref_doc.source(), reference.location().start()+1..reference.location().end() ))
+							Label::new((elem.location().source(), elem.location().start()..elem.location().end() ))
 							.with_message(format!("`{}` previously defined here",
 								refname.as_str().fg(parser.colors().highlight)))
 							.with_color(parser.colors().warning))
 						.with_note(format!("Previous reference was overwritten"))
 						.finish());
 				}
-				*/
 				Some(refname.as_str().to_string())
 			},
 		);

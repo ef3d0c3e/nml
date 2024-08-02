@@ -113,8 +113,6 @@ impl Element for Graphviz {
 
 	fn element_name(&self) -> &'static str { "Graphviz" }
 
-	fn to_string(&self) -> String { format!("{self:#?}") }
-
 	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {

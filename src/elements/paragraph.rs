@@ -50,8 +50,6 @@ impl Element for Paragraph {
 
 	fn element_name(&self) -> &'static str { "Paragraph" }
 
-	fn to_string(&self) -> String { format!("{:#?}", self) }
-
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		if self.content.is_empty() {
 			return Ok(String::new());
@@ -59,34 +57,21 @@ impl Element for Paragraph {
 
 		match compiler.target() {
 			Target::HTML => {
+				if self.content.is_empty() {
+					return Ok(String::new());
+				}
+
 				let mut result = String::new();
-				//if prev.is_none() || prev.unwrap().downcast_ref::<Paragraph>().is_none()
-				{
-					result.push_str("<p>");
-				}
-				//else
-				//{ result.push_str(" "); }
+				result.push_str("<p>");
 
-				let err = self.content.iter().try_for_each(|elem| {
-					match elem.compile(compiler, document) {
-						Err(e) => return Err(e),
-						Ok(content) => {
-							result.push_str(content.as_str());
-							Ok(())
-						}
-					}
-				});
-				//if next.is_none() || next.unwrap().downcast_ref::<Paragraph>().is_none()
-				{
-					result.push_str("</p>");
+				for elems in &self.content {
+					result += elems.compile(compiler, document)?.as_str();
 				}
 
-				match err {
-					Err(e) => Err(e),
-					Ok(()) => Ok(result),
-				}
+				result.push_str("</p>");
+				Ok(result)
 			}
-			Target::LATEX => todo!("Unimplemented compiler"),
+			_ => todo!("Unimplemented compiler"),
 		}
 	}
 

@@ -23,18 +23,17 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Link {
-	pub(self) location: Token,
+	pub location: Token,
 	/// Display content of link
-	pub(self) display: Vec<Box<dyn Element>>,
+	pub display: Vec<Box<dyn Element>>,
 	/// Url of link
-	pub(self) url: String,
+	pub url: String,
 }
 
 impl Element for Link {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Link" }
-	fn to_string(&self) -> String { format!("{self:#?}") }
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {

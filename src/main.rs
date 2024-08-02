@@ -60,7 +60,7 @@ fn parse(input: &str, debug_opts: &Vec<String>) -> Result<Box<dyn Document<'stat
 		doc.content()
 			.borrow()
 			.iter()
-			.for_each(|elem| println!("{}", (elem).to_string()));
+			.for_each(|elem| println!("{elem:#?}"));
 		println!("-- END AST DEBUGGING --");
 	}
 

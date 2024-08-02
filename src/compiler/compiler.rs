@@ -163,7 +163,7 @@ impl Compiler {
 
 			match elem.compile(self, document) {
 				Ok(result) => body.push_str(result.as_str()),
-				Err(err) => println!("Unable to compile element: {err}\n{}", elem.to_string()),
+				Err(err) => println!("Unable to compile element: {err}\n{elem:#?}"),
 			}
 		}
 		body.push_str("</div>");

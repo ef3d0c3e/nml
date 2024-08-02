@@ -50,9 +50,7 @@ impl Element for ListMarker {
 
 	fn element_name(&self) -> &'static str { "List Marker" }
 
-	fn to_string(&self) -> String { format!("{self:#?}") }
-
-	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => match (self.kind, self.numbered) {
 				(MarkerKind::Close, true) => Ok("</ol>".to_string()),
@@ -79,8 +77,6 @@ impl Element for ListEntry {
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 
 	fn element_name(&self) -> &'static str { "List Entry" }
-
-	fn to_string(&self) -> String { format!("{self:#?}") }
 
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
@@ -184,12 +180,12 @@ impl ListRule {
 		let pm = self.properties.parse(processed.as_str())?;
 
 		let offset = match pm.get("offset", |_, s| s.parse::<usize>()) {
-			Ok((prop, val)) => Some(val),
+			Ok((_, val)) => Some(val),
 			Err(err) => match err {
 				PropertyMapError::ParseError(err) => {
 					return Err(format!("Failed to parse `offset`: {err}"))
 				}
-				PropertyMapError::NotFoundError(err) => None,
+				PropertyMapError::NotFoundError(_) => None,
 			},
 		};
 
@@ -471,7 +467,6 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let compiler = Compiler::new(Target::HTML, None);
 		let doc = parser.parse(source, None);
 
 		validate_document!(doc.content().borrow(), 0,
@@ -480,7 +475,7 @@ mod tests {
 				Text { content == "1" };
 			};
 			ListEntry { numbering == vec![(false, 7)] } {
-				Text { /*content == "2 continued"*/ };
+				Text { content == "2 continued" };
 			};
 			ListEntry { numbering == vec![(false, 8)] } {
 				Text { content == "3" };

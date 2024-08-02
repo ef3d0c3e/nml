@@ -72,8 +72,6 @@ impl Element for Media {
 
 	fn element_name(&self) -> &'static str { "Media" }
 
-	fn to_string(&self) -> String { format!("{self:#?}") }
-
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
 
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
@@ -136,8 +134,6 @@ impl Element for Medium {
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 
 	fn element_name(&self) -> &'static str { "Medium" }
-
-	fn to_string(&self) -> String { format!("{self:#?}") }
 
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 

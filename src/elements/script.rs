@@ -277,3 +277,61 @@ impl RegexRule for ScriptRule {
 	// TODO
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::elements::link::Link;
+use crate::elements::list::ListEntry;
+	use crate::elements::list::ListMarker;
+	use crate::elements::paragraph::Paragraph;
+	use crate::elements::style::Style;
+	use crate::parser::langparser::LangParser;
+	use crate::parser::source::SourceFile;
+	use crate::validate_document;
+
+	#[test]
+	fn parser() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+Simple evals:
+ * %< 1+1>%
+ * %<" 1+1>% = 2
+ * %<! "**bold**">%
+
+Definition:
+@<
+function make_ref(name, ref)
+	return "[" .. name .. "](#" .. ref .. ")"
+end
+>@
+Evaluation: %<! make_ref("hello", "id")>%
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let doc = parser.parse(source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Paragraph;
+			ListMarker;
+			ListEntry {};
+			ListEntry {
+				Text { content == "2" };
+				Text { content == " = 2" };
+			};
+			ListEntry {
+				Style;
+				Text { content == "bold" };
+				Style;
+			};
+			ListMarker;
+			Paragraph {
+				Text; Text;
+				Link { url == "#id" } { Text { content == "hello" }; };
+			};
+		);
+	}
+}

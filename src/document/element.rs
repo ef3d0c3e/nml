@@ -34,7 +34,7 @@ impl FromStr for ElemKind {
 	}
 }
 
-pub trait Element: Downcast {
+pub trait Element: Downcast + core::fmt::Debug {
 	/// Gets the element defined location i.e token without filename
 	fn location(&self) -> &Token;
 
@@ -42,9 +42,6 @@ pub trait Element: Downcast {
 
 	/// Get the element's name
 	fn element_name(&self) -> &'static str;
-
-	/// Outputs element to string for debug purposes
-	fn to_string(&self) -> String;
 
 	/// Gets the element as a referenceable i.e an element that can be referenced
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { None }
@@ -57,12 +54,6 @@ pub trait Element: Downcast {
 }
 impl_downcast!(Element);
 
-impl core::fmt::Debug for dyn Element {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.to_string())
-	}
-}
-
 pub trait ReferenceableElement: Element {
 	/// Reference name
 	fn reference_name(&self) -> Option<&String>;
@@ -74,11 +65,6 @@ pub trait ReferenceableElement: Element {
 	fn compile_reference(&self, compiler: &Compiler, document: &dyn Document, reference: &Reference, refid: usize) -> Result<String, String>;
 }
 
-impl core::fmt::Debug for dyn ReferenceableElement {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.to_string())
-	}
-}
 
 pub trait ContainerElement: Element {
 	/// Gets the contained elements
@@ -86,12 +72,6 @@ pub trait ContainerElement: Element {
 
 	/// Adds an element to the container
 	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String>;
-}
-
-impl core::fmt::Debug for dyn ContainerElement {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.to_string())
-	}
 }
 
 #[derive(Debug)]
@@ -103,8 +83,6 @@ impl Element for DocumentEnd {
 	fn kind(&self) -> ElemKind { ElemKind::Invisible }
 
 	fn element_name(&self) -> &'static str { "Document End" }
-
-	fn to_string(&self) -> String { format!("{self:#?}") }
 
 	fn compile(&self, _compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		Ok(String::new())

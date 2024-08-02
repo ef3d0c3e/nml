@@ -46,7 +46,6 @@ impl Element for Style {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Section" }
-	fn to_string(&self) -> String { format!("{self:#?}") }
 	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {

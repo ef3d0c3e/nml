@@ -46,8 +46,6 @@ impl Element for Reference {
 
 	fn element_name(&self) -> &'static str { "Reference" }
 
-	fn to_string(&self) -> String { format!("{self:#?}") }
-
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {

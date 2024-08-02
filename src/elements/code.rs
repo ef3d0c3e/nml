@@ -263,8 +263,6 @@ impl Element for Code {
 
 	fn element_name(&self) -> &'static str { "Code Block" }
 
-	fn to_string(&self) -> String { format!("{self:#?}") }
-
 	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {

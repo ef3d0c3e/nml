@@ -151,8 +151,6 @@ impl Element for Tex {
 
 	fn element_name(&self) -> &'static str { "LaTeX" }
 
-	fn to_string(&self) -> String { format!("{self:#?}") }
-
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {

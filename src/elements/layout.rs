@@ -237,7 +237,6 @@ impl Element for Layout {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 	fn element_name(&self) -> &'static str { "Layout" }
-	fn to_string(&self) -> String { format!("{self:#?}") }
 	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
 		self.layout
 			.compile(self.token, self.id, &self.properties, compiler, document)

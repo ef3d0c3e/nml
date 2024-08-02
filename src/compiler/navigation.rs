@@ -99,6 +99,7 @@ pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<NavEntry, Strin
 			}
 		};
 
+		// Get entry to insert into
 		let pent = if let Some(subcat) = subcat {
 			let cat = match cat {
 				Some(cat) => cat,
@@ -111,7 +112,7 @@ pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<NavEntry, Strin
 				}
 			};
 
-			let mut cat_ent = match nav.children.get_mut(cat.as_str()) {
+			let cat_ent = match nav.children.get_mut(cat.as_str()) {
 				Some(cat_ent) => cat_ent,
 				None => {
 					// Insert
