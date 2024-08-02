@@ -17,6 +17,7 @@ use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
 use regex::Regex;
+use section_kind::NO_NUMBER;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -38,13 +39,25 @@ impl Element for Section {
 	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
+				let mut number = String::new();
+
+				if (self.kind & NO_NUMBER) != NO_NUMBER {
+					let numbering = compiler.section_counter(self.depth);
+					number = numbering
+						.iter()
+						.map(|n| n.to_string())
+						.collect::<Vec<_>>()
+						.join(".");
+					number += " ";
+				}
+
 				Ok(format!(
-				r#"<h{0} id="{1}">{2}</h{0}>"#,
-				self.depth,
-				Compiler::refname(compiler.target(), self.title.as_str()),
-				Compiler::sanitize(compiler.target(), self.title.as_str())
-			))
-			},
+					r#"<h{0} id="{1}">{number}{2}</h{0}>"#,
+					self.depth,
+					Compiler::refname(compiler.target(), self.title.as_str()),
+					Compiler::sanitize(compiler.target(), self.title.as_str())
+				))
+			}
 			Target::LATEX => Err("Unimplemented compiler".to_string()),
 		}
 	}
@@ -136,15 +149,15 @@ impl RegexRule for SectionRule {
 		};
 
 		// [Optional] Reference name
-		let section_refname = matches.get(2).map_or_else(
-			|| None,
-			|refname| {
-				// Check for duplicate reference
-				if let Some(elem_reference) = document.get_reference(refname.as_str())
-				{
-					let elem = document.get_from_reference(&elem_reference).unwrap();
+		let section_refname =
+			matches.get(2).map_or_else(
+				|| None,
+				|refname| {
+					// Check for duplicate reference
+					if let Some(elem_reference) = document.get_reference(refname.as_str()) {
+						let elem = document.get_from_reference(&elem_reference).unwrap();
 
-					result.push(
+						result.push(
 						Report::build(ReportKind::Warning, token.source(), refname.start())
 						.with_message("Duplicate reference name")
 						.with_label(
@@ -163,10 +176,10 @@ impl RegexRule for SectionRule {
 							.with_color(parser.colors().warning))
 						.with_note(format!("Previous reference was overwritten"))
 						.finish());
-				}
-				Some(refname.as_str().to_string())
-			},
-		);
+					}
+					Some(refname.as_str().to_string())
+				},
+			);
 
 		// Section kind
 		let section_kind = match matches.get(3) {

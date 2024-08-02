@@ -1,3 +1,4 @@
+use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::collections::HashMap;
@@ -20,6 +21,8 @@ pub struct Compiler {
 	cache: Option<RefCell<Connection>>,
 	reference_count: RefCell<HashMap<String, HashMap<String, usize>>>,
 	// TODO: External references, i.e resolved later
+	
+	sections_counter: RefCell<Vec<usize>>,
 }
 
 impl Compiler {
@@ -35,7 +38,32 @@ impl Compiler {
 			target,
 			cache: cache.map(|con| RefCell::new(con)),
 			reference_count: RefCell::new(HashMap::new()),
+			sections_counter: RefCell::new(vec![]),
 		}
+	}
+
+	/// Gets the section counter for a given depth
+	/// This function modifies the section counter
+	pub fn section_counter(&self, depth: usize) -> Ref<'_, Vec<usize>>
+	{
+		// Increment current counter
+		if self.sections_counter.borrow().len() == depth {
+			self.sections_counter.borrow_mut().last_mut()
+				.map(|id| *id += 1);
+			return Ref::map(self.sections_counter.borrow(), |b| &*b);
+		}
+
+		// Close
+		while self.sections_counter.borrow().len() > depth {
+			self.sections_counter.borrow_mut().pop();
+		}
+
+		// Open
+		while self.sections_counter.borrow().len() < depth {
+			self.sections_counter.borrow_mut().push(1);
+		}
+
+		Ref::map(self.sections_counter.borrow(), |b| &*b)
 	}
 
 	/// Sanitizes text for a [`Target`]

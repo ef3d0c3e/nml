@@ -282,7 +282,7 @@ impl RegexRule for ScriptRule {
 mod tests {
 	use super::*;
 	use crate::elements::link::Link;
-use crate::elements::list::ListEntry;
+	use crate::elements::list::ListEntry;
 	use crate::elements::list::ListMarker;
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::style::Style;
