@@ -216,7 +216,7 @@ impl RegexRule for LinkRule {
 #[cfg(test)]
 mod tests {
 	use crate::elements::style::Style;
-use crate::elements::text::Text;
+	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;

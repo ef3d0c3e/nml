@@ -67,7 +67,7 @@ impl RawRule {
 				Regex::new(r"\{\?(?:\[((?:\\.|[^\[\]\\])*?)\])?(?:((?:\\.|[^\\\\])*?)(\?\}))?")
 					.unwrap(),
 			],
-			properties: PropertyParser{ properties: props },
+			properties: PropertyParser { properties: props },
 		}
 	}
 }
@@ -268,15 +268,18 @@ impl RegexRule for RawRule {
 mod tests {
 	use super::*;
 	use crate::compiler::compiler::Target;
+	use crate::elements::paragraph::Paragraph;
+	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::source::SourceFile;
+	use crate::validate_document;
 
 	#[test]
-	fn raw_tests() {
+	fn parser() {
 		let source = Rc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"
-Break{?[kind=block]<RAW>?}NewParagraph
+Break{?[kind=block] Raw?}NewParagraph{?<b>?}
 				"#
 			.to_string(),
 			None,
@@ -285,13 +288,13 @@ Break{?[kind=block]<RAW>?}NewParagraph
 		let compiler = Compiler::new(Target::HTML, None);
 		let doc = parser.parse(source, None);
 
-		let borrow = doc.content().borrow();
-		let found = borrow
-			.iter()
-			.filter_map(|e| e.downcast_ref::<Raw>())
-			.collect::<Vec<_>>();
-
-		assert_eq!(found[0].compile(&compiler, &*doc), Ok("<RAW>".to_string()));
-		//assert_eq!(found[1].compile(&compiler, &*doc), Ok("<RAW>".to_string()));
+		validate_document!(doc.content().borrow(), 0,
+			Paragraph;
+			Raw { kind == ElemKind::Block, content == "Raw" };
+			Paragraph {
+				Text;
+				Raw { kind == ElemKind::Inline, content == "<b>" };
+			};
+		);
 	}
 }
