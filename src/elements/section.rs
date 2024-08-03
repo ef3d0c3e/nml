@@ -367,7 +367,7 @@ impl RegexRule for SectionRule {
 	}
 
 	fn register_styles(&self, parser: &dyn Parser) {
-		parser.set_style(Rc::new(SectionStyle::default()));
+		parser.set_current_style(Rc::new(SectionStyle::default()));
 	}
 }
 

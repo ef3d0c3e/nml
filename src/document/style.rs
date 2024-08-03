@@ -31,9 +31,7 @@ pub trait StyleHolder {
 	fn styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>>;
 
 	/// Checks if a given style key is registered
-	fn is_registered(&self, style_key: &str) -> bool {
-		self.styles().contains_key(style_key)
-	}
+	fn is_registered(&self, style_key: &str) -> bool { self.styles().contains_key(style_key) }
 
 	/// Gets the current active style for an element
 	/// NOTE: Will panic if a style is not defined for a given element
@@ -43,7 +41,7 @@ pub trait StyleHolder {
 	}
 
 	/// Sets the [`style`]
-	fn set_style(&self, style: Rc<dyn ElementStyle>) {
+	fn set_current_style(&self, style: Rc<dyn ElementStyle>) {
 		self.styles_mut().insert(style.key().to_string(), style);
 	}
 }
