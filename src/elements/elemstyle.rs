@@ -1,16 +1,24 @@
 use std::any::Any;
 use std::ops::Range;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
+use mlua::Error::BadArgument;
+use mlua::Function;
+use mlua::Lua;
+use mlua::LuaSerdeExt;
+use mlua::Table;
+use mlua::Value;
 use regex::Captures;
 use regex::Regex;
 
 use crate::document::document::Document;
 use crate::document::{self};
+use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
 use crate::parser::rule::RegexRule;
 use crate::parser::rule::Rule;
@@ -58,71 +66,6 @@ impl ElemStyleRule {
 impl Rule for ElemStyleRule {
 	fn name(&self) -> &'static str { "Element Style" }
 
-	/*
-		fn on_regex_match<'a>(
-			&self,
-			_: usize,
-			parser: &dyn Parser,
-			_document: &'a dyn Document,
-			token: Token,
-			matches: Captures,
-		) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
-			let mut reports = vec![];
-
-
-			// Get value
-			let new_style = if let Some(value) = matches.get(2) {
-				let value_str = match VariableRule::validate_value(value.as_str()) {
-					Err(err) => {
-						reports.push(
-							Report::build(ReportKind::Error, token.source(), value.start())
-								.with_message("Invalid Style Value")
-								.with_label(
-									Label::new((token.source(), value.range()))
-										.with_message(format!(
-											"Value `{}` is not allowed: {err}",
-											value.as_str().fg(parser.colors().highlight)
-										))
-										.with_color(parser.colors().error),
-								)
-								.finish(),
-						);
-						return reports;
-					}
-					Ok(value) => value,
-				};
-
-				// Attempt to serialize
-				match style.from_json(value_str.as_str()) {
-					Err(err) => {
-						reports.push(
-							Report::build(ReportKind::Error, token.source(), value.start())
-								.with_message("Invalid Style Value")
-								.with_label(
-									Label::new((token.source(), value.range()))
-										.with_message(format!(
-											"Failed to serialize `{}` into style with key `{}`: {err}",
-											value_str.fg(parser.colors().highlight),
-											style.key().fg(parser.colors().info)
-										))
-										.with_color(parser.colors().error),
-								)
-								.finish(),
-						);
-						return reports;
-					}
-					Ok(style) => style,
-				}
-			} else {
-				panic!("Unknown error")
-			};
-
-			parser.set_style(new_style);
-
-			reports
-		}
-	*/
-
 	fn next_match(&self, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re
 			.find_at(cursor.source.content(), cursor.pos)
@@ -164,7 +107,7 @@ impl Rule for ElemStyleRule {
 			}
 
 			// Check if key exists
-			if !parser.is_registered(trimmed) {
+			if !parser.is_style_registered(trimmed) {
 				reports.push(
 					Report::build(ReportKind::Error, cursor.source.clone(), key.start())
 						.with_message("Unknown Style Key")
@@ -239,5 +182,47 @@ impl Rule for ElemStyleRule {
 		parser.set_current_style(new_style);
 
 		(cursor, reports)
+	}
+
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+		let mut bindings = vec![];
+
+		bindings.push((
+			"set".to_string(),
+			lua.create_function(|lua, (style_key, new_style): (String, Value)| {
+				let mut result = Ok(());
+				CTX.with_borrow(|ctx| {
+					ctx.as_ref().map(|ctx| {
+						if !ctx.parser.is_style_registered(style_key.as_str()) {
+							result = Err(BadArgument {
+								to: Some("set".to_string()),
+								pos: 1,
+								name: Some("style_key".to_string()),
+								cause: Arc::new(mlua::Error::external(format!(
+									"Unable to find style with key: {style_key}"
+								))),
+							});
+							return;
+						}
+
+						let style = ctx.parser.current_style(style_key.as_str());
+						let new_style = match style.from_lua(lua, new_style) {
+							Err(err) => {
+								result = Err(err);
+								return;
+							}
+							Ok(new_style) => new_style,
+						};
+
+						ctx.parser.set_current_style(new_style);
+					})
+				});
+
+				result
+			})
+			.unwrap(),
+		));
+
+		Some(bindings)
 	}
 }

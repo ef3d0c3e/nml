@@ -20,6 +20,13 @@ pub trait ElementStyle: Downcast + core::fmt::Debug {
 
 	/// Serializes sytle into json string
 	fn to_json(&self) -> String;
+
+	/// Attempts to deserialize lua table into a new style
+	fn from_lua(
+		&self,
+		lua: &mlua::Lua,
+		value: mlua::Value,
+	) -> Result<Rc<dyn ElementStyle>, mlua::Error>;
 }
 impl_downcast!(ElementStyle);
 
@@ -31,7 +38,7 @@ pub trait StyleHolder {
 	fn styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>>;
 
 	/// Checks if a given style key is registered
-	fn is_registered(&self, style_key: &str) -> bool { self.styles().contains_key(style_key) }
+	fn is_style_registered(&self, style_key: &str) -> bool { self.styles().contains_key(style_key) }
 
 	/// Gets the current active style for an element
 	/// NOTE: Will panic if a style is not defined for a given element
@@ -59,6 +66,15 @@ macro_rules! impl_elementstyle {
 			}
 
 			fn to_json(&self) -> String { serde_json::to_string(self).unwrap() }
+
+			fn from_lua(
+				&self,
+				lua: &mlua::Lua,
+				value: mlua::Value,
+			) -> Result<std::rc::Rc<dyn ElementStyle>, mlua::Error> {
+				mlua::LuaSerdeExt::from_value::<$t>(lua, value)
+					.map(|obj| std::rc::Rc::new(obj) as std::rc::Rc<dyn ElementStyle>)
+			}
 		}
 	};
 }
