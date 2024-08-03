@@ -81,7 +81,7 @@ impl ReferenceRule {
 			),
 		);
 		Self {
-			re: [Regex::new(r"§\{(.*)\}(\[((?:\\.|[^\\\\])*?)\])?").unwrap()],
+			re: [Regex::new(r"§\{(.*?)\}(\[((?:\\.|[^\\\\])*?)\])?").unwrap()],
 			properties: PropertyParser{ properties: props },
 		}
 	}

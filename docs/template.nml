@@ -25,3 +25,8 @@ function make_doc(categories, title, page_title)
 	nml.variable.insert("compiler.output", page_title .. ".html")
 end
 >@
+
+@@style.section = {
+	"link_pos": "Before",
+	"link": ["", "🔗 ", " "]
+}

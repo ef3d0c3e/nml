@@ -46,16 +46,17 @@ impl Element for Section {
 		match compiler.target() {
 			Target::HTML => {
 				// Section numbering
-				let number = if (self.kind & section_kind::NO_NUMBER) == section_kind::NO_NUMBER {
+				let number = if (self.kind & section_kind::NO_NUMBER) != section_kind::NO_NUMBER {
 					let numbering = compiler.section_counter(self.depth);
-					let number = " ".to_string()
-						+ numbering
-							.iter()
-							.map(|n| n.to_string())
-							.collect::<Vec<_>>()
-							.join(".")
-							.as_str();
-					number
+
+					let mut result = String::new();
+					for num in numbering.iter()
+					{
+						result = result + num.to_string().as_str() + ".";
+					}
+					result += " ";
+
+					result
 				} else {
 					String::new()
 				};
@@ -71,8 +72,10 @@ impl Element for Section {
 
 				let refname = Compiler::refname(compiler.target(), self.title.as_str());
 				let link = format!(
-					"<a class=\"section-link\" href=\"#{refname}\">{}</a>",
-					Compiler::sanitize(compiler.target(), self.style.link.as_str())
+					"{}<a class=\"section-link\" href=\"#{refname}\">{}</a>{}",
+					Compiler::sanitize(compiler.target(), self.style.link[0].as_str()),
+					Compiler::sanitize(compiler.target(), self.style.link[1].as_str()),
+					Compiler::sanitize(compiler.target(), self.style.link[2].as_str())
 				);
 
 				if self.style.link_pos == SectionLinkPos::After {
@@ -123,7 +126,7 @@ impl ReferenceableElement for Section {
 				);
 
 				Ok(format!(
-					"<a class=\"section-ref\" href=\"#{}\">{caption}</a>",
+					"<a class=\"section-reference\" href=\"#{}\">{caption}</a>",
 					Compiler::refname(compiler.target(), self.title.as_str())
 				))
 			}
@@ -390,14 +393,14 @@ mod section_style {
 	#[derive(Debug, Serialize, Deserialize)]
 	pub struct SectionStyle {
 		pub link_pos: SectionLinkPos,
-		pub link: String,
+		pub link: [String; 3],
 	}
 
 	impl Default for SectionStyle {
 		fn default() -> Self {
 			Self {
-				link_pos: SectionLinkPos::After,
-				link: "🔗".to_string(),
+				link_pos: SectionLinkPos::Before,
+				link: ["".into(), "🔗".into(), " ".into()],
 			}
 		}
 	}

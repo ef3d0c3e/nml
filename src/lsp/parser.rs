@@ -1,6 +1,6 @@
 use std::{cell::{RefCell, RefMut}, collections::HashMap, rc::Rc};
 
-use crate::{document::{document::Document, element::Element}, lua::kernel::{Kernel, KernelHolder}, parser::{parser::{Parser, ReportColors}, rule::Rule, source::{Cursor, Source}, state::StateHolder}};
+use crate::{document::{document::Document, element::Element, style::{ElementStyle, StyleHolder}}, lua::kernel::{Kernel, KernelHolder}, parser::{parser::{Parser, ReportColors}, rule::Rule, source::{Cursor, Source}, state::StateHolder}};
 
 #[derive(Debug, Clone)]
 pub struct LineCursor
@@ -144,5 +144,15 @@ impl KernelHolder for LsParser
 		self.kernels.borrow_mut()
 			.insert(name.clone(), kernel);
 		self.get_kernel(name.as_str()).unwrap()
+    }
+}
+
+impl StyleHolder for LsParser {
+    fn styles(&self) -> std::cell::Ref<'_, HashMap<String, Rc<dyn ElementStyle>>> {
+        todo!()
+    }
+
+    fn styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>> {
+        todo!()
     }
 }
