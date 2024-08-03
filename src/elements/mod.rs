@@ -16,3 +16,4 @@ pub mod style;
 pub mod tex;
 pub mod text;
 pub mod variable;
+pub mod elemstyle;

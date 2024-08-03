@@ -10,6 +10,7 @@ use super::source::Source;
 use super::state::StateHolder;
 use crate::document::document::Document;
 use crate::document::element::Element;
+use crate::document::style::StyleHolder;
 use crate::lua::kernel::KernelHolder;
 use ariadne::Color;
 
@@ -41,7 +42,7 @@ impl ReportColors {
 	}
 }
 
-pub trait Parser: KernelHolder {
+pub trait Parser: KernelHolder + StyleHolder {
 	/// Gets the colors for formatting errors
 	///
 	/// When colors are disabled, all colors should resolve to empty string

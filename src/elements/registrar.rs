@@ -2,6 +2,7 @@ use crate::parser::parser::Parser;
 
 use super::code::CodeRule;
 use super::comment::CommentRule;
+use super::elemstyle::ElemStyleRule;
 use super::graphviz::GraphRule;
 use super::import::ImportRule;
 use super::layout::LayoutRule;
@@ -24,6 +25,7 @@ pub fn register<P: Parser>(parser: &mut P) {
 	parser.add_rule(Box::new(ParagraphRule::new()), None).unwrap();
 	parser.add_rule(Box::new(ImportRule::new()), None).unwrap();
 	parser.add_rule(Box::new(ScriptRule::new()), None).unwrap();
+	parser.add_rule(Box::new(ElemStyleRule::new()), None).unwrap();
 	parser.add_rule(Box::new(VariableRule::new()), None).unwrap();
 	parser.add_rule(Box::new(VariableSubstitutionRule::new()), None).unwrap();
 	parser.add_rule(Box::new(RawRule::new()), None).unwrap();

@@ -17,7 +17,8 @@ use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
 use regex::Regex;
-use section_kind::NO_NUMBER;
+use section_style::SectionLinkPos;
+use section_style::SectionStyle;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -25,42 +26,78 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct Section {
 	pub(self) location: Token,
-	pub(self) title: String,             // Section title
-	pub(self) depth: usize,              // Section depth
-	pub(self) kind: u8,                  // Section kind, e.g numbered, unnumbred, ...
-	pub(self) reference: Option<String>, // Section reference name
+	/// Title of the section
+	pub(self) title: String,
+	/// Depth i.e number of '#'
+	pub(self) depth: usize,
+	/// [`section_kind`]
+	pub(self) kind: u8,
+	/// Section reference name
+	pub(self) reference: Option<String>,
+	/// Style of the section
+	pub(self) style: Rc<section_style::SectionStyle>,
 }
 
 impl Element for Section {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 	fn element_name(&self) -> &'static str { "Section" }
-	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
-				let mut number = String::new();
-
-				if (self.kind & NO_NUMBER) != NO_NUMBER {
+				// Section numbering
+				let number = if (self.kind & section_kind::NO_NUMBER) == section_kind::NO_NUMBER {
 					let numbering = compiler.section_counter(self.depth);
-					number = numbering
-						.iter()
-						.map(|n| n.to_string())
-						.collect::<Vec<_>>()
-						.join(".");
-					number += " ";
+					let number = " ".to_string()
+						+ numbering
+							.iter()
+							.map(|n| n.to_string())
+							.collect::<Vec<_>>()
+							.join(".")
+							.as_str();
+					number
+				} else {
+					String::new()
+				};
+
+				if self.style.link_pos == SectionLinkPos::None {
+					return Ok(format!(
+						r#"<h{0} id="{1}">{number}{2}</h{0}>"#,
+						self.depth,
+						Compiler::refname(compiler.target(), self.title.as_str()),
+						Compiler::sanitize(compiler.target(), self.title.as_str())
+					));
 				}
 
-				Ok(format!(
-					r#"<h{0} id="{1}">{number}{2}</h{0}>"#,
-					self.depth,
-					Compiler::refname(compiler.target(), self.title.as_str()),
-					Compiler::sanitize(compiler.target(), self.title.as_str())
-				))
+				let refname = Compiler::refname(compiler.target(), self.title.as_str());
+				let link = format!(
+					"<a class=\"section-link\" href=\"#{refname}\">{}</a>",
+					Compiler::sanitize(compiler.target(), self.style.link.as_str())
+				);
+
+				if self.style.link_pos == SectionLinkPos::After {
+					Ok(format!(
+						r#"<h{0} id="{1}">{number}{2}{link}</h{0}>"#,
+						self.depth,
+						Compiler::refname(compiler.target(), self.title.as_str()),
+						Compiler::sanitize(compiler.target(), self.title.as_str())
+					))
+				} else
+				// Before
+				{
+					Ok(format!(
+						r#"<h{0} id="{1}">{link}{number}{2}</h{0}>"#,
+						self.depth,
+						Compiler::refname(compiler.target(), self.title.as_str()),
+						Compiler::sanitize(compiler.target(), self.title.as_str())
+					))
+				}
 			}
 			Target::LATEX => Err("Unimplemented compiler".to_string()),
 		}
 	}
+
+	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 }
 
 impl ReferenceableElement for Section {
@@ -252,6 +289,12 @@ impl RegexRule for SectionRule {
 			_ => panic!("Empty section name"),
 		};
 
+		// Get style
+		let style = parser
+			.current_style(section_style::STYLE_KEY)
+			.downcast_rc::<SectionStyle>()
+			.unwrap();
+
 		parser.push(
 			document,
 			Box::new(Section {
@@ -260,6 +303,7 @@ impl RegexRule for SectionRule {
 				depth: section_depth,
 				kind: section_kind,
 				reference: section_refname,
+				style,
 			}),
 		);
 
@@ -292,6 +336,13 @@ impl RegexRule for SectionRule {
 
 					CTX.with_borrow(|ctx| {
 						ctx.as_ref().map(|ctx| {
+							// Get style
+							let style = ctx
+								.parser
+								.current_style(section_style::STYLE_KEY)
+								.downcast_rc::<SectionStyle>()
+								.unwrap();
+
 							ctx.parser.push(
 								ctx.document,
 								Box::new(Section {
@@ -300,6 +351,7 @@ impl RegexRule for SectionRule {
 									depth,
 									kind,
 									reference,
+									style,
 								}),
 							);
 						})
@@ -313,4 +365,42 @@ impl RegexRule for SectionRule {
 
 		Some(bindings)
 	}
+
+	fn register_styles(&self, parser: &dyn Parser) {
+		parser.set_style(Rc::new(SectionStyle::default()));
+	}
+}
+
+mod section_style {
+	use serde::Deserialize;
+	use serde::Serialize;
+
+	use crate::document::style::ElementStyle;
+	use crate::impl_elementstyle;
+
+	pub static STYLE_KEY: &'static str = "style.section";
+
+	#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+	pub enum SectionLinkPos {
+		Before,
+		After,
+		None,
+	}
+
+	#[derive(Debug, Serialize, Deserialize)]
+	pub struct SectionStyle {
+		pub link_pos: SectionLinkPos,
+		pub link: String,
+	}
+
+	impl Default for SectionStyle {
+		fn default() -> Self {
+			Self {
+				link_pos: SectionLinkPos::After,
+				link: "🔗".to_string(),
+			}
+		}
+	}
+
+	impl_elementstyle!(SectionStyle, STYLE_KEY);
 }

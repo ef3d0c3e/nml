@@ -85,7 +85,7 @@ impl VariableRule {
 		return Ok(name);
 	}
 
-	pub fn validate_value(_colors: &ReportColors, original_value: &str) -> Result<String, String> {
+	pub fn validate_value(original_value: &str) -> Result<String, String> {
 		let mut escaped = 0usize;
 		let mut result = String::new();
 		for c in original_value.trim_start().trim_end().chars() {
@@ -93,7 +93,7 @@ impl VariableRule {
 				escaped += 1
 			} else if c == '\n' {
 				match escaped {
-					0 => return Err("Unknown error wile capturing variable".to_string()),
+					0 => return Err("Unknown error wile capturing value".to_string()),
 					// Remove '\n'
 					1 => {}
 					// Insert '\n'
@@ -202,7 +202,7 @@ impl RegexRule for VariableRule {
 		};
 
 		let var_value = match matches.get(3) {
-			Some(value) => match VariableRule::validate_value(&parser.colors(), value.as_str()) {
+			Some(value) => match VariableRule::validate_value(value.as_str()) {
 				Ok(var_value) => var_value,
 				Err(msg) => {
 					result.push(

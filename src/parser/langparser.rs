@@ -1,3 +1,4 @@
+use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::collections::HashMap;
@@ -15,6 +16,8 @@ use crate::document::element::DocumentEnd;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::langdocument::LangDocument;
+use crate::document::style::ElementStyle;
+use crate::document::style::StyleHolder;
 use crate::elements::paragraph::Paragraph;
 use crate::elements::registrar::register;
 use crate::elements::text::Text;
@@ -42,6 +45,7 @@ pub struct LangParser {
 	pub err_flag: RefCell<bool>,
 	pub state: RefCell<StateHolder>,
 	pub kernels: RefCell<HashMap<String, Kernel>>,
+	pub styles: RefCell<HashMap<String, Rc<dyn ElementStyle>>>,
 }
 
 impl LangParser {
@@ -52,12 +56,21 @@ impl LangParser {
 			err_flag: RefCell::new(false),
 			state: RefCell::new(StateHolder::new()),
 			kernels: RefCell::new(HashMap::new()),
+			styles: RefCell::new(HashMap::new()),
 		};
+		// Register rules
 		register(&mut s);
 
+
+		// Register default kernel
 		s.kernels
 			.borrow_mut()
 			.insert("main".to_string(), Kernel::new(&s));
+
+		// Register default styles
+		for rule in &s.rules {
+			rule.register_styles(&s);
+		}
 		s
 	}
 
@@ -290,5 +303,13 @@ impl KernelHolder for LangParser {
 		//TODO do not get
 		self.kernels.borrow_mut().insert(name.clone(), kernel);
 		self.get_kernel(name.as_str()).unwrap()
+	}
+}
+
+impl StyleHolder for LangParser {
+	fn styles(&self) -> Ref<'_, HashMap<String, Rc<dyn ElementStyle>>> { self.styles.borrow() }
+
+	fn styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>> {
+		self.styles.borrow_mut()
 	}
 }

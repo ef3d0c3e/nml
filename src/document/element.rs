@@ -3,6 +3,7 @@ use std::str::FromStr;
 use crate::compiler::compiler::Compiler;
 use crate::elements::reference::Reference;
 use crate::parser::source::Token;
+use crate::parser::util::PropertyParser;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
@@ -62,9 +63,14 @@ pub trait ReferenceableElement: Element {
 	fn refcount_key(&self) -> &'static str;
 
 	/// Creates the reference element
-	fn compile_reference(&self, compiler: &Compiler, document: &dyn Document, reference: &Reference, refid: usize) -> Result<String, String>;
+	fn compile_reference(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		reference: &Reference,
+		refid: usize,
+	) -> Result<String, String>;
 }
-
 
 pub trait ContainerElement: Element {
 	/// Gets the contained elements
