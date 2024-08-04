@@ -18,9 +18,6 @@ pub trait ElementStyle: Downcast + core::fmt::Debug {
 	/// Will fail if deserialization fails
 	fn from_json(&self, json: &str) -> Result<Rc<dyn ElementStyle>, String>;
 
-	/// Serializes sytle into json string
-	fn to_json(&self) -> String;
-
 	/// Attempts to deserialize lua table into a new style
 	fn from_lua(
 		&self,
@@ -32,24 +29,24 @@ impl_downcast!(ElementStyle);
 
 pub trait StyleHolder {
 	/// gets a reference to all defined styles
-	fn styles(&self) -> Ref<'_, HashMap<String, Rc<dyn ElementStyle>>>;
+	fn element_styles(&self) -> Ref<'_, HashMap<String, Rc<dyn ElementStyle>>>;
 
 	/// gets a (mutable) reference to all defined styles
-	fn styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>>;
+	fn element_styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>>;
 
 	/// Checks if a given style key is registered
-	fn is_style_registered(&self, style_key: &str) -> bool { self.styles().contains_key(style_key) }
+	fn is_style_registered(&self, style_key: &str) -> bool { self.element_styles().contains_key(style_key) }
 
 	/// Gets the current active style for an element
 	/// NOTE: Will panic if a style is not defined for a given element
 	/// If you need to process user input, use [`is_registered`]
 	fn current_style(&self, style_key: &str) -> Rc<dyn ElementStyle> {
-		self.styles().get(style_key).map(|rc| rc.clone()).unwrap()
+		self.element_styles().get(style_key).map(|rc| rc.clone()).unwrap()
 	}
 
 	/// Sets the [`style`]
 	fn set_current_style(&self, style: Rc<dyn ElementStyle>) {
-		self.styles_mut().insert(style.key().to_string(), style);
+		self.element_styles_mut().insert(style.key().to_string(), style);
 	}
 }
 
@@ -64,8 +61,6 @@ macro_rules! impl_elementstyle {
 					.map_err(|e| e.to_string())
 					.map(|obj| std::rc::Rc::new(obj) as std::rc::Rc<dyn ElementStyle>)
 			}
-
-			fn to_json(&self) -> String { serde_json::to_string(self).unwrap() }
 
 			fn from_lua(
 				&self,

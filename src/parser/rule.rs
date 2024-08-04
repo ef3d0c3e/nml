@@ -4,6 +4,8 @@ use super::source::Source;
 use super::source::Token;
 use crate::document::document::Document;
 use ariadne::Report;
+use downcast_rs::impl_downcast;
+use downcast_rs::Downcast;
 use mlua::Function;
 use mlua::Lua;
 
@@ -11,11 +13,11 @@ use std::any::Any;
 use std::ops::Range;
 use std::rc::Rc;
 
-pub trait Rule {
+pub trait Rule: Downcast {
 	/// Returns rule's name
 	fn name(&self) -> &'static str;
 	/// Finds the next match starting from [`cursor`]
-	fn next_match(&self, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)>;
+	fn next_match(&self, parser: &dyn Parser, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)>;
 	/// Callback when rule matches
 	fn on_match<'a>(
 		&self,
@@ -33,6 +35,7 @@ pub trait Rule {
 	/// Registers default layouts
 	fn register_layouts(&self, _parser: &dyn Parser) {}
 }
+impl_downcast!(Rule);
 
 impl core::fmt::Debug for dyn Rule {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -61,13 +64,13 @@ pub trait RegexRule {
 	fn register_layouts(&self, _parser: &dyn Parser) {}
 }
 
-impl<T: RegexRule> Rule for T {
+impl<T: RegexRule + 'static> Rule for T {
 	fn name(&self) -> &'static str {
 		RegexRule::name(self)
 	}
 
 	/// Finds the next match starting from [`cursor`]
-	fn next_match(&self, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _parser: &dyn Parser, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		let content = cursor.source.content();
 		let mut found: Option<(usize, usize)> = None;
 		self.regexes().iter().enumerate().for_each(|(id, re)| {

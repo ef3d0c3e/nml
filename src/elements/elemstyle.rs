@@ -10,23 +10,15 @@ use ariadne::ReportKind;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
-use mlua::LuaSerdeExt;
-use mlua::Table;
 use mlua::Value;
-use regex::Captures;
 use regex::Regex;
 
 use crate::document::document::Document;
-use crate::document::{self};
 use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
-use crate::parser::rule::RegexRule;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Source;
-use crate::parser::source::Token;
-
-use super::variable::VariableRule;
 
 pub struct ElemStyleRule {
 	start_re: Regex,
@@ -66,7 +58,7 @@ impl ElemStyleRule {
 impl Rule for ElemStyleRule {
 	fn name(&self) -> &'static str { "Element Style" }
 
-	fn next_match(&self, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _parser: &dyn Parser, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re
 			.find_at(cursor.source.content(), cursor.pos)
 			.map_or(None, |m| {

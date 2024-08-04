@@ -8,6 +8,7 @@ use super::rule::Rule;
 use super::source::Cursor;
 use super::source::Source;
 use super::state::StateHolder;
+use crate::document::customstyle::CustomStyleHolder;
 use crate::document::document::Document;
 use crate::document::element::Element;
 use crate::document::layout::LayoutHolder;
@@ -43,7 +44,7 @@ impl ReportColors {
 	}
 }
 
-pub trait Parser: KernelHolder + StyleHolder + LayoutHolder {
+pub trait Parser: KernelHolder + StyleHolder + LayoutHolder + CustomStyleHolder {
 	/// Gets the colors for formatting errors
 	///
 	/// When colors are disabled, all colors should resolve to empty string
@@ -52,7 +53,37 @@ pub trait Parser: KernelHolder + StyleHolder + LayoutHolder {
 	fn rules(&self) -> &Vec<Box<dyn Rule>>;
 	fn rules_mut(&mut self) -> &mut Vec<Box<dyn Rule>>;
 
-	fn add_rule(&mut self, rule: Box<dyn Rule>, after: Option<&'static str>) -> Result<(), String> {
+	fn state(&self) -> Ref<'_, StateHolder>;
+	fn state_mut(&self) -> RefMut<'_, StateHolder>;
+
+	fn has_error(&self) -> bool;
+
+	/// Add an [`Element`] to the [`Document`]
+	fn push<'a>(&self, doc: &dyn Document, elem: Box<dyn Element>);
+
+	/// Parse [`Source`] into a new [`Document`]
+	fn parse<'a>(
+		&self,
+		source: Rc<dyn Source>,
+		parent: Option<&'a dyn Document<'a>>,
+	) -> Box<dyn Document<'a> + 'a>;
+
+	/// Parse [`Source`] into an already existing [`Document`]
+	fn parse_into<'a>(&self, source: Rc<dyn Source>, document: &'a dyn Document<'a>);
+}
+
+pub trait ParserStrategy {
+	fn add_rule(&mut self, rule: Box<dyn Rule>, after: Option<&'static str>) -> Result<(), String>;
+
+	fn update_matches(
+		&self,
+		cursor: &Cursor,
+		matches: &mut Vec<(usize, Option<Box<dyn Any>>)>,
+	) -> (Cursor, Option<&Box<dyn Rule>>, Option<Box<dyn Any>>);
+}
+
+impl<T: Parser> ParserStrategy for T {
+    fn add_rule(&mut self, rule: Box<dyn Rule>, after: Option<&'static str>) -> Result<(), String> {
 		// Error on duplicate rule
 		let rule_name = (*rule).name();
 		if let Err(e) = self.rules().iter().try_for_each(|rule| {
@@ -89,21 +120,13 @@ pub trait Parser: KernelHolder + StyleHolder + LayoutHolder {
 		}
 
 		Ok(())
-	}
+    }
 
-	fn state(&self) -> Ref<'_, StateHolder>;
-	fn state_mut(&self) -> RefMut<'_, StateHolder>;
-
-	fn has_error(&self) -> bool;
-
-	// Update [`matches`] and returns the position of the next matched rule.
-	// If rule is empty, it means that there are no rules left to parse (i.e
-	// end of document).
-	fn update_matches(
-		&self,
-		cursor: &Cursor,
-		matches: &mut Vec<(usize, Option<Box<dyn Any>>)>,
-	) -> (Cursor, Option<&Box<dyn Rule>>, Option<Box<dyn Any>>) {
+    fn update_matches(
+		    &self,
+		    cursor: &Cursor,
+		    matches: &mut Vec<(usize, Option<Box<dyn Any>>)>,
+	    ) -> (Cursor, Option<&Box<dyn Rule>>, Option<Box<dyn Any>>) {
 		// Update matches
 		// TODO: Trivially parellalizable
 		self.rules()
@@ -111,11 +134,12 @@ pub trait Parser: KernelHolder + StyleHolder + LayoutHolder {
 			.zip(matches.iter_mut())
 			.for_each(|(rule, (matched_at, match_data))| {
 				// Don't upate if not stepped over yet
-				if *matched_at > cursor.pos {
+				if *matched_at > cursor.pos && rule.downcast_ref::<crate::elements::customstyle::CustomStyleRule>().is_none() {
+					// TODO: maybe we should expose matches() so it becomes possible to dynamically register a new rule
 					return;
 				}
 
-				(*matched_at, *match_data) = match rule.next_match(cursor) {
+				(*matched_at, *match_data) = match rule.next_match(self, cursor) {
 					None => (usize::MAX, None),
 					Some((mut pos, mut data)) => {
 						// Check if escaped
@@ -136,7 +160,7 @@ pub trait Parser: KernelHolder + StyleHolder + LayoutHolder {
 							}
 
 							// Find next potential match
-							(pos, data) = match rule.next_match(&cursor.at(pos + 1)) {
+							(pos, data) = match rule.next_match(self, &cursor.at(pos + 1)) {
 								Some((new_pos, new_data)) => (new_pos, new_data),
 								None => (usize::MAX, data), // Stop iterating
 							}
@@ -166,18 +190,5 @@ pub trait Parser: KernelHolder + StyleHolder + LayoutHolder {
 			Some(&self.rules()[winner]),
 			std::mem::replace(&mut matches[winner].1, None),
 		)
-	}
-
-	/// Add an [`Element`] to the [`Document`]
-	fn push<'a>(&self, doc: &dyn Document, elem: Box<dyn Element>);
-
-	/// Parse [`Source`] into a new [`Document`]
-	fn parse<'a>(
-		&self,
-		source: Rc<dyn Source>,
-		parent: Option<&'a dyn Document<'a>>,
-	) -> Box<dyn Document<'a> + 'a>;
-
-	/// Parse [`Source`] into an already existing [`Document`]
-	fn parse_into<'a>(&self, source: Rc<dyn Source>, document: &'a dyn Document<'a>);
+    }
 }

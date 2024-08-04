@@ -1,4 +1,5 @@
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserStrategy;
 
 use super::code::CodeRule;
 use super::comment::CommentRule;
@@ -14,6 +15,7 @@ use super::raw::RawRule;
 use super::script::ScriptRule;
 use super::section::SectionRule;
 use super::style::StyleRule;
+use super::customstyle::CustomStyleRule;
 use super::tex::TexRule;
 use super::text::TextRule;
 use super::variable::VariableRule;
@@ -37,6 +39,7 @@ pub fn register<P: Parser>(parser: &mut P) {
 	parser.add_rule(Box::new(LayoutRule::new()), None).unwrap();
 
 	parser.add_rule(Box::new(StyleRule::new()), None).unwrap();
+	parser.add_rule(Box::new(CustomStyleRule{}), None).unwrap();
 	parser.add_rule(Box::new(SectionRule::new()), None).unwrap();
 	parser.add_rule(Box::new(LinkRule::new()), None).unwrap();
 	parser.add_rule(Box::new(TextRule::default()), None).unwrap();

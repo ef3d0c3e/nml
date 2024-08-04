@@ -27,10 +27,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 #[derive(Debug)]
-struct Raw {
-	pub(self) location: Token,
-	pub(self) kind: ElemKind,
-	pub(self) content: String,
+pub struct Raw {
+	pub location: Token,
+	pub kind: ElemKind,
+	pub content: String,
 }
 
 impl Element for Raw {
@@ -265,7 +265,6 @@ impl RegexRule for RawRule {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::compiler::compiler::Target;
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;

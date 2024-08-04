@@ -1,6 +1,10 @@
 use std::cell::RefCell;
 use std::cell::RefMut;
 
+use mlua::Error;
+use mlua::FromLuaMulti;
+use mlua::Function;
+use mlua::IntoLuaMulti;
 use mlua::Lua;
 
 use crate::document::document::Document;
@@ -71,4 +75,20 @@ pub trait KernelHolder {
 	fn get_kernel(&self, name: &str) -> Option<RefMut<'_, Kernel>>;
 
 	fn insert_kernel(&self, name: String, kernel: Kernel) -> RefMut<'_, Kernel>;
+}
+
+/// Runs a lua function with a context
+///
+/// This is the only way lua functions shoule be ran, because exported
+/// functions may require the context in order to operate
+pub fn function_with_context<'lua, A, R>(context: KernelContext, fun: &Function<'lua>, args: A) -> Result<R, Error>
+where
+	A: IntoLuaMulti<'lua>,
+	R: FromLuaMulti<'lua>,
+{
+	CTX.set(Some(unsafe { std::mem::transmute(context) }));
+	let ret = fun.call::<A, R>(args);
+	CTX.set(None);
+
+	ret
 }

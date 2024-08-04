@@ -1,6 +1,6 @@
-use std::{cell::{RefCell, RefMut}, collections::HashMap, rc::Rc};
+use std::{cell::{Ref, RefCell, RefMut}, collections::HashMap, rc::Rc};
 
-use crate::{document::{document::Document, element::Element, layout::{LayoutHolder, LayoutType}, style::{ElementStyle, StyleHolder}}, lua::kernel::{Kernel, KernelHolder}, parser::{parser::{Parser, ReportColors}, rule::Rule, source::{Cursor, Source}, state::StateHolder}};
+use crate::{document::{customstyle::{CustomStyle, CustomStyleHolder}, document::Document, element::Element, layout::{LayoutHolder, LayoutType}, style::{ElementStyle, StyleHolder}}, lua::kernel::{Kernel, KernelHolder}, parser::{parser::{Parser, ReportColors}, rule::Rule, source::{Cursor, Source}, state::StateHolder}};
 
 #[derive(Debug, Clone)]
 pub struct LineCursor
@@ -112,7 +112,7 @@ impl Parser for LsParser
     fn rules(&self) -> &Vec<Box<dyn Rule>> { &self.rules }
     fn rules_mut(&mut self) -> &mut Vec<Box<dyn Rule>> { &mut self.rules }
 
-	fn state(&self) -> std::cell::Ref<'_, StateHolder> { self.state.borrow() }
+	fn state(&self) -> Ref<'_, StateHolder> { self.state.borrow() }
 	fn state_mut(&self) -> std::cell::RefMut<'_, StateHolder> { self.state.borrow_mut() }
 	
 	fn has_error(&self) -> bool { true }
@@ -148,21 +148,31 @@ impl KernelHolder for LsParser
 }
 
 impl StyleHolder for LsParser {
-    fn styles(&self) -> std::cell::Ref<'_, HashMap<String, Rc<dyn ElementStyle>>> {
+    fn element_styles(&self) -> Ref<'_, HashMap<String, Rc<dyn ElementStyle>>> {
         todo!()
     }
 
-    fn styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>> {
+    fn element_styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>> {
         todo!()
     }
 }
 
 impl LayoutHolder for LsParser {
-    fn layouts(&self) -> std::cell::Ref<'_, HashMap<String, Rc<dyn LayoutType>>> {
+    fn layouts(&self) -> Ref<'_, HashMap<String, Rc<dyn LayoutType>>> {
         todo!()
     }
 
     fn layouts_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn LayoutType>>> {
+        todo!()
+    }
+}
+
+impl CustomStyleHolder for LsParser {
+    fn custom_styles(&self) -> Ref<'_, HashMap<String, Rc<dyn CustomStyle>>> {
+        todo!()
+    }
+
+    fn custom_styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn CustomStyle>>> {
         todo!()
     }
 }

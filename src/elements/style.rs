@@ -96,10 +96,6 @@ impl State for StyleState {
 				} // Style not enabled
 				let token = token.as_ref().unwrap();
 
-				//let range = range.as_ref().unwrap();
-
-				//let active_range = range.start .. paragraph.location().end()-1;
-
 				let paragraph = document.last_element::<Paragraph>().unwrap();
 				let paragraph_end = paragraph
 					.content
@@ -112,16 +108,9 @@ impl State for StyleState {
 					})
 					.unwrap();
 
-				// TODO: Allow style to span multiple documents if they don't break paragraph.
 				reports.push(
 					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Unterminated style")
-						//.with_label(
-						//	Label::new((document.source(), active_range.clone()))
-						//	.with_order(0)
-						//	.with_message(format!("Style {} is not terminated before the end of paragraph",
-						//	name.fg(parser.colors().info)))
-						//	.with_color(parser.colors().error))
+						.with_message("Unterminated Style")
 						.with_label(
 							Label::new((token.source(), token.range.clone()))
 								.with_order(1)
@@ -129,13 +118,13 @@ impl State for StyleState {
 									"Style {} starts here",
 									name.fg(parser.colors().info)
 								))
-								.with_color(parser.colors().info),
+								.with_color(parser.colors().error),
 						)
 						.with_label(
 							Label::new(paragraph_end)
 								.with_order(1)
 								.with_message(format!("Paragraph ends here"))
-								.with_color(parser.colors().info),
+								.with_color(parser.colors().error),
 						)
 						.with_note("Styles cannot span multiple documents (i.e @import)")
 						.finish(),
@@ -199,7 +188,7 @@ impl RegexRule for StyleRule {
 			}
 		};
 
-		if let Some(style_state) = state.borrow_mut().as_any_mut().downcast_mut::<StyleState>() {
+		if let Some(style_state) = state.borrow_mut().downcast_mut::<StyleState>() {
 			style_state.toggled[index] = style_state.toggled[index]
 				.clone()
 				.map_or(Some(token.clone()), |_| None);

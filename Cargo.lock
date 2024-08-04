@@ -741,6 +741,7 @@ dependencies = [
  "lsp-server",
  "lsp-types 0.97.0",
  "mlua",
+ "rand 0.8.5",
  "regex",
  "rusqlite",
  "rust-crypto",

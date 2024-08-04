@@ -252,7 +252,7 @@ impl ListRule {
 impl Rule for ListRule {
 	fn name(&self) -> &'static str { "List" }
 
-	fn next_match(&self, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _parser: &dyn Parser, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re
 			.find_at(cursor.source.content(), cursor.pos)
 			.map_or(None, |m| {
@@ -440,7 +440,6 @@ impl Rule for ListRule {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::compiler::compiler::Target;
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;

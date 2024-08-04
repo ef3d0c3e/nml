@@ -48,7 +48,7 @@ pub struct TextRule;
 impl Rule for TextRule {
 	fn name(&self) -> &'static str { "Text" }
 
-	fn next_match(&self, _cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> { None }
+	fn next_match(&self, _parser: &dyn Parser, _cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> { None }
 
 	fn on_match(
 		&self,

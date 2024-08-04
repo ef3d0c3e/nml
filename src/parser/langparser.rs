@@ -9,6 +9,8 @@ use std::rc::Rc;
 use ariadne::Label;
 use ariadne::Report;
 
+use crate::document::customstyle::CustomStyle;
+use crate::document::customstyle::CustomStyleHolder;
 use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
 use crate::document::element::ContainerElement;
@@ -29,6 +31,7 @@ use crate::parser::source::SourceFile;
 use crate::parser::source::VirtualSource;
 
 use super::parser::Parser;
+use super::parser::ParserStrategy;
 use super::parser::ReportColors;
 use super::rule::Rule;
 use super::source::Cursor;
@@ -49,6 +52,7 @@ pub struct LangParser {
 	pub kernels: RefCell<HashMap<String, Kernel>>,
 	pub styles: RefCell<HashMap<String, Rc<dyn ElementStyle>>>,
 	pub layouts: RefCell<HashMap<String, Rc<dyn LayoutType>>>,
+	pub custom_styles: RefCell<HashMap<String, Rc<dyn CustomStyle>>>,
 }
 
 impl LangParser {
@@ -61,6 +65,7 @@ impl LangParser {
 			kernels: RefCell::new(HashMap::new()),
 			styles: RefCell::new(HashMap::new()),
 			layouts: RefCell::new(HashMap::new()),
+			custom_styles: RefCell::new(HashMap::new()),
 		};
 		// Register rules
 		register(&mut s);
@@ -316,21 +321,29 @@ impl KernelHolder for LangParser {
 }
 
 impl StyleHolder for LangParser {
-	fn styles(&self) -> Ref<'_, HashMap<String, Rc<dyn ElementStyle>>> { self.styles.borrow() }
+	fn element_styles(&self) -> Ref<'_, HashMap<String, Rc<dyn ElementStyle>>> {
+		self.styles.borrow()
+	}
 
-	fn styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>> {
+	fn element_styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>> {
 		self.styles.borrow_mut()
 	}
 }
 
 impl LayoutHolder for LangParser {
-	fn layouts(&self) -> Ref<'_, HashMap<String, Rc<dyn crate::document::layout::LayoutType>>> {
-		self.layouts.borrow()
+	fn layouts(&self) -> Ref<'_, HashMap<String, Rc<dyn LayoutType>>> { self.layouts.borrow() }
+
+	fn layouts_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn LayoutType>>> {
+		self.layouts.borrow_mut()
+	}
+}
+
+impl CustomStyleHolder for LangParser {
+	fn custom_styles(&self) -> Ref<'_, HashMap<String, Rc<dyn CustomStyle>>> {
+		self.custom_styles.borrow()
 	}
 
-	fn layouts_mut(
-		&self,
-	) -> RefMut<'_, HashMap<String, Rc<dyn crate::document::layout::LayoutType>>> {
-		self.layouts.borrow_mut()
+	fn custom_styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn CustomStyle>>> {
+		self.custom_styles.borrow_mut()
 	}
 }

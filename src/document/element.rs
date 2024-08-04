@@ -3,7 +3,6 @@ use std::str::FromStr;
 use crate::compiler::compiler::Compiler;
 use crate::elements::reference::Reference;
 use crate::parser::source::Token;
-use crate::parser::util::PropertyParser;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 

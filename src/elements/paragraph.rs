@@ -108,7 +108,7 @@ impl ParagraphRule {
 impl Rule for ParagraphRule {
 	fn name(&self) -> &'static str { "Paragraphing" }
 
-	fn next_match(&self, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _parser: &dyn Parser, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.re
 			.find_at(cursor.source.content(), cursor.pos)
 			.and_then(|m| Some((m.start(), Box::new([false; 0]) as Box<dyn Any>)))

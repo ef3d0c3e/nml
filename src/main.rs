@@ -215,7 +215,13 @@ fn main() -> ExitCode {
 			}
 		}
 		match std::fs::metadata(&output) {
-			Ok(_) => {}
+			Ok(output_meta) => {
+				if !output_meta.is_dir()
+				{
+					eprintln!("Input is a directory, but ouput is not a directory, halting");
+					return ExitCode::FAILURE;
+				}
+			}
 			Err(e) => {
 				eprintln!("Unable to get metadata for output `{output}`: {e}");
 				return ExitCode::FAILURE;
