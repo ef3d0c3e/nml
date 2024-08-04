@@ -29,6 +29,9 @@ pub trait Rule {
 
 	/// Registers default styles
 	fn register_styles(&self, _parser: &dyn Parser) {}
+
+	/// Registers default layouts
+	fn register_layouts(&self, _parser: &dyn Parser) {}
 }
 
 impl core::fmt::Debug for dyn Rule {
@@ -36,45 +39,6 @@ impl core::fmt::Debug for dyn Rule {
 		write!(f, "Rule{{{}}}", self.name())
 	}
 }
-
-/*
-pub trait RegexRule: Rule
-{
-	fn name(&self) -> &'static str;
-
-	/// Returns the rule's regex
-	fn regex(&self) -> &regex::Regex;
-	/// Callback on regex rule match
-	fn on_regex_match<'a>(&self, parser: &Parser, document: &Document, token: Token<'a>, matches: regex::Captures) -> Vec<Report<'a, (String, Range<usize>)>>;
-}
-
-impl<T: RegexRule> Rule for T {
-	fn name(&self) -> &'static str { RegexRule::name(self) }
-
-	/// Finds the next match starting from [`cursor`]
-	fn next_match<'a>(&self, cursor: &'a Cursor) -> Option<usize>
-	{
-		let re = self.regex();
-
-		let content = cursor.file.content.as_ref().unwrap();
-		match re.find_at(content.as_str(), cursor.pos)
-		{
-			Some(m) => Some(m.start()),
-			None => None,
-		}
-	}
-
-	fn on_match<'a>(&self, parser: &Parser, document: &Document, cursor: Cursor<'a>) -> (Cursor<'a>, Vec<Report<'a, (String, Range<usize>)>>)
-	{
-		let content = cursor.file.content.as_ref().unwrap();
-		let matches = self.regex().captures_at(content.as_str(), cursor.pos).unwrap();
-		let token = Token::new(cursor.pos, matches.get(0).unwrap().len(), cursor.file);
-
-		let token_end = token.end();
-		(cursor.at(token_end), self.on_regex_match(parser, document, token, matches))
-	}
-}
-*/
 
 pub trait RegexRule {
 	fn name(&self) -> &'static str;
@@ -94,6 +58,7 @@ pub trait RegexRule {
 
 	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 	fn register_styles(&self, _parser: &dyn Parser) {}
+	fn register_layouts(&self, _parser: &dyn Parser) {}
 }
 
 impl<T: RegexRule> Rule for T {
@@ -154,5 +119,9 @@ impl<T: RegexRule> Rule for T {
 
 	fn register_styles(&self, parser: &dyn Parser) {
 		self.register_styles(parser);
+	}
+
+	fn register_layouts(&self, parser: &dyn Parser) {
+		self.register_layouts(parser);
 	}
 }

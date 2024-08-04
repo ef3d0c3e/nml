@@ -216,7 +216,7 @@ mod tests {
 
 	#[test]
 	fn sort() {
-		let mut entries: Vec<(String, String, Option<String>)> = vec![
+		let entries: Vec<(String, String, Option<String>)> = vec![
 			("Index".into(), "".into(), None),
 			("AB".into(), "".into(), Some("Index".into())),
 			("Getting Started".into(), "".into(), Some("Index".into())),

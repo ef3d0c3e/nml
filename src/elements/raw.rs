@@ -283,7 +283,6 @@ Break{?[kind=block] Raw?}NewParagraph{?<b>?}
 			None,
 		));
 		let parser = LangParser::default();
-		let compiler = Compiler::new(Target::HTML, None);
 		let doc = parser.parse(source, None);
 
 		validate_document!(doc.content().borrow(), 0,
@@ -293,6 +292,29 @@ Break{?[kind=block] Raw?}NewParagraph{?<b>?}
 				Text;
 				Raw { kind == ElemKind::Inline, content == "<b>" };
 			};
+		);
+	}
+
+	#[test]
+	fn lua() {
+		let source = Rc::new(SourceFile::with_content(
+				"".to_string(),
+				r#"
+Break%<nml.raw.push("block", "Raw")>%NewParagraph%<nml.raw.push("inline", "<b>")>%
+				"#
+				.to_string(),
+				None,
+		));
+		let parser = LangParser::default();
+		let doc = parser.parse(source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+		Paragraph;
+		Raw { kind == ElemKind::Block, content == "Raw" };
+		Paragraph {
+			Text;
+			Raw { kind == ElemKind::Inline, content == "<b>" };
+		};
 		);
 	}
 }

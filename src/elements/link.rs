@@ -4,6 +4,7 @@ use crate::document::document::Document;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -14,12 +15,14 @@ use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
+use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
 use std::ops::Range;
 use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Link {
@@ -205,8 +208,56 @@ impl RegexRule for LinkRule {
 		return reports;
 	}
 
-	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+		let mut bindings = vec![];
+
+		bindings.push((
+			"push".to_string(),
+			lua.create_function(|_, (display, url): (String, String)| {
+				let mut result = Ok(());
+				CTX.with_borrow(|ctx| {
+					ctx.as_ref().map(|ctx| {
+						let source = Rc::new(VirtualSource::new(
+							ctx.location.clone(),
+							"Link Display".to_string(),
+							display,
+						));
+						let display_content =
+							match util::parse_paragraph(ctx.parser, source, ctx.document) {
+								Err(err) => {
+									result = Err(BadArgument {
+										to: Some("push".to_string()),
+										pos: 1,
+										name: Some("display".to_string()),
+										cause: Arc::new(mlua::Error::external(format!(
+											"Failed to parse link display: {err}"
+										))),
+									});
+									return;
+								}
+								Ok(mut paragraph) => {
+									std::mem::replace(&mut paragraph.content, vec![])
+								}
+							};
+
+						ctx.parser.push(
+							ctx.document,
+							Box::new(Link {
+								location: ctx.location.clone(),
+								display: display_content,
+								url,
+							}),
+						);
+					})
+				});
+
+				result
+			})
+			.unwrap(),
+		));
+
+		Some(bindings)
+	}
 }
 
 #[cfg(test)]
@@ -227,6 +278,36 @@ mod tests {
 			r#"
 Some [link](url).
 [**BOLD link**](another url)
+			"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let doc = parser.parse(source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Paragraph {
+				Text { content == "Some " };
+				Link { url == "url" } { Text { content == "link" }; };
+				Text { content == "." };
+				Link { url == "another url" } {
+					Style;
+					Text { content == "BOLD link" };
+					Style;
+				};
+			};
+		);
+	}
+
+	#[test]
+	fn lua() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+Some %<nml.link.push("link", "url")>%.
+%<
+nml.link.push("**BOLD link**", "another url")
+>%
 			"#
 			.to_string(),
 			None,

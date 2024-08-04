@@ -3,6 +3,8 @@ use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::document::layout::LayoutType;
+use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -16,6 +18,7 @@ use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
 use lazy_static::lazy_static;
+use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
 use regex::Captures;
@@ -27,6 +30,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
+use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LayoutToken {
@@ -35,31 +40,20 @@ pub(crate) enum LayoutToken {
 	End,
 }
 
-/// Represents the type of a layout
-pub trait LayoutType: core::fmt::Debug {
-	/// Name of the layout
-	fn name(&self) -> &'static str;
+impl FromStr for LayoutToken {
+	type Err = String;
 
-	/// Parses layout properties
-	fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String>;
-
-	/// Expected number of blocks
-	fn expects(&self) -> Range<usize>;
-
-	/// Compile layout
-	fn compile(
-		&self,
-		token: LayoutToken,
-		id: usize,
-		properties: &Option<Box<dyn Any>>,
-		compiler: &Compiler,
-		document: &dyn Document,
-	) -> Result<String, String>;
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s {
+			"Begin" | "begin" => Ok(LayoutToken::Begin),
+			"Next" | "next" => Ok(LayoutToken::Next),
+			"End" | "end" => Ok(LayoutToken::End),
+			_ => Err(format!("Unable to find LayoutToken with name: {s}")),
+		}
+	}
 }
 
 mod default_layouts {
-	use std::any::Any;
-
 	use crate::parser::util::Property;
 	use crate::parser::util::PropertyParser;
 
@@ -291,19 +285,10 @@ impl State for LayoutState {
 
 pub struct LayoutRule {
 	re: [Regex; 3],
-	layouts: HashMap<String, Rc<dyn LayoutType>>,
 }
 
 impl LayoutRule {
 	pub fn new() -> Self {
-		let mut layouts: HashMap<String, Rc<dyn LayoutType>> = HashMap::new();
-
-		let layout_centered = default_layouts::Centered::default();
-		layouts.insert(layout_centered.name().to_string(), Rc::new(layout_centered));
-
-		let layout_split = default_layouts::Split::default();
-		layouts.insert(layout_split.name().to_string(), Rc::new(layout_split));
-
 		Self {
 			re: [
 				RegexBuilder::new(
@@ -325,7 +310,23 @@ impl LayoutRule {
 				.build()
 				.unwrap(),
 			],
-			layouts,
+		}
+	}
+
+	pub fn initialize_state(parser: &dyn Parser) -> Rc<RefCell<dyn State>> {
+		let query = parser.state().query(&STATE_NAME);
+		match query {
+			Some(state) => state,
+			None => {
+				// Insert as a new state
+				match parser.state_mut().insert(
+					STATE_NAME.clone(),
+					Rc::new(RefCell::new(LayoutState { stack: vec![] })),
+				) {
+					Err(_) => panic!("Unknown error"),
+					Ok(state) => state,
+				}
+			}
 		}
 	}
 
@@ -391,20 +392,7 @@ impl RegexRule for LayoutRule {
 	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
 
-		let query = parser.state().query(&STATE_NAME);
-		let state = match query {
-			Some(state) => state,
-			None => {
-				// Insert as a new state
-				match parser.state_mut().insert(
-					STATE_NAME.clone(),
-					Rc::new(RefCell::new(LayoutState { stack: vec![] })),
-				) {
-					Err(_) => panic!("Unknown error"),
-					Ok(state) => state,
-				}
-			}
-		};
+		let state = LayoutRule::initialize_state(parser);
 
 		if index == 0
 		// BEGIN_LAYOUT
@@ -465,7 +453,7 @@ impl RegexRule for LayoutRule {
 					}
 
 					// Get layout
-					let layout_type = match self.layouts.get(trimmed) {
+					let layout_type = match parser.get_layout(trimmed) {
 						None => {
 							reports.push(
 								Report::build(ReportKind::Error, token.source(), name.start())
@@ -663,7 +651,212 @@ impl RegexRule for LayoutRule {
 	}
 
 	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
+	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+		let mut bindings = vec![];
+
+		bindings.push((
+			"push".to_string(),
+			lua.create_function(
+				|_, (token, layout, properties): (String, String, String)| {
+					let mut result = Ok(());
+
+					// Parse token
+					let layout_token = match LayoutToken::from_str(token.as_str())
+					{
+						Err(err) => {
+							return Err(BadArgument {
+								to: Some("push".to_string()),
+								pos: 1,
+								name: Some("token".to_string()),
+								cause: Arc::new(mlua::Error::external(err))
+							});
+						},
+						Ok(token) => token,
+					};
+
+					CTX.with_borrow(|ctx| {
+						ctx.as_ref().map(|ctx| {
+							// Make sure the state has been initialized
+							let state = LayoutRule::initialize_state(ctx.parser);
+
+							// Get layout
+							let layout_type = match ctx.parser.get_layout(layout.as_str())
+							{
+								None => {
+									result = Err(BadArgument {
+										to: Some("push".to_string()),
+										pos: 2,
+										name: Some("layout".to_string()),
+										cause: Arc::new(mlua::Error::external(format!(
+													"Cannot find layout with name `{layout}`"
+										))),
+									});
+									return;
+								},
+								Some(layout) => layout,
+							};
+
+							// Parse properties
+							let layout_properties = match layout_type.parse_properties(properties.as_str()) {
+								Err(err) => {
+									result = Err(BadArgument {
+										to: Some("push".to_string()),
+										pos: 3,
+										name: Some("properties".to_string()),
+										cause: Arc::new(mlua::Error::external(err)),
+									});
+									return;
+								},
+								Ok(properties) => properties,
+							};
+
+							let id = match layout_token {
+								LayoutToken::Begin => {
+									ctx.parser.push(
+										ctx.document,
+										Box::new(Layout {
+											location: ctx.location.clone(),
+											layout: layout_type.clone(),
+											id: 0,
+											token: LayoutToken::Begin,
+											properties: layout_properties,
+										}),
+									);
+
+									state
+										.borrow_mut()
+										.downcast_mut::<LayoutState>()
+										.map_or_else(
+											|| panic!("Invalid state at: `{}`", STATE_NAME.as_str()),
+											|s| s.stack.push((vec![ctx.location.clone()], layout_type.clone())),
+										);
+									return;
+								},
+								LayoutToken::Next => {
+									let mut state_borrow = state.borrow_mut();
+									let state = state_borrow.downcast_mut::<LayoutState>().unwrap();
+
+									let (tokens, current_layout_type) = match state.stack.last_mut() {
+										None => {
+											result = Err(BadArgument {
+												to: Some("push".to_string()),
+												pos: 1,
+												name: Some("token".to_string()),
+												cause: Arc::new(mlua::Error::external(format!("Unable set next layout: No active layout found"))),
+											});
+											return;
+										}
+										Some(last) => last,
+									};
+
+									if !Rc::ptr_eq(&layout_type, current_layout_type) {
+										result = Err(BadArgument {
+											to: Some("push".to_string()),
+											pos: 2,
+											name: Some("layout".to_string()),
+											cause: Arc::new(mlua::Error::external(format!("Invalid layout next, current layout is {} vs {}",
+												current_layout_type.name(),
+												layout_type.name())))
+										});
+										return;
+									}
+
+									if layout_type.expects().end < tokens.len()
+										// Too many blocks
+									{
+										result = Err(BadArgument {
+											to: Some("push".to_string()),
+											pos: 1,
+											name: Some("token".to_string()),
+											cause: Arc::new(mlua::Error::external(format!("Unable set layout next: layout {} expect at most {} blocks, currently at {} blocks", 
+														layout_type.name(),
+														layout_type.expects().end,
+														tokens.len()
+														))),
+										});
+										return;
+									}
+
+									tokens.push(ctx.location.clone());
+									tokens.len() - 1
+								},
+								LayoutToken::End => {
+									let mut state_borrow = state.borrow_mut();
+									let state = state_borrow.downcast_mut::<LayoutState>().unwrap();
+
+									let (tokens, current_layout_type) = match state.stack.last_mut() {
+										None => {
+											result = Err(BadArgument {
+												to: Some("push".to_string()),
+												pos: 1,
+												name: Some("token".to_string()),
+												cause: Arc::new(mlua::Error::external(format!("Unable set layout end: No active layout found"))),
+											});
+											return;
+										}
+										Some(last) => last,
+									};
+
+									if !Rc::ptr_eq(&layout_type, current_layout_type) {
+										result = Err(BadArgument {
+											to: Some("push".to_string()),
+											pos: 2,
+											name: Some("layout".to_string()),
+											cause: Arc::new(mlua::Error::external(format!("Invalid layout end, current layout is {} vs {}",
+														current_layout_type.name(),
+														layout_type.name())))
+										});
+										return;
+									}
+
+									if layout_type.expects().start > tokens.len()
+										// Not enough blocks
+									{
+										result = Err(BadArgument {
+											to: Some("push".to_string()),
+											pos: 1,
+											name: Some("token".to_string()),
+											cause: Arc::new(mlua::Error::external(format!("Unable set next layout: layout {} expect at least {} blocks, currently at {} blocks", 
+														layout_type.name(),
+														layout_type.expects().start,
+														tokens.len()
+											))),
+										});
+										return;
+									}
+
+									let id = tokens.len();
+									state.stack.pop();
+									id
+								}
+							};
+
+							ctx.parser.push(
+								ctx.document,
+								Box::new(Layout {
+									location: ctx.location.clone(),
+									layout: layout_type.clone(),
+									id,
+									token: layout_token,
+									properties: layout_properties,
+								}),
+							);
+						})
+					});
+
+					result
+				},
+			)
+			.unwrap(),
+		));
+
+		Some(bindings)
+	}
+
+	fn register_layouts(&self, parser: &dyn Parser) {
+		parser.insert_layout(Rc::new(default_layouts::Centered::default()));
+		parser.insert_layout(Rc::new(default_layouts::Split::default()));
+	}
 }
 
 #[cfg(test)]
@@ -694,6 +887,58 @@ mod tests {
 		E
 	#+LAYOUT_END
 #+LAYOUT_END
+"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let doc = parser.parse(source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Layout { token == LayoutToken::Begin, id == 0 };
+			Paragraph {
+				Text { content == "A" };
+			};
+			Layout { token == LayoutToken::Begin, id == 0 };
+			Paragraph {
+				Text { content == "B" };
+			};
+			Layout { token == LayoutToken::End, id == 1 };
+			Layout { token == LayoutToken::Next, id == 1 };
+			Paragraph {
+				Text { content == "C" };
+			};
+			Layout { token == LayoutToken::Begin, id == 0 };
+			Paragraph {
+				Text { content == "D" };
+			};
+			Layout { token == LayoutToken::Next, id == 1 };
+			Paragraph {
+				Text { content == "E" };
+			};
+			Layout { token == LayoutToken::End, id == 2 };
+			Layout { token == LayoutToken::End, id == 2 };
+		);
+	}
+
+	#[test]
+	fn lua() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+%<nml.layout.push("begin", "Split", "style=A")>%
+	A
+%<nml.layout.push("Begin", "Centered", "style=B")>%
+		B
+%<nml.layout.push("end", "Centered", "")>%
+%<nml.layout.push("next", "Split", "style=C")>%
+	C
+%<nml.layout.push("Begin", "Split", "style=D")>%
+		D
+%<nml.layout.push("Next", "Split", "style=E")>%
+		E
+%<nml.layout.push("End", "Split", "")>%
+%<nml.layout.push("End", "Split", "")>%
 "#
 			.to_string(),
 			None,

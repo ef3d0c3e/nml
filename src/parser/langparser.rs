@@ -16,6 +16,8 @@ use crate::document::element::DocumentEnd;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::langdocument::LangDocument;
+use crate::document::layout::LayoutHolder;
+use crate::document::layout::LayoutType;
 use crate::document::style::ElementStyle;
 use crate::document::style::StyleHolder;
 use crate::elements::paragraph::Paragraph;
@@ -46,6 +48,7 @@ pub struct LangParser {
 	pub state: RefCell<StateHolder>,
 	pub kernels: RefCell<HashMap<String, Kernel>>,
 	pub styles: RefCell<HashMap<String, Rc<dyn ElementStyle>>>,
+	pub layouts: RefCell<HashMap<String, Rc<dyn LayoutType>>>,
 }
 
 impl LangParser {
@@ -57,10 +60,10 @@ impl LangParser {
 			state: RefCell::new(StateHolder::new()),
 			kernels: RefCell::new(HashMap::new()),
 			styles: RefCell::new(HashMap::new()),
+			layouts: RefCell::new(HashMap::new()),
 		};
 		// Register rules
 		register(&mut s);
-
 
 		// Register default kernel
 		s.kernels
@@ -71,6 +74,12 @@ impl LangParser {
 		for rule in &s.rules {
 			rule.register_styles(&s);
 		}
+
+		// Register default layouts
+		for rule in &s.rules {
+			rule.register_layouts(&s);
+		}
+
 		s
 	}
 
@@ -311,5 +320,17 @@ impl StyleHolder for LangParser {
 
 	fn styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>> {
 		self.styles.borrow_mut()
+	}
+}
+
+impl LayoutHolder for LangParser {
+	fn layouts(&self) -> Ref<'_, HashMap<String, Rc<dyn crate::document::layout::LayoutType>>> {
+		self.layouts.borrow()
+	}
+
+	fn layouts_mut(
+		&self,
+	) -> RefMut<'_, HashMap<String, Rc<dyn crate::document::layout::LayoutType>>> {
+		self.layouts.borrow_mut()
 	}
 }

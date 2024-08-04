@@ -50,8 +50,7 @@ impl Element for Section {
 					let numbering = compiler.section_counter(self.depth);
 
 					let mut result = String::new();
-					for num in numbering.iter()
-					{
+					for num in numbering.iter() {
 						result = result + num.to_string().as_str() + ".";
 					}
 					result += " ";
@@ -409,18 +408,18 @@ mod section_style {
 }
 
 #[cfg(test)]
-mod tests
-{
-	use crate::{parser::{langparser::LangParser, source::SourceFile}, validate_document};
+mod tests {
+	use crate::parser::langparser::LangParser;
+	use crate::parser::source::SourceFile;
+	use crate::validate_document;
 
-use super::*;
+	use super::*;
 
 	#[test]
-	fn parser()
-	{
+	fn parser() {
 		let source = Rc::new(SourceFile::with_content(
-				"".to_string(),
-				r#"
+			"".to_string(),
+			r#"
 # 1
 ##+ 2
 ###* 3
@@ -428,8 +427,38 @@ use super::*;
 #####*+ 5
 ######{refname} 6
 		"#
-		.to_string(),
-		None,
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let doc = parser.parse(source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Section { depth == 1, title == "1" };
+			Section { depth == 2, title == "2", kind == section_kind::NO_TOC };
+			Section { depth == 3, title == "3", kind == section_kind::NO_NUMBER };
+			Section { depth == 4, title == "4", kind == section_kind::NO_NUMBER | section_kind::NO_TOC };
+			Section { depth == 5, title == "5", kind == section_kind::NO_NUMBER | section_kind::NO_TOC };
+			Section { depth == 6, title == "6", reference == Some("refname".to_string()) };
+		);
+	}
+
+	#[test]
+	fn lua() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+%<
+nml.section.push("1", 1, "", nil)
+nml.section.push("2", 2, "+", nil)
+nml.section.push("3", 3, "*", nil)
+nml.section.push("4", 4, "+*", nil)
+nml.section.push("5", 5, "*+", nil)
+nml.section.push("6", 6, "", "refname")
+>%
+		"#
+			.to_string(),
+			None,
 		));
 		let parser = LangParser::default();
 		let doc = parser.parse(source, None);
