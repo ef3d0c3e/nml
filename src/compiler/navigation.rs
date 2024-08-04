@@ -76,34 +76,28 @@ impl NavEntry {
 		result
 	}
 
-	/// Gets the insert index of the entry inside an already sorted entry list
 	fn sort_entry(
-		title: &String,
-		previous: &Option<String>,
-		entries: &Vec<(String, String, Option<String>)>,
-	) -> usize {
-		let mut insert_at = 0;
-		if let Some(previous) = &previous
-		// Using sort key
-		{
-			for (i, (ent_title, _, _)) in entries.iter().enumerate() {
-				if ent_title == previous {
-					insert_at = i + 1;
-					break;
+		left: &(String, String, Option<String>),
+		right: &(String, String, Option<String>),
+	) -> std::cmp::Ordering {
+		match (&left.2, &right.2) {
+			(Some(_), Some(_)) => left.0.cmp(&right.0),
+			(Some(lp), None) => {
+				if &right.0 == lp {
+					std::cmp::Ordering::Greater
+				} else {
+					left.0.cmp(&right.0)
 				}
 			}
-		}
-
-		// Then sort alphabetically
-		for (ent_title, _, ent_previous) in entries.iter().skip(insert_at) {
-			if (previous.is_some() && ent_previous != previous) || ent_title > title {
-				break;
+			(None, Some(rp)) => {
+				if &left.0 == rp {
+					std::cmp::Ordering::Less
+				} else {
+					left.0.cmp(&right.0)
+				}
 			}
-
-			insert_at += 1;
+			(None, None) => left.0.cmp(&right.0),
 		}
-
-		insert_at
 	}
 }
 
@@ -196,47 +190,49 @@ pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<NavEntry, Strin
 		}
 		all_paths.insert(path.clone(), title.clone());
 
-		pent.entries.insert(
-			NavEntry::sort_entry(title, &previous, &pent.entries),
-			(title.clone(), path.clone(), previous),
-		);
+		pent.entries.push((title.clone(), path.clone(), previous));
 	}
+
+	// Sort entries
+	fn sort_entries(nav: &mut NavEntry) {
+		nav.entries
+			.sort_unstable_by(|l, r| NavEntry::sort_entry(l, r));
+
+		for (_, child) in &mut nav.children {
+			sort_entries(child);
+		}
+	}
+	sort_entries(&mut nav);
 
 	Ok(nav)
 }
 
 #[cfg(test)]
 mod tests {
+	use rand::rngs::OsRng;
+	use rand::RngCore;
+
 	use super::*;
 
 	#[test]
 	fn sort() {
-		let entries: Vec<(String, String, Option<String>)> = vec![
-			("Root".into(), "".into(), None),
-			("First".into(), "".into(), Some("Root".into())),
-			("1".into(), "".into(), Some("First".into())),
-			("2".into(), "".into(), Some("First".into())),
+		let mut entries: Vec<(String, String, Option<String>)> = vec![
+			("Index".into(), "".into(), None),
+			("AB".into(), "".into(), Some("Index".into())),
+			("Getting Started".into(), "".into(), Some("Index".into())),
+			("Sections".into(), "".into(), Some("Getting Started".into())),
+			("Style".into(), "".into(), Some("Getting Started".into())),
 		];
+		let mut shuffled = entries.clone();
+		for _ in 0..10 {
+			for i in 0..5 {
+				let pos = OsRng.next_u64() % entries.len() as u64;
+				shuffled.swap(i, pos as usize);
+			}
 
-		assert_eq!(
-			NavEntry::sort_entry(&"E".into(), &Some("Root".into()), &entries),
-			1
-		);
-		assert_eq!(
-			NavEntry::sort_entry(&"G".into(), &Some("Root".into()), &entries),
-			2
-		);
-		// Orphans
-		assert_eq!(NavEntry::sort_entry(&"Q".into(), &None, &entries), 0);
-		assert_eq!(NavEntry::sort_entry(&"S".into(), &None, &entries), 4);
+			shuffled.sort_by(|l, r| NavEntry::sort_entry(l, r));
 
-		assert_eq!(
-			NavEntry::sort_entry(&"1.1".into(), &Some("First".into()), &entries),
-			3
-		);
-		assert_eq!(
-			NavEntry::sort_entry(&"2.1".into(), &Some("First".into()), &entries),
-			4
-		);
+			assert_eq!(shuffled, entries);
+		}
 	}
 }

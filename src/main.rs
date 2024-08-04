@@ -1,4 +1,3 @@
-#![feature(char_indices_offset)]
 mod cache;
 mod compiler;
 mod document;
