@@ -24,6 +24,7 @@ use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::document::references::validate_refname;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -333,7 +334,7 @@ impl RegexRule for MediaRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
@@ -377,7 +378,7 @@ impl RegexRule for MediaRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(parser.colors(), &token, &matches.get(3)) {
+		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(3)) {
 			Ok(pm) => pm,
 			Err(report) => {
 				reports.push(report);
@@ -401,10 +402,10 @@ impl RegexRule for MediaRule {
 										Label::new((token.source().clone(), token.range.clone()))
 											.with_message(format!(
 												"Property `type: {}` cannot be converted: {}",
-												prop.fg(parser.colors().info),
-												err.fg(parser.colors().error)
+												prop.fg(state.parser.colors().info),
+												err.fg(state.parser.colors().error)
 											))
-											.with_color(parser.colors().warning),
+											.with_color(state.parser.colors().warning),
 									)
 									.finish(),
 							);
@@ -420,7 +421,7 @@ impl RegexRule for MediaRule {
 										token.start() + 1..token.end(),
 								))
 								.with_message(format!("{err}. Required because mediatype could not be detected"))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 							)
 							.finish(),
 						);
@@ -454,7 +455,7 @@ impl RegexRule for MediaRule {
 				if source.content().is_empty() {
 					None
 				} else {
-					match parse_paragraph(parser, source, document) {
+					match parse_paragraph(state, source, document) {
 						Ok(paragraph) => Some(*paragraph),
 						Err(err) => {
 							reports.push(
@@ -465,7 +466,7 @@ impl RegexRule for MediaRule {
 											.with_message(format!(
 												"Could not parse description: {err}"
 											))
-											.with_color(parser.colors().error),
+											.with_color(state.parser.colors().error),
 									)
 									.finish(),
 							);
@@ -480,7 +481,7 @@ impl RegexRule for MediaRule {
 		let mut group = match document.last_element_mut::<Media>() {
 			Some(group) => group,
 			None => {
-				parser.push(
+				state.parser.push(
 					document,
 					Box::new(Media {
 						location: token.clone(),
@@ -507,7 +508,7 @@ impl RegexRule for MediaRule {
 					.with_label(
 						Label::new((token.source().clone(), token.range.clone()))
 							.with_message(err)
-							.with_color(parser.colors().error),
+							.with_color(state.parser.colors().error),
 					)
 					.finish(),
 			);
@@ -515,8 +516,6 @@ impl RegexRule for MediaRule {
 
 		reports
 	}
-
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }
 
 #[cfg(test)]
@@ -550,7 +549,7 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		let borrow = doc.content().borrow();
 		let group = borrow.first().as_ref().unwrap().as_container().unwrap();

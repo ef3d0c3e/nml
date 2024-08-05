@@ -3,14 +3,13 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
-use mlua::Function;
-use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
 use std::ops::Range;
@@ -60,7 +59,7 @@ impl RegexRule for CommentRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a dyn Document,
 		token: Token,
 		matches: Captures,
@@ -78,7 +77,7 @@ impl RegexRule for CommentRule {
 							.with_label(
 								Label::new((token.source(), comment.range()))
 									.with_message("Comment is empty")
-									.with_color(parser.colors().warning),
+									.with_color(state.parser.colors().warning),
 							)
 							.finish(),
 					);
@@ -88,7 +87,7 @@ impl RegexRule for CommentRule {
 			}
 		};
 
-		parser.push(document, Box::new(Comment::new(token.clone(), content)));
+		state.parser.push(document, Box::new(Comment::new(token.clone(), content)));
 
 		return reports;
 	}
@@ -118,7 +117,7 @@ COMMENT ::Test
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

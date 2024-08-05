@@ -21,6 +21,7 @@ use document::document::Document;
 use getopts::Options;
 use parser::langparser::LangParser;
 use parser::parser::Parser;
+use parser::parser::ParserState;
 use rusqlite::Connection;
 use walkdir::WalkDir;
 
@@ -46,13 +47,13 @@ NML version: 0.4\n"
 	);
 }
 
-fn parse(input: &str, debug_opts: &Vec<String>) -> Result<Box<dyn Document<'static>>, String> {
+fn parse(parser: &LangParser, input: &str, debug_opts: &Vec<String>) -> Result<Box<dyn Document<'static>>, String> {
 	println!("Parsing {input}...");
 	let parser = LangParser::default();
 
 	// Parse
 	let source = SourceFile::new(input.to_string(), None).unwrap();
-	let doc = parser.parse(Rc::new(source), None);
+	let doc = parser.parse(ParserState::new(&parser, None), Rc::new(source), None);
 
 	if debug_opts.contains(&"ast".to_string()) {
 		println!("-- BEGIN AST DEBUGGING --");
@@ -106,6 +107,7 @@ fn process(
 	CompiledDocument::init_cache(&con)
 		.map_err(|err| format!("Failed to initialize cached document table: {err}"))?;
 
+	let parser = LangParser::default();
 	for file in files {
 		let meta = std::fs::metadata(&file)
 			.map_err(|err| format!("Failed to get metadata for `{file:#?}`: {err}"))?;
@@ -123,7 +125,7 @@ fn process(
 
 		let parse_and_compile = || -> Result<CompiledDocument, String> {
 			// Parse
-			let doc = parse(file.to_str().unwrap(), debug_opts)?;
+			let doc = parse(&parser, file.to_str().unwrap(), debug_opts)?;
 
 			// Compile
 			let compiler = Compiler::new(target, db_path.clone());

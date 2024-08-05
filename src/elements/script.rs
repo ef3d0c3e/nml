@@ -2,6 +2,7 @@ use crate::document::document::Document;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelContext;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -84,7 +85,7 @@ impl RegexRule for ScriptRule {
 	fn on_regex_match<'a>(
 		&self,
 		index: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a dyn Document<'a>,
 		token: Token,
 		matches: Captures,
@@ -93,7 +94,7 @@ impl RegexRule for ScriptRule {
 
 		let kernel_name = match matches.get(1) {
 			None => "main".to_string(),
-			Some(name) => match ScriptRule::validate_kernel_name(parser.colors(), name.as_str()) {
+			Some(name) => match ScriptRule::validate_kernel_name(state.parser.colors(), name.as_str()) {
 				Ok(name) => name,
 				Err(e) => {
 					reports.push(
@@ -102,7 +103,7 @@ impl RegexRule for ScriptRule {
 							.with_label(
 								Label::new((token.source(), name.range()))
 									.with_message(e)
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -110,9 +111,12 @@ impl RegexRule for ScriptRule {
 				}
 			},
 		};
-		let kernel = parser
-			.get_kernel(kernel_name.as_str())
-			.unwrap_or_else(|| parser.insert_kernel(kernel_name.to_string(), Kernel::new(parser)));
+		let kernel = state.shared.kernels
+			.get(kernel_name.as_str())
+			.unwrap_or_else(|| {
+				state.shared.kernels.insert(kernel_name.to_string(), Kernel::new(state));
+				state.shared.kernels.get(kernel_name.as_str()).unwrap()
+			});
 
 		let kernel_data = matches
 			.get(if index == 0 { 2 } else { 3 })
@@ -127,7 +131,7 @@ impl RegexRule for ScriptRule {
 						.with_label(
 							Label::new((token.source(), token.start() + 1..token.end()))
 								.with_message("Kernel code is empty")
-								.with_color(parser.colors().warning),
+								.with_color(state.parser.colors().warning),
 						)
 						.finish(),
 				);
@@ -166,7 +170,7 @@ impl RegexRule for ScriptRule {
 										"Kernel execution failed:\n{}",
 										e.to_string()
 									))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -178,7 +182,7 @@ impl RegexRule for ScriptRule {
 				// Validate kind
 				let kind = match matches.get(2) {
 					None => 0,
-					Some(kind) => match self.validate_kind(parser.colors(), kind.as_str()) {
+					Some(kind) => match self.validate_kind(state.parser.colors(), kind.as_str()) {
 						Ok(kind) => kind,
 						Err(msg) => {
 							reports.push(
@@ -187,7 +191,7 @@ impl RegexRule for ScriptRule {
 									.with_label(
 										Label::new((token.source(), kind.range()))
 											.with_message(msg)
-											.with_color(parser.colors().error),
+											.with_color(state.parser.colors().error),
 									)
 									.finish(),
 							);
@@ -209,7 +213,7 @@ impl RegexRule for ScriptRule {
 											"Kernel evaluation failed:\n{}",
 											e.to_string()
 										))
-										.with_color(parser.colors().error),
+										.with_color(state.parser.colors().error),
 								)
 								.finish(),
 						);
@@ -223,7 +227,7 @@ impl RegexRule for ScriptRule {
 							// Eval to text
 							{
 								if !result.is_empty() {
-									parser.push(
+									state.parser.push(
 										document,
 										Box::new(Text::new(
 											Token::new(1..source.content().len(), source.clone()),
@@ -240,7 +244,9 @@ impl RegexRule for ScriptRule {
 									result,
 								)) as Rc<dyn Source>;
 
-								parser.parse_into(parse_source, document);
+								state.with_state(|new_state| {
+									new_state.parser.parse_into(new_state, parse_source, document);
+								})
 							}
 						}
 						Err(e) => {
@@ -253,7 +259,7 @@ impl RegexRule for ScriptRule {
 												"Kernel evaluation failed:\n{}",
 												e.to_string()
 											))
-											.with_color(parser.colors().error),
+											.with_color(state.parser.colors().error),
 									)
 									.finish(),
 							);
@@ -267,15 +273,12 @@ impl RegexRule for ScriptRule {
 
 		let ctx = KernelContext {
 			location: Token::new(0..source.content().len(), source.clone()),
-			parser,
+			parser_state: state,
 			document,
 		};
 
 		kernel.run_with_context(ctx, execute)
 	}
-
-	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }
 
 #[cfg(test)]

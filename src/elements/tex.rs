@@ -28,6 +28,7 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -304,7 +305,7 @@ impl RegexRule for TexRule {
 	fn on_regex_match(
 		&self,
 		index: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
@@ -321,10 +322,10 @@ impl RegexRule for TexRule {
 							Label::new((token.source().clone(), token.range.clone()))
 								.with_message(format!(
 									"Missing terminating `{}` after first `{}`",
-									["|$", "$"][index].fg(parser.colors().info),
-									["$|", "$"][index].fg(parser.colors().info)
+									["|$", "$"][index].fg(state.parser.colors().info),
+									["$|", "$"][index].fg(state.parser.colors().info)
 								))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.finish(),
 				);
@@ -344,7 +345,7 @@ impl RegexRule for TexRule {
 							.with_label(
 								Label::new((token.source().clone(), content.range()))
 									.with_message("Tex code is empty")
-									.with_color(parser.colors().warning),
+									.with_color(state.parser.colors().warning),
 							)
 							.finish(),
 					);
@@ -354,7 +355,7 @@ impl RegexRule for TexRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(parser.colors(), &token, &matches.get(1)) {
+		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(1)) {
 			Ok(pm) => pm,
 			Err(report) => {
 				reports.push(report);
@@ -376,10 +377,10 @@ impl RegexRule for TexRule {
 								Label::new((token.source().clone(), token.range.clone()))
 									.with_message(format!(
 										"Property `kind: {}` cannot be converted: {}",
-										prop.fg(parser.colors().info),
-										err.fg(parser.colors().error)
+										prop.fg(state.parser.colors().info),
+										err.fg(state.parser.colors().error)
 									))
-									.with_color(parser.colors().warning),
+									.with_color(state.parser.colors().warning),
 							)
 							.finish(),
 					);
@@ -412,7 +413,7 @@ impl RegexRule for TexRule {
 			.and_then(|(_, value)| Some(value))
 			.unwrap();
 
-		parser.push(
+		state.parser.push(
 			document,
 			Box::new(Tex {
 				mathmode: index == 1,
@@ -426,9 +427,6 @@ impl RegexRule for TexRule {
 
 		reports
 	}
-
-	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }
 
 #[cfg(test)]

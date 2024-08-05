@@ -1,5 +1,4 @@
 use crate::parser::parser::Parser;
-use crate::parser::parser::ParserStrategy;
 
 use super::code::CodeRule;
 use super::comment::CommentRule;

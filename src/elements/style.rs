@@ -5,18 +5,16 @@ use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
+use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
-use crate::parser::state::State;
 use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
-use lazy_static::lazy_static;
-use mlua::Function;
-use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
 use std::cell::RefCell;
@@ -77,12 +75,12 @@ impl StyleState {
 	}
 }
 
-impl State for StyleState {
+impl RuleState for StyleState {
 	fn scope(&self) -> Scope { Scope::PARAGRAPH }
 
 	fn on_remove<'a>(
 		&self,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
@@ -116,15 +114,15 @@ impl State for StyleState {
 								.with_order(1)
 								.with_message(format!(
 									"Style {} starts here",
-									name.fg(parser.colors().info)
+									name.fg(state.parser.colors().info)
 								))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.with_label(
 							Label::new(paragraph_end)
 								.with_order(1)
 								.with_message(format!("Paragraph ends here"))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.with_note("Styles cannot span multiple documents (i.e @import)")
 						.finish(),
@@ -156,9 +154,7 @@ impl StyleRule {
 	}
 }
 
-lazy_static! {
-	static ref STATE_NAME: String = "elements.style".to_string();
-}
+static STATE_NAME : &'static str = "elements.style";
 
 impl RegexRule for StyleRule {
 	fn name(&self) -> &'static str { "Style" }
@@ -168,19 +164,18 @@ impl RegexRule for StyleRule {
 	fn on_regex_match(
 		&self,
 		index: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 		token: Token,
 		_matches: Captures,
 	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
-		let query = parser.state().query(&STATE_NAME);
+		let query = state.shared.rule_state.get(&STATE_NAME);
 		let state = match query {
 			Some(state) => state,
 			None => {
 				// Insert as a new state
-				match parser
-					.state_mut()
-					.insert(STATE_NAME.clone(), Rc::new(RefCell::new(StyleState::new())))
+				match state.shared.rule_state
+					.insert(STATE_NAME.into(), Rc::new(RefCell::new(StyleState::new())))
 				{
 					Err(_) => panic!("Unknown error"),
 					Ok(state) => state,
@@ -192,7 +187,7 @@ impl RegexRule for StyleRule {
 			style_state.toggled[index] = style_state.toggled[index]
 				.clone()
 				.map_or(Some(token.clone()), |_| None);
-			parser.push(
+			state.parser.push(
 				document,
 				Box::new(Style::new(
 					token.clone(),
@@ -206,9 +201,6 @@ impl RegexRule for StyleRule {
 
 		return vec![];
 	}
-
-	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }
 
 #[cfg(test)]

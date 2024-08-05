@@ -16,6 +16,7 @@ use regex::Regex;
 use crate::document::document::Document;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Source;
@@ -58,7 +59,7 @@ impl ElemStyleRule {
 impl Rule for ElemStyleRule {
 	fn name(&self) -> &'static str { "Element Style" }
 
-	fn next_match(&self, _parser: &dyn Parser, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re
 			.find_at(cursor.source.content(), cursor.pos)
 			.map_or(None, |m| {
@@ -68,7 +69,7 @@ impl Rule for ElemStyleRule {
 
 	fn on_match<'a>(
 		&self,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		_document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
 		_match_data: Option<Box<dyn Any>>,
@@ -91,7 +92,7 @@ impl Rule for ElemStyleRule {
 						.with_label(
 							Label::new((cursor.source.clone(), key.range()))
 								.with_message(format!("Expected a non-empty style key",))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.finish(),
 				);
@@ -99,7 +100,7 @@ impl Rule for ElemStyleRule {
 			}
 
 			// Check if key exists
-			if !parser.is_style_registered(trimmed) {
+			if !state.shared.style.is_registered(trimmed) {
 				reports.push(
 					Report::build(ReportKind::Error, cursor.source.clone(), key.start())
 						.with_message("Unknown Style Key")
@@ -107,9 +108,9 @@ impl Rule for ElemStyleRule {
 							Label::new((cursor.source.clone(), key.range()))
 								.with_message(format!(
 									"Could not find a style with key: {}",
-									trimmed.fg(parser.colors().info)
+									trimmed.fg(state.parser.colors().info)
 								))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.finish(),
 				);
@@ -117,7 +118,7 @@ impl Rule for ElemStyleRule {
 				return (cursor, reports);
 			}
 
-			parser.current_style(trimmed)
+			state.shared.style.current_style(trimmed)
 		} else {
 			panic!("Unknown error")
 		};
@@ -135,7 +136,7 @@ impl Rule for ElemStyleRule {
 								.with_message(format!(
 									"Unable to parse json string after style key",
 								))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.finish(),
 				);
@@ -157,10 +158,10 @@ impl Rule for ElemStyleRule {
 									))
 									.with_message(format!(
 										"Failed to serialize `{}` into style with key `{}`: {err}",
-										json.fg(parser.colors().highlight),
-										style.key().fg(parser.colors().info)
+										json.fg(state.parser.colors().highlight),
+										style.key().fg(state.parser.colors().info)
 									))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 								)
 								.finish(),
 						);
@@ -171,12 +172,12 @@ impl Rule for ElemStyleRule {
 			}
 		};
 
-		parser.set_current_style(new_style);
+		state.shared.styles.set_current(new_style);
 
 		(cursor, reports)
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
 		let mut bindings = vec![];
 
 		bindings.push((
@@ -215,6 +216,6 @@ impl Rule for ElemStyleRule {
 			.unwrap(),
 		));
 
-		Some(bindings)
+		bindings
 	}
 }

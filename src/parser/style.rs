@@ -1,5 +1,3 @@
-use std::cell::Ref;
-use std::cell::RefMut;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -27,48 +25,53 @@ pub trait ElementStyle: Downcast + core::fmt::Debug {
 }
 impl_downcast!(ElementStyle);
 
-pub trait StyleHolder {
-	/// gets a reference to all defined styles
-	fn element_styles(&self) -> Ref<'_, HashMap<String, Rc<dyn ElementStyle>>>;
+#[derive(Default)]
+pub struct StyleHolder {
+	styles: HashMap<String, Rc<dyn ElementStyle>>,
+}
 
-	/// gets a (mutable) reference to all defined styles
-	fn element_styles_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn ElementStyle>>>;
-
+impl StyleHolder {
 	/// Checks if a given style key is registered
-	fn is_style_registered(&self, style_key: &str) -> bool { self.element_styles().contains_key(style_key) }
+	fn is_registered(&self, style_key: &str) -> bool { self.styles.contains_key(style_key) }
 
 	/// Gets the current active style for an element
 	/// NOTE: Will panic if a style is not defined for a given element
 	/// If you need to process user input, use [`is_registered`]
-	fn current_style(&self, style_key: &str) -> Rc<dyn ElementStyle> {
-		self.element_styles().get(style_key).map(|rc| rc.clone()).unwrap()
+	fn current(&self, style_key: &str) -> Rc<dyn ElementStyle> {
+		self.styles.get(style_key).map(|rc| rc.clone()).unwrap()
 	}
 
 	/// Sets the [`style`]
-	fn set_current_style(&self, style: Rc<dyn ElementStyle>) {
-		self.element_styles_mut().insert(style.key().to_string(), style);
+	fn set_current(&mut self, style: Rc<dyn ElementStyle>) {
+		self.styles.insert(style.key().to_string(), style);
 	}
 }
 
 #[macro_export]
 macro_rules! impl_elementstyle {
 	($t:ty, $key:expr) => {
-		impl ElementStyle for $t {
+		impl crate::parser::style::ElementStyle for $t {
 			fn key(&self) -> &'static str { $key }
 
-			fn from_json(&self, json: &str) -> Result<std::rc::Rc<dyn ElementStyle>, String> {
+			fn from_json(
+				&self,
+				json: &str,
+			) -> Result<std::rc::Rc<dyn crate::parser::style::ElementStyle>, String> {
 				serde_json::from_str::<$t>(json)
 					.map_err(|e| e.to_string())
-					.map(|obj| std::rc::Rc::new(obj) as std::rc::Rc<dyn ElementStyle>)
+					.map(|obj| {
+						std::rc::Rc::new(obj) as std::rc::Rc<dyn crate::parser::style::ElementStyle>
+					})
 			}
 
 			fn from_lua(
 				&self,
 				lua: &mlua::Lua,
 				value: mlua::Value,
-			) -> Result<std::rc::Rc<dyn ElementStyle>, mlua::Error> {
-				mlua::LuaSerdeExt::from_value::<$t>(lua, value)
-					.map(|obj| std::rc::Rc::new(obj) as std::rc::Rc<dyn ElementStyle>)
+			) -> Result<std::rc::Rc<dyn crate::parser::style::ElementStyle>, mlua::Error> {
+				mlua::LuaSerdeExt::from_value::<$t>(lua, value).map(|obj| {
+					std::rc::Rc::new(obj) as std::rc::Rc<dyn crate::parser::style::ElementStyle>
+				})
 			}
 		}
 	};

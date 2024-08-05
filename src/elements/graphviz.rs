@@ -3,6 +3,7 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Once;
 
+use crate::parser::parser::ParserState;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
@@ -190,7 +191,7 @@ impl RegexRule for GraphRule {
 	fn on_regex_match(
 		&self,
 		_: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
@@ -207,10 +208,10 @@ impl RegexRule for GraphRule {
 							Label::new((token.source().clone(), token.range.clone()))
 								.with_message(format!(
 									"Missing terminating `{}` after first `{}`",
-									"[/graph]".fg(parser.colors().info),
-									"[graph]".fg(parser.colors().info)
+									"[/graph]".fg(state.parser.colors().info),
+									"[graph]".fg(state.parser.colors().info)
 								))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.finish(),
 				);
@@ -230,7 +231,7 @@ impl RegexRule for GraphRule {
 							.with_label(
 								Label::new((token.source().clone(), content.range()))
 									.with_message("Graph code is empty")
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -251,7 +252,7 @@ impl RegexRule for GraphRule {
 							.with_label(
 								Label::new((token.source().clone(), token.range.clone()))
 									.with_message(format!("Graph is missing property: {e}"))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -269,7 +270,7 @@ impl RegexRule for GraphRule {
 								.with_label(
 									Label::new((token.source().clone(), props.range()))
 										.with_message(e)
-										.with_color(parser.colors().error),
+										.with_color(state.parser.colors().error),
 								)
 								.finish(),
 						);
@@ -294,10 +295,10 @@ impl RegexRule for GraphRule {
 								Label::new((token.source().clone(), token.range.clone()))
 									.with_message(format!(
 										"Property `layout: {}` cannot be converted: {}",
-										prop.fg(parser.colors().info),
-										err.fg(parser.colors().error)
+										prop.fg(state.parser.colors().info),
+										err.fg(state.parser.colors().error)
 									))
-									.with_color(parser.colors().warning),
+									.with_color(state.parser.colors().warning),
 							)
 							.finish(),
 					);
@@ -313,7 +314,7 @@ impl RegexRule for GraphRule {
 									token.start() + 1..token.end(),
 								))
 								.with_message(err)
-								.with_color(parser.colors().warning),
+								.with_color(state.parser.colors().warning),
 							)
 							.finish(),
 					);
@@ -340,9 +341,9 @@ impl RegexRule for GraphRule {
 								))
 								.with_message(format!(
 									"Property `{}` is missing",
-									err.fg(parser.colors().info)
+									err.fg(state.parser.colors().info)
 								))
-								.with_color(parser.colors().warning),
+								.with_color(state.parser.colors().warning),
 							)
 							.finish(),
 					);
@@ -352,7 +353,7 @@ impl RegexRule for GraphRule {
 			},
 		};
 
-		parser.push(
+		state.parser.push(
 			document,
 			Box::new(Graphviz {
 				location: token,
@@ -364,7 +365,4 @@ impl RegexRule for GraphRule {
 
 		reports
 	}
-
-	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }

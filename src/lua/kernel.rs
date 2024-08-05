@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::cell::RefMut;
+use std::collections::HashMap;
 
 use mlua::Error;
 use mlua::FromLuaMulti;
@@ -9,17 +10,18 @@ use mlua::Lua;
 
 use crate::document::document::Document;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::source::Token;
 
-pub struct KernelContext<'a, 'b> {
+pub struct KernelContext<'a, 'b, 'c> {
 	pub location: Token,
-	pub parser: &'a dyn Parser,
-	pub document: &'b dyn Document<'b>,
+	pub state: &'a ParserState<'a, 'b>,
+	pub document: &'c dyn Document<'c>,
 	//pub parser: &'a dyn Parser,
 }
 
 thread_local! {
-	pub static CTX: RefCell<Option<KernelContext<'static, 'static>>> = RefCell::new(None);
+	pub static CTX: RefCell<Option<KernelContext<'static, 'static, 'static>>> = RefCell::new(None);
 }
 
 #[derive(Debug)]
@@ -28,9 +30,6 @@ pub struct Kernel {
 }
 
 impl Kernel {
-	// TODO: Take parser as arg and
-	// iterate over the rules
-	// to find export the bindings (if some)
 	pub fn new(parser: &dyn Parser) -> Self {
 		let lua = Lua::new();
 
@@ -38,16 +37,13 @@ impl Kernel {
 			let nml_table = lua.create_table().unwrap();
 
 			for rule in parser.rules() {
-				if let Some(bindings) = rule.lua_bindings(&lua) {
-					let table = lua.create_table().unwrap();
-					let name = rule.name().to_lowercase().replace(' ', "_");
-
-					for (fun_name, fun) in bindings {
-						table.set(fun_name, fun).unwrap();
-					}
-
-					nml_table.set(name, table).unwrap();
+				let table = lua.create_table().unwrap();
+				// TODO: Export this so we can check for duplicate rules based on this name
+				let name = rule.name().to_lowercase().replace(' ', "_");
+				for (fun_name, fun) in rule.lua_bindings(&lua) {
+					table.set(fun_name, fun).unwrap();
 				}
+				nml_table.set(name, table).unwrap();
 			}
 			lua.globals().set("nml", nml_table).unwrap();
 		}
@@ -71,8 +67,17 @@ impl Kernel {
 	}
 }
 
-pub trait KernelHolder {
-	fn get_kernel(&self, name: &str) -> Option<RefMut<'_, Kernel>>;
+#[derive(Default)]
+pub struct KernelHolder {
+	kernels: HashMap<String, Kernel>,
+}
 
-	fn insert_kernel(&self, name: String, kernel: Kernel) -> RefMut<'_, Kernel>;
+impl KernelHolder {
+	pub fn get(&self, kernel_name: &str) -> Option<&Kernel> {
+		self.kernels.get(kernel_name)
+	}
+
+	pub fn insert(&self, kernel_name: String, kernel: Kernel) {
+		self.kernels.insert(kernel_name, kernel)
+	}
 }

@@ -11,7 +11,7 @@ use crate::document::document::DocumentAccessors;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
-use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Source;
@@ -25,8 +25,6 @@ use crate::parser::util::PropertyParser;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
-use mlua::Function;
-use mlua::Lua;
 use regex::Match;
 use regex::Regex;
 
@@ -136,7 +134,7 @@ impl ListRule {
 
 	fn push_markers(
 		token: &Token,
-		parser: &dyn Parser,
+		state: &ParserState,
 		document: &dyn Document,
 		current: &Vec<(bool, usize)>,
 		target: &Vec<(bool, usize)>,
@@ -152,7 +150,7 @@ impl ListRule {
 
 		// Close
 		for i in start_pos..current.len() {
-			parser.push(
+			state.parser.push(
 				document,
 				Box::new(ListMarker {
 					location: token.clone(),
@@ -164,7 +162,7 @@ impl ListRule {
 
 		// Open
 		for i in start_pos..target.len() {
-			parser.push(
+			state.parser.push(
 				document,
 				Box::new(ListMarker {
 					location: token.clone(),
@@ -252,7 +250,7 @@ impl ListRule {
 impl Rule for ListRule {
 	fn name(&self) -> &'static str { "List" }
 
-	fn next_match(&self, _parser: &dyn Parser, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re
 			.find_at(cursor.source.content(), cursor.pos)
 			.map_or(None, |m| {
@@ -262,10 +260,10 @@ impl Rule for ListRule {
 
 	fn on_match<'a>(
 		&self,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a dyn Document<'a>,
 		cursor: Cursor,
-		_match_data: Option<Box<dyn Any>>,
+		_match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
 		let mut reports = vec![];
 
@@ -295,7 +293,7 @@ impl Rule for ListRule {
 								.with_label(
 									Label::new((cursor.source.clone(), properties.range()))
 										.with_message(err)
-										.with_color(parser.colors().warning),
+										.with_color(state.parser.colors().warning),
 								)
 								.finish(),
 							);
@@ -354,12 +352,12 @@ impl Rule for ListRule {
 										captures.get(1).unwrap().range(),
 									))
 									.with_message("Spacing for list entries do not match")
-									.with_color(parser.colors().warning),
+									.with_color(state.parser.colors().warning),
 								)
 								.with_label(
 									Label::new((cursor.source.clone(), spacing.0.clone()))
 										.with_message("Previous spacing")
-										.with_color(parser.colors().warning),
+										.with_color(state.parser.colors().warning),
 								)
 								.finish(),
 							);
@@ -379,7 +377,7 @@ impl Rule for ListRule {
 					"List Entry".to_string(),
 					entry_content,
 				));
-				let parsed_content = match util::parse_paragraph(parser, entry_src, document) {
+				let parsed_content = match util::parse_paragraph(state, entry_src, document) {
 					Err(err) => {
 						reports.push(
 							Report::build(ReportKind::Warning, token.source(), token.range.start)
@@ -387,7 +385,7 @@ impl Rule for ListRule {
 								.with_label(
 									Label::new((token.source(), token.range.clone()))
 										.with_message(err)
-										.with_color(parser.colors().warning),
+										.with_color(state.parser.colors().warning),
 								)
 								.finish(),
 						);
@@ -400,12 +398,12 @@ impl Rule for ListRule {
 					.last_element::<ListEntry>()
 					.map(|ent| ent.numbering.clone())
 				{
-					ListRule::push_markers(&token, parser, document, &previous_depth, &depth);
+					ListRule::push_markers(&token, state, document, &previous_depth, &depth);
 				} else {
-					ListRule::push_markers(&token, parser, document, &vec![], &depth);
+					ListRule::push_markers(&token, state, document, &vec![], &depth);
 				}
 
-				parser.push(
+				state.parser.push(
 					document,
 					Box::new(ListEntry {
 						location: Token::new(
@@ -428,13 +426,10 @@ impl Rule for ListRule {
 			.map(|ent| ent.numbering.clone())
 			.unwrap();
 		let token = Token::new(end_cursor.pos..end_cursor.pos, end_cursor.source.clone());
-		ListRule::push_markers(&token, parser, document, &current, &Vec::new());
+		ListRule::push_markers(&token, state, document, &current, &Vec::new());
 
 		(end_cursor, reports)
 	}
-
-	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }
 
 #[cfg(test)]
@@ -443,6 +438,7 @@ mod tests {
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 
@@ -466,7 +462,8 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let state = ParserState::new(&parser, None);
+		let doc = parser.parse(state, source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			ListMarker { numbered == false, kind == MarkerKind::Open };

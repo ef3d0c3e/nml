@@ -6,6 +6,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
@@ -91,7 +92,7 @@ impl RegexRule for LinkRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
@@ -107,7 +108,7 @@ impl RegexRule for LinkRule {
 							.with_label(
 								Label::new((token.source().clone(), display.range()))
 									.with_message("Link name is empty")
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -122,10 +123,10 @@ impl RegexRule for LinkRule {
 								Label::new((token.source(), display.range()))
 									.with_message(format!(
 										"Link name is empty. Once processed, `{}` yields `{}`",
-										display.as_str().fg(parser.colors().highlight),
-										processed.fg(parser.colors().highlight),
+										display.as_str().fg(state.parser.colors().highlight),
+										processed.fg(state.parser.colors().highlight),
 									))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -137,7 +138,7 @@ impl RegexRule for LinkRule {
 					"Link Display".to_string(),
 					processed,
 				));
-				match util::parse_paragraph(parser, source, document) {
+				match util::parse_paragraph(state, source, document) {
 					Err(err) => {
 						reports.push(
 							Report::build(ReportKind::Error, token.source(), display.start())
@@ -145,7 +146,7 @@ impl RegexRule for LinkRule {
 								.with_label(
 									Label::new((token.source(), display.range()))
 										.with_message(err.to_string())
-										.with_color(parser.colors().error),
+										.with_color(state.parser.colors().error),
 								)
 								.finish(),
 						);
@@ -166,7 +167,7 @@ impl RegexRule for LinkRule {
 							.with_label(
 								Label::new((token.source(), url.range()))
 									.with_message("Link url is empty")
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -182,10 +183,10 @@ impl RegexRule for LinkRule {
 								Label::new((token.source(), url.range()))
 									.with_message(format!(
 										"Link url is empty. Once processed, `{}` yields `{}`",
-										url.as_str().fg(parser.colors().highlight),
-										text_content.as_str().fg(parser.colors().highlight),
+										url.as_str().fg(state.parser.colors().highlight),
+										text_content.as_str().fg(state.parser.colors().highlight),
 									))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -196,7 +197,7 @@ impl RegexRule for LinkRule {
 			_ => panic!("Empty link url"),
 		};
 
-		parser.push(
+		state.parser.push(
 			document,
 			Box::new(Link {
 				location: token,
@@ -208,7 +209,7 @@ impl RegexRule for LinkRule {
 		return reports;
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
 		let mut bindings = vec![];
 
 		bindings.push((
@@ -256,7 +257,7 @@ impl RegexRule for LinkRule {
 			.unwrap(),
 		));
 
-		Some(bindings)
+		bindings
 	}
 }
 

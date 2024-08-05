@@ -6,9 +6,8 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use crate::compiler::compiler::Compiler;
+use crate::document::document::Document;
 use crate::elements::layout::LayoutToken;
-
-use super::document::Document;
 
 /// Represents the type of a layout
 pub trait LayoutType: core::fmt::Debug {
@@ -32,18 +31,17 @@ pub trait LayoutType: core::fmt::Debug {
 	) -> Result<String, String>;
 }
 
-pub trait LayoutHolder {
-	/// gets a reference to all defined layouts
-	fn layouts(&self) -> Ref<'_, HashMap<String, Rc<dyn LayoutType>>>;
+#[derive(Default)]
+pub struct LayoutHolder {
+	layouts: HashMap<String, Rc<dyn LayoutType>>,
+}
 
-	/// gets a (mutable) reference to all defined layours
-	fn layouts_mut(&self) -> RefMut<'_, HashMap<String, Rc<dyn LayoutType>>>;
-
-	fn get_layout(&self, layout_name: &str) -> Option<Rc<dyn LayoutType>> {
-		self.layouts().get(layout_name).map(|layout| layout.clone())
+impl LayoutHolder {
+	pub fn get(&self, layout_name: &str) -> Option<Rc<dyn LayoutType>> {
+		self.layouts.get(layout_name).map(|layout| layout.clone())
 	}
 
-	fn insert_layout(&self, layout: Rc<dyn LayoutType>) {
-		self.layouts_mut().insert(layout.name().into(), layout);
+	pub fn insert(&self, layout: Rc<dyn LayoutType>) {
+		self.layouts.insert(layout.name().into(), layout);
 	}
 }

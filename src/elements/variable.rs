@@ -4,6 +4,7 @@ use crate::document::variable::PathVariable;
 use crate::document::variable::Variable;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -123,7 +124,7 @@ impl RegexRule for VariableRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a dyn Document,
 		token: Token,
 		matches: regex::Captures,
@@ -148,9 +149,9 @@ impl RegexRule for VariableRule {
 								Label::new((token.source(), kind.range()))
 									.with_message(format!(
 										"Variable kind `{}` is unknown",
-										kind.as_str().fg(parser.colors().highlight)
+										kind.as_str().fg(state.parser.colors().highlight)
 									))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.with_help(format!(
 								"Leave empty for regular variables. Available variable kinds:{}",
@@ -159,8 +160,8 @@ impl RegexRule for VariableRule {
 									|acc, (char, name)| {
 										acc + format!(
 											"\n - `{}` : {}",
-											char.fg(parser.colors().highlight),
-											name.fg(parser.colors().info)
+											char.fg(state.parser.colors().highlight),
+											name.fg(state.parser.colors().info)
 										)
 										.as_str()
 									}
@@ -178,7 +179,7 @@ impl RegexRule for VariableRule {
 		};
 
 		let var_name = match matches.get(2) {
-			Some(name) => match VariableRule::validate_name(&parser.colors(), name.as_str()) {
+			Some(name) => match VariableRule::validate_name(&state.parser.colors(), name.as_str()) {
 				Ok(var_name) => var_name,
 				Err(msg) => {
 					result.push(
@@ -188,9 +189,9 @@ impl RegexRule for VariableRule {
 								Label::new((token.source(), name.range()))
 									.with_message(format!(
 										"Variable name `{}` is not allowed. {msg}",
-										name.as_str().fg(parser.colors().highlight)
+										name.as_str().fg(state.parser.colors().highlight)
 									))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -212,9 +213,9 @@ impl RegexRule for VariableRule {
 								Label::new((token.source(), value.range()))
 									.with_message(format!(
 										"Variable value `{}` is not allowed. {msg}",
-										value.as_str().fg(parser.colors().highlight)
+										value.as_str().fg(state.parser.colors().highlight)
 									))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -226,7 +227,7 @@ impl RegexRule for VariableRule {
 		};
 
 		match self.make_variable(
-			&parser.colors(),
+			&state.parser.colors(),
 			token.clone(),
 			var_kind,
 			var_name.to_string(),
@@ -242,10 +243,10 @@ impl RegexRule for VariableRule {
 							Label::new((token.source(), m.start() + 1..m.end()))
 								.with_message(format!(
 									"Unable to create variable `{}`. {}",
-									var_name.fg(parser.colors().highlight),
+									var_name.fg(state.parser.colors().highlight),
 									msg
 								))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.finish(),
 				);
@@ -257,7 +258,7 @@ impl RegexRule for VariableRule {
 		return result;
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
 		let mut bindings = vec![];
 		bindings.push((
 			"insert".to_string(),
@@ -291,7 +292,7 @@ impl RegexRule for VariableRule {
 			.unwrap(),
 		));
 
-		Some(bindings)
+		bindings
 	}
 }
 
@@ -315,7 +316,7 @@ impl RegexRule for VariableSubstitutionRule {
 	fn on_regex_match<'a>(
 		&self,
 		_index: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a dyn Document<'a>,
 		token: Token,
 		matches: regex::Captures,
@@ -332,7 +333,7 @@ impl RegexRule for VariableSubstitutionRule {
 							.with_label(
 								Label::new((token.source(), matches.get(0).unwrap().range()))
 									.with_message(format!("Missing variable name for substitution"))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -347,7 +348,7 @@ impl RegexRule for VariableSubstitutionRule {
 							.with_label(
 								Label::new((token.source(), name.range()))
 									.with_message(format!("Variable names contains leading spaces"))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.with_help("Remove leading spaces")
 							.finish(),
@@ -365,7 +366,7 @@ impl RegexRule for VariableSubstitutionRule {
 									.with_message(format!(
 										"Variable names contains trailing spaces"
 									))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.with_help("Remove trailing spaces")
 							.finish(),
@@ -374,7 +375,7 @@ impl RegexRule for VariableSubstitutionRule {
 					return result;
 				}
 				// Invalid name
-				match VariableRule::validate_name(&parser.colors(), name.as_str()) {
+				match VariableRule::validate_name(&state.parser.colors(), name.as_str()) {
 					Err(msg) => {
 						result.push(
 							Report::build(ReportKind::Error, token.source(), name.start())
@@ -382,7 +383,7 @@ impl RegexRule for VariableSubstitutionRule {
 								.with_label(
 									Label::new((token.source(), name.range()))
 										.with_message(msg)
-										.with_color(parser.colors().error),
+										.with_color(state.parser.colors().error),
 								)
 								.finish(),
 						);
@@ -402,9 +403,9 @@ impl RegexRule for VariableSubstitutionRule {
 									Label::new((token.source(), name.range()))
 										.with_message(format!(
 											"Unable to find variable with name: `{}`",
-											name.as_str().fg(parser.colors().highlight)
+											name.as_str().fg(state.parser.colors().highlight)
 										))
-										.with_color(parser.colors().error),
+										.with_color(state.parser.colors().error),
 								)
 								.finish(),
 						);
@@ -416,10 +417,8 @@ impl RegexRule for VariableSubstitutionRule {
 			_ => panic!("Unknown error"),
 		};
 
-		variable.parse(token, parser, document);
+		variable.parse(token, state, document);
 
 		return result;
 	}
-
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }

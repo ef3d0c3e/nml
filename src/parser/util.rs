@@ -8,7 +8,7 @@ use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::elements::paragraph::Paragraph;
 
-use super::parser::Parser;
+use super::parser::ParserState;
 use super::source::Source;
 
 /// Processes text for escape characters and paragraphing
@@ -136,18 +136,21 @@ pub fn process_escaped<S: AsRef<str>>(escape: char, token: &'static str, content
 /// Parses source into a single paragraph
 /// If source contains anything but a single paragraph, an error is returned
 pub fn parse_paragraph<'a>(
-	parser: &dyn Parser,
+	state: &ParserState,
 	source: Rc<dyn Source>,
 	document: &'a dyn Document<'a>,
 ) -> Result<Box<Paragraph>, &'static str> {
-	let parsed = parser.parse(source.clone(), Some(document));
+	let parsed = state.with_state(|new_state| -> Box<dyn Document> {
+		new_state.parser.parse(new_state, source.clone(), Some(document))
+	});
 	if parsed.content().borrow().len() > 1 {
 		return Err("Parsed document contains more than a single paragraph");
 	} else if parsed.content().borrow().len() == 0 {
 		return Err("Parsed document is empty");
 	} else if parsed.last_element::<Paragraph>().is_none() {
 		return Err("Parsed element is not a paragraph");
-	} else if parser.has_error() {
+	} else if state.parser.has_error() {
+		// FIXME: If parser had an error before, this wold trigger
 		return Err("Parser error");
 	}
 

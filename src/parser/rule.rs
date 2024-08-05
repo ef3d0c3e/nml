@@ -1,7 +1,10 @@
+use super::layout::LayoutHolder;
 use super::parser::Parser;
+use super::parser::ParserState;
 use super::source::Cursor;
 use super::source::Source;
 use super::source::Token;
+use super::style::StyleHolder;
 use crate::document::document::Document;
 use ariadne::Report;
 use downcast_rs::impl_downcast;
@@ -17,23 +20,24 @@ pub trait Rule: Downcast {
 	/// Returns rule's name
 	fn name(&self) -> &'static str;
 	/// Finds the next match starting from [`cursor`]
-	fn next_match(&self, parser: &dyn Parser, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)>;
+	fn next_match(&self, state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)>;
 	/// Callback when rule matches
 	fn on_match<'a>(
 		&self,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
-		match_data: Option<Box<dyn Any>>,
+		match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>);
-	/// Export bindings to lua
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
+
+	/// Registers lua bindings
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 
 	/// Registers default styles
-	fn register_styles(&self, _parser: &dyn Parser) {}
+	fn register_styles(&self, holder: &mut StyleHolder) {}
 
 	/// Registers default layouts
-	fn register_layouts(&self, _parser: &dyn Parser) {}
+	fn register_layouts(&self, holder: &mut LayoutHolder) {}
 }
 impl_downcast!(Rule);
 
@@ -53,24 +57,22 @@ pub trait RegexRule {
 	fn on_regex_match<'a>(
 		&self,
 		index: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: regex::Captures,
 	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>;
 
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
-	fn register_styles(&self, _parser: &dyn Parser) {}
-	fn register_layouts(&self, _parser: &dyn Parser) {}
+	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
+	fn register_styles(&self, _holder: &mut StyleHolder) {}
+	fn register_layouts(&self, _holder: &mut LayoutHolder) {}
 }
 
 impl<T: RegexRule + 'static> Rule for T {
-	fn name(&self) -> &'static str {
-		RegexRule::name(self)
-	}
+	fn name(&self) -> &'static str { RegexRule::name(self) }
 
 	/// Finds the next match starting from [`cursor`]
-	fn next_match(&self, _parser: &dyn Parser, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		let content = cursor.source.content();
 		let mut found: Option<(usize, usize)> = None;
 		self.regexes().iter().enumerate().for_each(|(id, re)| {
@@ -92,18 +94,13 @@ impl<T: RegexRule + 'static> Rule for T {
 
 	fn on_match<'a>(
 		&self,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
-		match_data: Option<Box<dyn Any>>,
+		match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
 		let content = cursor.source.content();
-		let index = unsafe {
-			match_data
-				.unwrap_unchecked()
-				.downcast::<usize>()
-				.unwrap_unchecked()
-		};
+		let index = match_data.downcast::<usize>().unwrap();
 		let re = &self.regexes()[*index];
 
 		let captures = re.captures_at(content.as_str(), cursor.pos).unwrap();
@@ -112,19 +109,15 @@ impl<T: RegexRule + 'static> Rule for T {
 		let token_end = token.end();
 		return (
 			cursor.at(token_end),
-			self.on_regex_match(*index, parser, document, token, captures),
+			self.on_regex_match(*index, state, document, token, captures),
 		);
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
-		self.lua_bindings(lua)
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+		self.register_bindings(lua)
 	}
 
-	fn register_styles(&self, parser: &dyn Parser) {
-		self.register_styles(parser);
-	}
+	fn register_styles(&self, holder: &mut StyleHolder) { self.register_styles(holder); }
 
-	fn register_layouts(&self, parser: &dyn Parser) {
-		self.register_layouts(parser);
-	}
+	fn register_layouts(&self, holder: &mut LayoutHolder) { self.register_layouts(holder); }
 }

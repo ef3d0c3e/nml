@@ -26,6 +26,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
@@ -336,7 +337,7 @@ impl RegexRule for CodeRule {
 	fn on_regex_match<'a>(
 		&self,
 		index: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a dyn Document,
 		token: Token,
 		matches: Captures,
@@ -353,7 +354,7 @@ impl RegexRule for CodeRule {
 							.with_label(
 								Label::new((token.source().clone(), token.range.clone()))
 									.with_message(format!("Code is missing properties: {e}"))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -371,7 +372,7 @@ impl RegexRule for CodeRule {
 								.with_label(
 									Label::new((token.source().clone(), props.range()))
 										.with_message(e)
-										.with_color(parser.colors().error),
+										.with_color(state.parser.colors().error),
 								)
 								.finish(),
 						);
@@ -393,7 +394,7 @@ impl RegexRule for CodeRule {
 							.with_label(
 								Label::new((token.source().clone(), lang.range()))
 									.with_message("No language specified")
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -411,9 +412,9 @@ impl RegexRule for CodeRule {
 								Label::new((token.source().clone(), lang.range()))
 									.with_message(format!(
 										"Language `{}` cannot be found",
-										code_lang.fg(parser.colors().info)
+										code_lang.fg(state.parser.colors().info)
 									))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -443,7 +444,7 @@ impl RegexRule for CodeRule {
 					.with_label(
 						Label::new((token.source().clone(), token.range.clone()))
 							.with_message("Code content cannot be empty")
-							.with_color(parser.colors().error),
+							.with_color(state.parser.colors().error),
 					)
 					.finish(),
 			);
@@ -475,9 +476,9 @@ impl RegexRule for CodeRule {
 							.with_label(
 								Label::new((token.source().clone(), token.start()+1..token.end()))
 								.with_message(format!("Property `line_offset: {}` cannot be converted: {}",
-										prop.fg(parser.colors().info),
-										err.fg(parser.colors().error)))
-								.with_color(parser.colors().warning))
+										prop.fg(state.parser.colors().info),
+										err.fg(state.parser.colors().error)))
+								.with_color(state.parser.colors().warning))
 							.finish());
 								return reports;
 							}
@@ -492,9 +493,9 @@ impl RegexRule for CodeRule {
 											))
 											.with_message(format!(
 												"Property `{}` doesn't exist",
-												err.fg(parser.colors().info)
+												err.fg(state.parser.colors().info)
 											))
-											.with_color(parser.colors().warning),
+											.with_color(state.parser.colors().warning),
 										)
 										.finish(),
 								);
@@ -504,7 +505,7 @@ impl RegexRule for CodeRule {
 					}
 				};
 
-			parser.push(
+			state.parser.push(
 				document,
 				Box::new(Code::new(
 					token.clone(),
@@ -525,7 +526,7 @@ impl RegexRule for CodeRule {
 				CodeKind::Inline
 			};
 
-			parser.push(
+			state.parser.push(
 				document,
 				Box::new(Code::new(
 					token.clone(),
@@ -542,7 +543,7 @@ impl RegexRule for CodeRule {
 		reports
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
 		let mut bindings = vec![];
 		bindings.push((
 			"push_inline".to_string(),
@@ -644,7 +645,7 @@ impl RegexRule for CodeRule {
 			.unwrap(),
 		));
 
-		Some(bindings)
+		bindings
 	}
 }
 
@@ -679,7 +680,7 @@ fn fact(n: usize) -> usize
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		let borrow = doc.content().borrow();
 		let found = borrow

@@ -19,6 +19,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::references::validate_refname;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -135,7 +136,7 @@ impl RegexRule for ReferenceRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
@@ -155,7 +156,7 @@ impl RegexRule for ReferenceRule {
 								Label::new((token.source().clone(), m.range())).with_message(
 									format!(
 										"Could not find element with reference: `{}`",
-										refname.fg(parser.colors().info)
+										refname.fg(state.parser.colors().info)
 									),
 								),
 							)
@@ -178,7 +179,7 @@ impl RegexRule for ReferenceRule {
 			}
 		};
 		// Properties
-		let properties = match self.parse_properties(parser.colors(), &token, &matches.get(3)) {
+		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(3)) {
 			Ok(pm) => pm,
 			Err(report) => {
 				reports.push(report);
@@ -193,7 +194,7 @@ impl RegexRule for ReferenceRule {
 			.ok()
 			.and_then(|(_, s)| Some(s));
 
-		parser.push(
+		state.parser.push(
 			document,
 			Box::new(Reference {
 				location: token,
@@ -204,6 +205,4 @@ impl RegexRule for ReferenceRule {
 
 		reports
 	}
-
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }

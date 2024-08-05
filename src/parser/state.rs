@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
@@ -9,7 +8,7 @@ use downcast_rs::Downcast;
 
 use crate::document::document::Document;
 
-use super::parser::Parser;
+use super::parser::ParserState;
 use super::source::Source;
 
 /// Scope for state objects
@@ -25,75 +24,66 @@ pub enum Scope {
 	PARAGRAPH = 2,
 }
 
-pub trait State: Downcast {
+pub trait RuleState: Downcast {
 	/// Returns the state's [`Scope`]
 	fn scope(&self) -> Scope;
 
 	/// Callback called when state goes out of scope
 	fn on_remove<'a>(
 		&self,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>>;
 }
-impl_downcast!(State);
+impl_downcast!(RuleState);
 
-impl core::fmt::Debug for dyn State {
+impl core::fmt::Debug for dyn RuleState {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "State{{Scope: {:#?}}}", self.scope())
 	}
 }
 
 /// Object owning all the states
-#[derive(Debug)]
-pub struct StateHolder {
-	data: HashMap<String, Rc<RefCell<dyn State>>>,
+#[derive(Default)]
+pub struct RuleStateHolder {
+	states: HashMap<String, Rc<dyn RuleState>>,
 }
 
-impl StateHolder {
-	pub fn new() -> Self {
-		Self {
-			data: HashMap::new(),
-		}
-	}
-
+impl RuleStateHolder {
 	// Attempts to push [`state`]. On collision, returns an error with the already present state
 	pub fn insert(
 		&mut self,
 		name: String,
-		state: Rc<RefCell<dyn State>>,
-	) -> Result<Rc<RefCell<dyn State>>, Rc<RefCell<dyn State>>> {
-		match self.data.insert(name, state.clone()) {
-			Some(state) => Err(state),
-			_ => Ok(state),
-		}
+		state: Rc<dyn RuleState>,
+	) {
+		self.states.insert(name, state.clone());
 	}
 
-	pub fn query(&self, name: &String) -> Option<Rc<RefCell<dyn State>>> {
-		self.data.get(name).map_or(None, |st| Some(st.clone()))
+	pub fn get(&self, state_name: &str) -> Option<Rc<dyn RuleState>> {
+		self.states.get(state_name)
+			.map(|state| state.clone())
 	}
 
 	pub fn on_scope_end(
 		&mut self,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 		scope: Scope,
 	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
-		let mut result = vec![];
+		let mut reports = vec![];
 
-		self.data.retain(|_name, state| {
-			if state.borrow().scope() >= scope {
-				state
-					.borrow()
-					.on_remove(parser, document)
+		self.states.retain(|_name, rule_state| {
+			if rule_state.scope() >= scope {
+				rule_state
+					.on_remove(state, document)
 					.drain(..)
-					.for_each(|report| result.push(report));
+					.for_each(|report| reports.push(report));
 				false
 			} else {
 				true
 			}
 		});
 
-		return result;
+		return reports;
 	}
 }

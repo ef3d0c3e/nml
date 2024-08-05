@@ -12,6 +12,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Source;
@@ -48,11 +49,11 @@ pub struct TextRule;
 impl Rule for TextRule {
 	fn name(&self) -> &'static str { "Text" }
 
-	fn next_match(&self, _parser: &dyn Parser, _cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> { None }
+	fn next_match(&self, _state: &ParserState, _cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> { None }
 
 	fn on_match(
 		&self,
-		_parser: &dyn Parser,
+		_state: &mut ParserState,
 		_document: &dyn Document,
 		_cursor: Cursor,
 		_match_data: Option<Box<dyn Any>>,
@@ -60,14 +61,14 @@ impl Rule for TextRule {
 		panic!("Text cannot match");
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
 		let mut bindings = vec![];
 		bindings.push((
 			"push".to_string(),
 			lua.create_function(|_, content: String| {
 				CTX.with_borrow(|ctx| {
 					ctx.as_ref().map(|ctx| {
-						ctx.parser.push(
+						ctx.state.parser.push(
 							ctx.document,
 							Box::new(Text {
 								location: ctx.location.clone(),
@@ -82,6 +83,6 @@ impl Rule for TextRule {
 			.unwrap(),
 		));
 
-		Some(bindings)
+		bindings
 	}
 }

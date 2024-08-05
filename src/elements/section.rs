@@ -6,9 +6,11 @@ use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
+use crate::parser::style::StyleHolder;
 use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
@@ -160,7 +162,7 @@ impl RegexRule for SectionRule {
 	fn on_regex_match(
 		&self,
 		_: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 		token: Token,
 		matches: regex::Captures,
@@ -175,9 +177,9 @@ impl RegexRule for SectionRule {
 						.with_label(
 							Label::new((token.source(), depth.range()))
 							.with_message(format!("Section is of depth {}, which is greather than {} (maximum depth allowed)",
-                            depth.len().fg(parser.colors().info),
-                            6.fg(parser.colors().info)))
-							.with_color(parser.colors().error))
+                            depth.len().fg(state.parser.colors().info),
+                            6.fg(state.parser.colors().info)))
+							.with_color(state.parser.colors().error))
 						.finish());
 					return result;
 				}
@@ -202,17 +204,17 @@ impl RegexRule for SectionRule {
 						.with_label(
 							Label::new((token.source(), refname.range()))
 							.with_message(format!("Reference with name `{}` is already defined in `{}`",
-									refname.as_str().fg(parser.colors().highlight),
-									elem.location().source().name().as_str().fg(parser.colors().highlight)))
+									refname.as_str().fg(state.parser.colors().highlight),
+									elem.location().source().name().as_str().fg(state.parser.colors().highlight)))
 							.with_message(format!("`{}` conflicts with previously defined reference to {}",
-									refname.as_str().fg(parser.colors().highlight),
-									elem.element_name().fg(parser.colors().highlight)))
-							.with_color(parser.colors().warning))
+									refname.as_str().fg(state.parser.colors().highlight),
+									elem.element_name().fg(state.parser.colors().highlight)))
+							.with_color(state.parser.colors().warning))
 						.with_label(
 							Label::new((elem.location().source(), elem.location().start()..elem.location().end() ))
 							.with_message(format!("`{}` previously defined here",
-								refname.as_str().fg(parser.colors().highlight)))
-							.with_color(parser.colors().warning))
+								refname.as_str().fg(state.parser.colors().highlight)))
+							.with_color(state.parser.colors().warning))
 						.with_note(format!("Previous reference was overwritten"))
 						.finish());
 					}
@@ -234,10 +236,10 @@ impl RegexRule for SectionRule {
 							.with_label(
 								Label::new((token.source(), kind.range()))
 								.with_message(format!("Section numbering kind must be a combination of `{}` for unnumbered, and `{}` for non-listing; got `{}`",
-										"*".fg(parser.colors().info),
-										"+".fg(parser.colors().info),
-										kind.as_str().fg(parser.colors().highlight)))
-								.with_color(parser.colors().error))
+										"*".fg(state.parser.colors().info),
+										"+".fg(state.parser.colors().info),
+										kind.as_str().fg(state.parser.colors().highlight)))
+								.with_color(state.parser.colors().error))
 								.with_help(format!("Leave empty for a numbered listed section"))
 							.finish());
 					return result;
@@ -265,7 +267,7 @@ impl RegexRule for SectionRule {
 							.with_label(
 								Label::new((token.source(), name.range()))
 									.with_message("Sections require a name before line end")
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -280,8 +282,8 @@ impl RegexRule for SectionRule {
 						.with_label(
 							Label::new((token.source(), name.range()))
 							.with_message("Sections require at least one whitespace before the section's name")
-							.with_color(parser.colors().warning))
-                        .with_help(format!("Add a space before `{}`", section_name.fg(parser.colors().highlight)))
+							.with_color(state.parser.colors().warning))
+                        .with_help(format!("Add a space before `{}`", section_name.fg(state.parser.colors().highlight)))
 						.finish());
 					return result;
 				}
@@ -292,12 +294,12 @@ impl RegexRule for SectionRule {
 		};
 
 		// Get style
-		let style = parser
+		let style = state.shared.styles
 			.current_style(section_style::STYLE_KEY)
 			.downcast_rc::<SectionStyle>()
 			.unwrap();
 
-		parser.push(
+		state.parser.push(
 			document,
 			Box::new(Section {
 				location: token.clone(),
@@ -312,7 +314,7 @@ impl RegexRule for SectionRule {
 		return result;
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
 		let mut bindings = vec![];
 
 		bindings.push((
@@ -365,11 +367,11 @@ impl RegexRule for SectionRule {
 			.unwrap(),
 		));
 
-		Some(bindings)
+		bindings
 	}
 
-	fn register_styles(&self, parser: &dyn Parser) {
-		parser.set_current_style(Rc::new(SectionStyle::default()));
+	fn register_styles(&self, holder: &mut StyleHolder) {
+		holder.set_current_style(Rc::new(SectionStyle::default()));
 	}
 }
 
@@ -377,7 +379,6 @@ mod section_style {
 	use serde::Deserialize;
 	use serde::Serialize;
 
-	use crate::document::style::ElementStyle;
 	use crate::impl_elementstyle;
 
 	pub static STYLE_KEY: &'static str = "style.section";
@@ -409,7 +410,6 @@ mod section_style {
 
 #[cfg(test)]
 mod tests {
-	use crate::document::style::StyleHolder;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
@@ -432,7 +432,7 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Section { depth == 1, title == "1" };
@@ -462,7 +462,7 @@ nml.section.push("6", 6, "", "refname")
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Section { depth == 1, title == "1" };
@@ -488,9 +488,11 @@ nml.section.push("6", 6, "", "refname")
 			None,
 		));
 		let parser = LangParser::default();
-		let _ = parser.parse(source, None);
+		let state = ParserState::new(&parser, None);
+		let _ = parser.parse(state, source, None);
 
-		let style = parser
+		let style = state.shared
+			.styles
 			.current_style(section_style::STYLE_KEY)
 			.downcast_rc::<SectionStyle>()
 			.unwrap();

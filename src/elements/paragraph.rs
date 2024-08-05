@@ -3,8 +3,6 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use ariadne::Report;
-use mlua::Function;
-use mlua::Lua;
 use regex::Regex;
 
 use crate::compiler::compiler::Compiler;
@@ -14,6 +12,7 @@ use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Source;
@@ -108,7 +107,7 @@ impl ParagraphRule {
 impl Rule for ParagraphRule {
 	fn name(&self) -> &'static str { "Paragraphing" }
 
-	fn next_match(&self, _parser: &dyn Parser, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.re
 			.find_at(cursor.source.content(), cursor.pos)
 			.and_then(|m| Some((m.start(), Box::new([false; 0]) as Box<dyn Any>)))
@@ -116,7 +115,7 @@ impl Rule for ParagraphRule {
 
 	fn on_match(
 		&self,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 		cursor: Cursor,
 		_match_data: Option<Box<dyn Any>>,
@@ -126,7 +125,7 @@ impl Rule for ParagraphRule {
 			Some(capture) => cursor.at(capture.get(0).unwrap().end() - 1),
 		};
 
-		parser.push(
+		state.parser.push(
 			document,
 			Box::new(Paragraph {
 				location: Token::new(cursor.pos..end_cursor.pos, cursor.source.clone()),
@@ -136,9 +135,6 @@ impl Rule for ParagraphRule {
 
 		(end_cursor, Vec::new())
 	}
-
-	// TODO
-	fn lua_bindings<'lua>(&self, _lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> { None }
 }
 
 #[cfg(test)]
@@ -169,7 +165,7 @@ Last paragraph
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

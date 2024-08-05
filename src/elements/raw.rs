@@ -4,6 +4,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
@@ -78,7 +79,7 @@ impl RegexRule for RawRule {
 	fn on_regex_match(
 		&self,
 		_index: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
@@ -95,10 +96,10 @@ impl RegexRule for RawRule {
 							Label::new((token.source().clone(), token.range.clone()))
 								.with_message(format!(
 									"Missing terminating `{}` after first `{}`",
-									"?}".fg(parser.colors().info),
-									"{?".fg(parser.colors().info)
+									"?}".fg(state.parser.colors().info),
+									"{?".fg(state.parser.colors().info)
 								))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.finish(),
 				);
@@ -115,7 +116,7 @@ impl RegexRule for RawRule {
 							.with_label(
 								Label::new((token.source().clone(), content.range()))
 									.with_message("Raw code is empty")
-									.with_color(parser.colors().warning),
+									.with_color(state.parser.colors().warning),
 							)
 							.finish(),
 					);
@@ -134,7 +135,7 @@ impl RegexRule for RawRule {
 							.with_label(
 								Label::new((token.source().clone(), token.range.clone()))
 									.with_message(format!("Raw code is missing properties: {e}"))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -152,7 +153,7 @@ impl RegexRule for RawRule {
 								.with_label(
 									Label::new((token.source().clone(), props.range()))
 										.with_message(e)
-										.with_color(parser.colors().error),
+										.with_color(state.parser.colors().error),
 								)
 								.finish(),
 						);
@@ -176,10 +177,10 @@ impl RegexRule for RawRule {
 								Label::new((token.source().clone(), token.range.clone()))
 									.with_message(format!(
 										"Property `kind: {}` cannot be converted: {}",
-										prop.fg(parser.colors().info),
-										err.fg(parser.colors().error)
+										prop.fg(state.parser.colors().info),
+										err.fg(state.parser.colors().error)
 									))
-									.with_color(parser.colors().warning),
+									.with_color(state.parser.colors().warning),
 							)
 							.finish(),
 					);
@@ -196,9 +197,9 @@ impl RegexRule for RawRule {
 								))
 								.with_message(format!(
 									"Property `{}` is missing",
-									err.fg(parser.colors().info)
+									err.fg(state.parser.colors().info)
 								))
-								.with_color(parser.colors().warning),
+								.with_color(state.parser.colors().warning),
 							)
 							.finish(),
 					);
@@ -207,7 +208,7 @@ impl RegexRule for RawRule {
 			},
 		};
 
-		parser.push(
+		state.parser.push(
 			document,
 			Box::new(Raw {
 				location: token.clone(),
@@ -219,7 +220,7 @@ impl RegexRule for RawRule {
 		reports
 	}
 
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
 		let mut bindings = vec![];
 
 		bindings.push((
@@ -242,7 +243,7 @@ impl RegexRule for RawRule {
 
 				CTX.with_borrow(|ctx| {
 					ctx.as_ref().map(|ctx| {
-						ctx.parser.push(
+						ctx.state.parser.push(
 							ctx.document,
 							Box::new(Raw {
 								location: ctx.location.clone(),
@@ -258,7 +259,7 @@ impl RegexRule for RawRule {
 			.unwrap(),
 		));
 
-		Some(bindings)
+		bindings
 	}
 }
 
@@ -282,7 +283,7 @@ Break{?[kind=block] Raw?}NewParagraph{?<b>?}
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph;
@@ -297,15 +298,15 @@ Break{?[kind=block] Raw?}NewParagraph{?<b>?}
 	#[test]
 	fn lua() {
 		let source = Rc::new(SourceFile::with_content(
-				"".to_string(),
-				r#"
+			"".to_string(),
+			r#"
 Break%<nml.raw.push("block", "Raw")>%NewParagraph%<nml.raw.push("inline", "<b>")>%
 				"#
-				.to_string(),
-				None,
+			.to_string(),
+			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 		Paragraph;

@@ -3,21 +3,22 @@ use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
-use crate::document::layout::LayoutType;
 use crate::lua::kernel::CTX;
+use crate::parser::layout::LayoutHolder;
+use crate::parser::layout::LayoutType;
 use crate::parser::parser::Parser;
+use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
+use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
-use crate::parser::state::State;
 use crate::parser::util::process_escaped;
 use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
-use lazy_static::lazy_static;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -54,7 +55,8 @@ impl FromStr for LayoutToken {
 }
 
 mod default_layouts {
-	use crate::parser::util::Property;
+	use crate::parser::layout::LayoutType;
+use crate::parser::util::Property;
 	use crate::parser::util::PropertyParser;
 
 	use super::*;
@@ -242,12 +244,12 @@ struct LayoutState {
 	pub(self) stack: Vec<(Vec<Token>, Rc<dyn LayoutType>)>,
 }
 
-impl State for LayoutState {
+impl RuleState for LayoutState {
 	fn scope(&self) -> Scope { Scope::DOCUMENT }
 
 	fn on_remove<'a>(
 		&self,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
@@ -265,15 +267,15 @@ impl State for LayoutState {
 							.with_order(1)
 							.with_message(format!(
 								"Layout {} stars here",
-								layout_type.name().fg(parser.colors().info)
+								layout_type.name().fg(state.parser.colors().info)
 							))
-							.with_color(parser.colors().error),
+							.with_color(state.parser.colors().error),
 					)
 					.with_label(
 						Label::new((at.source(), at.range.clone()))
 							.with_order(2)
 							.with_message("Document ends here".to_string())
-							.with_color(parser.colors().error),
+							.with_color(state.parser.colors().error),
 					)
 					.finish(),
 			);
@@ -313,15 +315,15 @@ impl LayoutRule {
 		}
 	}
 
-	pub fn initialize_state(parser: &dyn Parser) -> Rc<RefCell<dyn State>> {
-		let query = parser.state().query(&STATE_NAME);
+	pub fn initialize_state(state: &mut ParserState) -> Rc<RefCell<dyn RuleState>> {
+		let query = state.shared.rule_state.get(STATE_NAME);
 		match query {
 			Some(state) => state,
 			None => {
 				// Insert as a new state
-				match parser.state_mut().insert(
-					STATE_NAME.clone(),
-					Rc::new(RefCell::new(LayoutState { stack: vec![] })),
+				match state.shared.rule_state.insert(
+					STATE_NAME.into(),
+					Rc::new(LayoutState { stack: vec![] }),
 				) {
 					Err(_) => panic!("Unknown error"),
 					Ok(state) => state,
@@ -373,9 +375,7 @@ impl LayoutRule {
 	}
 }
 
-lazy_static! {
-	static ref STATE_NAME: String = "elements.layout".to_string();
-}
+static STATE_NAME: &'static str = "elements.layout";
 
 impl RegexRule for LayoutRule {
 	fn name(&self) -> &'static str { "Layout" }
@@ -385,14 +385,14 @@ impl RegexRule for LayoutRule {
 	fn on_regex_match(
 		&self,
 		index: usize,
-		parser: &dyn Parser,
+		state: &mut ParserState,
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
 	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
 
-		let state = LayoutRule::initialize_state(parser);
+		let rule_state = LayoutRule::initialize_state(state);
 
 		if index == 0
 		// BEGIN_LAYOUT
@@ -406,9 +406,9 @@ impl RegexRule for LayoutRule {
 								Label::new((token.source(), token.range.clone()))
 									.with_message(format!(
 										"Missing layout name after `{}`",
-										"#+BEGIN_LAYOUT".fg(parser.colors().highlight)
+										"#+BEGIN_LAYOUT".fg(state.parser.colors().highlight)
 									))
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -426,9 +426,9 @@ impl RegexRule for LayoutRule {
 									Label::new((token.source(), token.range.clone()))
 										.with_message(format!(
 											"Empty layout name after `{}`",
-											"#+BEGIN_LAYOUT".fg(parser.colors().highlight)
+											"#+BEGIN_LAYOUT".fg(state.parser.colors().highlight)
 										))
-										.with_color(parser.colors().error),
+										.with_color(state.parser.colors().error),
 								)
 								.finish(),
 						);
@@ -443,9 +443,9 @@ impl RegexRule for LayoutRule {
 									Label::new((token.source(), name.range()))
 										.with_message(format!(
 											"Missing a space before layout name `{}`",
-											name.as_str().fg(parser.colors().highlight)
+											name.as_str().fg(state.parser.colors().highlight)
 										))
-										.with_color(parser.colors().error),
+										.with_color(state.parser.colors().error),
 								)
 								.finish(),
 						);
@@ -453,7 +453,7 @@ impl RegexRule for LayoutRule {
 					}
 
 					// Get layout
-					let layout_type = match parser.get_layout(trimmed) {
+					let layout_type = match state.shared.layouts.get(trimmed) {
 						None => {
 							reports.push(
 								Report::build(ReportKind::Error, token.source(), name.start())
@@ -462,9 +462,9 @@ impl RegexRule for LayoutRule {
 										Label::new((token.source(), name.range()))
 											.with_message(format!(
 												"Cannot find layout `{}`",
-												trimmed.fg(parser.colors().highlight)
+												trimmed.fg(state.parser.colors().highlight)
 											))
-											.with_color(parser.colors().error),
+											.with_color(state.parser.colors().error),
 									)
 									.finish(),
 							);
@@ -475,7 +475,7 @@ impl RegexRule for LayoutRule {
 
 					// Parse properties
 					let properties = match LayoutRule::parse_properties(
-						parser.colors(),
+						state.parser.colors(),
 						&token,
 						layout_type.clone(),
 						matches.get(1),
@@ -487,7 +487,7 @@ impl RegexRule for LayoutRule {
 						}
 					};
 
-					parser.push(
+					state.parser.push(
 						document,
 						Box::new(Layout {
 							location: token.clone(),
@@ -524,7 +524,7 @@ impl RegexRule for LayoutRule {
 							.with_label(
 								Label::new((token.source(), token.range.clone()))
 									.with_message("No active layout found".to_string())
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -543,10 +543,10 @@ impl RegexRule for LayoutRule {
 							Label::new((token.source(), token.range.clone()))
 								.with_message(format!(
 									"Layout expects a maximum of {} blocks, currently at {}",
-									layout_type.expects().end.fg(parser.colors().info),
-									tokens.len().fg(parser.colors().info),
+									layout_type.expects().end.fg(state.parser.colors().info),
+									tokens.len().fg(state.parser.colors().info),
 								))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.finish(),
 				);
@@ -555,7 +555,7 @@ impl RegexRule for LayoutRule {
 
 			// Parse properties
 			let properties = match LayoutRule::parse_properties(
-				parser.colors(),
+				state.parser.colors(),
 				&token,
 				layout_type.clone(),
 				matches.get(1),
@@ -587,7 +587,7 @@ impl RegexRule for LayoutRule {
 							.with_label(
 								Label::new((token.source(), token.range.clone()))
 									.with_message("No active layout found".to_string())
-									.with_color(parser.colors().error),
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
@@ -606,10 +606,10 @@ impl RegexRule for LayoutRule {
 							Label::new((token.source(), token.range.clone()))
 								.with_message(format!(
 									"Layout expects a minimum of {} blocks, currently at {}",
-									layout_type.expects().start.fg(parser.colors().info),
-									tokens.len().fg(parser.colors().info),
+									layout_type.expects().start.fg(state.parser.colors().info),
+									tokens.len().fg(state.parser.colors().info),
 								))
-								.with_color(parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.finish(),
 				);
@@ -618,7 +618,7 @@ impl RegexRule for LayoutRule {
 
 			// Parse properties
 			let properties = match LayoutRule::parse_properties(
-				parser.colors(),
+				state.parser.colors(),
 				&token,
 				layout_type.clone(),
 				matches.get(1),
@@ -636,7 +636,7 @@ impl RegexRule for LayoutRule {
 			(id, LayoutToken::End, layout_type, properties)
 		};
 
-		parser.push(
+		state.parser.push(
 			document,
 			Box::new(Layout {
 				location: token,
@@ -650,8 +650,8 @@ impl RegexRule for LayoutRule {
 		return reports;
 	}
 
-	// TODO
-	fn lua_bindings<'lua>(&self, lua: &'lua Lua) -> Option<Vec<(String, Function<'lua>)>> {
+	// TODO: Add method to create new layouts
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
 		let mut bindings = vec![];
 
 		bindings.push((
@@ -831,7 +831,7 @@ impl RegexRule for LayoutRule {
 								}
 							};
 
-							ctx.parser.push(
+							ctx.state.parser.push(
 								ctx.document,
 								Box::new(Layout {
 									location: ctx.location.clone(),
@@ -850,12 +850,12 @@ impl RegexRule for LayoutRule {
 			.unwrap(),
 		));
 
-		Some(bindings)
+		bindings
 	}
 
-	fn register_layouts(&self, parser: &dyn Parser) {
-		parser.insert_layout(Rc::new(default_layouts::Centered::default()));
-		parser.insert_layout(Rc::new(default_layouts::Split::default()));
+	fn register_layouts(&self, holder: &mut LayoutHolder) {
+	   holder.insert(Rc::new(default_layouts::Centered::default()));
+		holder.insert(Rc::new(default_layouts::Split::default()));
 	}
 }
 
@@ -892,7 +892,7 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Layout { token == LayoutToken::Begin, id == 0 };
@@ -944,7 +944,7 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Layout { token == LayoutToken::Begin, id == 0 };
