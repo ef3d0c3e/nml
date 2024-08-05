@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
@@ -48,6 +49,8 @@ pub struct LangParser {
 
 	// Parser state
 	pub err_flag: RefCell<bool>,
+	pub matches: RefCell<Vec<(usize, Option<Box<dyn Any>>)>>,
+	
 	pub state: RefCell<StateHolder>,
 	pub kernels: RefCell<HashMap<String, Kernel>>,
 	pub styles: RefCell<HashMap<String, Rc<dyn ElementStyle>>>,
@@ -61,6 +64,7 @@ impl LangParser {
 			rules: vec![],
 			colors: ReportColors::with_colors(),
 			err_flag: RefCell::new(false),
+			matches: RefCell::new(Vec::new()),
 			state: RefCell::new(StateHolder::new()),
 			kernels: RefCell::new(HashMap::new()),
 			styles: RefCell::new(HashMap::new()),

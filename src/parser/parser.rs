@@ -13,6 +13,7 @@ use crate::document::document::Document;
 use crate::document::element::Element;
 use crate::document::layout::LayoutHolder;
 use crate::document::style::StyleHolder;
+use crate::elements::customstyle::CustomStyleRule;
 use crate::lua::kernel::KernelHolder;
 use ariadne::Color;
 
@@ -50,7 +51,9 @@ pub trait Parser: KernelHolder + StyleHolder + LayoutHolder + CustomStyleHolder 
 	/// When colors are disabled, all colors should resolve to empty string
 	fn colors(&self) -> &ReportColors;
 
+	/// Gets a reference to all the [`Rule`]s defined for the parser
 	fn rules(&self) -> &Vec<Box<dyn Rule>>;
+	/// Gets a mutable reference to all the [`Rule`]s defined for the parser
 	fn rules_mut(&mut self) -> &mut Vec<Box<dyn Rule>>;
 
 	fn state(&self) -> Ref<'_, StateHolder>;
@@ -84,18 +87,13 @@ pub trait ParserStrategy {
 
 impl<T: Parser> ParserStrategy for T {
     fn add_rule(&mut self, rule: Box<dyn Rule>, after: Option<&'static str>) -> Result<(), String> {
-		// Error on duplicate rule
 		let rule_name = (*rule).name();
-		if let Err(e) = self.rules().iter().try_for_each(|rule| {
-			if (*rule).name() != rule_name {
-				return Ok(());
-			}
-
+		// Error on duplicate rule
+		if let Some(_) = self.rules().iter().find(|rule| rule.name() == rule_name)
+		{
 			return Err(format!(
 				"Attempted to introduce duplicate rule: `{rule_name}`"
 			));
-		}) {
-			return Err(e);
 		}
 
 		match after {
@@ -134,7 +132,7 @@ impl<T: Parser> ParserStrategy for T {
 			.zip(matches.iter_mut())
 			.for_each(|(rule, (matched_at, match_data))| {
 				// Don't upate if not stepped over yet
-				if *matched_at > cursor.pos && rule.downcast_ref::<crate::elements::customstyle::CustomStyleRule>().is_none() {
+				if *matched_at > cursor.pos && rule.downcast_ref::<CustomStyleRule>().is_none() {
 					// TODO: maybe we should expose matches() so it becomes possible to dynamically register a new rule
 					return;
 				}

@@ -409,6 +409,7 @@ mod section_style {
 
 #[cfg(test)]
 mod tests {
+	use crate::document::style::StyleHolder;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
@@ -471,5 +472,30 @@ nml.section.push("6", 6, "", "refname")
 			Section { depth == 5, title == "5", kind == section_kind::NO_NUMBER | section_kind::NO_TOC };
 			Section { depth == 6, title == "6", reference == Some("refname".to_string()) };
 		);
+	}
+
+	#[test]
+	fn style() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+@@style.section = {
+	"link_pos": "None",
+	"link": ["a", "b", "c"]
+}
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let _ = parser.parse(source, None);
+
+		let style = parser
+			.current_style(section_style::STYLE_KEY)
+			.downcast_rc::<SectionStyle>()
+			.unwrap();
+
+		assert_eq!(style.link_pos, SectionLinkPos::None);
+		assert_eq!(style.link, ["a".to_string(), "b".to_string(), "c".to_string()]);
 	}
 }

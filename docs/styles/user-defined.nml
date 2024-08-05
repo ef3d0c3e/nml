@@ -1,4 +1,39 @@
 @import ../template.nml
 %<make_doc({"Styles"}, "User-Defined", "User-Defined Styles")>%
 
-# TODO
+# Defining a custom style
+```Lua
+%<[main]
+function undercustom_start(color)
+	nml.raw.push("inline", "<span style=\"border-bottom: 1px dashed " .. color .. "\">")
+end
+
+function undercustom_end()
+	nml.raw.push("inline", "</span>")
+end
+
+nml.custom_style.define_toggled("Undercustom Red", "~", "undercustom_start(\"red\")", "undercustom_end()")
+nml.custom_style.define_paired("Undercustom Green", "[|", "|]", "undercustom_start(\"Green\")", "undercustom_end()")
+>%
+```
+
+%<[main]
+function undercustom_start(color)
+	nml.raw.push("inline", "<span style=\"border-bottom: 1px dashed " .. color .. "\">")
+end
+
+function undercustom_end()
+	nml.raw.push("inline", "</span>")
+end
+
+nml.custom_style.define_toggled("Undercustom Red", "~", "undercustom_start(\"red\")", "undercustom_end()")
+nml.custom_style.define_paired("Undercustom Green", "[|", "|]", "undercustom_start(\"Green\")", "undercustom_end()")
+>%
+Results in the following:
+ * ``Plain Text,~Dashed underline~`` → ~Dashed underline~
+ * ``Plain Text,[|Dashed underline|]`` → [|Dashed underline|]
+
+# Limitations
+
+ * Custom styles cannot be removed and will be defined through the entire document
+ * Custom styles defined from lua must have their `start` and `end` functions in the `main` lua kernel.

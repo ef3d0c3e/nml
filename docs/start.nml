@@ -1,0 +1,32 @@
+@import template.nml
+@nav.previous = Index
+%<make_doc({}, "Getting Started", "Getting Started")>%
+
+# Building NML
+
+You need at least the nightly version of rustc to compile NML.
+Instruction for your operating system can be found on [Rust's website](https://forge.rust-lang.org/infra/other-installation-methods.html).
+You'll also need liblua 5.4 installed. You can then move the `nml` executable in `target/release/nml` into your `\$PATH`
+
+``cargo build --bin nml`` or for release mode: ``cargo build --release --bin nml``
+
+# Building your first document
+
+ * ``nml -i input.nml -o output.html``
+
+# Using the cache
+
+NML relies on sqlite to keep a cache of precompiled elements that take a long time to process (e.g $|[kind=inline] \LaTeX|$).
+To enable caching, use option `-d` with a path: ``-d cache.db``. You can reuse the same cache for multiple documents and benefit from cached elements.
+Note that in directory-processing mode, a cache is required so that only modified ``.nml`` files get reprocessed.
+
+# Directory-Processing mode
+
+To use directory-processing mode, you need to pass an input directory and an output directory. Directory-processing mode requires that you use a database, so that it knows which documents have already been compiled. If the output directory doesn't exist, it will be automatically created.
+
+Compiling the docs: 
+``Plain Text,
+nml -i docs -o docs_out -d cache.db
+``
+
+If you modify an ``Plain Text,@import``ed file, you will need to use the ``--force-rebuild`` option, as NML currently doesn't track which files are imported by other files.

@@ -17,7 +17,6 @@ use crate::document::customstyle::CustomStyle;
 use crate::document::customstyle::CustomStyleToken;
 use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
-use crate::lua::kernel::function_with_context;
 use crate::lua::kernel::KernelContext;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::Parser;
@@ -423,6 +422,18 @@ impl Rule for CustomStyleRule {
 				)| {
 					let mut result = Ok(());
 
+					if token_start == token_end
+					{
+						return Err(BadArgument {
+							to: Some("define_paired".to_string()),
+							pos: 3,
+							name: Some("token_end".to_string()),
+							cause: Arc::new(mlua::Error::external(format!(
+										"Custom style with name `{name}` cannot be defined: The start token must differ from the end token, use `define_toggled` insteda"
+							))),
+						});
+					}
+
 					let style = LuaCustomStyle {
 						tokens: CustomStyleToken::Pair(token_start, token_end),
 						name: name.clone(),
@@ -434,7 +445,7 @@ impl Rule for CustomStyleRule {
 						ctx.as_ref().map(|ctx| {
 							if let Some(_) = ctx.parser.get_custom_style(name.as_str()) {
 								result = Err(BadArgument {
-									to: Some("define_toggled".to_string()),
+									to: Some("define_paired".to_string()),
 									pos: 1,
 									name: Some("name".to_string()),
 									cause: Arc::new(mlua::Error::external(format!(

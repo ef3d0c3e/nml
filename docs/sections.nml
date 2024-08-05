@@ -1,0 +1,56 @@
+@import template.nml
+@nav.previous = Getting Started
+%<make_doc({}, "Sections", "Sections")>%
+
+#{first} Sections
+
+To add a section to your document, put one or more ``Plain Text, #`` at the start of the line, followed a space and the name of your section.
+
+
+Which will render as:
+
+#+LAYOUT_BEGIN Split
+:: Make sure they don't pollute the ToC
+#+ Section name
+##+ Subsection
+##*+ Unnumbered section
+##+ Unnumbered section
+#+ This section is not in the ToC
+
+#+LAYOUT_NEXT
+
+Given by the following:
+``
+# Section name
+## Subsection
+#* Unnumbered section
+#+ This section is not in the ToC
+``
+#+LAYOUT_END
+
+# Sections references
+
+You can create a referenceable section by using ``Plain Text, #{refname}``, where `refname` is an internal reference name for use only within this document.
+You can then create a clickable reference to this section: ``§{refname}`` or ``§{refname}[caption=Click me!]``. Below is an example of this in action:
+
+###{refname}+* Section
+§{refname}[caption=Click me!] or §{first}[caption=First section]
+
+``
+###{refname}+* Section
+§{refname}[caption=Click me!] or §{first}[caption=First section]
+``
+
+# Section styling
+
+The styling for the section link is controlled by the style key ``style.section``
+
+ * ``link_pos``: `Before|After|None` Position of the section link.
+ * ``link``: `[Before, Link, After]` 3 strings-array
+
+```JSON, Default Style
+{
+	"link_pos": "Before",
+	"link": ["", "🔗", " "]
+}
+```

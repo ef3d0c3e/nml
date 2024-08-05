@@ -46,17 +46,17 @@ First
 
 Centered layout align text to the center of the current block.
 
-#### Style
+####+* Style
 The ``Centered`` layout uses the `.centered` css class to center the text.
 
-#### Properties
+####+* Properties
  * ``style`` Added css style to the div (defaults to none)
 
 ## Split
 
-#### Style
+####+* Style
 The ``Split`` layout uses the `.split-container` and `.split` css class to create the desired layout.
 If you wish to modify the relative width of the splits: add `style=flex: 0.5` in the properties, this makes the following split half the width of the other splits.
 
-#### Properties
+####+* Properties
  * ``style`` Added css style to the div (defaults to none)

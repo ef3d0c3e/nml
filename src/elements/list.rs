@@ -373,7 +373,7 @@ impl Rule for ListRule {
 				}
 
 				// Parse entry content
-				let token = Token::new(end_cursor.pos..end_cursor.pos, end_cursor.source.clone());
+				let token = Token::new(entry_start..end_cursor.pos, end_cursor.source.clone());
 				let entry_src = Rc::new(VirtualSource::new(
 					token.clone(),
 					"List Entry".to_string(),
