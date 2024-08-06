@@ -11,7 +11,6 @@ use crate::document::document::Document;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -115,17 +114,17 @@ impl Rule for ParagraphRule {
 
 	fn on_match(
 		&self,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &dyn Document,
 		cursor: Cursor,
-		_match_data: Option<Box<dyn Any>>,
+		_match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
 		let end_cursor = match self.re.captures_at(cursor.source.content(), cursor.pos) {
 			None => panic!("Unknown error"),
 			Some(capture) => cursor.at(capture.get(0).unwrap().end() - 1),
 		};
 
-		state.parser.push(
+		state.push(
 			document,
 			Box::new(Paragraph {
 				location: Token::new(cursor.pos..end_cursor.pos, cursor.source.clone()),
@@ -142,6 +141,7 @@ mod tests {
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 

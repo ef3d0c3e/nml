@@ -1,3 +1,4 @@
+use crate::parser::style::ElementStyle;
 use std::any::Any;
 use std::ops::Range;
 use std::rc::Rc;
@@ -15,7 +16,6 @@ use regex::Regex;
 
 use crate::document::document::Document;
 use crate::lua::kernel::CTX;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -69,10 +69,10 @@ impl Rule for ElemStyleRule {
 
 	fn on_match<'a>(
 		&self,
-		state: &mut ParserState,
+		state: &ParserState,
 		_document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
-		_match_data: Option<Box<dyn Any>>,
+		_match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
 		let mut reports = vec![];
 		let matches = self
@@ -81,7 +81,7 @@ impl Rule for ElemStyleRule {
 			.unwrap();
 		let mut cursor = cursor.at(matches.get(0).unwrap().end() - 1);
 
-		let style = if let Some(key) = matches.get(1) {
+		let style: Rc<dyn ElementStyle> = if let Some(key) = matches.get(1) {
 			let trimmed = key.as_str().trim_start().trim_end();
 
 			// Check if empty
@@ -100,7 +100,7 @@ impl Rule for ElemStyleRule {
 			}
 
 			// Check if key exists
-			if !state.shared.style.is_registered(trimmed) {
+			if !state.shared.styles.borrow().is_registered(trimmed) {
 				reports.push(
 					Report::build(ReportKind::Error, cursor.source.clone(), key.start())
 						.with_message("Unknown Style Key")
@@ -118,7 +118,7 @@ impl Rule for ElemStyleRule {
 				return (cursor, reports);
 			}
 
-			state.shared.style.current_style(trimmed)
+			state.shared.styles.borrow().current(trimmed)
 		} else {
 			panic!("Unknown error")
 		};
@@ -172,7 +172,7 @@ impl Rule for ElemStyleRule {
 			}
 		};
 
-		state.shared.styles.set_current(new_style);
+		state.shared.styles.borrow_mut().set_current(new_style);
 
 		(cursor, reports)
 	}
@@ -186,7 +186,13 @@ impl Rule for ElemStyleRule {
 				let mut result = Ok(());
 				CTX.with_borrow(|ctx| {
 					ctx.as_ref().map(|ctx| {
-						if !ctx.parser.is_style_registered(style_key.as_str()) {
+						if !ctx
+							.state
+							.shared
+							.styles
+							.borrow()
+							.is_registered(style_key.as_str())
+						{
 							result = Err(BadArgument {
 								to: Some("set".to_string()),
 								pos: 1,
@@ -198,7 +204,7 @@ impl Rule for ElemStyleRule {
 							return;
 						}
 
-						let style = ctx.parser.current_style(style_key.as_str());
+						let style = ctx.state.shared.styles.borrow().current(style_key.as_str());
 						let new_style = match style.from_lua(lua, new_style) {
 							Err(err) => {
 								result = Err(err);
@@ -207,7 +213,7 @@ impl Rule for ElemStyleRule {
 							Ok(new_style) => new_style,
 						};
 
-						ctx.parser.set_current_style(new_style);
+						ctx.state.shared.styles.borrow_mut().set_current(new_style);
 					})
 				});
 

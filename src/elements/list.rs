@@ -150,7 +150,7 @@ impl ListRule {
 
 		// Close
 		for i in start_pos..current.len() {
-			state.parser.push(
+			state.push(
 				document,
 				Box::new(ListMarker {
 					location: token.clone(),
@@ -162,7 +162,7 @@ impl ListRule {
 
 		// Open
 		for i in start_pos..target.len() {
-			state.parser.push(
+			state.push(
 				document,
 				Box::new(ListMarker {
 					location: token.clone(),
@@ -260,7 +260,7 @@ impl Rule for ListRule {
 
 	fn on_match<'a>(
 		&self,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a dyn Document<'a>,
 		cursor: Cursor,
 		_match_data: Box<dyn Any>,
@@ -403,7 +403,7 @@ impl Rule for ListRule {
 					ListRule::push_markers(&token, state, document, &vec![], &depth);
 				}
 
-				state.parser.push(
+				state.push(
 					document,
 					Box::new(ListEntry {
 						location: Token::new(

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
+use std::ops::Deref;
 
 use ariadne::Report;
 
@@ -25,13 +26,13 @@ pub trait CustomStyle: core::fmt::Debug {
 	fn on_start<'a>(
 		&self,
 		location: Token,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>>;
 	fn on_end<'a>(
 		&self,
 		location: Token,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>>;
 }
@@ -42,13 +43,21 @@ pub struct CustomStyleHolder {
 }
 
 impl CustomStyleHolder {
-	fn get(&self, style_name: &str) -> Option<Rc<dyn CustomStyle>> {
+	pub fn get(&self, style_name: &str) -> Option<Rc<dyn CustomStyle>> {
 		self.custom_styles
 			.get(style_name)
 			.map(|style| style.clone())
 	}
 
-	fn insert(&mut self, style: Rc<dyn CustomStyle>) {
+	pub fn insert(&mut self, style: Rc<dyn CustomStyle>) {
 		self.custom_styles.insert(style.name().into(), style);
 	}
+}
+
+impl Deref for CustomStyleHolder {
+    type Target = HashMap<String, Rc<dyn CustomStyle>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.custom_styles
+    }
 }

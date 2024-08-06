@@ -7,8 +7,6 @@ use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
-use mlua::Function;
-use mlua::Lua;
 use regex::Captures;
 use regex::Match;
 use regex::Regex;
@@ -23,7 +21,6 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::document::references::validate_refname;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -255,7 +252,7 @@ impl MediaRule {
 			.multi_line(true)
 			.build()
 			.unwrap()],
-			properties: PropertyParser{ properties: props },
+			properties: PropertyParser { properties: props },
 		}
 	}
 
@@ -334,7 +331,7 @@ impl RegexRule for MediaRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
@@ -378,7 +375,8 @@ impl RegexRule for MediaRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(3)) {
+		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(3))
+		{
 			Ok(pm) => pm,
 			Err(report) => {
 				reports.push(report);
@@ -481,7 +479,7 @@ impl RegexRule for MediaRule {
 		let mut group = match document.last_element_mut::<Media>() {
 			Some(group) => group,
 			None => {
-				state.parser.push(
+				state.push(
 					document,
 					Box::new(Media {
 						location: token.clone(),
@@ -521,6 +519,7 @@ impl RegexRule for MediaRule {
 #[cfg(test)]
 mod tests {
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 
 	use super::*;

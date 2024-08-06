@@ -2,7 +2,6 @@ use crate::compiler::compiler::Compiler;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -59,7 +58,7 @@ impl RegexRule for CommentRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a dyn Document,
 		token: Token,
 		matches: Captures,
@@ -87,7 +86,13 @@ impl RegexRule for CommentRule {
 			}
 		};
 
-		state.parser.push(document, Box::new(Comment::new(token.clone(), content)));
+		state.push(
+			document,
+			Box::new(Comment {
+				location: token.clone(),
+				content,
+			}),
+		);
 
 		return reports;
 	}
@@ -96,9 +101,10 @@ impl RegexRule for CommentRule {
 #[cfg(test)]
 mod tests {
 	use crate::elements::paragraph::Paragraph;
-use crate::elements::style::Style;
-use crate::elements::text::Text;
-use crate::parser::langparser::LangParser;
+	use crate::elements::style::Style;
+	use crate::elements::text::Text;
+	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 

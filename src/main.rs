@@ -47,13 +47,16 @@ NML version: 0.4\n"
 	);
 }
 
-fn parse(parser: &LangParser, input: &str, debug_opts: &Vec<String>) -> Result<Box<dyn Document<'static>>, String> {
+fn parse(
+	parser: &LangParser,
+	input: &str,
+	debug_opts: &Vec<String>,
+) -> Result<Box<dyn Document<'static>>, String> {
 	println!("Parsing {input}...");
-	let parser = LangParser::default();
 
 	// Parse
 	let source = SourceFile::new(input.to_string(), None).unwrap();
-	let doc = parser.parse(ParserState::new(&parser, None), Rc::new(source), None);
+	let doc = parser.parse(ParserState::new(parser, None), Rc::new(source), None);
 
 	if debug_opts.contains(&"ast".to_string()) {
 		println!("-- BEGIN AST DEBUGGING --");
@@ -218,8 +221,7 @@ fn main() -> ExitCode {
 		}
 		match std::fs::metadata(&output) {
 			Ok(output_meta) => {
-				if !output_meta.is_dir()
-				{
+				if !output_meta.is_dir() {
 					eprintln!("Input is a directory, but ouput is not a directory, halting");
 					return ExitCode::FAILURE;
 				}

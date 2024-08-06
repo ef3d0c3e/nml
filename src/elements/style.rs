@@ -4,7 +4,6 @@ use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -80,7 +79,7 @@ impl RuleState for StyleState {
 
 	fn on_remove<'a>(
 		&self,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &dyn Document,
 	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
@@ -154,7 +153,7 @@ impl StyleRule {
 	}
 }
 
-static STATE_NAME : &'static str = "elements.style";
+static STATE_NAME: &'static str = "elements.style";
 
 impl RegexRule for StyleRule {
 	fn name(&self) -> &'static str { "Style" }
@@ -164,17 +163,20 @@ impl RegexRule for StyleRule {
 	fn on_regex_match(
 		&self,
 		index: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &dyn Document,
 		token: Token,
 		_matches: Captures,
 	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
-		let query = state.shared.rule_state.get(&STATE_NAME);
-		let state = match query {
+		let query = state.shared.rule_state.borrow().get(STATE_NAME);
+		let style_state = match query {
 			Some(state) => state,
 			None => {
 				// Insert as a new state
-				match state.shared.rule_state
+				match state
+					.shared
+					.rule_state
+					.borrow_mut()
 					.insert(STATE_NAME.into(), Rc::new(RefCell::new(StyleState::new())))
 				{
 					Err(_) => panic!("Unknown error"),
@@ -183,11 +185,11 @@ impl RegexRule for StyleRule {
 			}
 		};
 
-		if let Some(style_state) = state.borrow_mut().downcast_mut::<StyleState>() {
+		if let Some(style_state) = style_state.borrow_mut().downcast_mut::<StyleState>() {
 			style_state.toggled[index] = style_state.toggled[index]
 				.clone()
 				.map_or(Some(token.clone()), |_| None);
-			state.parser.push(
+			state.push(
 				document,
 				Box::new(Style::new(
 					token.clone(),
@@ -196,7 +198,7 @@ impl RegexRule for StyleRule {
 				)),
 			);
 		} else {
-			panic!("Invalid state at `{}`", STATE_NAME.as_str());
+			panic!("Invalid state at `{STATE_NAME}`");
 		}
 
 		return vec![];
@@ -207,6 +209,7 @@ impl RegexRule for StyleRule {
 mod tests {
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 
@@ -227,7 +230,7 @@ __`UNDERLINE+EM`__
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

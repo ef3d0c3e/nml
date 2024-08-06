@@ -11,7 +11,6 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -53,10 +52,10 @@ impl Rule for TextRule {
 
 	fn on_match(
 		&self,
-		_state: &mut ParserState,
+		_state: &ParserState,
 		_document: &dyn Document,
 		_cursor: Cursor,
-		_match_data: Option<Box<dyn Any>>,
+		_match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
 		panic!("Text cannot match");
 	}
@@ -68,7 +67,7 @@ impl Rule for TextRule {
 			lua.create_function(|_, content: String| {
 				CTX.with_borrow(|ctx| {
 					ctx.as_ref().map(|ctx| {
-						ctx.state.parser.push(
+						ctx.state.push(
 							ctx.document,
 							Box::new(Text {
 								location: ctx.location.clone(),

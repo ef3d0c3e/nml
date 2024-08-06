@@ -5,7 +5,6 @@ use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -92,7 +91,7 @@ impl RegexRule for LinkRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
@@ -197,7 +196,7 @@ impl RegexRule for LinkRule {
 			_ => panic!("Empty link url"),
 		};
 
-		state.parser.push(
+		state.push(
 			document,
 			Box::new(Link {
 				location: token,
@@ -224,7 +223,7 @@ impl RegexRule for LinkRule {
 							display,
 						));
 						let display_content =
-							match util::parse_paragraph(ctx.parser, source, ctx.document) {
+							match util::parse_paragraph(ctx.state, source, ctx.document) {
 								Err(err) => {
 									result = Err(BadArgument {
 										to: Some("push".to_string()),
@@ -241,7 +240,7 @@ impl RegexRule for LinkRule {
 								}
 							};
 
-						ctx.parser.push(
+						ctx.state.push(
 							ctx.document,
 							Box::new(Link {
 								location: ctx.location.clone(),
@@ -267,6 +266,7 @@ mod tests {
 	use crate::elements::style::Style;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 
@@ -284,7 +284,7 @@ Some [link](url).
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
@@ -314,7 +314,7 @@ nml.link.push("**BOLD link**", "another url")
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

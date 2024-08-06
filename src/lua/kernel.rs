@@ -1,11 +1,6 @@
 use std::cell::RefCell;
-use std::cell::RefMut;
 use std::collections::HashMap;
 
-use mlua::Error;
-use mlua::FromLuaMulti;
-use mlua::Function;
-use mlua::IntoLuaMulti;
 use mlua::Lua;
 
 use crate::document::document::Document;
@@ -17,7 +12,6 @@ pub struct KernelContext<'a, 'b, 'c> {
 	pub location: Token,
 	pub state: &'a ParserState<'a, 'b>,
 	pub document: &'c dyn Document<'c>,
-	//pub parser: &'a dyn Parser,
 }
 
 thread_local! {
@@ -40,7 +34,7 @@ impl Kernel {
 				let table = lua.create_table().unwrap();
 				// TODO: Export this so we can check for duplicate rules based on this name
 				let name = rule.name().to_lowercase().replace(' ', "_");
-				for (fun_name, fun) in rule.lua_bindings(&lua) {
+				for (fun_name, fun) in rule.register_bindings(&lua) {
 					table.set(fun_name, fun).unwrap();
 				}
 				nml_table.set(name, table).unwrap();
@@ -73,11 +67,9 @@ pub struct KernelHolder {
 }
 
 impl KernelHolder {
-	pub fn get(&self, kernel_name: &str) -> Option<&Kernel> {
-		self.kernels.get(kernel_name)
-	}
+	pub fn get(&self, kernel_name: &str) -> Option<&Kernel> { self.kernels.get(kernel_name) }
 
-	pub fn insert(&self, kernel_name: String, kernel: Kernel) {
-		self.kernels.insert(kernel_name, kernel)
+	pub fn insert(&mut self, kernel_name: String, kernel: Kernel) {
+		self.kernels.insert(kernel_name, kernel);
 	}
 }

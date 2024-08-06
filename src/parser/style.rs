@@ -32,17 +32,17 @@ pub struct StyleHolder {
 
 impl StyleHolder {
 	/// Checks if a given style key is registered
-	fn is_registered(&self, style_key: &str) -> bool { self.styles.contains_key(style_key) }
+	pub fn is_registered(&self, style_key: &str) -> bool { self.styles.contains_key(style_key) }
 
 	/// Gets the current active style for an element
 	/// NOTE: Will panic if a style is not defined for a given element
 	/// If you need to process user input, use [`is_registered`]
-	fn current(&self, style_key: &str) -> Rc<dyn ElementStyle> {
+	pub fn current(&self, style_key: &str) -> Rc<dyn ElementStyle> {
 		self.styles.get(style_key).map(|rc| rc.clone()).unwrap()
 	}
 
 	/// Sets the [`style`]
-	fn set_current(&mut self, style: Rc<dyn ElementStyle>) {
+	pub fn set_current(&mut self, style: Rc<dyn ElementStyle>) {
 		self.styles.insert(style.key().to_string(), style);
 	}
 }

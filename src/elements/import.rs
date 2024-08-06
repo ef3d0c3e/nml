@@ -1,6 +1,5 @@
 use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -47,7 +46,7 @@ impl RegexRule for ImportRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a dyn Document<'a>,
 		token: Token,
 		matches: Captures,
@@ -120,7 +119,8 @@ impl RegexRule for ImportRule {
 
 		// [Optional] import as
 		let import_as = match matches.get(1) {
-			Some(as_name) => match ImportRule::validate_as(state.parser.colors(), as_name.as_str()) {
+			Some(as_name) => match ImportRule::validate_as(state.parser.colors(), as_name.as_str())
+			{
 				Ok(as_name) => as_name,
 				Err(msg) => {
 					result.push(
@@ -168,7 +168,7 @@ impl RegexRule for ImportRule {
 		// Close paragraph
 		// TODO2: Check if this is safe to remove
 		if document.last_element::<Paragraph>().is_none() {
-			state.parser.push(
+			state.push(
 				document,
 				Box::new(Paragraph {
 					location: Token::new(token.end()..token.end(), token.source()),

@@ -45,6 +45,7 @@ pub mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
+	use crate::ParserState;
 
 	#[test]
 	fn validate_refname_tests() {
@@ -54,7 +55,7 @@ pub mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		assert_eq!(validate_refname(&*doc, " abc ", true), Ok("abc"));
 		assert_eq!(

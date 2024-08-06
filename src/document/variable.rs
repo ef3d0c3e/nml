@@ -1,6 +1,5 @@
 use super::document::Document;
 use crate::elements::text::Text;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
@@ -19,7 +18,7 @@ pub trait Variable {
 	/// Converts variable to a string
 	fn to_string(&self) -> String;
 
-	fn parse<'a>(&self, state: &mut ParserState, location: Token, document: &'a dyn Document<'a>);
+	fn parse<'a>(&self, state: &ParserState, location: Token, document: &'a dyn Document<'a>);
 }
 
 impl core::fmt::Debug for dyn Variable {
@@ -57,7 +56,7 @@ impl Variable for BaseVariable {
 
 	fn to_string(&self) -> String { self.value.clone() }
 
-	fn parse<'a>(&self, state: &mut ParserState, _location: Token, document: &'a dyn Document<'a>) {
+	fn parse<'a>(&self, state: &ParserState, _location: Token, document: &'a dyn Document<'a>) {
 		let source = Rc::new(VirtualSource::new(
 			self.location().clone(),
 			self.name().to_string(),
@@ -97,14 +96,14 @@ impl Variable for PathVariable {
 
 	fn to_string(&self) -> String { self.path.to_str().unwrap().to_string() }
 
-	fn parse<'a>(&self, state: &mut ParserState, location: Token, document: &'a dyn Document) {
+	fn parse<'a>(&self, state: &ParserState, location: Token, document: &'a dyn Document) {
 		let source = Rc::new(VirtualSource::new(
 			location,
 			self.name().to_string(),
 			self.to_string(),
 		));
 
-		state.parser.push(
+		state.push(
 			document,
 			Box::new(Text::new(
 				Token::new(0..source.content().len(), source),

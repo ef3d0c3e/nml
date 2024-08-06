@@ -1,5 +1,4 @@
 use super::layout::LayoutHolder;
-use super::parser::Parser;
 use super::parser::ParserState;
 use super::source::Cursor;
 use super::source::Source;
@@ -24,20 +23,20 @@ pub trait Rule: Downcast {
 	/// Callback when rule matches
 	fn on_match<'a>(
 		&self,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
 		match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>);
 
 	/// Registers lua bindings
-	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
+	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 
 	/// Registers default styles
-	fn register_styles(&self, holder: &mut StyleHolder) {}
+	fn register_styles(&self, _holder: &mut StyleHolder) {}
 
 	/// Registers default layouts
-	fn register_layouts(&self, holder: &mut LayoutHolder) {}
+	fn register_layouts(&self, _holder: &mut LayoutHolder) {}
 }
 impl_downcast!(Rule);
 
@@ -57,7 +56,7 @@ pub trait RegexRule {
 	fn on_regex_match<'a>(
 		&self,
 		index: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: regex::Captures,
@@ -94,7 +93,7 @@ impl<T: RegexRule + 'static> Rule for T {
 
 	fn on_match<'a>(
 		&self,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
 		match_data: Box<dyn Any>,

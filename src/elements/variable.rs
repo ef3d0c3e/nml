@@ -3,7 +3,6 @@ use crate::document::variable::BaseVariable;
 use crate::document::variable::PathVariable;
 use crate::document::variable::Variable;
 use crate::lua::kernel::CTX;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -124,7 +123,7 @@ impl RegexRule for VariableRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a dyn Document,
 		token: Token,
 		matches: regex::Captures,
@@ -316,7 +315,7 @@ impl RegexRule for VariableSubstitutionRule {
 	fn on_regex_match<'a>(
 		&self,
 		_index: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a dyn Document<'a>,
 		token: Token,
 		matches: regex::Captures,
@@ -417,7 +416,7 @@ impl RegexRule for VariableSubstitutionRule {
 			_ => panic!("Unknown error"),
 		};
 
-		variable.parse(token, state, document);
+		variable.parse(state, token, document);
 
 		return result;
 	}

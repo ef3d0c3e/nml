@@ -141,7 +141,9 @@ pub fn parse_paragraph<'a>(
 	document: &'a dyn Document<'a>,
 ) -> Result<Box<Paragraph>, &'static str> {
 	let parsed = state.with_state(|new_state| -> Box<dyn Document> {
-		new_state.parser.parse(new_state, source.clone(), Some(document))
+		new_state
+			.parser
+			.parse(new_state, source.clone(), Some(document))
 	});
 	if parsed.content().borrow().len() > 1 {
 		return Err("Parsed document contains more than a single paragraph");

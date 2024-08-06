@@ -1,7 +1,6 @@
 use crate::document::document::Document;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelContext;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -13,7 +12,6 @@ use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
-use mlua::Function;
 use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
@@ -85,7 +83,7 @@ impl RegexRule for ScriptRule {
 	fn on_regex_match<'a>(
 		&self,
 		index: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a dyn Document<'a>,
 		token: Token,
 		matches: Captures,
@@ -94,29 +92,33 @@ impl RegexRule for ScriptRule {
 
 		let kernel_name = match matches.get(1) {
 			None => "main".to_string(),
-			Some(name) => match ScriptRule::validate_kernel_name(state.parser.colors(), name.as_str()) {
-				Ok(name) => name,
-				Err(e) => {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), name.start())
-							.with_message("Invalid kernel name")
-							.with_label(
-								Label::new((token.source(), name.range()))
-									.with_message(e)
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
-					);
-					return reports;
+			Some(name) => {
+				match ScriptRule::validate_kernel_name(state.parser.colors(), name.as_str()) {
+					Ok(name) => name,
+					Err(e) => {
+						reports.push(
+							Report::build(ReportKind::Error, token.source(), name.start())
+								.with_message("Invalid kernel name")
+								.with_label(
+									Label::new((token.source(), name.range()))
+										.with_message(e)
+										.with_color(state.parser.colors().error),
+								)
+								.finish(),
+						);
+						return reports;
+					}
 				}
-			},
+			}
 		};
-		let kernel = state.shared.kernels
-			.get(kernel_name.as_str())
-			.unwrap_or_else(|| {
-				state.shared.kernels.insert(kernel_name.to_string(), Kernel::new(state));
-				state.shared.kernels.get(kernel_name.as_str()).unwrap()
-			});
+		let mut kernels_borrow = state.shared.kernels.borrow_mut();
+		let kernel = match kernels_borrow.get(kernel_name.as_str()) {
+			Some(kernel) => kernel,
+			None => {
+				kernels_borrow.insert(kernel_name.clone(), Kernel::new(state.parser));
+				kernels_borrow.get(kernel_name.as_str()).unwrap()
+			}
+		};
 
 		let kernel_data = matches
 			.get(if index == 0 { 2 } else { 3 })
@@ -227,7 +229,7 @@ impl RegexRule for ScriptRule {
 							// Eval to text
 							{
 								if !result.is_empty() {
-									state.parser.push(
+									state.push(
 										document,
 										Box::new(Text::new(
 											Token::new(1..source.content().len(), source.clone()),
@@ -245,7 +247,9 @@ impl RegexRule for ScriptRule {
 								)) as Rc<dyn Source>;
 
 								state.with_state(|new_state| {
-									new_state.parser.parse_into(new_state, parse_source, document);
+									new_state
+										.parser
+										.parse_into(new_state, parse_source, document);
 								})
 							}
 						}
@@ -273,7 +277,7 @@ impl RegexRule for ScriptRule {
 
 		let ctx = KernelContext {
 			location: Token::new(0..source.content().len(), source.clone()),
-			parser_state: state,
+			state,
 			document,
 		};
 
@@ -290,6 +294,7 @@ mod tests {
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::style::Style;
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 
@@ -315,7 +320,7 @@ Evaluation: %<! make_ref("hello", "id")>%
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph;

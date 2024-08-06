@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
@@ -31,7 +32,7 @@ pub trait RuleState: Downcast {
 	/// Callback called when state goes out of scope
 	fn on_remove<'a>(
 		&self,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &dyn Document,
 	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>>;
 }
@@ -46,35 +47,38 @@ impl core::fmt::Debug for dyn RuleState {
 /// Object owning all the states
 #[derive(Default)]
 pub struct RuleStateHolder {
-	states: HashMap<String, Rc<dyn RuleState>>,
+	states: HashMap<String, Rc<RefCell<dyn RuleState>>>,
 }
 
 impl RuleStateHolder {
-	// Attempts to push [`state`]. On collision, returns an error with the already present state
 	pub fn insert(
 		&mut self,
 		name: String,
-		state: Rc<dyn RuleState>,
-	) {
+		state: Rc<RefCell<dyn RuleState>>,
+	) -> Result<Rc<RefCell<dyn RuleState>>, String> {
+		if self.states.contains_key(name.as_str()) {
+			return Err(format!("Attempted to insert duplicate RuleState: {name}"));
+		}
 		self.states.insert(name, state.clone());
+		Ok(state)
 	}
 
-	pub fn get(&self, state_name: &str) -> Option<Rc<dyn RuleState>> {
-		self.states.get(state_name)
-			.map(|state| state.clone())
+	pub fn get(&self, state_name: &str) -> Option<Rc<RefCell<dyn RuleState>>> {
+		self.states.get(state_name).map(|state| state.clone())
 	}
 
 	pub fn on_scope_end(
 		&mut self,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &dyn Document,
 		scope: Scope,
 	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
 
 		self.states.retain(|_name, rule_state| {
-			if rule_state.scope() >= scope {
+			if rule_state.borrow().scope() >= scope {
 				rule_state
+					.borrow_mut()
 					.on_remove(state, document)
 					.drain(..)
 					.for_each(|report| reports.push(report));

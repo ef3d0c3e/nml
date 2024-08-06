@@ -16,8 +16,6 @@ use crypto::sha2::Sha512;
 use graphviz_rust::cmd::Format;
 use graphviz_rust::cmd::Layout;
 use graphviz_rust::exec_dot;
-use mlua::Function;
-use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
 
@@ -28,7 +26,6 @@ use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
-use crate::parser::parser::Parser;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
@@ -71,7 +68,7 @@ impl Graphviz {
 				let split_at = out.split_at(svg_start).1.find('\n').unwrap();
 
 				let mut result = format!("<svg width=\"{}\"", self.width);
-				result.push_str(out.split_at(svg_start+split_at).1);
+				result.push_str(out.split_at(svg_start + split_at).1);
 
 				result
 			}
@@ -167,18 +164,14 @@ impl GraphRule {
 		);
 		props.insert(
 			"width".to_string(),
-			Property::new(
-				true,
-				"SVG width".to_string(),
-				Some("100%".to_string()),
-			),
+			Property::new(true, "SVG width".to_string(), Some("100%".to_string())),
 		);
 		Self {
 			re: [Regex::new(
 				r"\[graph\](?:\[((?:\\.|[^\[\]\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\[/graph\])?",
 			)
 			.unwrap()],
-			properties: PropertyParser{ properties: props },
+			properties: PropertyParser { properties: props },
 		}
 	}
 }
@@ -191,7 +184,7 @@ impl RegexRule for GraphRule {
 	fn on_regex_match(
 		&self,
 		_: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
@@ -349,11 +342,11 @@ impl RegexRule for GraphRule {
 					);
 					return reports;
 				}
-				_ => panic!("Unknown error")
+				_ => panic!("Unknown error"),
 			},
 		};
 
-		state.parser.push(
+		state.push(
 			document,
 			Box::new(Graphviz {
 				location: token,

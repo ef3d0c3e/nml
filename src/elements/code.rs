@@ -25,7 +25,6 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -324,7 +323,7 @@ impl CodeRule {
 				)
 				.unwrap(),
 			],
-			properties: PropertyParser{ properties: props },
+			properties: PropertyParser { properties: props },
 		}
 	}
 }
@@ -337,7 +336,7 @@ impl RegexRule for CodeRule {
 	fn on_regex_match<'a>(
 		&self,
 		index: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a dyn Document,
 		token: Token,
 		matches: Captures,
@@ -505,7 +504,7 @@ impl RegexRule for CodeRule {
 					}
 				};
 
-			state.parser.push(
+			state.push(
 				document,
 				Box::new(Code::new(
 					token.clone(),
@@ -526,7 +525,7 @@ impl RegexRule for CodeRule {
 				CodeKind::Inline
 			};
 
-			state.parser.push(
+			state.push(
 				document,
 				Box::new(Code::new(
 					token.clone(),
@@ -555,7 +554,7 @@ impl RegexRule for CodeRule {
 							.get_variable("code.theme")
 							.and_then(|var| Some(var.to_string()));
 
-						ctx.parser.push(
+						ctx.state.push(
 							ctx.document,
 							Box::new(Code {
 								location: ctx.location.clone(),
@@ -586,7 +585,7 @@ impl RegexRule for CodeRule {
 								.get_variable("code.theme")
 								.and_then(|var| Some(var.to_string()));
 
-							ctx.parser.push(
+							ctx.state.push(
 								ctx.document,
 								Box::new(Code {
 									location: ctx.location.clone(),
@@ -624,7 +623,7 @@ impl RegexRule for CodeRule {
 								.get_variable("code.theme")
 								.and_then(|var| Some(var.to_string()));
 
-							ctx.parser.push(
+							ctx.state.push(
 								ctx.document,
 								Box::new(Code {
 									location: ctx.location.clone(),
@@ -653,6 +652,7 @@ impl RegexRule for CodeRule {
 mod tests {
 	use super::*;
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 
 	#[test]
@@ -726,8 +726,7 @@ fn fact(n: usize) -> usize
 			None,
 		));
 		let parser = LangParser::default();
-		//let compiler = Compiler::new(Target::HTML, None);
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		let borrow = doc.content().borrow();
 		let found = borrow

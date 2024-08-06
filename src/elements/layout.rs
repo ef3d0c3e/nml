@@ -6,7 +6,6 @@ use crate::document::element::Element;
 use crate::lua::kernel::CTX;
 use crate::parser::layout::LayoutHolder;
 use crate::parser::layout::LayoutType;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -56,7 +55,7 @@ impl FromStr for LayoutToken {
 
 mod default_layouts {
 	use crate::parser::layout::LayoutType;
-use crate::parser::util::Property;
+	use crate::parser::util::Property;
 	use crate::parser::util::PropertyParser;
 
 	use super::*;
@@ -249,7 +248,7 @@ impl RuleState for LayoutState {
 
 	fn on_remove<'a>(
 		&self,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &dyn Document,
 	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
@@ -315,17 +314,17 @@ impl LayoutRule {
 		}
 	}
 
-	pub fn initialize_state(state: &mut ParserState) -> Rc<RefCell<dyn RuleState>> {
-		let query = state.shared.rule_state.get(STATE_NAME);
-		match query {
+	pub fn initialize_state(state: &ParserState) -> Rc<RefCell<dyn RuleState>> {
+		let mut rule_state_borrow = state.shared.rule_state.borrow_mut();
+		match rule_state_borrow.get(STATE_NAME) {
 			Some(state) => state,
 			None => {
 				// Insert as a new state
-				match state.shared.rule_state.insert(
+				match rule_state_borrow.insert(
 					STATE_NAME.into(),
-					Rc::new(LayoutState { stack: vec![] }),
+					Rc::new(RefCell::new(LayoutState { stack: vec![] })),
 				) {
-					Err(_) => panic!("Unknown error"),
+					Err(err) => panic!("{err}"),
 					Ok(state) => state,
 				}
 			}
@@ -385,7 +384,7 @@ impl RegexRule for LayoutRule {
 	fn on_regex_match(
 		&self,
 		index: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
@@ -453,7 +452,7 @@ impl RegexRule for LayoutRule {
 					}
 
 					// Get layout
-					let layout_type = match state.shared.layouts.get(trimmed) {
+					let layout_type = match state.shared.layouts.borrow().get(trimmed) {
 						None => {
 							reports.push(
 								Report::build(ReportKind::Error, token.source(), name.start())
@@ -487,7 +486,7 @@ impl RegexRule for LayoutRule {
 						}
 					};
 
-					state.parser.push(
+					state.push(
 						document,
 						Box::new(Layout {
 							location: token.clone(),
@@ -498,11 +497,12 @@ impl RegexRule for LayoutRule {
 						}),
 					);
 
-					state
+					rule_state
+						.as_ref()
 						.borrow_mut()
 						.downcast_mut::<LayoutState>()
 						.map_or_else(
-							|| panic!("Invalid state at: `{}`", STATE_NAME.as_str()),
+							|| panic!("Invalid state at: `{STATE_NAME}`"),
 							|s| s.stack.push((vec![token.clone()], layout_type.clone())),
 						);
 				}
@@ -513,10 +513,10 @@ impl RegexRule for LayoutRule {
 		let (id, token_type, layout_type, properties) = if index == 1
 		// LAYOUT_NEXT
 		{
-			let mut state_borrow = state.borrow_mut();
-			let state = state_borrow.downcast_mut::<LayoutState>().unwrap();
+			let mut rule_state_borrow = rule_state.as_ref().borrow_mut();
+			let layout_state = rule_state_borrow.downcast_mut::<LayoutState>().unwrap();
 
-			let (tokens, layout_type) = match state.stack.last_mut() {
+			let (tokens, layout_type) = match layout_state.stack.last_mut() {
 				None => {
 					reports.push(
 						Report::build(ReportKind::Error, token.source(), token.start())
@@ -576,10 +576,10 @@ impl RegexRule for LayoutRule {
 			)
 		} else {
 			// LAYOUT_END
-			let mut state_borrow = state.borrow_mut();
-			let state = state_borrow.downcast_mut::<LayoutState>().unwrap();
+			let mut rule_state_borrow = rule_state.as_ref().borrow_mut();
+			let layout_state = rule_state_borrow.downcast_mut::<LayoutState>().unwrap();
 
-			let (tokens, layout_type) = match state.stack.last_mut() {
+			let (tokens, layout_type) = match layout_state.stack.last_mut() {
 				None => {
 					reports.push(
 						Report::build(ReportKind::Error, token.source(), token.start())
@@ -632,11 +632,11 @@ impl RegexRule for LayoutRule {
 
 			let layout_type = layout_type.clone();
 			let id = tokens.len();
-			state.stack.pop();
+			layout_state.stack.pop();
 			(id, LayoutToken::End, layout_type, properties)
 		};
 
-		state.parser.push(
+		state.push(
 			document,
 			Box::new(Layout {
 				location: token,
@@ -676,11 +676,12 @@ impl RegexRule for LayoutRule {
 
 					CTX.with_borrow(|ctx| {
 						ctx.as_ref().map(|ctx| {
-							// Make sure the state has been initialized
-							let state = LayoutRule::initialize_state(ctx.parser);
+							// Make sure the rule state has been initialized
+							let rule_state = LayoutRule::initialize_state(ctx.state);
 
 							// Get layout
-							let layout_type = match ctx.parser.get_layout(layout.as_str())
+							//
+							let layout_type = match ctx.state.shared.layouts.borrow().get(layout.as_str())
 							{
 								None => {
 									result = Err(BadArgument {
@@ -712,7 +713,7 @@ impl RegexRule for LayoutRule {
 
 							let id = match layout_token {
 								LayoutToken::Begin => {
-									ctx.parser.push(
+									ctx.state.push(
 										ctx.document,
 										Box::new(Layout {
 											location: ctx.location.clone(),
@@ -723,20 +724,21 @@ impl RegexRule for LayoutRule {
 										}),
 									);
 
-									state
+									rule_state
+										.as_ref()
 										.borrow_mut()
 										.downcast_mut::<LayoutState>()
 										.map_or_else(
-											|| panic!("Invalid state at: `{}`", STATE_NAME.as_str()),
+											|| panic!("Invalid state at: `{STATE_NAME}`"),
 											|s| s.stack.push((vec![ctx.location.clone()], layout_type.clone())),
 										);
 									return;
 								},
 								LayoutToken::Next => {
-									let mut state_borrow = state.borrow_mut();
-									let state = state_borrow.downcast_mut::<LayoutState>().unwrap();
+									let mut state_borrow = rule_state.as_ref().borrow_mut();
+									let layout_state = state_borrow.downcast_mut::<LayoutState>().unwrap();
 
-									let (tokens, current_layout_type) = match state.stack.last_mut() {
+									let (tokens, current_layout_type) = match layout_state.stack.last_mut() {
 										None => {
 											result = Err(BadArgument {
 												to: Some("push".to_string()),
@@ -781,10 +783,10 @@ impl RegexRule for LayoutRule {
 									tokens.len() - 1
 								},
 								LayoutToken::End => {
-									let mut state_borrow = state.borrow_mut();
-									let state = state_borrow.downcast_mut::<LayoutState>().unwrap();
+									let mut state_borrow = rule_state.as_ref().borrow_mut();
+									let layout_state = state_borrow.downcast_mut::<LayoutState>().unwrap();
 
-									let (tokens, current_layout_type) = match state.stack.last_mut() {
+									let (tokens, current_layout_type) = match layout_state.stack.last_mut() {
 										None => {
 											result = Err(BadArgument {
 												to: Some("push".to_string()),
@@ -826,12 +828,12 @@ impl RegexRule for LayoutRule {
 									}
 
 									let id = tokens.len();
-									state.stack.pop();
+									layout_state.stack.pop();
 									id
 								}
 							};
 
-							ctx.state.parser.push(
+							ctx.state.push(
 								ctx.document,
 								Box::new(Layout {
 									location: ctx.location.clone(),
@@ -854,7 +856,7 @@ impl RegexRule for LayoutRule {
 	}
 
 	fn register_layouts(&self, holder: &mut LayoutHolder) {
-	   holder.insert(Rc::new(default_layouts::Centered::default()));
+		holder.insert(Rc::new(default_layouts::Centered::default()));
 		holder.insert(Rc::new(default_layouts::Split::default()));
 	}
 }
@@ -864,6 +866,7 @@ mod tests {
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 

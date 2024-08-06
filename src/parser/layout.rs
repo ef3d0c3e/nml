@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::cell::Ref;
-use std::cell::RefMut;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
@@ -41,7 +39,7 @@ impl LayoutHolder {
 		self.layouts.get(layout_name).map(|layout| layout.clone())
 	}
 
-	pub fn insert(&self, layout: Rc<dyn LayoutType>) {
+	pub fn insert(&mut self, layout: Rc<dyn LayoutType>) {
 		self.layouts.insert(layout.name().into(), layout);
 	}
 }

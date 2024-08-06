@@ -6,8 +6,6 @@ use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
-use mlua::Function;
-use mlua::Lua;
 use regex::Captures;
 use regex::Match;
 use regex::Regex;
@@ -18,7 +16,6 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::references::validate_refname;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -83,7 +80,7 @@ impl ReferenceRule {
 		);
 		Self {
 			re: [Regex::new(r"§\{(.*?)\}(\[((?:\\.|[^\\\\])*?)\])?").unwrap()],
-			properties: PropertyParser{ properties: props },
+			properties: PropertyParser { properties: props },
 		}
 	}
 
@@ -136,7 +133,7 @@ impl RegexRule for ReferenceRule {
 	fn on_regex_match<'a>(
 		&self,
 		_: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
@@ -179,7 +176,8 @@ impl RegexRule for ReferenceRule {
 			}
 		};
 		// Properties
-		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(3)) {
+		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(3))
+		{
 			Ok(pm) => pm,
 			Err(report) => {
 				reports.push(report);
@@ -194,7 +192,7 @@ impl RegexRule for ReferenceRule {
 			.ok()
 			.and_then(|(_, s)| Some(s));
 
-		state.parser.push(
+		state.push(
 			document,
 			Box::new(Reference {
 				location: token,

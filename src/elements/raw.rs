@@ -3,7 +3,6 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -79,7 +78,7 @@ impl RegexRule for RawRule {
 	fn on_regex_match(
 		&self,
 		_index: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
@@ -208,7 +207,7 @@ impl RegexRule for RawRule {
 			},
 		};
 
-		state.parser.push(
+		state.push(
 			document,
 			Box::new(Raw {
 				location: token.clone(),
@@ -243,7 +242,7 @@ impl RegexRule for RawRule {
 
 				CTX.with_borrow(|ctx| {
 					ctx.as_ref().map(|ctx| {
-						ctx.state.parser.push(
+						ctx.state.push(
 							ctx.document,
 							Box::new(Raw {
 								location: ctx.location.clone(),
@@ -269,7 +268,8 @@ mod tests {
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
-	use crate::parser::source::SourceFile;
+	use crate::parser::parser::Parser;
+use crate::parser::source::SourceFile;
 	use crate::validate_document;
 
 	#[test]

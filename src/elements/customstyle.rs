@@ -1,4 +1,6 @@
+use crate::lua::kernel::Kernel;
 use std::any::Any;
+use std::cell::Ref;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Range;
@@ -19,7 +21,6 @@ use crate::lua::kernel::KernelContext;
 use crate::lua::kernel::CTX;
 use crate::parser::customstyle::CustomStyle;
 use crate::parser::customstyle::CustomStyleToken;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -27,8 +28,6 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
-
-use lazy_static::lazy_static;
 
 use super::paragraph::Paragraph;
 
@@ -48,75 +47,78 @@ impl CustomStyle for LuaCustomStyle {
 	fn on_start<'a>(
 		&self,
 		location: Token,
-		parser_state: &mut ParserState,
+		state: &ParserState,
 		document: &'a dyn Document<'a>,
 	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
-		let kernel = parser_state.shared.kernels.get("main").unwrap();
+		let kernel: Ref<'_, Kernel> =
+			Ref::map(state.shared.kernels.borrow(), |b| b.get("main").unwrap());
+		//let kernel = RefMut::map(parser_state.shared.kernels.borrow(), |ker| ker.get("main").unwrap());
 		let ctx = KernelContext {
 			location: location.clone(),
-			parser_state,
+			state,
 			document,
 		};
 
-		let mut result = Ok(());
+		let mut reports = vec![];
 		kernel.run_with_context(ctx, |lua| {
 			let chunk = lua.load(self.start.as_str());
 			if let Err(err) = chunk.eval::<()>() {
-				result = Err(
+				reports.push(
 					Report::build(ReportKind::Error, location.source(), location.start())
 						.with_message("Lua execution failed")
 						.with_label(
 							Label::new((location.source(), location.range.clone()))
 								.with_message(err.to_string())
-								.with_color(parser_state.parser.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.with_note(format!(
 							"When trying to start custom style {}",
-							self.name().fg(parser_state.parser.colors().info)
+							self.name().fg(state.parser.colors().info)
 						))
 						.finish(),
 				);
 			}
 		});
 
-		result
+		reports
 	}
 
 	fn on_end<'a>(
 		&self,
 		location: Token,
-		parser_state: &mut ParserState,
-		document: &'a dyn Document<'a>
+		state: &ParserState,
+		document: &'a dyn Document<'a>,
 	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
-		let kernel = parser_state.shared.kernels.get("main").unwrap();
+		let kernel: Ref<'_, Kernel> =
+			Ref::map(state.shared.kernels.borrow(), |b| b.get("main").unwrap());
 		let ctx = KernelContext {
 			location: location.clone(),
-			parser_state,
+			state,
 			document,
 		};
 
-		let mut result = Ok(());
+		let mut reports = vec![];
 		kernel.run_with_context(ctx, |lua| {
 			let chunk = lua.load(self.end.as_str());
 			if let Err(err) = chunk.eval::<()>() {
-				result = Err(
+				reports.push(
 					Report::build(ReportKind::Error, location.source(), location.start())
 						.with_message("Lua execution failed")
 						.with_label(
 							Label::new((location.source(), location.range.clone()))
 								.with_message(err.to_string())
-								.with_color(parser_state.colors().error),
+								.with_color(state.parser.colors().error),
 						)
 						.with_note(format!(
 							"When trying to end custom style {}",
-							self.name().fg(parser_state.colors().info)
+							self.name().fg(state.parser.colors().info)
 						))
 						.finish(),
 				);
 			}
 		});
 
-		result
+		reports
 	}
 }
 
@@ -129,8 +131,8 @@ impl RuleState for CustomStyleState {
 
 	fn on_remove<'a>(
 		&self,
-		state: &mut ParserState,
-		document: &dyn Document
+		state: &ParserState,
+		document: &dyn Document,
 	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
 
@@ -189,6 +191,7 @@ impl Rule for CustomStyleRule {
 		state
 			.shared
 			.custom_styles
+			.borrow()
 			.iter()
 			.for_each(|(_name, style)| match style.tokens() {
 				CustomStyleToken::Toggle(s) => {
@@ -228,67 +231,61 @@ impl Rule for CustomStyleRule {
 
 	fn on_match<'a>(
 		&self,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &'a dyn Document<'a>,
 		cursor: Cursor,
-		match_data: Option<Box<dyn Any>>,
+		match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
 		let (style, end) = match_data
-			.as_ref()
-			.unwrap()
 			.downcast_ref::<(Rc<dyn CustomStyle>, bool)>()
 			.unwrap();
 
-		let query = state.shared.rule_state.get(STATE_NAME);
-		let rule_state = match query {
-			Some(state) => state,
+		let mut rule_state_borrow = state.shared.rule_state.borrow_mut();
+		let style_state = match rule_state_borrow.get(STATE_NAME) {
+			Some(rule_state) => rule_state,
+			// Insert as a new state
 			None => {
-				// Insert as a new state
-				match state.shared.rule_state.insert(
+				match rule_state_borrow.insert(
 					STATE_NAME.into(),
 					Rc::new(RefCell::new(CustomStyleState {
 						toggled: HashMap::new(),
 					})),
 				) {
-					Err(_) => panic!("Unknown error"),
-					Ok(state) => state,
+					Err(err) => panic!("{err}"),
+					Ok(rule_state) => rule_state,
 				}
 			}
 		};
 
 		let (close, token) = match style.tokens() {
 			CustomStyleToken::Toggle(s) => {
-				let mut borrow = rule_state.borrow_mut();
-				let state = borrow.downcast_mut::<CustomStyleState>().unwrap();
+				let mut borrow = style_state.as_ref().borrow_mut();
+				let style_state = borrow.downcast_mut::<CustomStyleState>().unwrap();
 
-				match state.toggled.get(style.name()) {
-					Some(_) => {
-						// Terminate style
-						let token =
-							Token::new(cursor.pos..cursor.pos + s.len(), cursor.source.clone());
+				if style_state.toggled.get(style.name()).is_some() {
+					// Terminate style
+					let token = Token::new(cursor.pos..cursor.pos + s.len(), cursor.source.clone());
 
-						state.toggled.remove(style.name());
-						(true, token)
-					}
-					None => {
-						// Start style
-						let token =
-							Token::new(cursor.pos..cursor.pos + s.len(), cursor.source.clone());
+					style_state.toggled.remove(style.name());
+					(true, token)
+				} else {
+					// Start style
+					let token = Token::new(cursor.pos..cursor.pos + s.len(), cursor.source.clone());
 
-						state.toggled.insert(style.name().into(), token.clone());
-						(false, token)
-					}
+					style_state
+						.toggled
+						.insert(style.name().into(), token.clone());
+					(false, token)
 				}
 			}
 			CustomStyleToken::Pair(s_begin, s_end) => {
-				let mut borrow = rule_state.borrow_mut();
-				let state = borrow.downcast_mut::<CustomStyleState>().unwrap();
-
+				let mut borrow = style_state.borrow_mut();
+				let style_state = borrow.downcast_mut::<CustomStyleState>().unwrap();
 				if *end {
 					// Terminate style
 					let token =
 						Token::new(cursor.pos..cursor.pos + s_end.len(), cursor.source.clone());
-					if state.toggled.get(style.name()).is_none() {
+					if style_state.toggled.get(style.name()).is_none() {
 						return (
 							cursor.at(cursor.pos + s_end.len()),
 							vec![
@@ -308,7 +305,7 @@ impl Rule for CustomStyleRule {
 						);
 					}
 
-					state.toggled.remove(style.name());
+					style_state.toggled.remove(style.name());
 					(true, token)
 				} else {
 					// Start style
@@ -316,7 +313,7 @@ impl Rule for CustomStyleRule {
 						cursor.pos..cursor.pos + s_begin.len(),
 						cursor.source.clone(),
 					);
-					if let Some(start_token) = state.toggled.get(style.name()) {
+					if let Some(start_token) = style_state.toggled.get(style.name()) {
 						return (
 							cursor.at(cursor.pos + s_end.len()),
 							vec![Report::build(
@@ -347,27 +344,23 @@ impl Rule for CustomStyleRule {
 						);
 					}
 
-					state.toggled.insert(style.name().into(), token.clone());
+					style_state
+						.toggled
+						.insert(style.name().into(), token.clone());
 					(false, token)
 				}
 			}
 		};
 
-		if let Err(rep) = if close {
+		let reports = if close {
 			style.on_end(token.clone(), state, document)
 		} else {
 			style.on_start(token.clone(), state, document)
-		} {
-			return (
-				cursor.at(token.end()),
-				vec![unsafe {
-					// TODO
-					std::mem::transmute(rep)
-				}],
-			);
-		} else {
-			(cursor.at(token.end()), vec![])
-		}
+		};
+
+		(cursor.at(token.end()), unsafe {
+			std::mem::transmute(reports)
+		})
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
@@ -388,7 +381,9 @@ impl Rule for CustomStyleRule {
 
 					CTX.with_borrow(|ctx| {
 						ctx.as_ref().map(|ctx| {
-							if let Some(_) = ctx.state.shared.custom_styles.get(name.as_str()) {
+							if let Some(_) =
+								ctx.state.shared.custom_styles.borrow().get(name.as_str())
+							{
 								result = Err(BadArgument {
 									to: Some("define_toggled".to_string()),
 									pos: 1,
@@ -399,7 +394,11 @@ impl Rule for CustomStyleRule {
 								});
 								return;
 							}
-							ctx.state.shared.custom_styles.insert(Rc::new(style));
+							ctx.state
+								.shared
+								.custom_styles
+								.borrow_mut()
+								.insert(Rc::new(style));
 						});
 					});
 
@@ -443,7 +442,7 @@ impl Rule for CustomStyleRule {
 
 					CTX.with_borrow(|ctx| {
 						ctx.as_ref().map(|ctx| {
-							if let Some(_) = ctx.state.shared.custom_styles.get(name.as_str()) {
+							if let Some(_) = ctx.state.shared.custom_styles.borrow().get(name.as_str()) {
 								result = Err(BadArgument {
 									to: Some("define_paired".to_string()),
 									pos: 1,
@@ -454,7 +453,7 @@ impl Rule for CustomStyleRule {
 								});
 								return;
 							}
-							ctx.state.shared.custom_styles.insert(Rc::new(style));
+							ctx.state.shared.custom_styles.borrow_mut().insert(Rc::new(style));
 						});
 					});
 
@@ -473,6 +472,7 @@ mod tests {
 	use crate::elements::raw::Raw;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 
@@ -505,7 +505,7 @@ pre |styled| post °Hello°.
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
@@ -549,7 +549,7 @@ pre [styled] post (Hello).
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

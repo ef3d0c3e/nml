@@ -14,8 +14,6 @@ use ariadne::Report;
 use ariadne::ReportKind;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
-use mlua::Function;
-use mlua::Lua;
 use regex::Captures;
 use regex::Match;
 use regex::Regex;
@@ -27,7 +25,6 @@ use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
-use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -305,7 +302,7 @@ impl RegexRule for TexRule {
 	fn on_regex_match(
 		&self,
 		index: usize,
-		state: &mut ParserState,
+		state: &ParserState,
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
@@ -355,7 +352,8 @@ impl RegexRule for TexRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(1)) {
+		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(1))
+		{
 			Ok(pm) => pm,
 			Err(report) => {
 				reports.push(report);
@@ -413,7 +411,7 @@ impl RegexRule for TexRule {
 			.and_then(|(_, value)| Some(value))
 			.unwrap();
 
-		state.parser.push(
+		state.push(
 			document,
 			Box::new(Tex {
 				mathmode: index == 1,
@@ -433,6 +431,7 @@ impl RegexRule for TexRule {
 mod tests {
 	use crate::elements::paragraph::Paragraph;
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 
@@ -451,7 +450,7 @@ $[kind=block,env=another] e^{i\pi}=-1$
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
@@ -473,7 +472,7 @@ $[env=another] e^{i\pi}=-1$
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(source, None);
+		let doc = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
