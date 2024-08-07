@@ -55,7 +55,7 @@ pub mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		assert_eq!(validate_refname(&*doc, " abc ", true), Ok("abc"));
 		assert_eq!(

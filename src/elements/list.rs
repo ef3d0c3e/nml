@@ -463,7 +463,7 @@ mod tests {
 		));
 		let parser = LangParser::default();
 		let state = ParserState::new(&parser, None);
-		let doc = parser.parse(state, source, None);
+		let (doc, _) = parser.parse(state, source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			ListMarker { numbered == false, kind == MarkerKind::Open };

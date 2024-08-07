@@ -1,10 +1,10 @@
+use ariadne::Label;
+use ariadne::Report;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Range;
 use std::rc::Rc;
-use ariadne::Label;
-use ariadne::Report;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::customstyle::CustomStyleHolder;
@@ -55,7 +55,7 @@ impl ReportColors {
 	}
 }
 
-/// The state that is shared with the state's children
+/// The state that is shared with the state's childre
 pub struct SharedState {
 	pub rule_state: RefCell<RuleStateHolder>,
 
@@ -84,9 +84,11 @@ impl SharedState {
 		};
 
 		// Register default kernel
-		s.kernels.borrow_mut()
+		s.kernels
+			.borrow_mut()
 			.insert("main".to_string(), Kernel::new(parser));
 
+		// Default styles & layouts
 		parser.rules().iter().for_each(|rule| {
 			rule.register_styles(&mut *s.styles.borrow_mut());
 			rule.register_layouts(&mut *s.layouts.borrow_mut());
@@ -118,9 +120,9 @@ pub struct ParserState<'a, 'b> {
 impl<'a, 'b> ParserState<'a, 'b> {
 	/// Constructs a new state for a given parser with an optional parent
 	///
-	/// Parent should be None when parsing a brand new document.
-	/// If you have to set the parent to Some(..) (e.g for imports or sub-document),
-	/// be sure to use the [`ParserState::with_state`] method instead, this create a
+	/// Parent should be None when parsing a brand new document. If you have to
+	/// set the parent to Some(..) (e.g for imports or sub-document), be sure
+	/// to use the [`ParserState::with_state`] method instead, this create a
 	/// RAII lived state for use within bounded lifetime.
 	pub fn new(parser: &'a dyn Parser, parent: Option<&'a ParserState<'a, 'b>>) -> Self {
 		let matches = parser.rules().iter().map(|_| (0, None)).collect::<Vec<_>>();
@@ -153,24 +155,37 @@ impl<'a, 'b> ParserState<'a, 'b> {
 	/// Updates matches from a given start position e.g [`Cursor`]
 	///
 	/// # Return
+	///
 	///  1. The cursor position after updating the matches
 	///  2. (Optional) The winning match with it's match data
+	/// If the winning match is None, it means that the document has no more
+	/// rule to match. I.e The rest of the content should be added as a
+	/// [`Text`] element.
+	/// The match data should be passed to the [`Rule::on_match`] method.
 	///
-	/// If the winning match is None, it means that the document has no more rule to match
-	/// I.E The rest of the content should be added as a [`Text`] element.
-	/// The match data should be passed to the [`Rule::on_match`] method
-	pub fn update_matches(
-		&self,
-		cursor: &Cursor,
-	) -> (Cursor, Option<(usize, Box<dyn Any>)>) {
+	/// # Strategy
+	///
+	/// This function call [`Rule::next_match`] on the rules defined for the
+	/// parser. It then takes the rule that has the closest `next_match` and
+	/// returns it. If next_match starts on an escaped character i.e `\\`,
+	/// then it starts over to find another match for that rule.
+	/// In case multiple rules have the same `next_match`, the rules that are
+	/// defined first in the parser are prioritized. See [Parser::add_rule] for
+	/// information on how to prioritize rules.
+	///
+	/// Notes that the result of every call to [`Rule::next_match`] gets stored
+	/// in a table: [`ParserState::matches`]. Until the cursor steps over a
+	/// position in the table, `next_match` won't be called.
+	pub fn update_matches(&self, cursor: &Cursor) -> (Cursor, Option<(usize, Box<dyn Any>)>) {
 		let mut matches_borrow = self.matches.borrow_mut();
 
-		self.parser.rules()
+		self.parser
+			.rules()
 			.iter()
 			.zip(matches_borrow.iter_mut())
 			.for_each(|(rule, (matched_at, match_data))| {
 				// Don't upate if not stepped over yet
-				if *matched_at > cursor.pos && rule.downcast_ref::<CustomStyleRule>().is_none() {
+				if *matched_at > cursor.pos {
 					// TODO: maybe we should expose matches() so it becomes possible to dynamically register a new rule
 					return;
 				}
@@ -215,15 +230,18 @@ impl<'a, 'b> ParserState<'a, 'b> {
 			.map(|(winner, (pos, _))| (winner, *pos))
 			.unwrap();
 
-		if next_pos == usize::MAX // No rule has matched
+		if next_pos == usize::MAX
+		// No rule has matched
 		{
 			let content = cursor.source.content();
 			// No winners, i.e no matches left
 			return (cursor.at(content.len()), None);
 		}
 
-		return (cursor.at(next_pos),
-			Some((winner, matches_borrow[winner].1.take().unwrap())))
+		return (
+			cursor.at(next_pos),
+			Some((winner, matches_borrow[winner].1.take().unwrap())),
+		);
 	}
 
 	/// Add an [`Element`] to the [`Document`]
@@ -244,14 +262,52 @@ impl<'a, 'b> ParserState<'a, 'b> {
 		} else {
 			// Process paragraph events
 			if doc.last_element::<Paragraph>().is_some_and(|_| true) {
-				self.parser.handle_reports(
-					self.shared.rule_state.borrow_mut()
-						.on_scope_end(&self, doc, super::state::Scope::PARAGRAPH),
-				);
+				self.parser
+					.handle_reports(self.shared.rule_state.borrow_mut().on_scope_end(
+						&self,
+						doc,
+						super::state::Scope::PARAGRAPH,
+					));
 			}
 
 			doc.push(elem);
 		}
+	}
+
+	/// Resets the position and the match_data for a given rule. This is used
+	/// in order to have 'dynamic' rules that may not match at first, but their
+	/// matching rule is modified through the parsing process.
+	///
+	/// This function also recursively calls itself on it's `parent`, in order
+	/// to fully reset the match.
+	///
+	/// See [`CustomStyleRule`] for an example of how this is used.
+	///
+	/// # Error
+	///
+	/// Returns an error if `rule_name` was not found in the parser's ruleset.
+	pub fn reset_match(&self, rule_name: &str) -> Result<(), String>
+	{
+		if self.parser.rules().iter()
+			.zip(self.matches.borrow_mut().iter_mut())
+			.try_for_each(|(rule, (match_pos, match_data))| {
+				if rule.name() != rule_name { return Ok(()) }
+
+				*match_pos = 0;
+				match_data.take();
+				Err(())
+			}).is_ok()
+		{
+			return Err(format!("Could not find rule: {rule_name}"));
+		}
+
+		// Resurcively reset
+		if let Some(parent) = self.parent
+		{
+			return parent.reset_match(rule_name);
+		}
+
+		Ok(())
 	}
 }
 
@@ -268,37 +324,52 @@ pub trait Parser {
 
 	/// Whether the parser emitted an error during it's parsing process
 	fn has_error(&self) -> bool;
-	
+
 	/// Parse [`Source`] into a new [`Document`]
 	///
 	/// # Errors
 	///
-	/// This method will not fail because we try to optimistically recover from parsing errors.
-	/// However the resulting document should not get compiled if an error has happened
-	/// see [`Parser::has_error()`] for reference
-	fn parse<'a>(
-		&self,
-		state: ParserState,
+	/// This method will not fail because we try to optimistically recover from
+	/// parsing errors. However the resulting document should not get compiled
+	/// if an error has happenedn, see [`Parser::has_error()`] for reference
+	///
+	/// # Returns
+	///
+	/// This method returns the resulting [`Document`] after psrsing `source`,
+	/// note that the [`ParserState`] is only meant to perform testing and not
+	/// meant to be reused.
+	fn parse<'p, 'a, 'doc>(
+		&'p self,
+		state: ParserState<'p, 'a>,
 		source: Rc<dyn Source>,
-		parent: Option<&'a dyn Document<'a>>,
-	) -> Box<dyn Document<'a> + 'a>;
+		parent: Option<&'doc dyn Document<'doc>>,
+	) -> (Box<dyn Document<'doc> + 'doc>, ParserState<'p, 'a>);
 
 	/// Parse [`Source`] into an already existing [`Document`]
 	///
 	/// # Errors
 	///
-	/// This method will not fail because we try to optimistically recover from parsing errors.
-	/// However the resulting document should not get compiled if an error has happened
-	/// see [`Parser::has_error()`] for reference
-	fn parse_into<'a>(&self,
-		state: ParserState,
-		source: Rc<dyn Source>, document: &'a dyn Document<'a>);
+	/// This method will not fail because we try to optimistically recover from
+	/// parsing errors. However the resulting document should not get compiled
+	/// if an error has happened see [`Parser::has_error()`] for reference
+	///
+	/// # Returns
+	///
+	/// The returned [`ParserState`] is not meant to be reused, it's meant for
+	/// testing.
+	fn parse_into<'p, 'a, 'doc>(
+		&'p self,
+		state: ParserState<'p, 'a>,
+		source: Rc<dyn Source>,
+		document: &'doc dyn Document<'doc>,
+	) -> ParserState<'p, 'a>;
 
-	fn add_rule(
-		&mut self,
-		rule: Box<dyn Rule>,
-		after: Option<&'static str>,
-	) -> Result<(), String> {
+	/// Adds a rule to the parser.
+	///
+	/// # Warning
+	///
+	/// This method must not be called if a [`ParserState`] for this parser exists.
+	fn add_rule(&mut self, rule: Box<dyn Rule>, after: Option<&'static str>) -> Result<(), String> {
 		if let Some(_) = self
 			.rules()
 			.iter()
@@ -312,12 +383,12 @@ pub trait Parser {
 
 		// Try to insert after
 		if let Some(after) = after {
-			let index =
-				self.rules()
-					.iter()
-					.enumerate()
-					.find(|(_, rule)| rule.name() == after)
-					.map(|(idx, _)| idx);
+			let index = self
+				.rules()
+				.iter()
+				.enumerate()
+				.find(|(_, rule)| rule.name() == after)
+				.map(|(idx, _)| idx);
 
 			if let Some(index) = index {
 				self.rules_mut().insert(index, rule);
@@ -331,10 +402,9 @@ pub trait Parser {
 		Ok(())
 	}
 
-	fn handle_reports(
-		&self,
-		reports: Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>,
-	) {
+	/// Handles the reports produced by parsing. The default is to output them
+	/// to stderr, but you are free to modify it.
+	fn handle_reports(&self, reports: Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
 		for mut report in reports {
 			let mut sources: HashSet<Rc<dyn Source>> = HashSet::new();
 			fn recurse_source(sources: &mut HashSet<Rc<dyn Source>>, source: Rc<dyn Source>) {
@@ -364,8 +434,8 @@ pub trait Parser {
 					if let Some(_s) = source.downcast_ref::<SourceFile>() {
 						report.labels.push(
 							Label::new((location.source(), location.start() + 1..location.end()))
-							.with_message("In file included from here")
-							.with_order(-1),
+								.with_message("In file included from here")
+								.with_order(-1),
 						);
 					};
 
@@ -373,12 +443,12 @@ pub trait Parser {
 						let start = location.start()
 							+ (location.source().content().as_bytes()[location.start()]
 								== '\n' as u8)
-							.then_some(1)
-							.unwrap_or(0);
+								.then_some(1)
+								.unwrap_or(0);
 						report.labels.push(
 							Label::new((location.source(), start..location.end()))
-							.with_message("In evaluation of")
-							.with_order(-1),
+								.with_message("In evaluation of")
+								.with_order(-1),
 						);
 					};
 				}

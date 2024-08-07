@@ -50,12 +50,12 @@ impl Parser for LangParser {
 
 	fn has_error(&self) -> bool { *self.err_flag.borrow() }
 
-	fn parse<'a>(
-		&self,
-		state: ParserState,
+	fn parse<'p, 'a, 'doc>(
+		&'p self,
+		state: ParserState<'p, 'a>,
 		source: Rc<dyn Source>,
-		parent: Option<&'a dyn Document<'a>>,
-	) -> Box<dyn Document<'a> + 'a> {
+		parent: Option<&'doc dyn Document<'doc>>,
+	) -> (Box<dyn Document<'doc> + 'doc>, ParserState<'p, 'a>) {
 		let doc = LangDocument::new(source.clone(), parent);
 
 		let content = source.content();
@@ -105,7 +105,6 @@ impl Parser for LangParser {
 		}
 
 		// Rule States
-
 		self.handle_reports(state.shared.rule_state.borrow_mut().on_scope_end(
 			&state,
 			&doc,
@@ -120,15 +119,15 @@ impl Parser for LangParser {
 			))),
 		);
 
-		return Box::new(doc);
+		return (Box::new(doc), state);
 	}
 
-	fn parse_into<'a>(
-		&self,
-		state: ParserState,
+	fn parse_into<'p, 'a, 'doc>(
+		&'p self,
+		state: ParserState<'p, 'a>,
 		source: Rc<dyn Source>,
-		document: &'a dyn Document<'a>,
-	) {
+		document: &'doc dyn Document<'doc>,
+	) -> ParserState<'p, 'a> {
 		let content = source.content();
 		let mut cursor = Cursor::new(0usize, source.clone());
 
@@ -164,6 +163,7 @@ impl Parser for LangParser {
 			}
 		}
 
+		return state;
 		// State
 		//self.handle_reports(source.clone(),
 		//	self.state_mut().on_scope_end(&self, &document, super::state::Scope::DOCUMENT));

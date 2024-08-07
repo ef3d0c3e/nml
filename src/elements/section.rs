@@ -438,7 +438,7 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Section { depth == 1, title == "1" };
@@ -468,7 +468,7 @@ nml.section.push("6", 6, "", "refname")
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Section { depth == 1, title == "1" };
@@ -495,18 +495,16 @@ nml.section.push("6", 6, "", "refname")
 		));
 		let parser = LangParser::default();
 		let state = ParserState::new(&parser, None);
-		let _ = parser.parse(state, source, None);
+		let (_, state) = parser.parse(state, source, None);
 
-		// TODO2
-		/*
 		let style = state.shared
 			.styles
-			.current_style(section_style::STYLE_KEY)
+			.borrow()
+			.current(section_style::STYLE_KEY)
 			.downcast_rc::<SectionStyle>()
 			.unwrap();
 
 		assert_eq!(style.link_pos, SectionLinkPos::None);
 		assert_eq!(style.link, ["a".to_string(), "b".to_string(), "c".to_string()]);
-		*/
 	}
 }

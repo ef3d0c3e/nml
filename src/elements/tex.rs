@@ -450,7 +450,7 @@ $[kind=block,env=another] e^{i\pi}=-1$
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
@@ -472,7 +472,7 @@ $[env=another] e^{i\pi}=-1$
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

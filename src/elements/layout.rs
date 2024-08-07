@@ -895,7 +895,7 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Layout { token == LayoutToken::Begin, id == 0 };
@@ -947,7 +947,7 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Layout { token == LayoutToken::Begin, id == 0 };

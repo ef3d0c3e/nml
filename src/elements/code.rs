@@ -680,7 +680,7 @@ fn fact(n: usize) -> usize
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		let borrow = doc.content().borrow();
 		let found = borrow
@@ -726,7 +726,7 @@ fn fact(n: usize) -> usize
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		let borrow = doc.content().borrow();
 		let found = borrow

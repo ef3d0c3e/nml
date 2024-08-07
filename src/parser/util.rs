@@ -144,6 +144,7 @@ pub fn parse_paragraph<'a>(
 		new_state
 			.parser
 			.parse(new_state, source.clone(), Some(document))
+			.0
 	});
 	if parsed.content().borrow().len() > 1 {
 		return Err("Parsed document contains more than a single paragraph");
@@ -422,20 +423,23 @@ mod tests {
 		(&doc as &dyn Document)
 			.last_element_mut::<Paragraph>()
 			.unwrap()
-			.push(Box::new(Comment::new(tok.clone(), "COMMENT".to_string())));
+			.push(Box::new(Comment::new(tok.clone(), "COMMENT".to_string())))
+			.unwrap();
 		assert_eq!(process_text(&doc, "\na"), "a");
 
 		// A space is appended as previous element is inline
 		(&doc as &dyn Document)
 			.last_element_mut::<Paragraph>()
 			.unwrap()
-			.push(Box::new(Text::new(tok.clone(), "TEXT".to_string())));
+			.push(Box::new(Text::new(tok.clone(), "TEXT".to_string())))
+			.unwrap();
 		assert_eq!(process_text(&doc, "\na"), " a");
 
 		(&doc as &dyn Document)
 			.last_element_mut::<Paragraph>()
 			.unwrap()
-			.push(Box::new(Style::new(tok.clone(), 0, false)));
+			.push(Box::new(Style::new(tok.clone(), 0, false)))
+			.unwrap();
 		assert_eq!(process_text(&doc, "\na"), " a");
 	}
 

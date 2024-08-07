@@ -56,7 +56,7 @@ fn parse(
 
 	// Parse
 	let source = SourceFile::new(input.to_string(), None).unwrap();
-	let doc = parser.parse(ParserState::new(parser, None), Rc::new(source), None);
+	let (doc, _) = parser.parse(ParserState::new(parser, None), Rc::new(source), None);
 
 	if debug_opts.contains(&"ast".to_string()) {
 		println!("-- BEGIN AST DEBUGGING --");

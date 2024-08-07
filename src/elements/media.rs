@@ -548,7 +548,7 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		let borrow = doc.content().borrow();
 		let group = borrow.first().as_ref().unwrap().as_container().unwrap();

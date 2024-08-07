@@ -161,7 +161,7 @@ impl RegexRule for ImportRule {
 		};
 
 		state.with_state(|new_state| {
-			let import_doc = new_state.parser.parse(new_state, import, Some(document));
+			let (import_doc, _) = new_state.parser.parse(new_state, import, Some(document));
 			document.merge(import_doc.content(), import_doc.scope(), Some(&import_as));
 		});
 

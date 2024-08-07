@@ -284,7 +284,7 @@ Some [link](url).
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
@@ -314,7 +314,7 @@ nml.link.push("**BOLD link**", "another url")
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

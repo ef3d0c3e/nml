@@ -63,7 +63,9 @@ impl Variable for BaseVariable {
 			self.to_string(),
 		));
 
-		state.with_state(|new_state| new_state.parser.parse_into(new_state, source, document))
+		state.with_state(|new_state| {
+			let _ = new_state.parser.parse_into(new_state, source, document);
+		});
 	}
 }
 

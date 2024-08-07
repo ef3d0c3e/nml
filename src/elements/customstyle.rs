@@ -399,6 +399,8 @@ impl Rule for CustomStyleRule {
 								.custom_styles
 								.borrow_mut()
 								.insert(Rc::new(style));
+
+							ctx.state.reset_match("Custom Style").unwrap();
 						});
 					});
 
@@ -454,6 +456,8 @@ impl Rule for CustomStyleRule {
 								return;
 							}
 							ctx.state.shared.custom_styles.borrow_mut().insert(Rc::new(style));
+
+							ctx.state.reset_match("Custom Style").unwrap();
 						});
 					});
 
@@ -505,7 +509,7 @@ pre |styled| post °Hello°.
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
@@ -549,7 +553,7 @@ pre [styled] post (Hello).
 			None,
 		));
 		let parser = LangParser::default();
-		let doc = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
