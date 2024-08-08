@@ -106,7 +106,7 @@ impl ContainerElement for ListEntry {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::list")]
 pub struct ListRule {
 	start_re: Regex,
 	continue_re: Regex,

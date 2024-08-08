@@ -42,7 +42,7 @@ impl Element for Text {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::text")]
 pub struct TextRule;
 
 impl TextRule {

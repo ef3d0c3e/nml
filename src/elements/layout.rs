@@ -284,7 +284,7 @@ impl RuleState for LayoutState {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::layout")]
 pub struct LayoutRule {
 	re: [Regex; 3],
 }

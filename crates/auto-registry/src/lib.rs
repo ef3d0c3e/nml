@@ -76,6 +76,12 @@ impl Parse for AutoRegistryArgs {
 ///  - registry: (String) Name of the registry to collect the struct into
 ///  - path: (Optional String) The crate path in which the struct is located
 ///          If left empty, the path will be try to be automatically-deduced
+///
+/// # Note
+///
+/// Due to a lacking implementation of `proc_macro_span` in rust-analyzer,
+/// it is highly advised the set the `path` attribute when using this macro.
+/// See https://github.com/rust-lang/rust-analyzer/issues/15950
 #[proc_macro_attribute]
 pub fn auto_registry(attr: TokenStream, input: TokenStream) -> TokenStream {
 	let args = parse_macro_input!(attr as AutoRegistryArgs);
@@ -84,7 +90,12 @@ pub fn auto_registry(attr: TokenStream, input: TokenStream) -> TokenStream {
 	let ident = &input.ident;
 
 	let path = if let Some(path) = args.path {
-		format!("{}::{}", path.value(), ident.to_string().as_str())
+		let value = path.value();
+		if value.is_empty() {
+			value
+		} else {
+			format!("{}::{}", value, ident.to_string().as_str())
+		}
 	} else {
 		// Attempt to get the path in a hacky way in case the path wasn't
 		// specified as an attribute to the macro
@@ -229,6 +240,25 @@ impl Parse for GenerateRegistryArgs {
 ///           comma-separated and create the resulting expression
 ///  - return_type: (Type) The return type of the generated function.
 ///                 Must match the type of the macro invocation
+///
+/// # Example
+/// ```
+/// macro_rules! create_listeners {
+/// 	( $($construct:expr),+ $(,)? ) => {{
+/// 		vec![$(Box::new($construct) as Box<dyn Listener>,)+]
+/// 	}};
+/// }
+/// #[generate_registry(
+/// 		registry = "listeners",
+/// 		target = build_listeners,
+/// 		return_type = Vec<Box<dyn Listener>>,
+/// 		maker = create_listeners)]
+///
+/// fn main()
+/// {
+/// 	let all_listeners : Vec<Box<dyn Listener>> = build_listeners();
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn generate_registry(attr: TokenStream, input: TokenStream) -> TokenStream {
 	let args = parse_macro_input!(attr as GenerateRegistryArgs);
@@ -250,7 +280,6 @@ pub fn generate_registry(attr: TokenStream, input: TokenStream) -> TokenStream {
 	}
 
 	let function = args.target;
-	//proc_macro2::Ident::new(args.target.value().as_str(), proc_macro2::Span::call_site());
 	let return_type = args.return_type;
 	let maker = args.maker;
 

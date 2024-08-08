@@ -178,7 +178,7 @@ impl RuleState for CustomStyleState {
 
 static STATE_NAME: &'static str = "elements.custom_style";
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::customstyle")]
 pub struct CustomStyleRule;
 
 impl CustomStyleRule {

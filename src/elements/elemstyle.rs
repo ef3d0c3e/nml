@@ -21,7 +21,7 @@ use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Source;
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::elemstyle")]
 pub struct ElemStyleRule {
 	start_re: Regex,
 }

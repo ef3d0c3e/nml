@@ -132,7 +132,7 @@ impl RuleState for StyleState {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::style")]
 pub struct StyleRule {
 	re: [Regex; 4],
 }

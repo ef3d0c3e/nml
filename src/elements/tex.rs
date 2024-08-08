@@ -219,7 +219,7 @@ impl Element for Tex {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::tex")]
 pub struct TexRule {
 	re: [Regex; 2],
 	properties: PropertyParser,

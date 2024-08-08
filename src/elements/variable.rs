@@ -37,7 +37,7 @@ impl FromStr for VariableKind {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::variable")]
 pub struct VariableRule {
 	re: [Regex; 1],
 	kinds: Vec<(String, String)>,
@@ -297,7 +297,7 @@ impl RegexRule for VariableRule {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::variable")]
 pub struct VariableSubstitutionRule {
 	re: [Regex; 1],
 }

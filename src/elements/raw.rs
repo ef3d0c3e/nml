@@ -44,7 +44,7 @@ impl Element for Raw {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::raw")]
 pub struct RawRule {
 	re: [Regex; 1],
 	properties: PropertyParser,

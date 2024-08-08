@@ -20,7 +20,7 @@ use std::rc::Rc;
 
 use super::text::Text;
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::script")]
 pub struct ScriptRule {
 	re: [Regex; 2],
 	eval_kinds: [(&'static str, &'static str); 3],

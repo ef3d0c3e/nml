@@ -71,7 +71,7 @@ impl ContainerElement for Link {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::link")]
 pub struct LinkRule {
 	re: [Regex; 1],
 }

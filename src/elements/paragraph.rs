@@ -91,7 +91,7 @@ impl ContainerElement for Paragraph {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::paragraph")]
 pub struct ParagraphRule {
 	re: Regex,
 }

@@ -296,7 +296,7 @@ impl Element for Code {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::code")]
 pub struct CodeRule {
 	re: [Regex; 2],
 	properties: PropertyParser,

@@ -16,17 +16,9 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Comment {
-	location: Token,
-	content: String,
-}
-
-impl Comment {
-	pub fn new(location: Token, content: String) -> Self {
-		Self {
-			location: location,
-			content,
-		}
-	}
+	pub location: Token,
+	#[allow(unused)]
+	pub content: String,
 }
 
 impl Element for Comment {
@@ -38,7 +30,7 @@ impl Element for Comment {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::comment")]
 pub struct CommentRule {
 	re: [Regex; 1],
 }

@@ -17,7 +17,7 @@ use std::rc::Rc;
 
 use super::paragraph::Paragraph;
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::import")]
 pub struct ImportRule {
 	re: [Regex; 1],
 }

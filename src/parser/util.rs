@@ -423,7 +423,10 @@ mod tests {
 		(&doc as &dyn Document)
 			.last_element_mut::<Paragraph>()
 			.unwrap()
-			.push(Box::new(Comment::new(tok.clone(), "COMMENT".to_string())))
+			.push(Box::new(Comment {
+				location: tok.clone(),
+				content: "COMMENT".into(),
+			}))
 			.unwrap();
 		assert_eq!(process_text(&doc, "\na"), "a");
 

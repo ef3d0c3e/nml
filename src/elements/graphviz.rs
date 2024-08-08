@@ -146,7 +146,7 @@ impl Element for Graphviz {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::graphviz")]
 pub struct GraphRule {
 	re: [Regex; 1],
 	properties: PropertyParser,

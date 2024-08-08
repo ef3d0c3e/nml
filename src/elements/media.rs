@@ -221,7 +221,7 @@ impl ReferenceableElement for Medium {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::media")]
 pub struct MediaRule {
 	re: [Regex; 1],
 	properties: PropertyParser,

@@ -13,6 +13,7 @@ use crate::document::variable::Variable;
 #[derive(Clone, Copy)]
 pub enum Target {
 	HTML,
+	#[allow(unused)]
 	LATEX,
 }
 
@@ -21,7 +22,6 @@ pub struct Compiler {
 	cache: Option<RefCell<Connection>>,
 	reference_count: RefCell<HashMap<String, HashMap<String, usize>>>,
 	// TODO: External references, i.e resolved later
-	
 	sections_counter: RefCell<Vec<usize>>,
 }
 
@@ -44,11 +44,12 @@ impl Compiler {
 
 	/// Gets the section counter for a given depth
 	/// This function modifies the section counter
-	pub fn section_counter(&self, depth: usize) -> Ref<'_, Vec<usize>>
-	{
+	pub fn section_counter(&self, depth: usize) -> Ref<'_, Vec<usize>> {
 		// Increment current counter
 		if self.sections_counter.borrow().len() == depth {
-			self.sections_counter.borrow_mut().last_mut()
+			self.sections_counter
+				.borrow_mut()
+				.last_mut()
 				.map(|id| *id += 1);
 			return Ref::map(self.sections_counter.borrow(), |b| &*b);
 		}

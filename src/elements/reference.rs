@@ -62,7 +62,7 @@ impl Element for Reference {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::reference")]
 pub struct ReferenceRule {
 	re: [Regex; 1],
 	properties: PropertyParser,

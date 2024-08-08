@@ -135,7 +135,7 @@ impl ReferenceableElement for Section {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules")]
+#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::section")]
 pub struct SectionRule {
 	re: [Regex; 1],
 }
