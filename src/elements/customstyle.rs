@@ -178,10 +178,16 @@ impl RuleState for CustomStyleState {
 
 static STATE_NAME: &'static str = "elements.custom_style";
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct CustomStyleRule;
+
+impl CustomStyleRule {
+	pub fn new() -> Self { Self{} }
+}
 
 impl Rule for CustomStyleRule {
 	fn name(&self) -> &'static str { "Custom Style" }
+	fn previous(&self) -> Option<&'static str> { Some("Style") }
 
 	fn next_match(&self, state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		let content = cursor.source.content();

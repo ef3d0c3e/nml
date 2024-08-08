@@ -4,7 +4,6 @@ use std::rc::Rc;
 use crate::document::document::Document;
 use crate::document::element::DocumentEnd;
 use crate::document::langdocument::LangDocument;
-use crate::elements::registrar::register;
 use crate::elements::text::Text;
 
 use super::parser::Parser;
@@ -35,8 +34,10 @@ impl LangParser {
 		};
 
 		// Register rules
-		// TODO: use https://docs.rs/inventory/latest/inventory/
-		register(&mut s);
+		for rule in super::rule::get_rule_registry()
+		{
+			s.add_rule(rule).unwrap();
+		}
 
 		s
 	}

@@ -38,6 +38,7 @@ impl Element for Comment {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct CommentRule {
 	re: [Regex; 1],
 }
@@ -52,6 +53,8 @@ impl CommentRule {
 
 impl RegexRule for CommentRule {
 	fn name(&self) -> &'static str { "Comment" }
+
+	fn previous(&self) -> Option<&'static str> { None }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 

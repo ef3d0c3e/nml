@@ -91,6 +91,7 @@ impl ContainerElement for Paragraph {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct ParagraphRule {
 	re: Regex,
 }
@@ -104,7 +105,8 @@ impl ParagraphRule {
 }
 
 impl Rule for ParagraphRule {
-	fn name(&self) -> &'static str { "Paragraphing" }
+	fn name(&self) -> &'static str { "Paragraph" }
+	fn previous(&self) -> Option<&'static str> { Some("Comment") }
 
 	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.re

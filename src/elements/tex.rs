@@ -219,6 +219,7 @@ impl Element for Tex {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct TexRule {
 	re: [Regex; 2],
 	properties: PropertyParser,
@@ -296,6 +297,7 @@ impl TexRule {
 
 impl RegexRule for TexRule {
 	fn name(&self) -> &'static str { "Tex" }
+	fn previous(&self) -> Option<&'static str> { Some("Code") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

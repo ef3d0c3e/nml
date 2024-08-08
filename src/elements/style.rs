@@ -132,6 +132,7 @@ impl RuleState for StyleState {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct StyleRule {
 	re: [Regex; 4],
 }
@@ -157,6 +158,7 @@ static STATE_NAME: &'static str = "elements.style";
 
 impl RegexRule for StyleRule {
 	fn name(&self) -> &'static str { "Style" }
+	fn previous(&self) -> Option<&'static str> { Some("Layout") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

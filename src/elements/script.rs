@@ -20,6 +20,7 @@ use std::rc::Rc;
 
 use super::text::Text;
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct ScriptRule {
 	re: [Regex; 2],
 	eval_kinds: [(&'static str, &'static str); 3],
@@ -77,6 +78,7 @@ impl ScriptRule {
 
 impl RegexRule for ScriptRule {
 	fn name(&self) -> &'static str { "Script" }
+	fn previous(&self) -> Option<&'static str> { Some("Import") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

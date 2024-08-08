@@ -21,6 +21,7 @@ use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Source;
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct ElemStyleRule {
 	start_re: Regex,
 }
@@ -58,6 +59,7 @@ impl ElemStyleRule {
 
 impl Rule for ElemStyleRule {
 	fn name(&self) -> &'static str { "Element Style" }
+	fn previous(&self) -> Option<&'static str> { Some("Script") }
 
 	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re

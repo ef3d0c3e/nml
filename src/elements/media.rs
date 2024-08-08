@@ -221,6 +221,7 @@ impl ReferenceableElement for Medium {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct MediaRule {
 	re: [Regex; 1],
 	properties: PropertyParser,
@@ -325,6 +326,7 @@ impl MediaRule {
 
 impl RegexRule for MediaRule {
 	fn name(&self) -> &'static str { "Media" }
+	fn previous(&self) -> Option<&'static str> { Some("Graph") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

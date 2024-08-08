@@ -71,6 +71,7 @@ impl ContainerElement for Link {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct LinkRule {
 	re: [Regex; 1],
 }
@@ -85,6 +86,7 @@ impl LinkRule {
 
 impl RegexRule for LinkRule {
 	fn name(&self) -> &'static str { "Link" }
+	fn previous(&self) -> Option<&'static str> { Some("Link") }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 

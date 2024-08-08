@@ -106,6 +106,7 @@ impl ContainerElement for ListEntry {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct ListRule {
 	start_re: Regex,
 	continue_re: Regex,
@@ -249,6 +250,7 @@ impl ListRule {
 
 impl Rule for ListRule {
 	fn name(&self) -> &'static str { "List" }
+	fn previous(&self) -> Option<&'static str> { Some("Raw") }
 
 	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re

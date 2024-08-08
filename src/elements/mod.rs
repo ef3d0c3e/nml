@@ -9,7 +9,6 @@ pub mod media;
 pub mod paragraph;
 pub mod raw;
 pub mod reference;
-pub mod registrar;
 pub mod script;
 pub mod section;
 pub mod style;

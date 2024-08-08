@@ -146,6 +146,7 @@ impl Element for Graphviz {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct GraphRule {
 	re: [Regex; 1],
 	properties: PropertyParser,
@@ -178,6 +179,7 @@ impl GraphRule {
 
 impl RegexRule for GraphRule {
 	fn name(&self) -> &'static str { "Graph" }
+	fn previous(&self) -> Option<&'static str> { Some("Tex") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

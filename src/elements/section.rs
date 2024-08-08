@@ -135,6 +135,7 @@ impl ReferenceableElement for Section {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct SectionRule {
 	re: [Regex; 1],
 }
@@ -155,6 +156,7 @@ pub mod section_kind {
 
 impl RegexRule for SectionRule {
 	fn name(&self) -> &'static str { "Section" }
+	fn previous(&self) -> Option<&'static str> { Some("Custom Style") }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 

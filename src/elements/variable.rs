@@ -37,6 +37,7 @@ impl FromStr for VariableKind {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct VariableRule {
 	re: [Regex; 1],
 	kinds: Vec<(String, String)>,
@@ -117,6 +118,7 @@ impl VariableRule {
 
 impl RegexRule for VariableRule {
 	fn name(&self) -> &'static str { "Variable" }
+	fn previous(&self) -> Option<&'static str> { Some("Element Style") }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 
@@ -295,6 +297,7 @@ impl RegexRule for VariableRule {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct VariableSubstitutionRule {
 	re: [Regex; 1],
 }
@@ -309,6 +312,7 @@ impl VariableSubstitutionRule {
 
 impl RegexRule for VariableSubstitutionRule {
 	fn name(&self) -> &'static str { "Variable Substitution" }
+	fn previous(&self) -> Option<&'static str> { Some("Variable") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

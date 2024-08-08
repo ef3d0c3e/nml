@@ -296,6 +296,7 @@ impl Element for Code {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct CodeRule {
 	re: [Regex; 2],
 	properties: PropertyParser,
@@ -330,6 +331,7 @@ impl CodeRule {
 
 impl RegexRule for CodeRule {
 	fn name(&self) -> &'static str { "Code" }
+	fn previous(&self) -> Option<&'static str> { Some("List") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

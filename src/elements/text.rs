@@ -42,13 +42,20 @@ impl Element for Text {
 	}
 }
 
-#[derive(Default)]
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct TextRule;
+
+impl TextRule {
+	pub fn new() -> Self { Self {} }
+}
 
 impl Rule for TextRule {
 	fn name(&self) -> &'static str { "Text" }
+	fn previous(&self) -> Option<&'static str> { Some("Link") }
 
-	fn next_match(&self, _state: &ParserState, _cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> { None }
+	fn next_match(&self, _state: &ParserState, _cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+		None
+	}
 
 	fn on_match(
 		&self,

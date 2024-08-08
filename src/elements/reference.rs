@@ -62,6 +62,7 @@ impl Element for Reference {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct ReferenceRule {
 	re: [Regex; 1],
 	properties: PropertyParser,
@@ -127,6 +128,7 @@ impl ReferenceRule {
 
 impl RegexRule for ReferenceRule {
 	fn name(&self) -> &'static str { "Reference" }
+	fn previous(&self) -> Option<&'static str> { Some("Text") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

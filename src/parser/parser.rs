@@ -19,7 +19,6 @@ use crate::document::document::DocumentAccessors;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
-use crate::elements::customstyle::CustomStyleRule;
 use crate::elements::paragraph::Paragraph;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
@@ -186,7 +185,6 @@ impl<'a, 'b> ParserState<'a, 'b> {
 			.for_each(|(rule, (matched_at, match_data))| {
 				// Don't upate if not stepped over yet
 				if *matched_at > cursor.pos {
-					// TODO: maybe we should expose matches() so it becomes possible to dynamically register a new rule
 					return;
 				}
 
@@ -369,7 +367,7 @@ pub trait Parser {
 	/// # Warning
 	///
 	/// This method must not be called if a [`ParserState`] for this parser exists.
-	fn add_rule(&mut self, rule: Box<dyn Rule>, after: Option<&'static str>) -> Result<(), String> {
+	fn add_rule(&mut self, rule: Box<dyn Rule>) -> Result<(), String> {
 		if let Some(_) = self
 			.rules()
 			.iter()
@@ -381,23 +379,7 @@ pub trait Parser {
 			));
 		}
 
-		// Try to insert after
-		if let Some(after) = after {
-			let index = self
-				.rules()
-				.iter()
-				.enumerate()
-				.find(|(_, rule)| rule.name() == after)
-				.map(|(idx, _)| idx);
-
-			if let Some(index) = index {
-				self.rules_mut().insert(index, rule);
-			} else {
-				return Err(format!("Unable to find rule `{after}` to insert after"));
-			}
-		} else {
-			self.rules_mut().push(rule);
-		}
+		self.rules_mut().push(rule);
 
 		Ok(())
 	}

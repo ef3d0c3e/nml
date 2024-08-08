@@ -12,12 +12,66 @@ use mlua::Function;
 use mlua::Lua;
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
+macro_rules! create_registry {
+	( $($construct:expr),+ $(,)? ) => {{
+		let mut map = HashMap::new();
+		$(
+			let boxed = Box::new($construct) as Box<dyn Rule>;
+			map.insert(boxed.name(), boxed);
+		)+
+		map
+	}};
+}
+
+/// Gets the list of all rules exported with the [`auto_registry`] proc macro.
+/// Rules are sorted according to topological order using the [`Rule::previous`] method.
+#[auto_registry::generate_registry(registry = "rules", target = make_rules, return_type = HashMap<&'static str, Box<dyn Rule>>, maker = create_registry)]
+pub fn get_rule_registry() -> Vec<Box<dyn Rule>> {
+	fn cmp(
+		map: &HashMap<&'static str, Box<dyn Rule>>,
+		lname: &'static str,
+		rname: &'static str,
+	) -> std::cmp::Ordering {
+		let l = map.get(lname).unwrap();
+		let r = map.get(rname).unwrap();
+		if l.previous() == Some(r.name()) {
+			std::cmp::Ordering::Greater
+		} else if r.previous() == Some(l.name()) {
+			std::cmp::Ordering::Less
+		} else if l.previous().is_some() && r.previous().is_none() {
+			std::cmp::Ordering::Greater
+		} else if r.previous().is_some() && l.previous().is_none() {
+			std::cmp::Ordering::Less
+		} else if let (Some(pl), Some(pr)) = (l.previous(), r.previous()) {
+			cmp(map, pl, pr)
+		} else {
+			std::cmp::Ordering::Equal
+		}
+	}
+	let mut map = make_rules();
+	let mut sorted_keys = map.iter().map(|(key, _)| *key).collect::<Vec<_>>();
+	sorted_keys.sort_by(|l, r| cmp(&map, l, r));
+
+	let mut owned = Vec::with_capacity(sorted_keys.len());
+	for key in sorted_keys {
+		let rule = map.remove(key).unwrap();
+		owned.push(rule);
+	}
+
+	owned
+}
+
 pub trait Rule: Downcast {
-	/// Returns rule's name
+	/// The rule name
 	fn name(&self) -> &'static str;
+
+	/// The name of the rule that should come before this one
+	fn previous(&self) -> Option<&'static str>;
+
 	/// Finds the next match starting from [`cursor`]
 	fn next_match(&self, state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)>;
 	/// Callback when rule matches
@@ -47,7 +101,11 @@ impl core::fmt::Debug for dyn Rule {
 }
 
 pub trait RegexRule {
+	/// The rule name
 	fn name(&self) -> &'static str;
+
+	/// The name of the rule that should come before this one
+	fn previous(&self) -> Option<&'static str>;
 
 	/// Returns the rule's regexes
 	fn regexes(&self) -> &[regex::Regex];
@@ -69,6 +127,7 @@ pub trait RegexRule {
 
 impl<T: RegexRule + 'static> Rule for T {
 	fn name(&self) -> &'static str { RegexRule::name(self) }
+	fn previous(&self) -> Option<&'static str> { RegexRule::previous(self) }
 
 	/// Finds the next match starting from [`cursor`]
 	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
@@ -119,4 +178,42 @@ impl<T: RegexRule + 'static> Rule for T {
 	fn register_styles(&self, holder: &mut StyleHolder) { self.register_styles(holder); }
 
 	fn register_layouts(&self, holder: &mut LayoutHolder) { self.register_layouts(holder); }
+}
+
+#[cfg(test)]
+mod tests {
+
+	use super::*;
+
+	#[test]
+	fn registry() {
+		let rules = get_rule_registry();
+		let names: Vec<&'static str> = rules.iter().map(|rule| rule.name()).collect();
+
+		assert_eq!(
+			names,
+			vec![
+				"Comment",
+				"Paragraph",
+				"Import",
+				"Script",
+				"Element Style",
+				"Variable",
+				"Variable Substitution",
+				"Raw",
+				"List",
+				"Code",
+				"Tex",
+				"Graph",
+				"Media",
+				"Layout",
+				"Style",
+				"Custom Style",
+				"Section",
+				"Link",
+				"Text",
+				"Reference",
+			]
+		);
+	}
 }

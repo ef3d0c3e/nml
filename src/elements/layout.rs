@@ -284,6 +284,7 @@ impl RuleState for LayoutState {
 	}
 }
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct LayoutRule {
 	re: [Regex; 3],
 }
@@ -378,6 +379,7 @@ static STATE_NAME: &'static str = "elements.layout";
 
 impl RegexRule for LayoutRule {
 	fn name(&self) -> &'static str { "Layout" }
+	fn previous(&self) -> Option<&'static str> { Some("Media") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

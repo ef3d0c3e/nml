@@ -17,6 +17,7 @@ use std::rc::Rc;
 
 use super::paragraph::Paragraph;
 
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct ImportRule {
 	re: [Regex; 1],
 }
@@ -40,6 +41,7 @@ impl ImportRule {
 
 impl RegexRule for ImportRule {
 	fn name(&self) -> &'static str { "Import" }
+	fn previous(&self) -> Option<&'static str> { Some("Paragraph") }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 
