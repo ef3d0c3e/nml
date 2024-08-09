@@ -4,6 +4,7 @@ use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lua::kernel::CTX;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -14,11 +15,13 @@ use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
+use mlua::Function;
 use regex::Captures;
 use regex::Regex;
 use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use super::paragraph::Paragraph;
 
@@ -42,7 +45,7 @@ impl Style {
 impl Element for Style {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
-	fn element_name(&self) -> &'static str { "Section" }
+	fn element_name(&self) -> &'static str { "Style" }
 	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
@@ -205,6 +208,74 @@ impl RegexRule for StyleRule {
 
 		return vec![];
 	}
+
+	fn register_bindings<'lua>(&self, lua: &'lua mlua::Lua) -> Vec<(String, Function<'lua>)> {
+		let mut bindings = vec![];
+
+		bindings.push((
+			"toggle".to_string(),
+			lua.create_function(|_, style: String| {
+				let kind = match style.as_str() {
+					"bold" | "Bold" => 0,
+					"italic" | "Italic" => 1,
+					"underline" | "Underline" => 2,
+					"emphasis" | "Emphasis" => 3,
+					_ => {
+						return Err(mlua::Error::BadArgument {
+							to: Some("toggle".to_string()),
+							pos: 1,
+							name: Some("style".to_string()),
+							cause: Arc::new(mlua::Error::external(format!(
+								"Unknown style specified"
+							))),
+						})
+					}
+				};
+
+				CTX.with_borrow(|ctx| {
+					ctx.as_ref().map(|ctx| {
+						let query = ctx.state.shared.rule_state.borrow().get(STATE_NAME);
+						let style_state = match query {
+							Some(state) => state,
+							None => {
+								// Insert as a new state
+								match ctx.state.shared.rule_state.borrow_mut().insert(
+									STATE_NAME.into(),
+									Rc::new(RefCell::new(StyleState::new())),
+								) {
+									Err(_) => panic!("Unknown error"),
+									Ok(state) => state,
+								}
+							}
+						};
+
+						if let Some(style_state) =
+							style_state.borrow_mut().downcast_mut::<StyleState>()
+						{
+							style_state.toggled[kind] = style_state.toggled[kind]
+								.clone()
+								.map_or(Some(ctx.location.clone()), |_| None);
+							ctx.state.push(
+								ctx.document,
+								Box::new(Style::new(
+									ctx.location.clone(),
+									kind,
+									!style_state.toggled[kind].is_some(),
+								)),
+							);
+						} else {
+							panic!("Invalid state at `{STATE_NAME}`");
+						};
+					})
+				});
+
+				Ok(())
+			})
+			.unwrap(),
+		));
+
+		bindings
+	}
 }
 
 #[cfg(test)]
@@ -227,6 +298,47 @@ terminated here*
 
 **BOLD + *italic***
 __`UNDERLINE+EM`__
+"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Paragraph {
+				Text;
+				Style { kind == 1, close == false };
+				Text;
+				Style { kind == 1, close == true };
+			};
+			Paragraph {
+				Style { kind == 0, close == false }; // **
+				Text;
+				Style { kind == 1, close == false }; // *
+				Text;
+				Style { kind == 0, close == true }; // **
+				Style { kind == 1, close == true }; // *
+
+				Style { kind == 2, close == false }; // __
+				Style { kind == 3, close == false }; // `
+				Text;
+				Style { kind == 3, close == true }; // `
+				Style { kind == 2, close == true }; // __
+			};
+		);
+	}
+
+	#[test]
+	fn lua() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+Some %<nml.style.toggle("italic")>%style
+terminated here%<nml.style.toggle("Italic")>%
+
+%<nml.style.toggle("Bold")>%NOLD + %<nml.style.toggle("italic")>%italic%<nml.style.toggle("bold") nml.style.toggle("italic")>%
+%<nml.style.toggle("Underline") nml.style.toggle("Emphasis")>%UNDERLINE+EM%<nml.style.toggle("emphasis")>%%<nml.style.toggle("underline")>%
 "#
 			.to_string(),
 			None,
