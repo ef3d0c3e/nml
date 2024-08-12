@@ -1,3 +1,4 @@
+use core::fmt;
 use std::any::Any;
 use std::collections::HashMap;
 use std::ops::Range;
@@ -11,9 +12,13 @@ use blockquote_style::AuthorPos::Before;
 use blockquote_style::BlockquoteStyle;
 use regex::Match;
 use regex::Regex;
-use runtime_fmt::rt_format;
+use runtime_format::FormatArgs;
+use runtime_format::FormatError;
+use runtime_format::FormatKey;
+use runtime_format::FormatKeyError;
 
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ContainerElement;
@@ -42,6 +47,28 @@ pub struct Blockquote {
 	pub(self) style: Rc<blockquote_style::BlockquoteStyle>,
 }
 
+struct FmtPair<'a>(Target, &'a Blockquote);
+
+impl FormatKey for FmtPair<'_> {
+	fn fmt(&self, key: &str, f: &mut fmt::Formatter<'_>) -> Result<(), FormatKeyError> {
+		match key {
+			"author" => write!(
+				f,
+				"{}",
+				Compiler::sanitize(self.0, self.1.author.as_ref().unwrap_or(&"".into()))
+			)
+			.map_err(FormatKeyError::Fmt),
+			"cite" => write!(
+				f,
+				"{}",
+				Compiler::sanitize(self.0, self.1.cite.as_ref().unwrap_or(&"".into()))
+			)
+			.map_err(FormatKeyError::Fmt),
+			_ => Err(FormatKeyError::UnknownKey),
+		}
+	}
+}
+
 impl Element for Blockquote {
 	fn location(&self) -> &Token { &self.location }
 
@@ -53,34 +80,32 @@ impl Element for Blockquote {
 		match compiler.target() {
 			HTML => {
 				let mut result = r#"<div class="blockquote-content">"#.to_string();
-				let format_author = || -> Result<String, runtime_fmt::Error> {
+				let format_author = || -> Result<String, FormatError> {
 					let mut result = String::new();
+
 					if self.cite.is_some() || self.author.is_some() {
 						result += r#"<p class="blockquote-author">"#;
-						match (&self.author, &self.cite) {
-							(Some(author), Some(cite)) => {
-								result += rt_format!(
-									self.style.format[0].as_str(),
-									author,
-									format!("<cite>{}</cite>", Compiler::sanitize(HTML, cite)),
-								)?
-								.as_str();
+						let fmt_pair = FmtPair(compiler.target(), &self);
+						match (self.author.is_some(), self.cite.is_some()) {
+							(true, true) => {
+								let args =
+									FormatArgs::new(self.style.format[0].as_str(), &fmt_pair);
+								args.status()?;
+								result += args.to_string().as_str();
 							}
-							(Some(author), None) => {
-								result += rt_format!(
-									self.style.format[1].as_str(),
-									Compiler::sanitize(HTML, author),
-								)?
-								.as_str()
+							(true, false) => {
+								let args =
+									FormatArgs::new(self.style.format[1].as_str(), &fmt_pair);
+								args.status()?;
+								result += args.to_string().as_str();
 							}
-							(None, Some(cite)) => {
-								result += rt_format!(
-									self.style.format[2].as_str(),
-									format!("<cite>{}</cite>", Compiler::sanitize(HTML, cite)),
-								)?
-								.as_str()
+							(false, false) => {
+								let args =
+									FormatArgs::new(self.style.format[2].as_str(), &fmt_pair);
+								args.status()?;
+								result += args.to_string().as_str();
 							}
-							(None, None) => panic!(""),
+							_ => panic!(""),
 						}
 						result += "</p>";
 					}
@@ -94,7 +119,7 @@ impl Element for Blockquote {
 					result += "<blockquote>";
 				}
 				if self.style.author_pos == Before {
-					result += format_author().as_str();
+					result += format_author().map_err(|err| err.to_string())?.as_str();
 				}
 
 				result += "<p>";
@@ -103,7 +128,7 @@ impl Element for Blockquote {
 				}
 				result += "</p></blockquote>";
 				if self.style.author_pos == After {
-					result += format_author().as_str();
+					result += format_author().map_err(|err| err.to_string())?.as_str();
 				}
 
 				result += "</div>";
@@ -371,9 +396,9 @@ mod blockquote_style {
 			Self {
 				author_pos: AuthorPos::After,
 				format: [
-					"A{author}, {cite}".into(),
-					"B{author}".into(),
-					"C{cite}".into(),
+					"{author}, {cite}".into(),
+					"{author}".into(),
+					"{cite}".into(),
 				],
 			}
 		}
@@ -409,8 +434,7 @@ AFTER
 			None,
 		));
 		let parser = LangParser::default();
-		let state = ParserState::new(&parser, None);
-		let (doc, _) = parser.parse(state, source, None);
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph { Text{ content == "BEFORE" }; };
@@ -425,6 +449,46 @@ AFTER
 				Style;
 			};
 			Paragraph { Text{ content == "AFTER" }; };
+		);
+	}
+
+	#[test]
+	pub fn style() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+@@style.blockquote = {
+	"author_pos": "Before",
+	"format": ["{cite} by {author}", "Author: {author}", "From: {cite}"]
+}
+PRE
+>[author=A, cite=B, url=C] Some entry
+> contin**ued here
+> **
+AFTER
+"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(ParserState::new(&parser, None), source, None);
+
+		let style = state
+			.shared
+			.styles
+			.borrow()
+			.current(blockquote_style::STYLE_KEY)
+			.downcast_rc::<BlockquoteStyle>()
+			.unwrap();
+
+		assert_eq!(style.author_pos, Before);
+		assert_eq!(
+			style.format,
+			[
+				"{cite} by {author}".to_string(),
+				"Author: {author}".to_string(),
+				"From: {cite}".to_string()
+			]
 		);
 	}
 }
