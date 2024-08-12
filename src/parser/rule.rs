@@ -202,6 +202,7 @@ mod tests {
 				"Variable Substitution",
 				"Raw",
 				"List",
+				"Blockquote",
 				"Code",
 				"Tex",
 				"Graph",

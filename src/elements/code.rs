@@ -331,7 +331,7 @@ impl CodeRule {
 
 impl RegexRule for CodeRule {
 	fn name(&self) -> &'static str { "Code" }
-	fn previous(&self) -> Option<&'static str> { Some("List") }
+	fn previous(&self) -> Option<&'static str> { Some("Blockquote") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
