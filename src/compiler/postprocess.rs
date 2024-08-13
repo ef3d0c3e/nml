@@ -35,7 +35,7 @@ impl PostProcess {
 						if let Some(found) = doc.borrow().references.get(name) {
 							// Check for duplicates
 							if let Some((_, previous_doc)) = &found_ref {
-								return Err(format!("Cannot use an unspecific reference for reference named: `{found}`. Found in document `{}` but also in `{}`. Specify the source of the reference to resolve the conflict.", previous_doc.borrow().input, doc.borrow().input));
+								return Err(format!("Cannot use an unspecific reference for reference named: `{name}`. Found in document `{}` but also in `{}`. Specify the source of the reference to resolve the conflict.", previous_doc.borrow().input, doc.borrow().input));
 							}
 
 							found_ref = Some((found.clone(), &doc));
@@ -71,7 +71,7 @@ impl PostProcess {
 					"Unable to get the output. Aborting postprocessing."
 				))?;
 				let insert_content = format!("{found_path}#{found_ref}");
-				content.insert_str(pos - offset, insert_content.as_str());
+				content.insert_str(pos + offset, insert_content.as_str());
 				offset += insert_content.len();
 			} else {
 				return Err(format!("Cannot find reference `{cross_ref}` from document `{}`. Aborting postprocessing.", doc.borrow().input));

@@ -157,7 +157,7 @@ pub fn process(
 
 /// Processes sources from in-memory strings
 /// This function is indented for testing
-fn process_in_memory(target: Target, sources: Vec<String>) -> Result<Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>, String> {
+pub fn process_from_memory(target: Target, sources: Vec<String>) -> Result<Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>, String> {
 	let mut compiled = vec![];
 
 	let parser = LangParser::default();
@@ -169,7 +169,7 @@ fn process_in_memory(target: Target, sources: Vec<String>) -> Result<Vec<(RefCel
 
 			// Compile
 			let compiler = Compiler::new(target, None);
-			let (mut compiled, postprocess) = compiler.compile(&*doc);
+			let (compiled, postprocess) = compiler.compile(&*doc);
 
 			Ok((compiled, Some(postprocess)))
 		};
