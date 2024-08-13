@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
-use crate::elements::reference::Reference;
+use crate::elements::reference::InternalReference;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
@@ -50,7 +50,7 @@ pub trait Element: Downcast + core::fmt::Debug {
 	fn as_container(&self) -> Option<&dyn ContainerElement> { None }
 
 	/// Compiles element
-	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String>;
+	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String>;
 }
 impl_downcast!(Element);
 
@@ -66,9 +66,13 @@ pub trait ReferenceableElement: Element {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		reference: &Reference,
+		reference: &InternalReference,
 		refid: usize,
 	) -> Result<String, String>;
+
+	/// Gets the refid for a compiler. The refid is some key that can be used from an external
+	/// document to reference this element.
+	fn refid(&self, compiler: &Compiler, refid: usize) -> String;
 }
 
 pub trait ContainerElement: Element {
@@ -89,7 +93,7 @@ impl Element for DocumentEnd {
 
 	fn element_name(&self) -> &'static str { "Document End" }
 
-	fn compile(&self, _compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, _compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
 		Ok(String::new())
 	}
 }

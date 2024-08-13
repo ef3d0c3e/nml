@@ -35,9 +35,9 @@ cargo build --release --bin nml
  - [x] LaTeX rendering
  - [x] Graphviz rendering
  - [x] Media
- - [ ] References
- - [ ] Navigation
- - [ ] Cross-Document references
+ - [x] References
+ - [x] Navigation
+ - [x] Cross-Document references
  - [ ] Complete Lua api
  - [ ] Documentation
  - [ ] Table

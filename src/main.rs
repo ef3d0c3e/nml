@@ -5,6 +5,7 @@ mod elements;
 mod lua;
 mod parser;
 
+use std::cell::RefCell;
 use std::env;
 use std::io::BufWriter;
 use std::io::Write;
@@ -17,6 +18,7 @@ use compiler::compiler::CompiledDocument;
 use compiler::compiler::Compiler;
 use compiler::compiler::Target;
 use compiler::navigation::create_navigation;
+use compiler::postprocess::PostProcess;
 use document::document::Document;
 use getopts::Options;
 use parser::langparser::LangParser;
@@ -66,7 +68,6 @@ fn parse(
 			.for_each(|elem| println!("{elem:#?}"));
 		println!("-- END AST DEBUGGING --");
 	}
-
 	if debug_opts.contains(&"ref".to_string()) {
 		println!("-- BEGIN REFERENCES DEBUGGING --");
 		let sc = doc.scope().borrow();
@@ -85,7 +86,7 @@ fn parse(
 	}
 
 	if parser.has_error() {
-		return Err("Parsing failed aborted due to errors while parsing".to_string());
+		return Err("Parsing failed due to errors while parsing".to_string());
 	}
 
 	Ok(doc)
@@ -97,7 +98,7 @@ fn process(
 	db_path: &Option<String>,
 	force_rebuild: bool,
 	debug_opts: &Vec<String>,
-) -> Result<Vec<CompiledDocument>, String> {
+) -> Result<Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>, String> {
 	let mut compiled = vec![];
 
 	let current_dir = std::env::current_dir()
@@ -126,24 +127,20 @@ fn process(
 		std::env::set_current_dir(file_parent_path)
 			.map_err(|err| format!("Failed to move to path `{file_parent_path:#?}`: {err}"))?;
 
-		let parse_and_compile = || -> Result<CompiledDocument, String> {
+		let parse_and_compile = || -> Result<(CompiledDocument, Option<PostProcess>), String> {
 			// Parse
 			let doc = parse(&parser, file.to_str().unwrap(), debug_opts)?;
 
 			// Compile
 			let compiler = Compiler::new(target, db_path.clone());
-			let mut compiled = compiler.compile(&*doc);
+			let (mut compiled, postprocess) = compiler.compile(&*doc);
 
-			// Insert into cache
 			compiled.mtime = modified.duration_since(UNIX_EPOCH).unwrap().as_secs();
-			compiled.insert_cache(&con).map_err(|err| {
-				format!("Failed to insert compiled document from `{file:#?}` into cache: {err}")
-			})?;
 
-			Ok(compiled)
+			Ok((compiled, Some(postprocess)))
 		};
 
-		let cdoc = if force_rebuild {
+		let (cdoc, post) = if force_rebuild {
 			parse_and_compile()?
 		} else {
 			match CompiledDocument::from_cache(&con, file.to_str().unwrap()) {
@@ -151,14 +148,35 @@ fn process(
 					if compiled.mtime < modified.duration_since(UNIX_EPOCH).unwrap().as_secs() {
 						parse_and_compile()?
 					} else {
-						compiled
+						(compiled, None)
 					}
 				}
 				None => parse_and_compile()?,
 			}
 		};
 
-		compiled.push(cdoc);
+		compiled.push((RefCell::new(cdoc), post));
+	}
+
+	for (doc, postprocess) in &compiled {
+		if postprocess.is_none() {
+			continue;
+		}
+
+		// Post processing
+		let body = postprocess
+			.as_ref()
+			.unwrap()
+			.apply(target, &compiled, &doc)?;
+		doc.borrow_mut().body = body;
+
+		// Insert into cache
+		doc.borrow().insert_cache(&con).map_err(|err| {
+			format!(
+				"Failed to insert compiled document from `{}` into cache: {err}",
+				doc.borrow().input
+			)
+		})?;
 	}
 
 	std::env::set_current_dir(current_dir)
@@ -344,8 +362,8 @@ fn main() -> ExitCode {
 	}
 
 	// Parse, compile using the cache
-	let compiled = match process(Target::HTML, files, &db_path, force_rebuild, &debug_opts) {
-		Ok(compiled) => compiled,
+	let processed = match process(Target::HTML, files, &db_path, force_rebuild, &debug_opts) {
+		Ok(processed) => processed,
 		Err(e) => {
 			eprintln!("{e}");
 			return ExitCode::FAILURE;
@@ -356,7 +374,7 @@ fn main() -> ExitCode {
 	// Batch mode
 	{
 		// Build navigation
-		let navigation = match create_navigation(&compiled) {
+		let navigation = match create_navigation(&processed) {
 			Ok(nav) => nav,
 			Err(e) => {
 				eprintln!("{e}");
@@ -365,14 +383,15 @@ fn main() -> ExitCode {
 		};
 
 		// Output
-		for doc in compiled {
+		for (doc, _) in &processed {
 			let out_path = match doc
+				.borrow()
 				.get_variable("compiler.output")
 				.or(input_meta.is_file().then_some(&output))
 			{
 				Some(path) => path.clone(),
 				None => {
-					eprintln!("Unable to get output file for `{}`", doc.input);
+					eprintln!("Unable to get output file for `{}`", doc.borrow().input);
 					continue;
 				}
 			};
@@ -382,18 +401,33 @@ fn main() -> ExitCode {
 
 			let mut writer = BufWriter::new(file);
 
-			write!(writer, "{}{}{}{}", doc.header, nav, doc.body, doc.footer).unwrap();
+			write!(
+				writer,
+				"{}{}{}{}",
+				doc.borrow().header,
+				nav,
+				doc.borrow().body,
+				doc.borrow().footer
+			)
+			.unwrap();
 			writer.flush().unwrap();
 		}
 	} else
 	// Single file
 	{
-		for doc in compiled {
+		for (doc, _) in &processed {
 			let file = std::fs::File::create(output.clone()).unwrap();
 
 			let mut writer = BufWriter::new(file);
 
-			write!(writer, "{}{}{}", doc.header, doc.body, doc.footer).unwrap();
+			write!(
+				writer,
+				"{}{}{}",
+				doc.borrow().header,
+				doc.borrow().body,
+				doc.borrow().footer
+			)
+			.unwrap();
 			writer.flush().unwrap();
 		}
 	}

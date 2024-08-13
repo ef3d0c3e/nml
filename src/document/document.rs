@@ -4,13 +4,17 @@ use std::cell::RefMut;
 use std::collections::hash_map::HashMap;
 use std::rc::Rc;
 
+use serde::Deserialize;
+use serde::Serialize;
+
 use crate::parser::source::Source;
 
 use super::element::Element;
 use super::element::ReferenceableElement;
 use super::variable::Variable;
 
-#[derive(Debug, Clone, Copy)]
+/// For references inside the current document
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ElemReference {
 	Direct(usize),
 
@@ -18,10 +22,30 @@ pub enum ElemReference {
 	Nested(usize, usize),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CrossReference {
+	/// When the referenced document is unspecified
+	Unspecific(String),
+
+	/// When the referenced document is specified
+	Specific(String, String),
+}
+
+impl core::fmt::Display for CrossReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self
+		{
+			CrossReference::Unspecific(name) => write!(f, "#{name}"),
+			CrossReference::Specific(doc_name, name) => write!(f, "{doc_name}#{name}"),
+		}
+	}
+}
+
 #[derive(Debug)]
 pub struct Scope {
 	/// List of all referenceable elements in current scope.
-	/// All elements in this should return a non empty
+	/// All elements in this should return a non empty element
+	/// when [`Element::as_referenceable`] is called
 	pub referenceable: HashMap<String, ElemReference>,
 	pub variables: HashMap<String, Rc<dyn Variable>>,
 }

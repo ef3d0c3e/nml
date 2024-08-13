@@ -1,9 +1,11 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::compiler::compiler::Compiler;
 
 use super::compiler::CompiledDocument;
 use super::compiler::Target;
+use super::postprocess::PostProcess;
 
 #[derive(Debug, Default)]
 pub struct NavEntry {
@@ -13,10 +15,14 @@ pub struct NavEntry {
 
 impl NavEntry {
 	// FIXME: Sanitize
-	pub fn compile(&self, target: Target, doc: &CompiledDocument) -> String {
+	pub fn compile(&self, target: Target, doc: &RefCell<CompiledDocument>) -> String {
+		let doc_borrow = doc.borrow();
 		let categories = vec![
-			doc.get_variable("nav.category").map_or("", |s| s.as_str()),
-			doc.get_variable("nav.subcategory")
+			doc_borrow
+				.get_variable("nav.category")
+				.map_or("", |s| s.as_str()),
+			doc_borrow
+				.get_variable("nav.subcategory")
 				.map_or("", |s| s.as_str()),
 		];
 
@@ -101,7 +107,9 @@ impl NavEntry {
 	}
 }
 
-pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<NavEntry, String> {
+pub fn create_navigation(
+	docs: &Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>,
+) -> Result<NavEntry, String> {
 	let mut nav = NavEntry {
 		entries: vec![],
 		children: HashMap::new(),
@@ -110,19 +118,20 @@ pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<NavEntry, Strin
 	// All paths (for duplicate checking)
 	let mut all_paths = HashMap::new();
 
-	for doc in docs {
-		let cat = doc.get_variable("nav.category");
-		let subcat = doc.get_variable("nav.subcategory");
-		let title = doc
+	for (doc, _) in docs {
+		let doc_borrow = doc.borrow();
+		let cat = doc_borrow.get_variable("nav.category");
+		let subcat = doc_borrow.get_variable("nav.subcategory");
+		let title = doc_borrow
 			.get_variable("nav.title")
-			.or(doc.get_variable("doc.title"));
-		let previous = doc.get_variable("nav.previous").map(|s| s.clone());
-		let path = doc.get_variable("compiler.output");
+			.or(doc_borrow.get_variable("doc.title"));
+		let previous = doc_borrow.get_variable("nav.previous").map(|s| s.clone());
+		let path = doc_borrow.get_variable("compiler.output");
 
 		let (title, path) = match (title, path) {
 			(Some(title), Some(path)) => (title, path),
 			_ => {
-				eprintln!("Skipping navigation generation for `{}`, must have a defined `@nav.title` and `@compiler.output`", doc.input);
+				eprintln!("Skipping navigation generation for `{}`, must have a defined `@nav.title` and `@compiler.output`", doc_borrow.input);
 				continue;
 			}
 		};
@@ -134,7 +143,7 @@ pub fn create_navigation(docs: &Vec<CompiledDocument>) -> Result<NavEntry, Strin
 				None => {
 					eprintln!(
 						"Skipping `{}`: No `@nav.category`, but `@nav.subcategory` is set",
-						doc.input
+						doc_borrow.input
 					);
 					continue;
 				}

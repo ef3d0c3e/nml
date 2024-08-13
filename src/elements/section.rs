@@ -24,6 +24,8 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use super::reference::InternalReference;
+
 #[derive(Debug)]
 pub struct Section {
 	pub(self) location: Token,
@@ -43,7 +45,7 @@ impl Element for Section {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 	fn element_name(&self) -> &'static str { "Section" }
-	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				// Section numbering
@@ -112,7 +114,7 @@ impl ReferenceableElement for Section {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		reference: &super::reference::Reference,
+		reference: &InternalReference,
 		_refid: usize,
 	) -> Result<String, String> {
 		match compiler.target() {
@@ -132,6 +134,10 @@ impl ReferenceableElement for Section {
 			}
 			_ => todo!(""),
 		}
+	}
+
+	fn refid(&self, compiler: &Compiler, _refid: usize) -> String {
+		Compiler::refname(compiler.target(), self.title.as_str())
 	}
 }
 

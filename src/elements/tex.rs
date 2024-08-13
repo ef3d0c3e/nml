@@ -149,7 +149,7 @@ impl Element for Tex {
 
 	fn element_name(&self) -> &'static str { "LaTeX" }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, document: &dyn Document, _cursor: usize) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				static CACHE_INIT: Once = Once::new();

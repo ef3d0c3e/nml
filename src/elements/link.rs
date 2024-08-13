@@ -37,7 +37,7 @@ impl Element for Link {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Link" }
-	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				let mut result = format!(
@@ -46,7 +46,7 @@ impl Element for Link {
 				);
 
 				for elem in &self.display {
-					result += elem.compile(compiler, document)?.as_str();
+					result += elem.compile(compiler, document, cursor+result.len())?.as_str();
 				}
 
 				result += "</a>";

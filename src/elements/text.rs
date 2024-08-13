@@ -37,7 +37,7 @@ impl Element for Text {
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Text" }
 
-	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
 		Ok(Compiler::sanitize(compiler.target(), self.content.as_str()))
 	}
 }

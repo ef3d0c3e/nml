@@ -12,6 +12,7 @@ use regex::Regex;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
+use crate::document::document::CrossReference;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
@@ -27,24 +28,29 @@ use crate::parser::util::PropertyMap;
 use crate::parser::util::PropertyParser;
 
 #[derive(Debug)]
-pub struct Reference {
+pub struct InternalReference {
 	pub(self) location: Token,
 	pub(self) refname: String,
 	pub(self) caption: Option<String>,
 }
 
-impl Reference {
+impl InternalReference {
 	pub fn caption(&self) -> Option<&String> { self.caption.as_ref() }
 }
 
-impl Element for Reference {
+impl Element for InternalReference {
 	fn location(&self) -> &Token { &self.location }
 
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 
 	fn element_name(&self) -> &'static str { "Reference" }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				let elemref = document.get_reference(self.refname.as_str()).unwrap();
@@ -56,6 +62,43 @@ impl Element for Reference {
 					self,
 					compiler.reference_id(document, elemref),
 				)
+			}
+			_ => todo!(""),
+		}
+	}
+}
+
+#[derive(Debug)]
+pub struct ExternalReference {
+	pub(self) location: Token,
+	pub(self) reference: CrossReference,
+	pub(self) caption: Option<String>,
+}
+
+impl Element for ExternalReference {
+	fn location(&self) -> &Token { &self.location }
+
+	fn kind(&self) -> ElemKind { ElemKind::Inline }
+
+	fn element_name(&self) -> &'static str { "Reference" }
+
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		_document: &dyn Document,
+		cursor: usize,
+	) -> Result<String, String> {
+		match compiler.target() {
+			Target::HTML => {
+				let mut result = "<a href=\"".to_string();
+				let refname = self.caption.as_ref().unwrap_or(match &self.reference {
+					CrossReference::Unspecific(name) => &name,
+					CrossReference::Specific(_, name) => &name,
+				});
+
+				compiler.insert_crossreference(cursor + result.len(), self.reference.clone());
+				result += format!("\">{}</a>", Compiler::sanitize(Target::HTML, refname)).as_str();
+				Ok(result)
 			}
 			_ => todo!(""),
 		}
@@ -142,41 +185,71 @@ impl RegexRule for ReferenceRule {
 	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
 		let mut reports = vec![];
 
-		let refname = match (
-			matches.get(1).unwrap(),
-			validate_refname(document, matches.get(1).unwrap().as_str(), false),
-		) {
-			(m, Ok(refname)) => {
-				if document.get_reference(refname).is_none() {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), m.start())
-							.with_message("Uknown Reference Refname")
-							.with_label(
-								Label::new((token.source().clone(), m.range())).with_message(
-									format!(
-										"Could not find element with reference: `{}`",
-										refname.fg(state.parser.colors().info)
-									),
-								),
-							)
-							.finish(),
-					);
-					return reports;
+		let (refdoc, refname) = if let Some(refname_match) = matches.get(1) {
+			if let Some(sep) = refname_match.as_str().find('#')
+			// External reference
+			{
+				let refdoc = refname_match.as_str().split_at(sep).0;
+				match validate_refname(document, refname_match.as_str().split_at(sep + 1).1, false)
+				{
+					Err(err) => {
+						reports.push(
+							Report::build(ReportKind::Error, token.source(), refname_match.start())
+								.with_message("Invalid Reference Refname")
+								.with_label(
+									Label::new((token.source().clone(), refname_match.range()))
+										.with_message(err),
+								)
+								.finish(),
+						);
+						return reports;
+					}
+					Ok(refname) => (Some(refdoc.to_string()), refname.to_string()),
 				}
-				refname.to_string()
+			} else
+			// Internal reference
+			{
+				match validate_refname(document, refname_match.as_str(), false) {
+					Err(err) => {
+						reports.push(
+							Report::build(ReportKind::Error, token.source(), refname_match.start())
+								.with_message("Invalid Reference Refname")
+								.with_label(
+									Label::new((token.source().clone(), refname_match.range()))
+										.with_message(err),
+								)
+								.finish(),
+						);
+						return reports;
+					}
+					Ok(refname) => {
+						if document.get_reference(refname).is_none() {
+							reports.push(
+								Report::build(
+									ReportKind::Error,
+									token.source(),
+									refname_match.start(),
+								)
+								.with_message("Uknown Reference Refname")
+								.with_label(
+									Label::new((token.source().clone(), refname_match.range()))
+										.with_message(format!(
+											"Could not find element with reference: `{}`",
+											refname.fg(state.parser.colors().info)
+										)),
+								)
+								.finish(),
+							);
+							return reports;
+						}
+						(None, refname.to_string())
+					}
+				}
 			}
-			(m, Err(err)) => {
-				reports.push(
-					Report::build(ReportKind::Error, token.source(), m.start())
-						.with_message("Invalid Reference Refname")
-						.with_label(
-							Label::new((token.source().clone(), m.range())).with_message(err),
-						)
-						.finish(),
-				);
-				return reports;
-			}
+		} else {
+			panic!("Unknown error")
 		};
+
 		// Properties
 		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(3))
 		{
@@ -194,14 +267,40 @@ impl RegexRule for ReferenceRule {
 			.ok()
 			.and_then(|(_, s)| Some(s));
 
-		state.push(
-			document,
-			Box::new(Reference {
-				location: token,
-				refname,
-				caption,
-			}),
-		);
+		if let Some(refdoc) = refdoc {
+			if caption.is_none() {
+				return reports;
+			}
+
+			if refdoc.is_empty() {
+				state.push(
+					document,
+					Box::new(ExternalReference {
+						location: token,
+						reference: CrossReference::Unspecific(refname),
+						caption,
+					}),
+				);
+			} else {
+				state.push(
+					document,
+					Box::new(ExternalReference {
+						location: token,
+						reference: CrossReference::Specific(refdoc, refname),
+						caption,
+					}),
+				);
+			}
+		} else {
+			state.push(
+				document,
+				Box::new(InternalReference {
+					location: token,
+					refname,
+					caption,
+				}),
+			);
+		}
 
 		reports
 	}

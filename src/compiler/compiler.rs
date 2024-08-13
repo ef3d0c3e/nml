@@ -6,9 +6,12 @@ use std::rc::Rc;
 
 use rusqlite::Connection;
 
+use crate::document::document::CrossReference;
 use crate::document::document::Document;
 use crate::document::document::ElemReference;
 use crate::document::variable::Variable;
+
+use super::postprocess::PostProcess;
 
 #[derive(Clone, Copy)]
 pub enum Target {
@@ -21,8 +24,9 @@ pub struct Compiler {
 	target: Target,
 	cache: Option<RefCell<Connection>>,
 	reference_count: RefCell<HashMap<String, HashMap<String, usize>>>,
-	// TODO: External references, i.e resolved later
 	sections_counter: RefCell<Vec<usize>>,
+
+	unresolved_references: RefCell<Vec<(usize, CrossReference)>>,
 }
 
 impl Compiler {
@@ -39,6 +43,7 @@ impl Compiler {
 			cache: cache.map(|con| RefCell::new(con)),
 			reference_count: RefCell::new(HashMap::new()),
 			sections_counter: RefCell::new(vec![]),
+			unresolved_references: RefCell::new(vec![]),
 		}
 	}
 
@@ -115,6 +120,13 @@ impl Compiler {
 		}
 	}
 
+	/// Inserts a new crossreference
+	pub fn insert_crossreference(&self, pos: usize, reference: CrossReference) {
+		self.unresolved_references
+			.borrow_mut()
+			.push((pos, reference));
+	}
+
 	pub fn target(&self) -> Target { self.target }
 
 	pub fn cache(&self) -> Option<RefMut<'_, Connection>> {
@@ -179,7 +191,7 @@ impl Compiler {
 		result
 	}
 
-	pub fn compile(&self, document: &dyn Document) -> CompiledDocument {
+	pub fn compile(&self, document: &dyn Document) -> (CompiledDocument, PostProcess) {
 		let borrow = document.content().borrow();
 
 		// Header
@@ -190,7 +202,7 @@ impl Compiler {
 		for i in 0..borrow.len() {
 			let elem = &borrow[i];
 
-			match elem.compile(self, document) {
+			match elem.compile(self, document, body.len()) {
 				Ok(result) => body.push_str(result.as_str()),
 				Err(err) => println!("Unable to compile element: {err}\n{elem:#?}"),
 			}
@@ -209,14 +221,35 @@ impl Compiler {
 			.map(|(key, var)| (key.clone(), var.to_string()))
 			.collect::<HashMap<String, String>>();
 
-		CompiledDocument {
+		// References
+		let references = document
+			.scope()
+			.borrow_mut()
+			.referenceable
+			.iter()
+			.map(|(key, reference)| {
+				let elem = document.get_from_reference(reference).unwrap();
+				let refid = self.reference_id(document, *reference);
+
+				(key.clone(), elem.refid(self, refid))
+			})
+			.collect::<HashMap<String, String>>();
+
+		let postprocess = PostProcess {
+			resolve_references: self.unresolved_references.replace(vec![]),
+		};
+
+		let cdoc = CompiledDocument {
 			input: document.source().name().clone(),
 			mtime: 0,
 			variables,
+			references,
 			header,
 			body,
 			footer,
-		}
+		};
+
+		(cdoc, postprocess)
 	}
 }
 
@@ -227,11 +260,13 @@ pub struct CompiledDocument {
 	/// Modification time (i.e seconds since last epoch)
 	pub mtime: u64,
 
-	// TODO: Also store exported references
-	// so they can be referenced from elsewhere
-	// This will also require rebuilding in case some exported references have changed...
-	/// Variables exported to string, so they can be querried later
+	/// All the variables defined in the document
+	/// with values mapped by [`Variable::to_string()`]
 	pub variables: HashMap<String, String>,
+
+	/// All the referenceable elements in the document
+	/// with values mapped by [`ReferenceableElement::refid()`]
+	pub references: HashMap<String, String>,
 
 	/// Compiled document's header
 	pub header: String,
@@ -245,10 +280,11 @@ impl CompiledDocument {
 	pub fn get_variable(&self, name: &str) -> Option<&String> { self.variables.get(name) }
 
 	fn sql_table() -> &'static str {
-		"CREATE TABLE IF NOT EXISTS compiled_documents (
+		"CREATE TABLE IF NOT EXISTS compiled_documents(
 			input TEXT PRIMARY KEY,
 			mtime INTEGER NOT NULL,
 			variables TEXT NOT NULL,
+			internal_references TEXT NOT NULL,
 			header TEXT NOT NULL,
 			body TEXT NOT NULL,
 			footer TEXT NOT NULL
@@ -258,7 +294,7 @@ impl CompiledDocument {
 	fn sql_get_query() -> &'static str { "SELECT * FROM compiled_documents WHERE input = (?1)" }
 
 	fn sql_insert_query() -> &'static str {
-		"INSERT OR REPLACE INTO compiled_documents (input, mtime, variables, header, body, footer) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
+		"INSERT OR REPLACE INTO compiled_documents (input, mtime, variables, internal_references, header, body, footer) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
 	}
 
 	pub fn init_cache(con: &Connection) -> Result<usize, rusqlite::Error> {
@@ -271,9 +307,10 @@ impl CompiledDocument {
 				input: input.to_string(),
 				mtime: row.get_unwrap::<_, u64>(1),
 				variables: serde_json::from_str(row.get_unwrap::<_, String>(2).as_str()).unwrap(),
-				header: row.get_unwrap::<_, String>(3),
-				body: row.get_unwrap::<_, String>(4),
-				footer: row.get_unwrap::<_, String>(5),
+				references: serde_json::from_str(row.get_unwrap::<_, String>(3).as_str()).unwrap(),
+				header: row.get_unwrap::<_, String>(4),
+				body: row.get_unwrap::<_, String>(5),
+				footer: row.get_unwrap::<_, String>(6),
 			})
 		})
 		.ok()
@@ -287,6 +324,7 @@ impl CompiledDocument {
 				&self.input,
 				&self.mtime,
 				serde_json::to_string(&self.variables).unwrap(),
+				serde_json::to_string(&self.references).unwrap(),
 				&self.header,
 				&self.body,
 				&self.footer,

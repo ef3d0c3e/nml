@@ -48,7 +48,7 @@ impl Element for ListMarker {
 
 	fn element_name(&self) -> &'static str { "List Marker" }
 
-	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => match (self.kind, self.numbered) {
 				(MarkerKind::Close, true) => Ok("</ol>".to_string()),
@@ -76,12 +76,12 @@ impl Element for ListEntry {
 
 	fn element_name(&self) -> &'static str { "List Entry" }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				let mut result = "<li>".to_string();
 				for elem in &self.content {
-					result += elem.compile(compiler, document)?.as_str();
+					result += elem.compile(compiler, document, cursor+result.len())?.as_str();
 				}
 				result += "</li>";
 				Ok(result)

@@ -111,7 +111,7 @@ impl Element for Graphviz {
 
 	fn element_name(&self) -> &'static str { "Graphviz" }
 
-	fn compile(&self, compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				static CACHE_INIT: Once = Once::new();

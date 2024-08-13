@@ -76,7 +76,7 @@ impl Element for Blockquote {
 
 	fn element_name(&self) -> &'static str { "Blockquote" }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
 		match compiler.target() {
 			HTML => {
 				let mut result = r#"<div class="blockquote-content">"#.to_string();
@@ -124,7 +124,7 @@ impl Element for Blockquote {
 
 				result += "<p>";
 				for elem in &self.content {
-					result += elem.compile(compiler, document)?.as_str();
+					result += elem.compile(compiler, document, cursor+result.len())?.as_str();
 				}
 				result += "</p></blockquote>";
 				if self.style.author_pos == After {

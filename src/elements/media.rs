@@ -35,7 +35,7 @@ use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
 
 use super::paragraph::Paragraph;
-use super::reference::Reference;
+use super::reference::InternalReference;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MediaType {
@@ -72,17 +72,14 @@ impl Element for Media {
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				let mut result = String::new();
 
 				result.push_str("<div class=\"media\">");
 				for medium in &self.media {
-					match medium.compile(compiler, document) {
-						Ok(r) => result.push_str(r.as_str()),
-						Err(e) => return Err(e),
-					}
+					result += medium.compile(compiler, document, cursor+result.len())?.as_str();
 				}
 				result.push_str("</div>");
 
@@ -135,16 +132,20 @@ impl Element for Medium {
 
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				let mut result = String::new();
+
+				// Reference
+				let elemref = document.get_reference(self.reference.as_str()).unwrap();
+				let refcount = compiler.reference_id(document, elemref);
 
 				let width = self
 					.width
 					.as_ref()
 					.map_or(String::new(), |w| format!(r#" style="width:{w};""#));
-				result.push_str(format!(r#"<div class="medium"{width}>"#).as_str());
+				result.push_str(format!(r#"<div id="{}" class="medium"{width}>"#, self.refid(compiler, refcount)).as_str());
 				result += match self.media_type {
 					MediaType::IMAGE => format!(r#"<a href="{0}"><img src="{0}"></a>"#, self.uri),
 					MediaType::VIDEO => format!(
@@ -168,17 +169,11 @@ impl Element for Medium {
 					})
 					.unwrap_or(String::new());
 
-				// Reference
-				let elemref = document.get_reference(self.reference.as_str()).unwrap();
-				let refcount = compiler.reference_id(document, elemref);
 				result.push_str(
 					format!(r#"<p class="medium-refname">({refcount}){caption}</p>"#).as_str(),
 				);
 				if let Some(paragraph) = self.description.as_ref() {
-					match paragraph.compile(compiler, document) {
-						Ok(res) => result.push_str(res.as_str()),
-						Err(err) => return Err(err),
-					}
+					result += paragraph.compile(compiler, document, cursor+result.len())?.as_str();
 				}
 				result.push_str("</div>");
 
@@ -198,7 +193,7 @@ impl ReferenceableElement for Medium {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		reference: &Reference,
+		reference: &InternalReference,
 		refid: usize,
 	) -> Result<String, String> {
 		match compiler.target() {
@@ -218,6 +213,10 @@ impl ReferenceableElement for Medium {
 			}
 			_ => todo!(""),
 		}
+	}
+
+	fn refid(&self, _compiler: &Compiler, refid: usize) -> String {
+		format!("medium-{refid}")
 	}
 }
 

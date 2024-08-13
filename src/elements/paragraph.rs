@@ -48,7 +48,7 @@ impl Element for Paragraph {
 
 	fn element_name(&self) -> &'static str { "Paragraph" }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
 		if self.content.is_empty() {
 			return Ok(String::new());
 		}
@@ -63,7 +63,7 @@ impl Element for Paragraph {
 				result.push_str("<p>");
 
 				for elems in &self.content {
-					result += elems.compile(compiler, document)?.as_str();
+					result += elems.compile(compiler, document, cursor+result.len())?.as_str();
 				}
 
 				result.push_str("</p>");

@@ -39,7 +39,7 @@ impl Element for Raw {
 
 	fn element_name(&self) -> &'static str { "Raw" }
 
-	fn compile(&self, _compiler: &Compiler, _document: &dyn Document) -> Result<String, String> {
+	fn compile(&self, _compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
 		Ok(self.content.clone())
 	}
 }
