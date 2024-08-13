@@ -91,13 +91,15 @@ impl Element for ExternalReference {
 		match compiler.target() {
 			Target::HTML => {
 				let mut result = "<a href=\"".to_string();
-				let refname = self.caption.as_ref().unwrap_or(match &self.reference {
-					CrossReference::Unspecific(name) => &name,
-					CrossReference::Specific(_, name) => &name,
-				});
 
 				compiler.insert_crossreference(cursor + result.len(), self.reference.clone());
-				result += format!("\">{}</a>", Compiler::sanitize(Target::HTML, refname)).as_str();
+
+				if let Some(caption) = &self.caption {
+					result +=
+						format!("\">{}</a>", Compiler::sanitize(Target::HTML, caption)).as_str();
+				} else {
+					result += format!("\">{}</a>", self.reference).as_str();
+				}
 				Ok(result)
 			}
 			_ => todo!(""),
@@ -268,10 +270,6 @@ impl RegexRule for ReferenceRule {
 			.and_then(|(_, s)| Some(s));
 
 		if let Some(refdoc) = refdoc {
-			if caption.is_none() {
-				return reports;
-			}
-
 			if refdoc.is_empty() {
 				state.push(
 					document,
@@ -303,5 +301,66 @@ impl RegexRule for ReferenceRule {
 		}
 
 		reports
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::elements::paragraph::Paragraph;
+use crate::elements::section::Section;
+use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
+use crate::parser::source::SourceFile;
+	use crate::validate_document;
+
+	use super::*;
+
+	#[test]
+	pub fn parse_internal() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+#{ref} Referenceable section
+
+§{ref}[caption=Section]
+§{ref}[caption=Another]
+"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Section;
+			Paragraph {
+				InternalReference { refname == "ref", caption == Some("Section".to_string()) };
+				InternalReference { refname == "ref", caption == Some("Another".to_string()) };
+			};
+		);
+	}
+
+	#[test]
+	pub fn parse_external() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+§{DocA#ref}[caption=Section]
+§{DocB#ref}
+§{#ref}[caption='ref' from any document]
+"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+
+		validate_document!(doc.content().borrow(), 0,
+			Paragraph {
+				ExternalReference { reference == CrossReference::Specific("DocA".into(), "ref".into()), caption == Some("Section".to_string()) };
+				ExternalReference { reference == CrossReference::Specific("DocB".into(), "ref".into()), caption == None::<String> };
+				ExternalReference { reference == CrossReference::Unspecific("ref".into()), caption == Some("'ref' from any document".to_string()) };
+			};
+		);
 	}
 }

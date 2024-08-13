@@ -19,7 +19,7 @@ impl PostProcess {
 	/// Applies postprocessing to a [`CompiledDocument`]
 	pub fn apply(
 		&self,
-		target: Target,
+		_target: Target,
 		list: &Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>,
 		doc: &RefCell<CompiledDocument>,
 	) -> Result<String, String> {

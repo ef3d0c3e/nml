@@ -5,29 +5,16 @@ mod elements;
 mod lua;
 mod parser;
 
-use std::cell::RefCell;
 use std::env;
 use std::io::BufWriter;
 use std::io::Write;
-use std::path::PathBuf;
 use std::process::ExitCode;
-use std::rc::Rc;
-use std::time::UNIX_EPOCH;
 
-use compiler::compiler::CompiledDocument;
-use compiler::compiler::Compiler;
 use compiler::compiler::Target;
 use compiler::navigation::create_navigation;
-use compiler::postprocess::PostProcess;
-use document::document::Document;
 use getopts::Options;
-use parser::langparser::LangParser;
-use parser::parser::Parser;
-use parser::parser::ParserState;
-use rusqlite::Connection;
 use walkdir::WalkDir;
 
-use crate::parser::source::SourceFile;
 extern crate getopts;
 
 fn print_usage(program: &str, opts: Options) {
@@ -47,142 +34,6 @@ There is NO WARRANTY, to the extent permitted by law.
 
 NML version: 0.4\n"
 	);
-}
-
-fn parse(
-	parser: &LangParser,
-	input: &str,
-	debug_opts: &Vec<String>,
-) -> Result<Box<dyn Document<'static>>, String> {
-	println!("Parsing {input}...");
-
-	// Parse
-	let source = SourceFile::new(input.to_string(), None).unwrap();
-	let (doc, _) = parser.parse(ParserState::new(parser, None), Rc::new(source), None);
-
-	if debug_opts.contains(&"ast".to_string()) {
-		println!("-- BEGIN AST DEBUGGING --");
-		doc.content()
-			.borrow()
-			.iter()
-			.for_each(|elem| println!("{elem:#?}"));
-		println!("-- END AST DEBUGGING --");
-	}
-	if debug_opts.contains(&"ref".to_string()) {
-		println!("-- BEGIN REFERENCES DEBUGGING --");
-		let sc = doc.scope().borrow();
-		sc.referenceable.iter().for_each(|(name, reference)| {
-			println!(" - {name}: `{:#?}`", doc.get_from_reference(reference));
-		});
-		println!("-- END REFERENCES DEBUGGING --");
-	}
-	if debug_opts.contains(&"var".to_string()) {
-		println!("-- BEGIN VARIABLES DEBUGGING --");
-		let sc = doc.scope().borrow();
-		sc.variables.iter().for_each(|(_name, var)| {
-			println!(" - `{:#?}`", var);
-		});
-		println!("-- END VARIABLES DEBUGGING --");
-	}
-
-	if parser.has_error() {
-		return Err("Parsing failed due to errors while parsing".to_string());
-	}
-
-	Ok(doc)
-}
-
-fn process(
-	target: Target,
-	files: Vec<PathBuf>,
-	db_path: &Option<String>,
-	force_rebuild: bool,
-	debug_opts: &Vec<String>,
-) -> Result<Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>, String> {
-	let mut compiled = vec![];
-
-	let current_dir = std::env::current_dir()
-		.map_err(|err| format!("Unable to get the current working directory: {err}"))?;
-
-	let con = db_path
-		.as_ref()
-		.map_or(Connection::open_in_memory(), |path| Connection::open(path))
-		.map_err(|err| format!("Unable to open connection to the database: {err}"))?;
-	CompiledDocument::init_cache(&con)
-		.map_err(|err| format!("Failed to initialize cached document table: {err}"))?;
-
-	let parser = LangParser::default();
-	for file in files {
-		let meta = std::fs::metadata(&file)
-			.map_err(|err| format!("Failed to get metadata for `{file:#?}`: {err}"))?;
-
-		let modified = meta
-			.modified()
-			.map_err(|err| format!("Unable to query modification time for `{file:#?}`: {err}"))?;
-
-		// Move to file's directory
-		let file_parent_path = file
-			.parent()
-			.ok_or(format!("Failed to get parent path for `{file:#?}`"))?;
-		std::env::set_current_dir(file_parent_path)
-			.map_err(|err| format!("Failed to move to path `{file_parent_path:#?}`: {err}"))?;
-
-		let parse_and_compile = || -> Result<(CompiledDocument, Option<PostProcess>), String> {
-			// Parse
-			let doc = parse(&parser, file.to_str().unwrap(), debug_opts)?;
-
-			// Compile
-			let compiler = Compiler::new(target, db_path.clone());
-			let (mut compiled, postprocess) = compiler.compile(&*doc);
-
-			compiled.mtime = modified.duration_since(UNIX_EPOCH).unwrap().as_secs();
-
-			Ok((compiled, Some(postprocess)))
-		};
-
-		let (cdoc, post) = if force_rebuild {
-			parse_and_compile()?
-		} else {
-			match CompiledDocument::from_cache(&con, file.to_str().unwrap()) {
-				Some(compiled) => {
-					if compiled.mtime < modified.duration_since(UNIX_EPOCH).unwrap().as_secs() {
-						parse_and_compile()?
-					} else {
-						(compiled, None)
-					}
-				}
-				None => parse_and_compile()?,
-			}
-		};
-
-		compiled.push((RefCell::new(cdoc), post));
-	}
-
-	for (doc, postprocess) in &compiled {
-		if postprocess.is_none() {
-			continue;
-		}
-
-		// Post processing
-		let body = postprocess
-			.as_ref()
-			.unwrap()
-			.apply(target, &compiled, &doc)?;
-		doc.borrow_mut().body = body;
-
-		// Insert into cache
-		doc.borrow().insert_cache(&con).map_err(|err| {
-			format!(
-				"Failed to insert compiled document from `{}` into cache: {err}",
-				doc.borrow().input
-			)
-		})?;
-	}
-
-	std::env::set_current_dir(current_dir)
-		.map_err(|err| format!("Failed to set current directory: {err}"))?;
-
-	Ok(compiled)
 }
 
 fn main() -> ExitCode {
@@ -362,13 +213,15 @@ fn main() -> ExitCode {
 	}
 
 	// Parse, compile using the cache
-	let processed = match process(Target::HTML, files, &db_path, force_rebuild, &debug_opts) {
-		Ok(processed) => processed,
-		Err(e) => {
-			eprintln!("{e}");
-			return ExitCode::FAILURE;
-		}
-	};
+	let processed =
+		match compiler::process::process(Target::HTML, files, &db_path, force_rebuild, &debug_opts)
+		{
+			Ok(processed) => processed,
+			Err(e) => {
+				eprintln!("{e}");
+				return ExitCode::FAILURE;
+			}
+		};
 
 	if input_meta.is_dir()
 	// Batch mode

@@ -22,7 +22,7 @@ pub enum ElemReference {
 	Nested(usize, usize),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CrossReference {
 	/// When the referenced document is unspecified
 	Unspecific(String),

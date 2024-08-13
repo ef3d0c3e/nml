@@ -45,7 +45,7 @@ pub mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::ParserState;
+	use crate::parser::parser::ParserState;
 
 	#[test]
 	fn validate_refname_tests() {
