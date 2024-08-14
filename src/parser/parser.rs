@@ -89,8 +89,8 @@ impl SharedState {
 
 		// Default styles & layouts
 		parser.rules().iter().for_each(|rule| {
-			rule.register_styles(&mut *s.styles.borrow_mut());
-			rule.register_layouts(&mut *s.layouts.borrow_mut());
+			rule.register_styles(&mut s.styles.borrow_mut());
+			rule.register_layouts(&mut s.layouts.borrow_mut());
 		});
 
 		s
@@ -198,7 +198,7 @@ impl<'a, 'b> ParserState<'a, 'b> {
 							let mut escaped = false;
 							'inner: loop {
 								let g = graphemes.next_back();
-								if !g.is_some() || g.unwrap() != "\\" {
+								if g.is_none() || g.unwrap() != "\\" {
 									break 'inner;
 								}
 
@@ -236,10 +236,10 @@ impl<'a, 'b> ParserState<'a, 'b> {
 			return (cursor.at(content.len()), None);
 		}
 
-		return (
+		(
 			cursor.at(next_pos),
 			Some((winner, matches_borrow[winner].1.take().unwrap())),
-		);
+		)
 	}
 
 	/// Add an [`Element`] to the [`Document`]
@@ -262,7 +262,7 @@ impl<'a, 'b> ParserState<'a, 'b> {
 			if doc.last_element::<Paragraph>().is_some_and(|_| true) {
 				self.parser
 					.handle_reports(self.shared.rule_state.borrow_mut().on_scope_end(
-						&self,
+						self,
 						doc,
 						super::state::Scope::PARAGRAPH,
 					));
@@ -368,10 +368,10 @@ pub trait Parser {
 	///
 	/// This method must not be called if a [`ParserState`] for this parser exists.
 	fn add_rule(&mut self, rule: Box<dyn Rule>) -> Result<(), String> {
-		if let Some(_) = self
+		if self
 			.rules()
 			.iter()
-			.find(|other_rule| other_rule.name() == rule.name())
+			.any(|other_rule| other_rule.name() == rule.name())
 		{
 			return Err(format!(
 				"Attempted to introduce duplicate rule: `{}`",
@@ -391,14 +391,11 @@ pub trait Parser {
 			let mut sources: HashSet<Rc<dyn Source>> = HashSet::new();
 			fn recurse_source(sources: &mut HashSet<Rc<dyn Source>>, source: Rc<dyn Source>) {
 				sources.insert(source.clone());
-				match source.location() {
-					Some(parent) => {
-						let parent_source = parent.source();
-						if sources.get(&parent_source).is_none() {
-							recurse_source(sources, parent_source);
-						}
+				if let Some(parent) = source.location() {
+					let parent_source = parent.source();
+					if sources.get(&parent_source).is_none() {
+						recurse_source(sources, parent_source);
 					}
-					None => {}
 				}
 			}
 
@@ -423,10 +420,8 @@ pub trait Parser {
 
 					if let Some(_s) = source.downcast_ref::<VirtualSource>() {
 						let start = location.start()
-							+ (location.source().content().as_bytes()[location.start()]
-								== '\n' as u8)
-								.then_some(1)
-								.unwrap_or(0);
+							+ if location.source().content().as_bytes()[location.start()]
+								== b'\n' { 1 } else { 0 };
 						report.labels.push(
 							Label::new((location.source(), start..location.end()))
 								.with_message("In evaluation of")

@@ -24,7 +24,6 @@ impl core::fmt::Display for dyn Source {
 }
 
 impl core::fmt::Debug for dyn Source {
-	// TODO
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "Source{{{}}}", self.name())
 	}
@@ -55,10 +54,10 @@ impl SourceFile {
 	pub fn new(path: String, location: Option<Token>) -> Result<Self, String> {
 		match fs::read_to_string(&path) {
 			Err(_) => {
-				return Err(String::from(format!(
+				Err(format!(
 					"Unable to read file content: `{}`",
 					path
-				)))
+				))
 			}
 			Ok(content) => Ok(Self {
 				location,
@@ -70,9 +69,9 @@ impl SourceFile {
 
 	pub fn with_content(path: String, content: String, location: Option<Token>) -> Self {
 		Self {
-			location: location,
-			path: path,
-			content: content,
+			location,
+			path,
+			content,
 		}
 	}
 }
@@ -162,7 +161,7 @@ impl Token {
 	}
 
 	pub fn source(&self) -> Rc<dyn Source> {
-		return self.source.clone();
+		self.source.clone()
 	}
 
 	/// Construct Token from a range
@@ -176,10 +175,10 @@ impl Token {
 	}
 
 	pub fn start(&self) -> usize {
-		return self.range.start;
+		self.range.start
 	}
 
 	pub fn end(&self) -> usize {
-		return self.range.end;
+		self.range.end
 	}
 }

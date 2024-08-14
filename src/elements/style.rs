@@ -99,13 +99,10 @@ impl RuleState for StyleState {
 				let paragraph = document.last_element::<Paragraph>().unwrap();
 				let paragraph_end = paragraph
 					.content
-					.last()
-					.and_then(|last| {
-						Some((
+					.last().map(|last| (
 							last.location().source(),
 							last.location().end() - 1..last.location().end(),
 						))
-					})
 					.unwrap();
 
 				reports.push(
@@ -123,7 +120,7 @@ impl RuleState for StyleState {
 						.with_label(
 							Label::new(paragraph_end)
 								.with_order(1)
-								.with_message(format!("Paragraph ends here"))
+								.with_message("Paragraph ends here".to_string())
 								.with_color(state.parser.colors().error),
 						)
 						.with_note("Styles cannot span multiple documents (i.e @import)")
@@ -131,7 +128,7 @@ impl RuleState for StyleState {
 				);
 			});
 
-		return reports;
+		reports
 	}
 }
 
@@ -157,7 +154,7 @@ impl StyleRule {
 	}
 }
 
-static STATE_NAME: &'static str = "elements.style";
+static STATE_NAME: &str = "elements.style";
 
 impl RegexRule for StyleRule {
 	fn name(&self) -> &'static str { "Style" }
@@ -199,14 +196,14 @@ impl RegexRule for StyleRule {
 				Box::new(Style::new(
 					token.clone(),
 					index,
-					!style_state.toggled[index].is_some(),
+					style_state.toggled[index].is_none(),
 				)),
 			);
 		} else {
 			panic!("Invalid state at `{STATE_NAME}`");
 		}
 
-		return vec![];
+		vec![]
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua mlua::Lua) -> Vec<(String, Function<'lua>)> {
@@ -225,9 +222,7 @@ impl RegexRule for StyleRule {
 							to: Some("toggle".to_string()),
 							pos: 1,
 							name: Some("style".to_string()),
-							cause: Arc::new(mlua::Error::external(format!(
-								"Unknown style specified"
-							))),
+							cause: Arc::new(mlua::Error::external("Unknown style specified".to_string())),
 						})
 					}
 				};
@@ -260,7 +255,7 @@ impl RegexRule for StyleRule {
 								Box::new(Style::new(
 									ctx.location.clone(),
 									kind,
-									!style_state.toggled[kind].is_some(),
+									style_state.toggled[kind].is_none(),
 								)),
 							);
 						} else {

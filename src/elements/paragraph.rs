@@ -110,8 +110,7 @@ impl Rule for ParagraphRule {
 
 	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.re
-			.find_at(cursor.source.content(), cursor.pos)
-			.and_then(|m| Some((m.start(), Box::new([false; 0]) as Box<dyn Any>)))
+			.find_at(cursor.source.content(), cursor.pos).map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
 	}
 
 	fn on_match(

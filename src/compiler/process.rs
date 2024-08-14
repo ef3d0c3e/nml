@@ -74,7 +74,7 @@ pub fn process(
 
 	let con = db_path
 		.as_ref()
-		.map_or(Connection::open_in_memory(), |path| Connection::open(path))
+		.map_or(Connection::open_in_memory(), Connection::open)
 		.map_err(|err| format!("Unable to open connection to the database: {err}"))?;
 	CompiledDocument::init_cache(&con)
 		.map_err(|err| format!("Failed to initialize cached document table: {err}"))?;
@@ -137,7 +137,7 @@ pub fn process(
 		let body = postprocess
 			.as_ref()
 			.unwrap()
-			.apply(target, &compiled, &doc)?;
+			.apply(target, &compiled, doc)?;
 		doc.borrow_mut().body = body;
 
 		// Insert into cache
@@ -157,6 +157,7 @@ pub fn process(
 
 /// Processes sources from in-memory strings
 /// This function is indented for testing
+#[cfg(test)]
 pub fn process_from_memory(target: Target, sources: Vec<String>) -> Result<Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>, String> {
 	let mut compiled = vec![];
 
@@ -187,7 +188,7 @@ pub fn process_from_memory(target: Target, sources: Vec<String>) -> Result<Vec<(
 		let body = postprocess
 			.as_ref()
 			.unwrap()
-			.apply(target, &compiled, &doc)?;
+			.apply(target, &compiled, doc)?;
 		doc.borrow_mut().body = body;
 	}
 

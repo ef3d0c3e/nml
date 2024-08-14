@@ -62,10 +62,10 @@ pub trait Cached {
 
 		if let Some(value) = value {
 			// Found in cache
-			return Ok(value);
+			Ok(value)
 		} else {
 			// Compute a value
-			let value = match f(&self) {
+			let value = match f(self) {
 				Ok(val) => val,
 				Err(e) => return Err(CachedError::GenErr(e)),
 			};

@@ -48,7 +48,7 @@ impl<'a> Compiler<'a> {
 				.borrow_mut()
 				.last_mut()
 				.map(|id| *id += 1);
-			return Ref::map(self.sections_counter.borrow(), |b| &*b);
+			return Ref::map(self.sections_counter.borrow(), |b| b);
 		}
 
 		// Close
@@ -61,7 +61,7 @@ impl<'a> Compiler<'a> {
 			self.sections_counter.borrow_mut().push(1);
 		}
 
-		Ref::map(self.sections_counter.borrow(), |b| &*b)
+		Ref::map(self.sections_counter.borrow(), |b| b)
 	}
 
 	/// Sanitizes text for a [`Target`]
@@ -86,7 +86,7 @@ impl<'a> Compiler<'a> {
 	///
 	/// # Parameters
 	/// - [`reference`] The reference to get or insert
-	pub fn reference_id<'b>(&self, document: &'b dyn Document, reference: ElemReference) -> usize {
+	pub fn reference_id(&self, document: &dyn Document, reference: ElemReference) -> usize {
 		let mut borrow = self.reference_count.borrow_mut();
 		let reference = document.get_from_reference(&reference).unwrap();
 		let refkey = reference.refcount_key();
@@ -133,7 +133,6 @@ impl<'a> Compiler<'a> {
 		) -> Option<Rc<dyn Variable>> {
 			document
 				.get_variable(var_name)
-				.and_then(|var| Some(var))
 				.or_else(|| {
 					println!(
 						"Missing variable `{var_name}` in {}",

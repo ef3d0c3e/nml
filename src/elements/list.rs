@@ -244,7 +244,7 @@ impl ListRule {
 			}
 		});
 
-		return parsed;
+		parsed
 	}
 }
 
@@ -254,10 +254,7 @@ impl Rule for ListRule {
 
 	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re
-			.find_at(cursor.source.content(), cursor.pos)
-			.map_or(None, |m| {
-				Some((m.start(), Box::new([false; 0]) as Box<dyn Any>))
-			})
+			.find_at(cursor.source.content(), cursor.pos).map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
 	}
 
 	fn on_match<'a>(
@@ -329,7 +326,7 @@ impl Rule for ListRule {
 							.get(2)
 							.unwrap()
 							.as_str()
-							.find(|c| c == '*' || c == '-')
+							.find(['*', '-'])
 							== Some(0)
 					{
 						break;
@@ -393,7 +390,7 @@ impl Rule for ListRule {
 						);
 						break;
 					}
-					Ok(mut paragraph) => std::mem::replace(&mut paragraph.content, vec![]),
+					Ok(mut paragraph) => std::mem::take(&mut paragraph.content),
 				};
 
 				if let Some(previous_depth) = document

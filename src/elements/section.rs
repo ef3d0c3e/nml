@@ -222,7 +222,7 @@ impl RegexRule for SectionRule {
 							.with_message(format!("`{}` previously defined here",
 								refname.as_str().fg(state.parser.colors().highlight)))
 							.with_color(state.parser.colors().warning))
-						.with_note(format!("Previous reference was overwritten"))
+						.with_note("Previous reference was overwritten".to_string())
 						.finish());
 					}
 					Some(refname.as_str().to_string())
@@ -247,7 +247,7 @@ impl RegexRule for SectionRule {
 										"+".fg(state.parser.colors().info),
 										kind.as_str().fg(state.parser.colors().highlight)))
 								.with_color(state.parser.colors().error))
-								.with_help(format!("Leave empty for a numbered listed section"))
+								.with_help("Leave empty for a numbered listed section".to_string())
 							.finish());
 					return result;
 				}
@@ -321,7 +321,7 @@ impl RegexRule for SectionRule {
 			}),
 		);
 
-		return result;
+		result
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
@@ -331,7 +331,7 @@ impl RegexRule for SectionRule {
 			"push".to_string(),
 			lua.create_function(
 				|_, (title, depth, kind, reference): (String, usize, Option<String>, Option<String>)| {
-					let kind = match kind.as_ref().map(|s| s.as_str()).unwrap_or("") {
+					let kind = match kind.as_deref().unwrap_or("") {
 						"*+" | "+*" => section_kind::NO_NUMBER | section_kind::NO_TOC,
 						"*" => section_kind::NO_NUMBER,
 						"+" => section_kind::NO_TOC,
@@ -341,9 +341,7 @@ impl RegexRule for SectionRule {
 								to: Some("push".to_string()),
 								pos: 3,
 								name: Some("kind".to_string()),
-								cause: Arc::new(mlua::Error::external(format!(
-									"Unknown section kind specified"
-								))),
+								cause: Arc::new(mlua::Error::external("Unknown section kind specified".to_string())),
 							})
 						}
 					};
@@ -394,7 +392,7 @@ mod section_style {
 
 	use crate::impl_elementstyle;
 
-	pub static STYLE_KEY: &'static str = "style.section";
+	pub static STYLE_KEY: &str = "style.section";
 
 	#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 	pub enum SectionLinkPos {

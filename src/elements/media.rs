@@ -158,14 +158,11 @@ impl Element for Medium {
 
 				let caption = self
 					.caption
-					.as_ref()
-					.and_then(|cap| {
-						Some(format!(
+					.as_ref().map(|cap| format!(
 							" {}",
 							Compiler::sanitize(compiler.target(), cap.as_str())
 						))
-					})
-					.unwrap_or(String::new());
+					.unwrap_or_default();
 
 				result.push_str(
 					format!(r#"<p class="medium-refname">({refcount}){caption}</p>"#).as_str(),
@@ -436,15 +433,13 @@ impl RegexRule for MediaRule {
 			.get("width", |_, value| -> Result<String, ()> {
 				Ok(value.clone())
 			})
-			.ok()
-			.and_then(|(_, s)| Some(s));
+			.ok().map(|(_, s)| s);
 
 		let caption = properties
 			.get("caption", |_, value| -> Result<String, ()> {
 				Ok(value.clone())
 			})
-			.ok()
-			.and_then(|(_, value)| Some(value));
+			.ok().map(|(_, value)| value);
 
 		let description = match matches.get(4) {
 			Some(content) => {

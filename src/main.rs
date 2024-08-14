@@ -249,7 +249,7 @@ fn main() -> ExitCode {
 				}
 			};
 
-			let nav = navigation.compile(Target::HTML, &doc);
+			let nav = navigation.compile(Target::HTML, doc);
 			let file = std::fs::File::create(output.clone() + "/" + out_path.as_str()).unwrap();
 
 			let mut writer = BufWriter::new(file);
@@ -285,5 +285,5 @@ fn main() -> ExitCode {
 		}
 	}
 
-	return ExitCode::SUCCESS;
+	ExitCode::SUCCESS
 }

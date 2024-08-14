@@ -172,7 +172,7 @@ impl RegexRule for ScriptRule {
 								Label::new((source.clone(), 0..source.content().len()))
 									.with_message(format!(
 										"Kernel execution failed:\n{}",
-										e.to_string()
+										e
 									))
 									.with_color(state.parser.colors().error),
 							)
@@ -215,7 +215,7 @@ impl RegexRule for ScriptRule {
 									Label::new((source.clone(), 0..source.content().len()))
 										.with_message(format!(
 											"Kernel evaluation failed:\n{}",
-											e.to_string()
+											e
 										))
 										.with_color(state.parser.colors().error),
 								)
@@ -263,7 +263,7 @@ impl RegexRule for ScriptRule {
 										Label::new((source.clone(), 0..source.content().len()))
 											.with_message(format!(
 												"Kernel evaluation failed:\n{}",
-												e.to_string()
+												e
 											))
 											.with_color(state.parser.colors().error),
 									)

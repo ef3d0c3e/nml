@@ -85,7 +85,7 @@ impl Element for Blockquote {
 
 					if self.cite.is_some() || self.author.is_some() {
 						result += r#"<p class="blockquote-author">"#;
-						let fmt_pair = FmtPair(compiler.target(), &self);
+						let fmt_pair = FmtPair(compiler.target(), self);
 						match (self.author.is_some(), self.cite.is_some()) {
 							(true, true) => {
 								let args =
@@ -215,10 +215,7 @@ impl Rule for BlockquoteRule {
 
 	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re
-			.find_at(cursor.source.content(), cursor.pos)
-			.map_or(None, |m| {
-				Some((m.start(), Box::new([false; 0]) as Box<dyn Any>))
-			})
+			.find_at(cursor.source.content(), cursor.pos).map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
 	}
 
 	fn on_match<'a>(
@@ -331,7 +328,7 @@ impl Rule for BlockquoteRule {
 						);
 						break;
 					}
-					Ok(mut paragraph) => std::mem::replace(&mut paragraph.content, vec![]),
+					Ok(mut paragraph) => std::mem::take(&mut paragraph.content),
 				};
 
 				// Get style
@@ -376,7 +373,7 @@ mod blockquote_style {
 
 	use crate::impl_elementstyle;
 
-	pub static STYLE_KEY: &'static str = "style.blockquote";
+	pub static STYLE_KEY: &str = "style.blockquote";
 
 	#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 	pub enum AuthorPos {

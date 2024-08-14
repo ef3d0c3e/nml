@@ -92,13 +92,13 @@ impl Variable for PathVariable {
 	fn name(&self) -> &str { self.name.as_str() }
 
 	fn from_string(&mut self, str: &str) -> Option<String> {
-		self.path = PathBuf::from(std::fs::canonicalize(str).unwrap());
+		self.path = std::fs::canonicalize(str).unwrap();
 		None
 	}
 
 	fn to_string(&self) -> String { self.path.to_str().unwrap().to_string() }
 
-	fn parse<'a>(&self, state: &ParserState, location: Token, document: &'a dyn Document) {
+	fn parse(&self, state: &ParserState, location: Token, document: &dyn Document) {
 		let source = Rc::new(VirtualSource::new(
 			location,
 			self.name().to_string(),

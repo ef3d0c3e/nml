@@ -15,7 +15,7 @@ pub struct KernelContext<'a, 'b, 'c> {
 }
 
 thread_local! {
-	pub static CTX: RefCell<Option<KernelContext<'static, 'static, 'static>>> = RefCell::new(None);
+	pub static CTX: RefCell<Option<KernelContext<'static, 'static, 'static>>> = const { RefCell::new(None) };
 }
 
 #[derive(Debug)]

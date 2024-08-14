@@ -50,11 +50,11 @@ impl RegexRule for CommentRule {
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 
-	fn on_regex_match<'a>(
+	fn on_regex_match(
 		&self,
 		_: usize,
 		state: &ParserState,
-		document: &'a dyn Document,
+		document: &dyn Document,
 		token: Token,
 		matches: Captures,
 	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
@@ -89,7 +89,7 @@ impl RegexRule for CommentRule {
 			}),
 		);
 
-		return reports;
+		reports
 	}
 }
 

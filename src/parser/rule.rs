@@ -53,7 +53,7 @@ pub fn get_rule_registry() -> Vec<Box<dyn Rule>> {
 		}
 	}
 	let mut map = make_rules();
-	let mut sorted_keys = map.iter().map(|(key, _)| *key).collect::<Vec<_>>();
+	let mut sorted_keys = map.keys().copied().collect::<Vec<_>>();
 	sorted_keys.sort_by(|l, r| cmp(&map, l, r));
 
 	let mut owned = Vec::with_capacity(sorted_keys.len());
@@ -136,18 +136,18 @@ impl<T: RegexRule + 'static> Rule for T {
 		self.regexes().iter().enumerate().for_each(|(id, re)| {
 			if let Some(m) = re.find_at(content.as_str(), cursor.pos) {
 				found = found
-					.and_then(|(f_pos, f_id)| {
+					.map(|(f_pos, f_id)| {
 						if f_pos > m.start() {
-							Some((m.start(), id))
+							(m.start(), id)
 						} else {
-							Some((f_pos, f_id))
+							(f_pos, f_id)
 						}
 					})
 					.or(Some((m.start(), id)));
 			}
 		});
 
-		return found.map(|(pos, id)| (pos, Box::new(id) as Box<dyn Any>));
+		found.map(|(pos, id)| (pos, Box::new(id) as Box<dyn Any>))
 	}
 
 	fn on_match<'a>(

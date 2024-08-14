@@ -26,8 +26,8 @@ pub struct Text {
 impl Text {
 	pub fn new(location: Token, content: String) -> Text {
 		Text {
-			location: location,
-			content: content,
+			location,
+			content,
 		}
 	}
 }

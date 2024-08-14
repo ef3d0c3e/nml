@@ -45,8 +45,7 @@ pub struct CustomStyleHolder {
 impl CustomStyleHolder {
 	pub fn get(&self, style_name: &str) -> Option<Rc<dyn CustomStyle>> {
 		self.custom_styles
-			.get(style_name)
-			.map(|style| style.clone())
+			.get(style_name).cloned()
 	}
 
 	pub fn insert(&mut self, style: Rc<dyn CustomStyle>) {

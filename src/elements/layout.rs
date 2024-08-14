@@ -280,7 +280,7 @@ impl RuleState for LayoutState {
 			);
 		}
 
-		return reports;
+		reports
 	}
 }
 
@@ -375,7 +375,7 @@ impl LayoutRule {
 	}
 }
 
-static STATE_NAME: &'static str = "elements.layout";
+static STATE_NAME: &str = "elements.layout";
 
 impl RegexRule for LayoutRule {
 	fn name(&self) -> &'static str { "Layout" }
@@ -649,7 +649,7 @@ impl RegexRule for LayoutRule {
 			}),
 		);
 
-		return reports;
+		reports
 	}
 
 	// TODO: Add method to create new layouts
@@ -746,7 +746,7 @@ impl RegexRule for LayoutRule {
 												to: Some("push".to_string()),
 												pos: 1,
 												name: Some("token".to_string()),
-												cause: Arc::new(mlua::Error::external(format!("Unable set next layout: No active layout found"))),
+												cause: Arc::new(mlua::Error::external("Unable set next layout: No active layout found".to_string())),
 											});
 											return;
 										}
@@ -794,7 +794,7 @@ impl RegexRule for LayoutRule {
 												to: Some("push".to_string()),
 												pos: 1,
 												name: Some("token".to_string()),
-												cause: Arc::new(mlua::Error::external(format!("Unable set layout end: No active layout found"))),
+												cause: Arc::new(mlua::Error::external("Unable set layout end: No active layout found".to_string())),
 											});
 											return;
 										}

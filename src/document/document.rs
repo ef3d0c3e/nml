@@ -75,7 +75,7 @@ impl Scope {
 
 				// Variables
 				self.variables
-					.extend(other.variables.drain().map(|(name, var)| (name, var)));
+					.extend(other.variables.drain());
 			}
 			false => {
 				// References
@@ -165,15 +165,15 @@ pub trait Document<'a>: core::fmt::Debug {
 	fn get_variable(&self, name: &str) -> Option<Rc<dyn Variable>> {
 		match self.scope().borrow().variables.get(name) {
 			Some(variable) => {
-				return Some(variable.clone());
+				Some(variable.clone())
 			}
 
 			// Continue search recursively
 			None => match self.parent() {
-				Some(parent) => return parent.get_variable(name),
+				Some(parent) => parent.get_variable(name),
 
 				// Not found
-				None => return None,
+				None => None,
 			},
 		}
 	}
@@ -189,27 +189,23 @@ pub trait Document<'a>: core::fmt::Debug {
 		scope: &RefCell<Scope>,
 		merge_as: Option<&String>,
 	) {
-		match merge_as {
-			Some(merge_as) => self.scope().borrow_mut().merge(
-				&mut *scope.borrow_mut(),
-				merge_as,
-				self.content().borrow().len(),
-			),
-			_ => {}
-		}
+		if let Some(merge_as) = merge_as { self.scope().borrow_mut().merge(
+  				&mut scope.borrow_mut(),
+  				merge_as,
+  				self.content().borrow().len(),
+  			) }
 
 		// Content
 		self.content()
 			.borrow_mut()
-			.extend((content.borrow_mut()).drain(..).map(|value| value));
+			.extend((content.borrow_mut()).drain(..));
 	}
 
 	fn get_reference(&self, refname: &str) -> Option<ElemReference> {
 		self.scope()
 			.borrow()
 			.referenceable
-			.get(refname)
-			.and_then(|reference| Some(*reference))
+			.get(refname).copied()
 	}
 
 	fn get_from_reference(

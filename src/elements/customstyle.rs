@@ -140,13 +140,10 @@ impl RuleState for CustomStyleState {
 			let paragraph = document.last_element::<Paragraph>().unwrap();
 			let paragraph_end = paragraph
 				.content
-				.last()
-				.and_then(|last| {
-					Some((
+				.last().map(|last| (
 						last.location().source(),
 						last.location().end() - 1..last.location().end(),
 					))
-				})
 				.unwrap();
 
 			reports.push(
@@ -164,7 +161,7 @@ impl RuleState for CustomStyleState {
 					.with_label(
 						Label::new(paragraph_end)
 							.with_order(1)
-							.with_message(format!("Paragraph ends here"))
+							.with_message("Paragraph ends here".to_string())
 							.with_color(state.parser.colors().error),
 					)
 					.with_note("Styles cannot span multiple documents (i.e @import)")
@@ -172,11 +169,11 @@ impl RuleState for CustomStyleState {
 			);
 		});
 
-		return reports;
+		reports
 	}
 }
 
-static STATE_NAME: &'static str = "elements.custom_style";
+static STATE_NAME: &str = "elements.custom_style";
 
 #[auto_registry::auto_registry(registry = "rules", path = "crate::elements::customstyle")]
 pub struct CustomStyleRule;

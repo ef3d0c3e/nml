@@ -123,8 +123,8 @@ impl Code {
 			}
 
 			result +=
-				format!("<div class=\"code-block-content\"><table cellspacing=\"0\">").as_str();
-			for (line_id, line) in self.code.split(|c| c == '\n').enumerate() {
+				"<div class=\"code-block-content\"><table cellspacing=\"0\">".to_string().as_str();
+			for (line_id, line) in self.code.split('\n').enumerate() {
 				result += "<tr><td class=\"code-block-gutter\">";
 
 				// Line number
@@ -137,7 +137,7 @@ impl Code {
 					Err(e) => {
 						return Err(format!(
 							"Error highlighting line `{line}`: {}",
-							e.to_string()
+							e
 						))
 					}
 					Ok(regions) => {
@@ -146,7 +146,7 @@ impl Code {
 							syntect::html::IncludeBackground::No,
 						) {
 							Err(e) => {
-								return Err(format!("Error highlighting code: {}", e.to_string()))
+								return Err(format!("Error highlighting code: {}", e))
 							}
 							Ok(highlighted) => {
 								result += if highlighted.is_empty() {
@@ -165,14 +165,14 @@ impl Code {
 		} else if self.block == CodeKind::MiniBlock {
 			result += "<div class=\"code-block\"><div class=\"code-block-content\"><table cellspacing=\"0\">";
 
-			for line in self.code.split(|c| c == '\n') {
+			for line in self.code.split('\n') {
 				result += "<tr><td class=\"code-block-line\"><pre>";
 				// Code
 				match h.highlight_line(line, Code::get_syntaxes()) {
 					Err(e) => {
 						return Err(format!(
 							"Error highlighting line `{line}`: {}",
-							e.to_string()
+							e
 						))
 					}
 					Ok(regions) => {
@@ -181,7 +181,7 @@ impl Code {
 							syntect::html::IncludeBackground::No,
 						) {
 							Err(e) => {
-								return Err(format!("Error highlighting code: {}", e.to_string()))
+								return Err(format!("Error highlighting code: {}", e))
 							}
 							Ok(highlighted) => {
 								result += if highlighted.is_empty() {
@@ -203,7 +203,7 @@ impl Code {
 					return Err(format!(
 						"Error highlighting line `{}`: {}",
 						self.code,
-						e.to_string()
+						e
 					))
 				}
 				Ok(regions) => {
@@ -212,7 +212,7 @@ impl Code {
 						syntect::html::IncludeBackground::No,
 					) {
 						Err(e) => {
-							return Err(format!("Error highlighting code: {}", e.to_string()))
+							return Err(format!("Error highlighting code: {}", e))
 						}
 						Ok(highlighted) => result += highlighted.as_str(),
 					}
@@ -244,11 +244,10 @@ impl Cached for Code {
 	fn key(&self) -> <Self as Cached>::Key {
 		let mut hasher = Sha512::new();
 		hasher.input((self.block as usize).to_be_bytes().as_slice());
-		hasher.input((self.line_offset as usize).to_be_bytes().as_slice());
-		self.theme
-			.as_ref()
-			.map(|theme| hasher.input(theme.as_bytes()));
-		self.name.as_ref().map(|name| hasher.input(name.as_bytes()));
+		hasher.input(self.line_offset.to_be_bytes().as_slice());
+		if let Some(theme) = self.theme
+			.as_ref() { hasher.input(theme.as_bytes()) }
+		if let Some(name) = self.name.as_ref() { hasher.input(name.as_bytes()) }
 		hasher.input(self.language.as_bytes());
 		hasher.input(self.code.as_bytes());
 
@@ -335,11 +334,11 @@ impl RegexRule for CodeRule {
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-	fn on_regex_match<'a>(
+	fn on_regex_match(
 		&self,
 		index: usize,
 		state: &ParserState,
-		document: &'a dyn Document,
+		document: &dyn Document,
 		token: Token,
 		matches: Captures,
 	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
@@ -432,7 +431,7 @@ impl RegexRule for CodeRule {
 		} else {
 			util::process_escaped('\\', "``", matches.get(3).unwrap().as_str())
 		};
-		if code_content.bytes().last() == Some('\n' as u8)
+		if code_content.bytes().last() == Some(b'\n')
 		// Remove newline
 		{
 			code_content.pop();
@@ -453,8 +452,7 @@ impl RegexRule for CodeRule {
 		}
 
 		let theme = document
-			.get_variable("code.theme")
-			.and_then(|var| Some(var.to_string()));
+			.get_variable("code.theme").map(|var| var.to_string());
 
 		if index == 0
 		// Block
@@ -553,8 +551,7 @@ impl RegexRule for CodeRule {
 					ctx.as_ref().map(|ctx| {
 						let theme = ctx
 							.document
-							.get_variable("code.theme")
-							.and_then(|var| Some(var.to_string()));
+							.get_variable("code.theme").map(|var| var.to_string());
 
 						ctx.state.push(
 							ctx.document,
@@ -584,8 +581,7 @@ impl RegexRule for CodeRule {
 						ctx.as_ref().map(|ctx| {
 							let theme = ctx
 								.document
-								.get_variable("code.theme")
-								.and_then(|var| Some(var.to_string()));
+								.get_variable("code.theme").map(|var| var.to_string());
 
 							ctx.state.push(
 								ctx.document,
@@ -622,8 +618,7 @@ impl RegexRule for CodeRule {
 						ctx.as_ref().map(|ctx| {
 							let theme = ctx
 								.document
-								.get_variable("code.theme")
-								.and_then(|var| Some(var.to_string()));
+								.get_variable("code.theme").map(|var| var.to_string());
 
 							ctx.state.push(
 								ctx.document,

@@ -38,7 +38,7 @@ impl StyleHolder {
 	/// NOTE: Will panic if a style is not defined for a given element
 	/// If you need to process user input, use [`is_registered`]
 	pub fn current(&self, style_key: &str) -> Rc<dyn ElementStyle> {
-		self.styles.get(style_key).map(|rc| rc.clone()).unwrap()
+		self.styles.get(style_key).cloned().unwrap()
 	}
 
 	/// Sets the [`style`]
@@ -50,17 +50,17 @@ impl StyleHolder {
 #[macro_export]
 macro_rules! impl_elementstyle {
 	($t:ty, $key:expr) => {
-		impl crate::parser::style::ElementStyle for $t {
+		impl $crate::parser::style::ElementStyle for $t {
 			fn key(&self) -> &'static str { $key }
 
 			fn from_json(
 				&self,
 				json: &str,
-			) -> Result<std::rc::Rc<dyn crate::parser::style::ElementStyle>, String> {
+			) -> Result<std::rc::Rc<dyn $crate::parser::style::ElementStyle>, String> {
 				serde_json::from_str::<$t>(json)
 					.map_err(|e| e.to_string())
 					.map(|obj| {
-						std::rc::Rc::new(obj) as std::rc::Rc<dyn crate::parser::style::ElementStyle>
+						std::rc::Rc::new(obj) as std::rc::Rc<dyn $crate::parser::style::ElementStyle>
 					})
 			}
 
@@ -68,9 +68,9 @@ macro_rules! impl_elementstyle {
 				&self,
 				lua: &mlua::Lua,
 				value: mlua::Value,
-			) -> Result<std::rc::Rc<dyn crate::parser::style::ElementStyle>, mlua::Error> {
+			) -> Result<std::rc::Rc<dyn $crate::parser::style::ElementStyle>, mlua::Error> {
 				mlua::LuaSerdeExt::from_value::<$t>(lua, value).map(|obj| {
-					std::rc::Rc::new(obj) as std::rc::Rc<dyn crate::parser::style::ElementStyle>
+					std::rc::Rc::new(obj) as std::rc::Rc<dyn $crate::parser::style::ElementStyle>
 				})
 			}
 		}

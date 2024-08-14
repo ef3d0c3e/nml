@@ -64,7 +64,7 @@ impl RuleStateHolder {
 	}
 
 	pub fn get(&self, state_name: &str) -> Option<Rc<RefCell<dyn RuleState>>> {
-		self.states.get(state_name).map(|state| state.clone())
+		self.states.get(state_name).cloned()
 	}
 
 	pub fn on_scope_end(
@@ -88,6 +88,6 @@ impl RuleStateHolder {
 			}
 		});
 
-		return reports;
+		reports
 	}
 }

@@ -36,7 +36,7 @@ pub struct LayoutHolder {
 
 impl LayoutHolder {
 	pub fn get(&self, layout_name: &str) -> Option<Rc<dyn LayoutType>> {
-		self.layouts.get(layout_name).map(|layout| layout.clone())
+		self.layouts.get(layout_name).cloned()
 	}
 
 	pub fn insert(&mut self, layout: Rc<dyn LayoutType>) {

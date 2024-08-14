@@ -38,7 +38,7 @@ impl PostProcess {
 								return Err(format!("Cannot use an unspecific reference for reference named: `{name}`. Found in document `{}` but also in `{}`. Specify the source of the reference to resolve the conflict.", previous_doc.borrow().input, doc.borrow().input));
 							}
 
-							found_ref = Some((found.clone(), &doc));
+							found_ref = Some((found.clone(), doc));
 						}
 					}
 				}
@@ -67,9 +67,7 @@ impl PostProcess {
 			}
 			if let Some((found_ref, found_doc)) = &found_ref {
 				let found_borrow = found_doc.borrow();
-				let found_path = found_borrow.get_variable("compiler.output").ok_or(format!(
-					"Unable to get the output. Aborting postprocessing."
-				))?;
+				let found_path = found_borrow.get_variable("compiler.output").ok_or("Unable to get the output. Aborting postprocessing.".to_string())?;
 				let insert_content = format!("{found_path}#{found_ref}");
 				content.insert_str(pos + offset, insert_content.as_str());
 				offset += insert_content.len();

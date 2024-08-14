@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
-use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
@@ -245,8 +244,7 @@ impl RegexRule for ReferenceRule {
 			.get("caption", |_, value| -> Result<String, ()> {
 				Ok(value.clone())
 			})
-			.ok()
-			.and_then(|(_, s)| Some(s));
+			.ok().map(|(_, s)| s);
 
 		if let Some(refdoc) = refdoc {
 			if refdoc.is_empty() {

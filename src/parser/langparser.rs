@@ -120,7 +120,7 @@ impl Parser for LangParser {
 			))),
 		);
 
-		return (Box::new(doc), state);
+		(Box::new(doc), state)
 	}
 
 	fn parse_into<'p, 'a, 'doc>(
@@ -164,7 +164,7 @@ impl Parser for LangParser {
 			}
 		}
 
-		return state;
+		state
 		// State
 		//self.handle_reports(source.clone(),
 		//	self.state_mut().on_scope_end(&self, &document, super::state::Scope::DOCUMENT));

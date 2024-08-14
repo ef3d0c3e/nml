@@ -179,6 +179,6 @@ impl RegexRule for ImportRule {
 			);
 		}
 
-		return result;
+		result
 	}
 }

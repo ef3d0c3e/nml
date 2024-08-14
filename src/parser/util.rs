@@ -36,7 +36,7 @@ pub fn process_text(document: &dyn Document, content: &str) -> String {
 							.last_element::<Paragraph>()
 							.and_then(|par| {
 								par.find_back(|e| e.kind() != ElemKind::Invisible)
-									.and_then(|e| Some(e.kind() == ElemKind::Inline))
+									.map(|e| e.kind() == ElemKind::Inline)
 							})
 							.unwrap_or(false)
 						{
@@ -79,12 +79,12 @@ pub fn process_text(document: &dyn Document, content: &str) -> String {
 				}
 			}
 
-			return (out + g, Some(g));
+			(out + g, Some(g))
 		})
 		.0
 		.to_string();
 
-	return processed;
+	processed
 }
 
 /// Processed a string and escapes a single token out of it
@@ -111,7 +111,7 @@ pub fn process_escaped<S: AsRef<str>>(escape: char, token: &'static str, content
 			escaped += 1;
 		} else if escaped % 2 == 1 && token_it.peek().map_or(false, |p| *p == c) {
 			let _ = token_it.next();
-			if token_it.peek() == None {
+			if token_it.peek().is_none() {
 				(0..(escaped / 2)).for_each(|_| processed.push(escape));
 				escaped = 0;
 				token_it = token.chars().peekable();
@@ -333,9 +333,8 @@ impl PropertyParser {
 					escaped = 0;
 					in_name = true;
 
-					if let Err(e) = try_insert(&name, &value) {
-						return Err(e);
-					}
+					try_insert(&name, &value)?;
+
 					name.clear();
 					value.clear();
 				} else {
@@ -361,9 +360,7 @@ impl PropertyParser {
 			return Err("Expected non empty property list.".to_string());
 		}
 
-		if let Err(e) = try_insert(&name, &value) {
-			return Err(e);
-		}
+		try_insert(&name, &value)?;
 
 		if let Err(e) = self.properties.iter().try_for_each(|(key, prop)| {
 			if !properties.properties.contains_key(key) {

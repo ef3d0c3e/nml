@@ -153,7 +153,7 @@ impl RegexRule for LinkRule {
 						);
 						return reports;
 					}
-					Ok(mut paragraph) => std::mem::replace(&mut paragraph.content, vec![]),
+					Ok(mut paragraph) => std::mem::take(&mut paragraph.content),
 				}
 			}
 			_ => panic!("Empty link name"),
@@ -176,7 +176,7 @@ impl RegexRule for LinkRule {
 				}
 				let text_content = util::process_text(document, url.as_str());
 
-				if text_content.as_str().is_empty() {
+				if text_content.is_empty() {
 					reports.push(
 						Report::build(ReportKind::Error, token.source(), url.start())
 							.with_message("Empty link url")
@@ -207,7 +207,7 @@ impl RegexRule for LinkRule {
 			}),
 		);
 
-		return reports;
+		reports
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
@@ -238,7 +238,7 @@ impl RegexRule for LinkRule {
 									return;
 								}
 								Ok(mut paragraph) => {
-									std::mem::replace(&mut paragraph.content, vec![])
+									std::mem::take(&mut paragraph.content)
 								}
 							};
 

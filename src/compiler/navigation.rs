@@ -125,7 +125,7 @@ pub fn create_navigation(
 		let title = doc_borrow
 			.get_variable("nav.title")
 			.or(doc_borrow.get_variable("doc.title"));
-		let previous = doc_borrow.get_variable("nav.previous").map(|s| s.clone());
+		let previous = doc_borrow.get_variable("nav.previous").cloned();
 		let path = doc_borrow.get_variable("compiler.output");
 
 		let (title, path) = match (title, path) {
@@ -205,7 +205,7 @@ pub fn create_navigation(
 	// Sort entries
 	fn sort_entries(nav: &mut NavEntry) {
 		nav.entries
-			.sort_unstable_by(|l, r| NavEntry::sort_entry(l, r));
+			.sort_unstable_by(NavEntry::sort_entry);
 
 		for (_, child) in &mut nav.children {
 			sort_entries(child);

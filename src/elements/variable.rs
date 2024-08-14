@@ -67,7 +67,7 @@ impl VariableRule {
                     Ok(path) => Ok(Rc::new(PathVariable::new(location, name, path))),
                     Err(e) => Err(format!("Unable to canonicalize path `{}`: {}",
                             value.fg(colors.highlight),
-                            e.to_string()))
+                            e))
                 }
 			}
 			_ => panic!("Unhandled variable kind"),
@@ -83,7 +83,7 @@ impl VariableRule {
 		if name.contains("%") {
 			return Err(format!("Name cannot contain '{}'", "%".fg(colors.info)));
 		}
-		return Ok(name);
+		Ok(name)
 	}
 
 	pub fn validate_value(original_value: &str) -> Result<String, String> {
@@ -122,11 +122,11 @@ impl RegexRule for VariableRule {
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 
-	fn on_regex_match<'a>(
+	fn on_regex_match(
 		&self,
 		_: usize,
 		state: &ParserState,
-		document: &'a dyn Document,
+		document: &dyn Document,
 		token: Token,
 		matches: regex::Captures,
 	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
@@ -180,7 +180,7 @@ impl RegexRule for VariableRule {
 		};
 
 		let var_name = match matches.get(2) {
-			Some(name) => match VariableRule::validate_name(&state.parser.colors(), name.as_str()) {
+			Some(name) => match VariableRule::validate_name(state.parser.colors(), name.as_str()) {
 				Ok(var_name) => var_name,
 				Err(msg) => {
 					result.push(
@@ -228,7 +228,7 @@ impl RegexRule for VariableRule {
 		};
 
 		match self.make_variable(
-			&state.parser.colors(),
+			state.parser.colors(),
 			token.clone(),
 			var_kind,
 			var_name.to_string(),
@@ -256,7 +256,7 @@ impl RegexRule for VariableRule {
 			}
 		}
 
-		return result;
+		result
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
@@ -335,7 +335,7 @@ impl RegexRule for VariableSubstitutionRule {
 							.with_message("Empty variable name")
 							.with_label(
 								Label::new((token.source(), matches.get(0).unwrap().range()))
-									.with_message(format!("Missing variable name for substitution"))
+									.with_message("Missing variable name for substitution".to_string())
 									.with_color(state.parser.colors().error),
 							)
 							.finish(),
@@ -350,7 +350,7 @@ impl RegexRule for VariableSubstitutionRule {
 							.with_message("Invalid variable name")
 							.with_label(
 								Label::new((token.source(), name.range()))
-									.with_message(format!("Variable names contains leading spaces"))
+									.with_message("Variable names contains leading spaces".to_string())
 									.with_color(state.parser.colors().error),
 							)
 							.with_help("Remove leading spaces")
@@ -366,9 +366,7 @@ impl RegexRule for VariableSubstitutionRule {
 							.with_message("Invalid variable name")
 							.with_label(
 								Label::new((token.source(), name.range()))
-									.with_message(format!(
-										"Variable names contains trailing spaces"
-									))
+									.with_message("Variable names contains trailing spaces".to_string())
 									.with_color(state.parser.colors().error),
 							)
 							.with_help("Remove trailing spaces")
@@ -378,23 +376,20 @@ impl RegexRule for VariableSubstitutionRule {
 					return result;
 				}
 				// Invalid name
-				match VariableRule::validate_name(&state.parser.colors(), name.as_str()) {
-					Err(msg) => {
-						result.push(
-							Report::build(ReportKind::Error, token.source(), name.start())
-								.with_message("Invalid variable name")
-								.with_label(
-									Label::new((token.source(), name.range()))
-										.with_message(msg)
-										.with_color(state.parser.colors().error),
-								)
-								.finish(),
-						);
+				if let Err(msg) = VariableRule::validate_name(state.parser.colors(), name.as_str()) {
+    						result.push(
+    							Report::build(ReportKind::Error, token.source(), name.start())
+    								.with_message("Invalid variable name")
+    								.with_label(
+    									Label::new((token.source(), name.range()))
+    										.with_message(msg)
+    										.with_color(state.parser.colors().error),
+    								)
+    								.finish(),
+    						);
 
-						return result;
-					}
-					_ => {}
-				}
+    						return result;
+    					}
 
 				// Get variable
 				match document.get_variable(name.as_str()) {
@@ -422,6 +417,6 @@ impl RegexRule for VariableSubstitutionRule {
 
 		variable.parse(state, token, document);
 
-		return result;
+		result
 	}
 }

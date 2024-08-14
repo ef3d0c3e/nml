@@ -114,10 +114,7 @@ impl FormattedTex {
 		}
 
 		let mut result = String::new();
-		match process.stdout.unwrap().read_to_string(&mut result) {
-			Err(e) => panic!("Unable to read `latex2svg` stdout: {}", e),
-			Ok(_) => {}
-		}
+		if let Err(e) = process.stdout.unwrap().read_to_string(&mut result) { panic!("Unable to read `latex2svg` stdout: {}", e) }
 		println!("Done!");
 
 		Ok(result)
@@ -410,16 +407,14 @@ impl RegexRule for TexRule {
 			.get("caption", |_, value| -> Result<String, ()> {
 				Ok(value.clone())
 			})
-			.ok()
-			.and_then(|(_, value)| Some(value));
+			.ok().map(|(_, value)| value);
 
 		// Environ
 		let tex_env = properties
 			.get("env", |_, value| -> Result<String, ()> {
 				Ok(value.clone())
 			})
-			.ok()
-			.and_then(|(_, value)| Some(value))
+			.ok().map(|(_, value)| value)
 			.unwrap();
 
 		state.push(
