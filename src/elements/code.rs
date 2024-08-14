@@ -268,15 +268,15 @@ impl Element for Code {
 			Target::HTML => {
 				static CACHE_INIT: Once = Once::new();
 				CACHE_INIT.call_once(|| {
-					if let Some(mut con) = compiler.cache() {
-						if let Err(e) = Code::init(&mut con) {
+					if let Some(con) = compiler.cache() {
+						if let Err(e) = Code::init(con) {
 							eprintln!("Unable to create cache table: {e}");
 						}
 					}
 				});
 
-				if let Some(mut con) = compiler.cache() {
-					match self.cached(&mut con, |s| s.highlight_html(compiler)) {
+				if let Some(con) = compiler.cache() {
+					match self.cached(con, |s| s.highlight_html(compiler)) {
 						Ok(s) => Ok(s),
 						Err(e) => match e {
 							CachedError::SqlErr(e) => {

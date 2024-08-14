@@ -23,7 +23,7 @@ pub trait Cached {
 
 	fn key(&self) -> <Self as Cached>::Key;
 
-	fn init(con: &mut Connection) -> Result<(), rusqlite::Error> {
+	fn init(con: &Connection) -> Result<(), rusqlite::Error> {
 		con.execute(<Self as Cached>::sql_table(), ()).map(|_| ())
 	}
 
@@ -38,7 +38,7 @@ pub trait Cached {
 	/// Note that on error, [`f`] may still have been called
 	fn cached<E, F>(
 		&self,
-		con: &mut Connection,
+		con: &Connection,
 		f: F,
 	) -> Result<<Self as Cached>::Value, CachedError<E>>
 	where

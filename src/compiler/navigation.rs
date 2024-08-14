@@ -221,7 +221,9 @@ mod tests {
 	use rand::rngs::OsRng;
 	use rand::RngCore;
 
-	use super::*;
+	use crate::compiler::process::process_from_memory;
+
+use super::*;
 
 	#[test]
 	fn sort() {
@@ -243,5 +245,55 @@ mod tests {
 
 			assert_eq!(shuffled, entries);
 		}
+	}
+
+	#[test]
+	pub fn batch() {
+		let result = process_from_memory(
+			Target::HTML,
+			vec![
+				r#"
+@html.page_title = 0
+@compiler.output = 0.html
+@nav.title = C
+@nav.category = First
+"#
+				.into(),
+				r#"
+@html.page_title = 1
+@compiler.output = 1.html
+@nav.title = A
+@nav.category = First
+"#
+				.into(),
+				r#"
+@html.page_title = 2
+@compiler.output = 2.html
+@nav.title = B
+@nav.category = First
+"#
+				.into(),
+			],
+		)
+		.unwrap();
+
+		let nav = create_navigation(&result).unwrap();
+		assert_eq!(nav.children.get("First").unwrap().entries, vec![
+			(
+				"A".to_string(),
+				"1.html".to_string(),
+				None,
+			),
+			(
+				"B".to_string(),
+				"2.html".to_string(),
+				None,
+			),
+			(
+				"C".to_string(),
+				"0.html".to_string(),
+				None,
+			),
+		]);
 	}
 }

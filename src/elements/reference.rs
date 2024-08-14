@@ -307,11 +307,11 @@ impl RegexRule for ReferenceRule {
 #[cfg(test)]
 mod tests {
 	use crate::compiler::process::process_from_memory;
-use crate::elements::paragraph::Paragraph;
-use crate::elements::section::Section;
-use crate::parser::langparser::LangParser;
+	use crate::elements::paragraph::Paragraph;
+	use crate::elements::section::Section;
+	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
-use crate::parser::source::SourceFile;
+	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 
 	use super::*;
@@ -366,30 +366,36 @@ use crate::parser::source::SourceFile;
 	}
 
 	#[test]
-	pub fn test_external()
-	{
-		let result = process_from_memory(Target::HTML, vec![
-r#"
+	pub fn test_external() {
+		let result = process_from_memory(
+			Target::HTML,
+			vec![
+				r#"
 @html.page_title = 0
 @compiler.output = a.html
 
 #{ref} Referenceable section
-"#.into(),
-r#"
+"#
+				.into(),
+				r#"
 @html.page_title = 1
 @compiler.output = b.html
 
 §{#ref}
 §{a#ref}
 #{ref2} Another Referenceable section
-"#.into(),
-r#"
+"#
+				.into(),
+				r#"
 @html.page_title = 2
 
 §{#ref}[caption=from 0]
 §{#ref2}[caption=from 1]
-"#.into(),
-		]).unwrap();
+"#
+				.into(),
+			],
+		)
+		.unwrap();
 
 		assert!(result[1].0.borrow().body.starts_with("<div class=\"content\"><p><a href=\"a.html#Referenceable_section\">#ref</a><a href=\"a.html#Referenceable_section\">a#ref</a></p>"));
 		assert!(result[2].0.borrow().body.starts_with("<div class=\"content\"><p><a href=\"a.html#Referenceable_section\">from 0</a><a href=\"b.html#Another_Referenceable_section\">from 1</a></p>"));

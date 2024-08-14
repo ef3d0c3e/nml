@@ -325,7 +325,7 @@ impl MediaRule {
 
 impl RegexRule for MediaRule {
 	fn name(&self) -> &'static str { "Media" }
-	fn previous(&self) -> Option<&'static str> { Some("Graph") }
+	fn previous(&self) -> Option<&'static str> { Some("Graphviz") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

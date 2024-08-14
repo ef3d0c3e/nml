@@ -6,6 +6,7 @@ use std::process::Command;
 use std::process::Stdio;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::sync::Once;
 
 use ariadne::Fmt;
@@ -14,6 +15,8 @@ use ariadne::Report;
 use ariadne::ReportKind;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
+use mlua::Function;
+use mlua::Lua;
 use regex::Captures;
 use regex::Match;
 use regex::Regex;
@@ -25,6 +28,7 @@ use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lua::kernel::CTX;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -149,13 +153,18 @@ impl Element for Tex {
 
 	fn element_name(&self) -> &'static str { "LaTeX" }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document, _cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				static CACHE_INIT: Once = Once::new();
 				CACHE_INIT.call_once(|| {
-					if let Some(mut con) = compiler.cache() {
-						if let Err(e) = FormattedTex::init(&mut con) {
+					if let Some(con) = compiler.cache() {
+						if let Err(e) = FormattedTex::init(con) {
 							eprintln!("Unable to create cache table: {e}");
 						}
 					}
@@ -185,8 +194,8 @@ impl Element for Tex {
 					Tex::format_latex(&fontsize, &preamble, &format!("{prepend}{}", self.tex))
 				};
 
-				let result = if let Some(mut con) = compiler.cache() {
-					match latex.cached(&mut con, |s| s.latex_to_svg(&exec, &fontsize)) {
+				let result = if let Some(con) = compiler.cache() {
+					match latex.cached(con, |s| s.latex_to_svg(&exec, &fontsize)) {
 						Ok(s) => Ok(s),
 						Err(e) => match e {
 							CachedError::SqlErr(e) => {
@@ -427,6 +436,95 @@ impl RegexRule for TexRule {
 
 		reports
 	}
+
+	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+		let mut bindings = vec![];
+		bindings.push((
+			"push_math".to_string(),
+			lua.create_function(
+				|_, (env, kind, tex, caption): (Option<String>, String, String, Option<String>)| {
+					let mut result = Ok(());
+					CTX.with_borrow(|ctx| {
+						ctx.as_ref().map(|ctx| {
+							let kind = match TexKind::from_str(kind.as_str()) {
+								Ok(kind) => kind,
+								Err(err) => {
+									result = Err(mlua::Error::BadArgument {
+										to: Some("push".to_string()),
+										pos: 2,
+										name: Some("kind".to_string()),
+										cause: Arc::new(mlua::Error::external(format!(
+											"Unable to get tex kind: {err}"
+										))),
+									});
+									return;
+								}
+							};
+
+							ctx.state.push(
+								ctx.document,
+								Box::new(Tex {
+									location: ctx.location.clone(),
+									mathmode: true,
+									kind,
+									env: env.unwrap_or("main".to_string()),
+									tex,
+									caption,
+								}),
+							);
+						})
+					});
+
+					result
+				},
+			)
+			.unwrap(),
+		));
+
+		bindings.push((
+			"push".to_string(),
+			lua.create_function(
+				|_, (env, kind, tex, caption): (Option<String>, String, String, Option<String>)| {
+					let mut result = Ok(());
+					CTX.with_borrow(|ctx| {
+						ctx.as_ref().map(|ctx| {
+							let kind = match TexKind::from_str(kind.as_str()) {
+								Ok(kind) => kind,
+								Err(err) => {
+									result = Err(mlua::Error::BadArgument {
+										to: Some("push".to_string()),
+										pos: 2,
+										name: Some("kind".to_string()),
+										cause: Arc::new(mlua::Error::external(format!(
+											"Unable to get tex kind: {err}"
+										))),
+									});
+									return;
+								}
+							};
+
+							ctx.state.push(
+								ctx.document,
+								Box::new(Tex {
+									location: ctx.location.clone(),
+									mathmode: false,
+									kind,
+									env: env.unwrap_or("main".to_string()),
+									tex,
+									caption,
+								}),
+							);
+						})
+					});
+
+					result
+				},
+			)
+			.unwrap(),
+		));
+
+		bindings
+	}
 }
 
 #[cfg(test)]
@@ -447,6 +545,9 @@ mod tests {
 $[kind=block, caption=Some\, text\\] 1+1=2	$
 $|[env=another] Non Math \LaTeX |$
 $[kind=block,env=another] e^{i\pi}=-1$
+%<nml.tex.push_math(nil, "block", "1+1=2", "Some, text\\")>%
+%<nml.tex.push("another", "block", "Non Math \\LaTeX", nil)>%
+%<nml.tex.push_math("another", "block", "e^{i\\pi}=-1", nil)>%
 			"#
 			.to_string(),
 			None,
@@ -455,6 +556,9 @@ $[kind=block,env=another] e^{i\pi}=-1$
 		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
 
 		validate_document!(doc.content().borrow(), 0,
+			Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
+			Tex { mathmode == false, tex == "Non Math \\LaTeX", env == "another" };
+			Tex { mathmode == true, tex == "e^{i\\pi}=-1", env == "another" };
 			Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
 			Tex { mathmode == false, tex == "Non Math \\LaTeX", env == "another" };
 			Tex { mathmode == true, tex == "e^{i\\pi}=-1", env == "another" };
@@ -469,6 +573,9 @@ $[kind=block,env=another] e^{i\pi}=-1$
 $[ caption=Some\, text\\] 1+1=2	$
 $|[env=another, kind=inline  ,   caption = Enclosed \].  ] Non Math \LaTeX|$
 $[env=another] e^{i\pi}=-1$
+%<nml.tex.push_math("main", "inline", "1+1=2", "Some, text\\")>%
+%<nml.tex.push("another", "inline", "Non Math \\LaTeX", "Enclosed ].")>%
+%<nml.tex.push_math("another", "inline", "e^{i\\pi}=-1", nil)>%
 			"#
 			.to_string(),
 			None,
@@ -479,7 +586,10 @@ $[env=another] e^{i\pi}=-1$
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
 				Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
-				Tex { mathmode == false, tex == "Non Math \\LaTeX", env == "another" };
+				Tex { mathmode == false, tex == "Non Math \\LaTeX", env == "another", caption == Some("Enclosed ].".to_string()) };
+				Tex { mathmode == true, tex == "e^{i\\pi}=-1", env == "another" };
+				Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
+				Tex { mathmode == false, tex == "Non Math \\LaTeX", env == "another", caption == Some("Enclosed ].".to_string()) };
 				Tex { mathmode == true, tex == "e^{i\\pi}=-1", env == "another" };
 			};
 		);

@@ -1,6 +1,5 @@
 use std::cell::Ref;
 use std::cell::RefCell;
-use std::cell::RefMut;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -20,27 +19,20 @@ pub enum Target {
 	LATEX,
 }
 
-pub struct Compiler {
+pub struct Compiler<'a> {
 	target: Target,
-	cache: Option<RefCell<Connection>>,
+	cache: Option<&'a Connection>,
 	reference_count: RefCell<HashMap<String, HashMap<String, usize>>>,
 	sections_counter: RefCell<Vec<usize>>,
 
 	unresolved_references: RefCell<Vec<(usize, CrossReference)>>,
 }
 
-impl Compiler {
-	pub fn new(target: Target, db_path: Option<String>) -> Self {
-		let cache = match db_path {
-			None => None,
-			Some(path) => match Connection::open(path) {
-				Err(e) => panic!("Cannot connect to database: {e}"),
-				Ok(con) => Some(con),
-			},
-		};
+impl<'a> Compiler<'a> {
+	pub fn new(target: Target, con: Option<&'a Connection>) -> Self {
 		Self {
 			target,
-			cache: cache.map(|con| RefCell::new(con)),
+			cache: con,
 			reference_count: RefCell::new(HashMap::new()),
 			sections_counter: RefCell::new(vec![]),
 			unresolved_references: RefCell::new(vec![]),
@@ -94,7 +86,7 @@ impl Compiler {
 	///
 	/// # Parameters
 	/// - [`reference`] The reference to get or insert
-	pub fn reference_id<'a>(&self, document: &'a dyn Document, reference: ElemReference) -> usize {
+	pub fn reference_id<'b>(&self, document: &'b dyn Document, reference: ElemReference) -> usize {
 		let mut borrow = self.reference_count.borrow_mut();
 		let reference = document.get_from_reference(&reference).unwrap();
 		let refkey = reference.refcount_key();
@@ -129,8 +121,9 @@ impl Compiler {
 
 	pub fn target(&self) -> Target { self.target }
 
-	pub fn cache(&self) -> Option<RefMut<'_, Connection>> {
-		self.cache.as_ref().map(RefCell::borrow_mut)
+	pub fn cache(&self) -> Option<&'a Connection> {
+		self.cache
+		//self.cache.as_ref().map(RefCell::borrow_mut)
 	}
 
 	pub fn header(&self, document: &dyn Document) -> String {

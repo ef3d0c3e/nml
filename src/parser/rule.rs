@@ -205,7 +205,7 @@ mod tests {
 				"Blockquote",
 				"Code",
 				"Tex",
-				"Graph",
+				"Graphviz",
 				"Media",
 				"Layout",
 				"Style",

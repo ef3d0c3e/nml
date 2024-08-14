@@ -102,7 +102,7 @@ pub fn process(
 			let doc = parse(&parser, Rc::new(source), debug_opts)?;
 
 			// Compile
-			let compiler = Compiler::new(target, db_path.clone());
+			let compiler = Compiler::new(target, Some(&con));
 			let (mut compiled, postprocess) = compiler.compile(&*doc);
 
 			compiled.mtime = modified.duration_since(UNIX_EPOCH).unwrap().as_secs();
