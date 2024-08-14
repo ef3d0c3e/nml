@@ -53,7 +53,7 @@ impl Element for InternalReference {
 	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
-				let elemref = document.get_reference(self.refname.as_str()).unwrap();
+				let elemref = document.get_reference(self.refname.as_str()).ok_or(format!("Unable to find reference `{}` in current document", self.refname))?;
 				let elem = document.get_from_reference(&elemref).unwrap();
 
 				elem.compile_reference(
@@ -224,28 +224,7 @@ impl RegexRule for ReferenceRule {
 						);
 						return reports;
 					}
-					Ok(refname) => {
-						if document.get_reference(refname).is_none() {
-							reports.push(
-								Report::build(
-									ReportKind::Error,
-									token.source(),
-									refname_match.start(),
-								)
-								.with_message("Uknown Reference Refname")
-								.with_label(
-									Label::new((token.source().clone(), refname_match.range()))
-										.with_message(format!(
-											"Could not find element with reference: `{}`",
-											refname.fg(state.parser.colors().info)
-										)),
-								)
-								.finish(),
-							);
-							return reports;
-						}
-						(None, refname.to_string())
-					}
+					Ok(refname) => (None, refname.to_string())
 				}
 			}
 		} else {
@@ -325,6 +304,9 @@ mod tests {
 
 §{ref}[caption=Section]
 §{ref}[caption=Another]
+§{ref2}[caption=Before]
+
+#{ref2} Another section
 "#
 			.to_string(),
 			None,
@@ -337,7 +319,10 @@ mod tests {
 			Paragraph {
 				InternalReference { refname == "ref", caption == Some("Section".to_string()) };
 				InternalReference { refname == "ref", caption == Some("Another".to_string()) };
+				InternalReference { refname == "ref2", caption == Some("Before".to_string()) };
 			};
+			Paragraph;
+			Section;
 		);
 	}
 

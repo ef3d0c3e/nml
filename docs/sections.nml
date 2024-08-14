@@ -54,3 +54,14 @@ The styling for the section link is controlled by the style key ``style.section`
 	"link": ["", "🔗", " "]
 }
 ```
+
+# Bindings
+
+ * ``Lua, nml.section.push(title, depth, [, kind [, reference]])``
+ ** ``title`` *(string)* the section display title
+ ** ``depth`` *(number)* the section depth
+ ** ``kind`` *(string)* the section kind
+ **- `\*` for unnumbered
+ **- `+` for outside of the table of content
+ **- `\*+` or `+\*` for both
+ ** ``reference`` *(string)* the section reference name

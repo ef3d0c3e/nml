@@ -442,7 +442,7 @@ impl RegexRule for TexRule {
 		bindings.push((
 			"push_math".to_string(),
 			lua.create_function(
-				|_, (env, kind, tex, caption): (Option<String>, String, String, Option<String>)| {
+				|_, (kind, tex, env, caption): (String, String, Option<String>, Option<String>)| {
 					let mut result = Ok(());
 					CTX.with_borrow(|ctx| {
 						ctx.as_ref().map(|ctx| {
@@ -484,7 +484,7 @@ impl RegexRule for TexRule {
 		bindings.push((
 			"push".to_string(),
 			lua.create_function(
-				|_, (env, kind, tex, caption): (Option<String>, String, String, Option<String>)| {
+				|_, (kind, tex, env, caption): (String, String, Option<String>, Option<String>)| {
 					let mut result = Ok(());
 					CTX.with_borrow(|ctx| {
 						ctx.as_ref().map(|ctx| {
@@ -545,9 +545,9 @@ mod tests {
 $[kind=block, caption=Some\, text\\] 1+1=2	$
 $|[env=another] Non Math \LaTeX |$
 $[kind=block,env=another] e^{i\pi}=-1$
-%<nml.tex.push_math(nil, "block", "1+1=2", "Some, text\\")>%
-%<nml.tex.push("another", "block", "Non Math \\LaTeX", nil)>%
-%<nml.tex.push_math("another", "block", "e^{i\\pi}=-1", nil)>%
+%<nml.tex.push_math("block", "1+1=2", nil, "Some, text\\")>%
+%<nml.tex.push("block", "Non Math \\LaTeX", "another", nil)>%
+%<nml.tex.push_math("block", "e^{i\\pi}=-1", "another", nil)>%
 			"#
 			.to_string(),
 			None,
@@ -573,9 +573,9 @@ $[kind=block,env=another] e^{i\pi}=-1$
 $[ caption=Some\, text\\] 1+1=2	$
 $|[env=another, kind=inline  ,   caption = Enclosed \].  ] Non Math \LaTeX|$
 $[env=another] e^{i\pi}=-1$
-%<nml.tex.push_math("main", "inline", "1+1=2", "Some, text\\")>%
-%<nml.tex.push("another", "inline", "Non Math \\LaTeX", "Enclosed ].")>%
-%<nml.tex.push_math("another", "inline", "e^{i\\pi}=-1", nil)>%
+%<nml.tex.push_math("inline", "1+1=2", "main", "Some, text\\")>%
+%<nml.tex.push("inline", "Non Math \\LaTeX", "another", "Enclosed ].")>%
+%<nml.tex.push_math("inline", "e^{i\\pi}=-1", "another", nil)>%
 			"#
 			.to_string(),
 			None,

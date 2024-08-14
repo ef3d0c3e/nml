@@ -330,8 +330,8 @@ impl RegexRule for SectionRule {
 		bindings.push((
 			"push".to_string(),
 			lua.create_function(
-				|_, (title, depth, kind, reference): (String, usize, String, Option<String>)| {
-					let kind = match kind.as_str() {
+				|_, (title, depth, kind, reference): (String, usize, Option<String>, Option<String>)| {
+					let kind = match kind.as_ref().map(|s| s.as_str()).unwrap_or("") {
 						"*+" | "+*" => section_kind::NO_NUMBER | section_kind::NO_TOC,
 						"*" => section_kind::NO_NUMBER,
 						"+" => section_kind::NO_TOC,

@@ -3,7 +3,14 @@
 
 @LaTeX = $|[kind=inline, caption=LaTeX]\LaTeX|$
 
+#+LAYOUT_BEGIN Centered
 *Bring some %LaTeX% unto your document!*
+#+LAYOUT_END
+
+# Requirements
+
+In order to use LaTeX processing, you need to have a %LaTeX% distribution installed. We recommend the [TeX Live](https://en.wikipedia.org/wiki/TeX_Live) distribution.
+You'll also need to install the [latex2svg](https://github.com/ef3d0c3e/nml/blob/master/third/latex2svg) python script provided with NML. You'll have to follow the installation instructions from the [original latex2svg repository](https://github.com/Moonbase59/latex2svg). If you don't want to add the script to your `\$PATH`, you can set the executable path in the §{tex_env}[caption=LaTeX environment].
 
 # Inline Math
 
@@ -64,7 +71,7 @@ $|\begin{tikzpicture}
 \end{tikzpicture}|$
 #+LAYOUT_END
 
-# LaTeX environment
+#{tex_env} LaTeX environment
 
 You can define multiple %LaTeX% environment, the default being `main`
  * ``@tex.env.fontsize`` The fontsize (in pt) specified to `latex2svg` (default: `12`).
@@ -98,4 +105,20 @@ To set the environment you wish to use for a particular %LaTeX% element, set the
 
 %LaTeX% elements that have been successfully rendered to **svg** are stored in the cache database, to avoid processing them a second time.
 Note that this cache is shared between documents, so you don't need to reprocess them if they share the same environment.
-They are stored under the table named ``cached_tex``, if you modify the `env` all elements will be reprocessed which may take a while...
+They are stored under the table named ``Plain Text,cached_tex``, if you modify the `env` all elements will be reprocessed which may take a while...
+
+# Bindings
+
+ * ``Lua, nml.tex.push_math(kind, tex [, env [, caption]])``
+ inserts a math mode %LaTeX% element.
+ ** ``kind`` *(string)* the element kind (inline or block)
+ ** ``tex`` *(string)* the %LaTeX% code
+ ** ``env`` *(string)* the %LaTeX% environment (defaults to `main`)
+ ** ``caption`` *(string)* the accessibility caption
+
+ * ``Lua, nml.tex.push(kind, tex [, env [, caption]])``
+ inserts a non-math %LaTeX% element.
+ ** ``kind`` *(string)* the element kind (inline or block)
+ ** ``tex`` *(string)* the %LaTeX% code
+ ** ``env`` *(string)* the %LaTeX% environment (defaults to `main`)
+ ** ``caption`` *(string)* the accessibility caption

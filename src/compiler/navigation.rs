@@ -223,7 +223,7 @@ mod tests {
 
 	use crate::compiler::process::process_from_memory;
 
-use super::*;
+	use super::*;
 
 	#[test]
 	fn sort() {
@@ -278,22 +278,13 @@ use super::*;
 		.unwrap();
 
 		let nav = create_navigation(&result).unwrap();
-		assert_eq!(nav.children.get("First").unwrap().entries, vec![
-			(
-				"A".to_string(),
-				"1.html".to_string(),
-				None,
-			),
-			(
-				"B".to_string(),
-				"2.html".to_string(),
-				None,
-			),
-			(
-				"C".to_string(),
-				"0.html".to_string(),
-				None,
-			),
-		]);
+		assert_eq!(
+			nav.children.get("First").unwrap().entries,
+			vec![
+				("A".to_string(), "1.html".to_string(), None,),
+				("B".to_string(), "2.html".to_string(), None,),
+				("C".to_string(), "0.html".to_string(), None,),
+			]
+		);
 	}
 }

@@ -148,9 +148,7 @@ impl Element for Medium {
 				result.push_str(format!(r#"<div id="{}" class="medium"{width}>"#, self.refid(compiler, refcount)).as_str());
 				result += match self.media_type {
 					MediaType::IMAGE => format!(r#"<a href="{0}"><img src="{0}"></a>"#, self.uri),
-					MediaType::VIDEO => format!(
-						r#"<video controls{width}><source src="{0}"></video>"#,
-						self.uri
+					MediaType::VIDEO => format!(r#"<video controls{width}><source src="{0}"></video>"#, self.uri
 					),
 					MediaType::AUDIO => {
 						format!(r#"<audio controls src="{0}"{width}></audio>"#, self.uri)
@@ -205,7 +203,11 @@ impl ReferenceableElement for Medium {
 				// TODO Handle other kind of media
 				match self.media_type {
 					MediaType::IMAGE => Ok(format!(
-						r#"<a class="medium-ref">{caption}<img src="{}"></a>"#,
+						"<a class=\"medium-ref\" href=\"#medium-{refid}\">{caption}<img src=\"{}\"></a>",
+						self.uri
+					)),
+					MediaType::VIDEO => Ok(format!(
+						"<a class=\"medium-ref\" href=\"#medium-{refid}\">{caption}<video><source src=\"{0}\"></video></a>",
 						self.uri
 					)),
 					_ => todo!(""),

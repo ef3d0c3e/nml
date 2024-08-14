@@ -8,28 +8,50 @@
 digraph {
 	bgcolor=transparent;
 	graph[fontcolor=darkgray];
-	node[fontcolor=darkgray];
-	edge[fontcolor=darkgray, color=gray90];
+	node[shape=box,fontcolor=darkgray];
+	edge[fontcolor=darkgray, color=gray];
 
-	filelist [shape=box, color=orange, label="File List"];
-	doclist [shape=box, color=orange, label="Document List"];
+	filelist [color=orange, label="File List"];
+	doclist [color=orange, label="Document List"];
+
 	iscached [shape=diamond, color=red, label="Cached?"];
-	parse [shape=box, color=white, label=Parse];
-	compile [shape=box,color=white, label=Compile];
-	cache [shape=box, color=orange, label=Cache];
+	parse [color=white, label=Parse];
+	compile [color=white, label=Compile];
+	cache [color=orange, label=Cache];
 
 	filelist -> iscached;
-	iscached -> cache[dir=both];
-	iscached -> doclist[label="Yes"];
+	iscached -> cache[dir=both,color=lightblue,style=dashed];
+	iscached -> doclist[label="Yes",color=lightblue,style=dashed];
 
-	iscached -> parse[label="No"];
-	parse -> compile;
-	compile -> cache[label=""];
+	iscached -> parse[label="No",color=lightblue,style=dashed];
+	subgraph cluster_0 {
+		style=dotted;
+		color=white;
+		label = "Processing";
+		labeljust="l";
+
+		parse -> compile;
+	}
+
 	compile -> doclist[label=""];
 
+
 	buildnav [color=white, label="Build Navigation"];
-	doclist -> buildnav;
-	output [color=white, label="Output"];
+	xref [color=white, label="Resolve Cross-References"];
+	
+	doclist -> xref;
+	doclist -> buildnav[label="Cached",color=lightblue,style=dashed];
+	
+	subgraph cluster_1 {
+		style=dotted;
+		color=white;
+		label = "Post-Processing";
+		labeljust="l";
+
+		xref -> buildnav;
+	}
+	xref -> cache[color=lightblue,style=dashed];
+	output [color=orange, label="Output"];
 	buildnav -> output;
 }
 [/graph]
@@ -43,7 +65,7 @@ Graphs blocks are delimited by `` [graph]...[/graph]``
 
 # Properties
  * ``layout`` The layout engine, defaults to `dot`
-	see [Graphviz's documentation](https://graphviz.org/docs/layouts/), allowed values:
+	see [Graphviz's documentation](https://graphviz.org/docs/layouts/). Allowed values:
  *- [`dot`](https://graphviz.org/docs/layouts/dot/)
  *- [`neato`](https://graphviz.org/docs/layouts/neato/)
  *- [`fdp`](https://graphviz.org/docs/layouts/fdp/)
@@ -313,3 +335,10 @@ digraph UML_Class_diagram {
 
 Graphviz graphs that have been rendered to **svg** are stored in the cache database, under table ``cached_dot``.
 Unless you modify the graph or it's properties, it won't be rendered again, instead it will be sourced from the database.
+
+# Bindigs
+
+ * ``Lua, nml.graphviz.push(layout, width, dot)``
+ ** ``layout`` *(string)* the layout engine
+ ** ``width`` *(string)* the width property (empty string for default)
+ ** ``dot`` *(string)* the graphviz code

@@ -5,10 +5,10 @@ use crate::document::document::CrossReference;
 use super::compiler::CompiledDocument;
 use super::compiler::Target;
 
-/// Represents the list of tasks that have to be ran after the document has been compiled and the
+/// Represents the list of tasks that have to run after the document has been compiled and the
 /// compiled document list has been built. Every task is stored with a raw byte position in the
 /// compiled document's body. The position represents the original position and thus should be
-/// offset accordingly to other postprocessing tasks.
+/// offset accordingly to other post-processing tasks.
 pub struct PostProcess {
 	/// List of references to resolve i.e insert the resolved refname at a certain byte position
 	/// in the document's body

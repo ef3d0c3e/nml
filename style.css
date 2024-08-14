@@ -201,7 +201,7 @@ div.code-block-content .code-block-line {
 	margin-right: .5em;
 }
 
-.medium img {
+.medium img, video, audio {
 	max-width: 100%;
 }
 
@@ -227,6 +227,7 @@ a.medium-ref {
 
 	font-weight: bold;
 	color: #d367c1;
+	text-decoration: none;
 }
 
 a.medium-ref:hover {
@@ -238,9 +239,23 @@ a.medium-ref img {
 	margin: 1.3em 0 0 0;
 }
 
+a.medium-ref video {
+	display: none;
+	margin: 1.3em 0 0 0;
+}
+
 a:hover.medium-ref img {
-	max-width: 50%;
-	margin: auto;
+	max-width: 25%;
+	left: 37.5%;
+	display: inline-block;
+	position: absolute;
+
+	box-shadow: 0px 0px 6px 2px rgba(0, 0, 0, 0.75);
+}
+
+a:hover.medium-ref video {
+	max-width: 25%;
+	left: 37.5%;
 	display: inline-block;
 	position: absolute;
 
