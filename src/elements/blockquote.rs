@@ -22,8 +22,10 @@ use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ContainerElement;
+use crate::document::element::DocumentEnd;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::elements::paragraph::Paragraph;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -31,7 +33,6 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::style::StyleHolder;
-use crate::parser::util::parse_paragraph;
 use crate::parser::util::process_escaped;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyParser;
@@ -127,13 +128,36 @@ impl Element for Blockquote {
 					result += format_author().map_err(|err| err.to_string())?.as_str();
 				}
 
-				result += "<p>";
+				let mut in_paragraph = false;
 				for elem in &self.content {
-					result += elem
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
+					if elem.downcast_ref::<DocumentEnd>().is_some() {}
+					else if elem.downcast_ref::<Blockquote>().is_some()
+					{
+						if in_paragraph
+						{
+							result += "</p>";
+							in_paragraph = false;
+						}
+						result += elem
+							.compile(compiler, document, cursor + result.len())?
+							.as_str();
+					}
+					else
+					{
+						if !in_paragraph {
+							result += "<p>";
+							in_paragraph = true;
+						}
+						result += elem
+							.compile(compiler, document, cursor + result.len())?
+							.as_str();
+					}
 				}
-				result += "</p></blockquote>";
+				if in_paragraph
+				{
+					result += "</p>";
+				}
+				result += "</blockquote>";
 				if self.style.author_pos == After {
 					result += format_author().map_err(|err| err.to_string())?.as_str();
 				}
@@ -274,7 +298,6 @@ impl Rule for BlockquoteRule {
 			// Content
 			let entry_start = captures.get(0).unwrap().start();
 			let mut entry_content = captures.get(2).unwrap().as_str().to_string();
-			let mut spacing: Option<(Range<usize>, &str)> = None;
 			while let Some(captures) = self.continue_re.captures_at(content, end_cursor.pos) {
 				if captures.get(0).unwrap().start() != end_cursor.pos {
 					break;
@@ -282,38 +305,7 @@ impl Rule for BlockquoteRule {
 				// Advance cursor
 				end_cursor = end_cursor.at(captures.get(0).unwrap().end());
 
-				// Spacing
-				let current_spacing = captures.get(1).unwrap().as_str();
-				if let Some(spacing) = &spacing {
-					if spacing.1 != current_spacing {
-						reports.push(
-							Report::build(
-								ReportKind::Warning,
-								cursor.source.clone(),
-								captures.get(1).unwrap().start(),
-							)
-							.with_message("Invalid Blockquote Spacing")
-							.with_label(
-								Label::new((
-									cursor.source.clone(),
-									captures.get(1).unwrap().range(),
-								))
-								.with_message("Spacing for blockquote entries do not match")
-								.with_color(state.parser.colors().warning),
-							)
-							.with_label(
-								Label::new((cursor.source.clone(), spacing.0.clone()))
-									.with_message("Previous spacing")
-									.with_color(state.parser.colors().warning),
-							)
-							.finish(),
-						);
-					}
-				} else {
-					spacing = Some((captures.get(1).unwrap().range(), current_spacing));
-				}
-
-				entry_content += " ";
+				entry_content += "\n";
 				entry_content += captures.get(2).unwrap().as_str();
 			}
 
@@ -324,22 +316,38 @@ impl Rule for BlockquoteRule {
 				"Blockquote Entry".to_string(),
 				entry_content,
 			));
-			let parsed_content = match parse_paragraph(state, entry_src, document) {
-				Err(err) => {
+			// Parse content
+			let parsed_doc = state.with_state(|new_state| {
+				new_state.parser.parse(new_state, entry_src, Some(document)).0
+			});
+			
+			// Extract paragraph and nested blockquotes
+			let mut parsed_content = vec![];
+			for mut elem in parsed_doc.content().borrow_mut().drain(..)
+			{
+				if let Some(paragraph) = elem.downcast_mut::<Paragraph>()
+				{
+					parsed_content.extend(std::mem::take(&mut paragraph.content));
+				}
+				else if elem.downcast_ref::<Blockquote>().is_some()
+				{
+					parsed_content.push(elem);
+				}
+				else
+				{
 					reports.push(
-						Report::build(ReportKind::Warning, token.source(), token.range.start)
+						Report::build(ReportKind::Error, token.source(), token.range.start)
 							.with_message("Unable to Parse Blockquote Entry")
 							.with_label(
 								Label::new((token.source(), token.range.clone()))
-									.with_message(err)
-									.with_color(state.parser.colors().warning),
+									.with_message("Blockquotes may only contain paragraphs and other blockquotes")
+									.with_color(state.parser.colors().error),
 							)
 							.finish(),
 					);
 					return (end_cursor, reports);
 				}
-				Ok(mut paragraph) => std::mem::take(&mut paragraph.content),
-			};
+			}
 
 			// Get style
 			let style = state
@@ -431,6 +439,8 @@ BEFORE
 > **
 AFTER
 > Another quote
+>>[author=B] Nested
+>>> More nested
 END
 "#
 			.to_string(),
@@ -448,12 +458,18 @@ END
 			} {
 				Text { content == "Some entry contin" };
 				Style;
-				Text { content == "ued here " };
+				Text { content == "ued here" };
 				Style;
 			};
 			Paragraph { Text{ content == "AFTER" }; };
 			Blockquote {
 				Text { content == "Another quote" };
+				Blockquote { author == Some("B".to_string()) } {
+					Text { content == "Nested" };
+					Blockquote {
+						Text { content == "More nested" };
+					};
+				};
 			};
 			Paragraph { Text{ content == "END" }; };
 		);
