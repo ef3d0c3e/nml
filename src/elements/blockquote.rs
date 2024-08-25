@@ -26,6 +26,7 @@ use crate::document::element::DocumentEnd;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::elements::paragraph::Paragraph;
+use crate::elements::text::Text;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -210,7 +211,7 @@ impl BlockquoteRule {
 
 		Self {
 			start_re: Regex::new(r"(?:^|\n)>(?:\[((?:\\.|[^\\\\])*?)\])?\s*(.*)").unwrap(),
-			continue_re: Regex::new(r"(?:^|\n)>(\s*)(.*)").unwrap(),
+			continue_re: Regex::new(r"(?:^|\n)>\s*?(.*)").unwrap(),
 			properties: PropertyParser { properties: props },
 		}
 	}
@@ -298,6 +299,7 @@ impl Rule for BlockquoteRule {
 			// Content
 			let entry_start = captures.get(0).unwrap().start();
 			let mut entry_content = captures.get(2).unwrap().as_str().to_string();
+			println!("f={entry_content}");
 			while let Some(captures) = self.continue_re.captures_at(content, end_cursor.pos) {
 				if captures.get(0).unwrap().start() != end_cursor.pos {
 					break;
@@ -305,12 +307,18 @@ impl Rule for BlockquoteRule {
 				// Advance cursor
 				end_cursor = end_cursor.at(captures.get(0).unwrap().end());
 
-				entry_content += "\n";
-				entry_content += captures.get(2).unwrap().as_str();
+				let trimmed = captures.get(1).unwrap().as_str().trim_start().trim_end();
+				println!("tr={trimmed}");
+				//if !trimmed.is_empty()
+				{
+					entry_content += "\n";
+					entry_content += trimmed;
+				}
 			}
 
 			// Parse entry content
 			let token = Token::new(entry_start..end_cursor.pos, end_cursor.source.clone());
+			println!("{entry_content}.");
 			let entry_src = Rc::new(VirtualSource::new(
 				token.clone(),
 				"Blockquote Entry".to_string(),
@@ -322,11 +330,21 @@ impl Rule for BlockquoteRule {
 			});
 			
 			// Extract paragraph and nested blockquotes
-			let mut parsed_content = vec![];
+			let mut parsed_content : Vec<Box<dyn Element>> = vec![];
 			for mut elem in parsed_doc.content().borrow_mut().drain(..)
 			{
 				if let Some(paragraph) = elem.downcast_mut::<Paragraph>()
 				{
+					if let Some(last) = parsed_content.last()
+					{
+						if last.kind() == ElemKind::Inline
+						{
+							parsed_content.push(Box::new(Text {
+								location: Token::new(last.location().end()..last.location().end(), last.location().source()),
+								content: " ".to_string()
+							}) as Box<dyn Element>);
+						}
+					}
 					parsed_content.extend(std::mem::take(&mut paragraph.content));
 				}
 				else if elem.downcast_ref::<Blockquote>().is_some()
@@ -438,7 +456,9 @@ BEFORE
 > contin**ued here
 > **
 AFTER
-> Another quote
+> Another
+>
+> quote
 >>[author=B] Nested
 >>> More nested
 END
@@ -463,7 +483,9 @@ END
 			};
 			Paragraph { Text{ content == "AFTER" }; };
 			Blockquote {
-				Text { content == "Another quote" };
+				Text { content == "Another" };
+				Text { content == " " };
+				Text { content == "quote" };
 				Blockquote { author == Some("B".to_string()) } {
 					Text { content == "Nested" };
 					Blockquote {
