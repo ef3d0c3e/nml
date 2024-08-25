@@ -7,13 +7,20 @@ use super::compiler::CompiledDocument;
 use super::compiler::Target;
 use super::postprocess::PostProcess;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct NavEntry {
-	pub(self) entries: Vec<(String, String, Option<String>)>,
-	pub(self) children: HashMap<String, NavEntry>,
+	title: String,
+	path: String,
+	previous: Option<String>,
 }
 
-impl NavEntry {
+#[derive(Debug, Default)]
+pub struct NavEntries {
+	pub(self) entries: Vec<NavEntry>,
+	pub(self) children: HashMap<String, NavEntries>,
+}
+
+impl NavEntries {
 	// FIXME: Sanitize
 	pub fn compile(&self, target: Target, doc: &RefCell<CompiledDocument>) -> String {
 		let doc_borrow = doc.borrow();
@@ -36,16 +43,16 @@ impl NavEntry {
 					categories: &Vec<&str>,
 					did_match: bool,
 					result: &mut String,
-					entry: &NavEntry,
+					entry: &NavEntries,
 					depth: usize,
 				) {
 					// Orphans = Links
-					for (title, path, _) in &entry.entries {
+					for entry in &entry.entries {
 						result.push_str(
 							format!(
 								r#"<li><a href="{}">{}</a></li>"#,
-								Compiler::sanitize(target, path),
-								Compiler::sanitize(target, title)
+								Compiler::sanitize(target, entry.path.as_str()),
+								Compiler::sanitize(target, entry.title.as_str())
 							)
 							.as_str(),
 						);
@@ -83,34 +90,46 @@ impl NavEntry {
 	}
 
 	fn sort_entry(
-		left: &(String, String, Option<String>),
-		right: &(String, String, Option<String>),
+		entrymap: &HashMap<String, Option<String>>,
+		left_title: &str,
+		right_title: &str,
 	) -> std::cmp::Ordering {
-		match (&left.2, &right.2) {
-			(Some(_), Some(_)) => left.0.cmp(&right.0),
+		let left_previous = entrymap.get(left_title).unwrap();
+		let right_previous = entrymap.get(right_title).unwrap();
+
+		match (left_previous, right_previous) {
+			(Some(lp), Some(rp)) => {
+				if lp.as_str() == right_title {
+					std::cmp::Ordering::Greater
+				} else if rp.as_str() == left_title {
+					std::cmp::Ordering::Less
+				} else {
+					Self::sort_entry(entrymap, lp.as_str(), rp.as_str())
+				}
+			}
 			(Some(lp), None) => {
-				if &right.0 == lp {
+				if right_title == lp.as_str() {
 					std::cmp::Ordering::Greater
 				} else {
-					left.0.cmp(&right.0)
+					left_title.cmp(right_title)
 				}
 			}
 			(None, Some(rp)) => {
-				if &left.0 == rp {
+				if left_title == rp.as_str() {
 					std::cmp::Ordering::Less
 				} else {
-					left.0.cmp(&right.0)
+					left_title.cmp(right_title)
 				}
 			}
-			(None, None) => left.0.cmp(&right.0),
+			(None, None) => left_title.cmp(right_title),
 		}
 	}
 }
 
 pub fn create_navigation(
 	docs: &Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>,
-) -> Result<NavEntry, String> {
-	let mut nav = NavEntry {
+) -> Result<NavEntries, String> {
+	let mut nav = NavEntries {
 		entries: vec![],
 		children: HashMap::new(),
 	};
@@ -153,7 +172,7 @@ pub fn create_navigation(
 				Some(cat_ent) => cat_ent,
 				None => {
 					// Insert
-					nav.children.insert(cat.clone(), NavEntry::default());
+					nav.children.insert(cat.clone(), NavEntries::default());
 					nav.children.get_mut(cat.as_str()).unwrap()
 				}
 			};
@@ -162,7 +181,9 @@ pub fn create_navigation(
 				Some(subcat_ent) => subcat_ent,
 				None => {
 					// Insert
-					cat_ent.children.insert(subcat.clone(), NavEntry::default());
+					cat_ent
+						.children
+						.insert(subcat.clone(), NavEntries::default());
 					cat_ent.children.get_mut(subcat.as_str()).unwrap()
 				}
 			}
@@ -171,7 +192,7 @@ pub fn create_navigation(
 				Some(cat_ent) => cat_ent,
 				None => {
 					// Insert
-					nav.children.insert(cat.clone(), NavEntry::default());
+					nav.children.insert(cat.clone(), NavEntries::default());
 					nav.children.get_mut(cat.as_str()).unwrap()
 				}
 			}
@@ -180,13 +201,13 @@ pub fn create_navigation(
 		};
 
 		// Find duplicates titles in current parent
-		for (ent_title, _, _) in &pent.entries {
-			if ent_title == title {
+		for entry in &pent.entries {
+			if &entry.title == title {
 				return Err(format!(
 					"Conflicting entry title `{title}` for entries with the same parent: ({})",
 					pent.entries
 						.iter()
-						.map(|(title, _, _)| title.clone())
+						.map(|entry| entry.title.clone())
 						.collect::<Vec<_>>()
 						.join(", ")
 				));
@@ -199,13 +220,22 @@ pub fn create_navigation(
 		}
 		all_paths.insert(path.clone(), title.clone());
 
-		pent.entries.push((title.clone(), path.clone(), previous));
+		pent.entries.push(NavEntry {
+			title: title.clone(),
+			path: path.clone(),
+			previous,
+		});
 	}
 
 	// Sort entries
-	fn sort_entries(nav: &mut NavEntry) {
+	fn sort_entries(nav: &mut NavEntries) {
+		let mut entrymap = nav
+			.entries
+			.iter()
+			.map(|ent| (ent.title.clone(), ent.previous.clone()))
+			.collect::<HashMap<String, Option<String>>>();
 		nav.entries
-			.sort_unstable_by(NavEntry::sort_entry);
+			.sort_by(|l, r| NavEntries::sort_entry(&entrymap, l.title.as_str(), r.title.as_str()));
 
 		for (_, child) in &mut nav.children {
 			sort_entries(child);
@@ -227,12 +257,32 @@ mod tests {
 
 	#[test]
 	fn sort() {
-		let entries: Vec<(String, String, Option<String>)> = vec![
-			("Index".into(), "".into(), None),
-			("AB".into(), "".into(), Some("Index".into())),
-			("Getting Started".into(), "".into(), Some("Index".into())),
-			("Sections".into(), "".into(), Some("Getting Started".into())),
-			("Style".into(), "".into(), Some("Getting Started".into())),
+		let entries: Vec<NavEntry> = vec![
+			NavEntry {
+				title: "Index".into(),
+				path: "".into(),
+				previous: None,
+			},
+			NavEntry {
+				title: "AB".into(),
+				path: "".into(),
+				previous: Some("Index".into()),
+			},
+			NavEntry {
+				title: "Getting Started".into(),
+				path: "".into(),
+				previous: Some("Index".into()),
+			},
+			NavEntry {
+				title: "Sections".into(),
+				path: "".into(),
+				previous: Some("Getting Started".into()),
+			},
+			NavEntry {
+				title: "Style".into(),
+				path: "".into(),
+				previous: Some("Getting Started".into()),
+			},
 		];
 		let mut shuffled = entries.clone();
 		for _ in 0..10 {
@@ -241,7 +291,14 @@ mod tests {
 				shuffled.swap(i, pos as usize);
 			}
 
-			shuffled.sort_by(|l, r| NavEntry::sort_entry(l, r));
+			let mut entrymap = shuffled
+				.iter()
+				.map(|ent| (ent.title.clone(), ent.previous.clone()))
+				.collect::<HashMap<String, Option<String>>>();
+
+			shuffled.sort_by(|l, r| {
+				NavEntries::sort_entry(&entrymap, l.title.as_str(), r.title.as_str())
+			});
 
 			assert_eq!(shuffled, entries);
 		}
@@ -281,9 +338,21 @@ mod tests {
 		assert_eq!(
 			nav.children.get("First").unwrap().entries,
 			vec![
-				("A".to_string(), "1.html".to_string(), None,),
-				("B".to_string(), "2.html".to_string(), None,),
-				("C".to_string(), "0.html".to_string(), None,),
+				NavEntry {
+					title: "A".to_string(),
+					path: "1.html".to_string(),
+					previous: None
+				},
+				NavEntry {
+					title: "B".to_string(),
+					path: "2.html".to_string(),
+					previous: None
+				},
+				NavEntry {
+					title: "C".to_string(),
+					path: "0.html".to_string(),
+					previous: None
+				},
 			]
 		);
 	}
