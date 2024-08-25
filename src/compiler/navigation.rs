@@ -103,6 +103,8 @@ impl NavEntries {
 					std::cmp::Ordering::Greater
 				} else if rp.as_str() == left_title {
 					std::cmp::Ordering::Less
+				} else if rp.as_str() == lp.as_str() {
+					left_title.cmp(right_title)
 				} else {
 					Self::sort_entry(entrymap, lp.as_str(), rp.as_str())
 				}
