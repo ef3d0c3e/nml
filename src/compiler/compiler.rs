@@ -77,6 +77,51 @@ impl<'a> Compiler<'a> {
 		}
 	}
 
+	/// Sanitizes a format string for a [`Target`]
+	///
+	/// # Notes
+	///
+	/// This function may process invalid format string, which will be caught later
+	/// by runtime_format.
+	pub fn sanitize_format<S: AsRef<str>>(target: Target, str: S) -> String {
+		match target {
+			Target::HTML => {
+				let mut out = String::new();
+
+				let mut braces = 0;
+				for c in str.as_ref().chars() {
+					if c == '{' {
+						out.push(c);
+						braces += 1;
+						continue;
+					} else if c == '}' {
+						out.push(c);
+						if braces != 0 {
+							braces -= 1;
+						}
+						continue;
+					}
+					// Inside format args
+					if braces % 2 == 1 {
+						out.push(c);
+						continue;
+					}
+
+					match c {
+						'&' => out += "&amp;",
+						'<' => out += "&lt;",
+						'>' => out += "&gt;",
+						'"' => out += "&quot;",
+						_ => out.push(c),
+					}
+				}
+
+				out
+			}
+			_ => todo!("Sanitize not implemented"),
+		}
+	}
+
 	/// Gets a reference name
 	pub fn refname<S: AsRef<str>>(target: Target, str: S) -> String {
 		Self::sanitize(target, str).replace(' ', "_")
@@ -131,15 +176,13 @@ impl<'a> Compiler<'a> {
 			document: &dyn Document,
 			var_name: &'static str,
 		) -> Option<Rc<dyn Variable>> {
-			document
-				.get_variable(var_name)
-				.or_else(|| {
-					println!(
-						"Missing variable `{var_name}` in {}",
-						document.source().name()
-					);
-					None
-				})
+			document.get_variable(var_name).or_else(|| {
+				println!(
+					"Missing variable `{var_name}` in {}",
+					document.source().name()
+				);
+				None
+			})
 		}
 
 		let mut result = String::new();
@@ -308,7 +351,7 @@ impl CompiledDocument {
 		.ok()
 	}
 
-	/// Inserts [`CompiledDocument`] into cache
+	/// Interts [`CompiledDocument`] into cache
 	pub fn insert_cache(&self, con: &Connection) -> Result<usize, rusqlite::Error> {
 		con.execute(
 			Self::sql_insert_query(),
@@ -322,5 +365,21 @@ impl CompiledDocument {
 				&self.footer,
 			),
 		)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn sanitize_test() {
+		assert_eq!(Compiler::sanitize(Target::HTML, "<a>"), "&lt;a&gt;");
+		assert_eq!(Compiler::sanitize(Target::HTML, "&lt;"), "&amp;lt;");
+		assert_eq!(Compiler::sanitize(Target::HTML, "\""), "&quot;");
+
+		assert_eq!(Compiler::sanitize_format(Target::HTML, "{<>&\"}"), "{<>&\"}");
+		assert_eq!(Compiler::sanitize_format(Target::HTML, "{{<>}}"), "{{&lt;&gt;}}");
+		assert_eq!(Compiler::sanitize_format(Target::HTML, "{{<"), "{{&lt;");
 	}
 }

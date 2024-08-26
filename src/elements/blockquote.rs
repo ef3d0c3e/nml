@@ -87,33 +87,29 @@ impl Element for Blockquote {
 		match compiler.target() {
 			HTML => {
 				let mut result = r#"<div class="blockquote-content">"#.to_string();
-				let format_author = || -> Result<String, FormatError> {
+				let format_author = || -> Result<String, String> {
 					let mut result = String::new();
 
 					if self.cite.is_some() || self.author.is_some() {
 						result += r#"<p class="blockquote-author">"#;
 						let fmt_pair = FmtPair(compiler.target(), self);
-						match (self.author.is_some(), self.cite.is_some()) {
+						let format_string = match (self.author.is_some(), self.cite.is_some()) {
 							(true, true) => {
-								let args =
-									FormatArgs::new(self.style.format[0].as_str(), &fmt_pair);
-								args.status()?;
-								result += args.to_string().as_str();
+								Compiler::sanitize_format(fmt_pair.0, self.style.format[0].as_str())
 							}
 							(true, false) => {
-								let args =
-									FormatArgs::new(self.style.format[1].as_str(), &fmt_pair);
-								args.status()?;
-								result += args.to_string().as_str();
+								Compiler::sanitize_format(fmt_pair.0, self.style.format[1].as_str())
 							}
 							(false, false) => {
-								let args =
-									FormatArgs::new(self.style.format[2].as_str(), &fmt_pair);
-								args.status()?;
-								result += args.to_string().as_str();
+								Compiler::sanitize_format(fmt_pair.0, self.style.format[2].as_str())
 							}
 							_ => panic!(""),
-						}
+						};
+						let args = FormatArgs::new(format_string.as_str(), &fmt_pair);
+						args.status().map_err(|err| {
+							format!("Failed to format Blockquote style `{format_string}`: {err}")
+						})?;
+						result += args.to_string().as_str();
 						result += "</p>";
 					}
 					Ok(result)
@@ -126,25 +122,21 @@ impl Element for Blockquote {
 					result += "<blockquote>";
 				}
 				if self.style.author_pos == Before {
-					result += format_author().map_err(|err| err.to_string())?.as_str();
+					result += format_author()?.as_str();
 				}
 
 				let mut in_paragraph = false;
 				for elem in &self.content {
-					if elem.downcast_ref::<DocumentEnd>().is_some() {}
-					else if elem.downcast_ref::<Blockquote>().is_some()
-					{
-						if in_paragraph
-						{
+					if elem.downcast_ref::<DocumentEnd>().is_some() {
+					} else if elem.downcast_ref::<Blockquote>().is_some() {
+						if in_paragraph {
 							result += "</p>";
 							in_paragraph = false;
 						}
 						result += elem
 							.compile(compiler, document, cursor + result.len())?
 							.as_str();
-					}
-					else
-					{
+					} else {
 						if !in_paragraph {
 							result += "<p>";
 							in_paragraph = true;
@@ -154,8 +146,7 @@ impl Element for Blockquote {
 							.as_str();
 					}
 				}
-				if in_paragraph
-				{
+				if in_paragraph {
 					result += "</p>";
 				}
 				result += "</blockquote>";
@@ -299,7 +290,6 @@ impl Rule for BlockquoteRule {
 			// Content
 			let entry_start = captures.get(0).unwrap().start();
 			let mut entry_content = captures.get(2).unwrap().as_str().to_string();
-			println!("f={entry_content}");
 			while let Some(captures) = self.continue_re.captures_at(content, end_cursor.pos) {
 				if captures.get(0).unwrap().start() != end_cursor.pos {
 					break;
@@ -308,17 +298,12 @@ impl Rule for BlockquoteRule {
 				end_cursor = end_cursor.at(captures.get(0).unwrap().end());
 
 				let trimmed = captures.get(1).unwrap().as_str().trim_start().trim_end();
-				println!("tr={trimmed}");
-				//if !trimmed.is_empty()
-				{
-					entry_content += "\n";
-					entry_content += trimmed;
-				}
+				entry_content += "\n";
+				entry_content += trimmed;
 			}
 
 			// Parse entry content
 			let token = Token::new(entry_start..end_cursor.pos, end_cursor.source.clone());
-			println!("{entry_content}.");
 			let entry_src = Rc::new(VirtualSource::new(
 				token.clone(),
 				"Blockquote Entry".to_string(),
@@ -326,33 +311,31 @@ impl Rule for BlockquoteRule {
 			));
 			// Parse content
 			let parsed_doc = state.with_state(|new_state| {
-				new_state.parser.parse(new_state, entry_src, Some(document)).0
+				new_state
+					.parser
+					.parse(new_state, entry_src, Some(document))
+					.0
 			});
-			
+
 			// Extract paragraph and nested blockquotes
-			let mut parsed_content : Vec<Box<dyn Element>> = vec![];
-			for mut elem in parsed_doc.content().borrow_mut().drain(..)
-			{
-				if let Some(paragraph) = elem.downcast_mut::<Paragraph>()
-				{
-					if let Some(last) = parsed_content.last()
-					{
-						if last.kind() == ElemKind::Inline
-						{
+			let mut parsed_content: Vec<Box<dyn Element>> = vec![];
+			for mut elem in parsed_doc.content().borrow_mut().drain(..) {
+				if let Some(paragraph) = elem.downcast_mut::<Paragraph>() {
+					if let Some(last) = parsed_content.last() {
+						if last.kind() == ElemKind::Inline {
 							parsed_content.push(Box::new(Text {
-								location: Token::new(last.location().end()..last.location().end(), last.location().source()),
-								content: " ".to_string()
+								location: Token::new(
+									last.location().end()..last.location().end(),
+									last.location().source(),
+								),
+								content: " ".to_string(),
 							}) as Box<dyn Element>);
 						}
 					}
 					parsed_content.extend(std::mem::take(&mut paragraph.content));
-				}
-				else if elem.downcast_ref::<Blockquote>().is_some()
-				{
+				} else if elem.downcast_ref::<Blockquote>().is_some() {
 					parsed_content.push(elem);
-				}
-				else
-				{
+				} else {
 					reports.push(
 						Report::build(ReportKind::Error, token.source(), token.range.start)
 							.with_message("Unable to Parse Blockquote Entry")

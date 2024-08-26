@@ -231,7 +231,7 @@ pub fn create_navigation(
 
 	// Sort entries
 	fn sort_entries(nav: &mut NavEntries) {
-		let mut entrymap = nav
+		let entrymap = nav
 			.entries
 			.iter()
 			.map(|ent| (ent.title.clone(), ent.previous.clone()))
@@ -250,8 +250,8 @@ pub fn create_navigation(
 
 #[cfg(test)]
 mod tests {
+	use rand::prelude::SliceRandom;
 	use rand::rngs::OsRng;
-	use rand::RngCore;
 
 	use crate::compiler::process::process_from_memory;
 
@@ -288,12 +288,10 @@ mod tests {
 		];
 		let mut shuffled = entries.clone();
 		for _ in 0..10 {
-			for i in 0..5 {
-				let pos = OsRng.next_u64() % entries.len() as u64;
-				shuffled.swap(i, pos as usize);
-			}
+			let mut rng = OsRng {};
+			shuffled.shuffle(&mut rng);
 
-			let mut entrymap = shuffled
+			let entrymap = shuffled
 				.iter()
 				.map(|ent| (ent.title.clone(), ent.previous.clone()))
 				.collect::<HashMap<String, Option<String>>>();
