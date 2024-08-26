@@ -79,7 +79,16 @@ impl Element for ListEntry {
 	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
-				let mut result = "<li>".to_string();
+				let mut result = String::new();
+				if let Some((numbered, number)) = self.numbering.last()
+				{
+					if *numbered {
+						result += format!("<li value=\"{number}\">").as_str();
+					}
+					else {
+						result += "<li>";
+					}
+				}
 				for elem in &self.content {
 					result += elem.compile(compiler, document, cursor+result.len())?.as_str();
 				}
@@ -198,14 +207,13 @@ impl ListRule {
 
 	fn parse_depth(depth: &str, document: &dyn Document, offset: usize) -> Vec<(bool, usize)> {
 		let mut parsed = vec![];
-		// FIXME: Previous iteration used to recursively retrieve the list indent
 		let prev_entry = document
 			.last_element::<ListEntry>()
 			.and_then(|entry| Ref::filter_map(entry, |e| Some(&e.numbering)).ok());
 
 		let mut continue_match = true;
 		depth.chars().enumerate().for_each(|(idx, c)| {
-			let number = if offset == 0 {
+			let number = if offset == usize::MAX {
 				prev_entry
 					.as_ref()
 					.and_then(|v| {
@@ -312,7 +320,7 @@ impl Rule for ListRule {
 				let depth = ListRule::parse_depth(
 					captures.get(1).unwrap().as_str(),
 					document,
-					offset.unwrap_or(0),
+					offset.unwrap_or(usize::MAX),
 				);
 
 				// Content
