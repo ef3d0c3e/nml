@@ -201,7 +201,7 @@ impl BlockquoteRule {
 		);
 
 		Self {
-			start_re: Regex::new(r"(?:^|\n)>(?:\[((?:\\.|[^\\\\])*?)\])?\s*(.*)").unwrap(),
+			start_re: Regex::new(r"(?:^|\n)>(?:\[((?:\\.|[^\\\\])*?)\])?\s*?(.*)").unwrap(),
 			continue_re: Regex::new(r"(?:^|\n)>\s*?(.*)").unwrap(),
 			properties: PropertyParser { properties: props },
 		}
