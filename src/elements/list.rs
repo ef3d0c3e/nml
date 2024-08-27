@@ -396,10 +396,12 @@ impl Rule for ListRule {
 								)
 								.finish(),
 						);
-						break;
+						// Return an empty paragraph
+						vec![]
 					}
 					Ok(mut paragraph) => std::mem::take(&mut paragraph.content),
 				};
+
 
 				if let Some(previous_depth) = document
 					.last_element::<ListEntry>()

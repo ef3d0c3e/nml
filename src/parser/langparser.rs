@@ -112,13 +112,16 @@ impl Parser for LangParser {
 			super::state::Scope::DOCUMENT,
 		));
 
-		state.push(
-			&doc,
-			Box::new(DocumentEnd(Token::new(
-				doc.source().content().len()..doc.source().content().len(),
-				doc.source(),
-			))),
-		);
+		if parent.is_none()
+		{
+			state.push(
+				&doc,
+				Box::new(DocumentEnd(Token::new(
+							doc.source().content().len()..doc.source().content().len(),
+							doc.source(),
+				))),
+			);
+		}
 
 		(Box::new(doc), state)
 	}

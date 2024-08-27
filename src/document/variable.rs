@@ -7,7 +7,6 @@ use crate::parser::source::VirtualSource;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-// TODO enforce to_string(from_string(to_string())) == to_string()
 pub trait Variable {
 	fn location(&self) -> &Token;
 

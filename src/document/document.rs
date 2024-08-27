@@ -120,6 +120,7 @@ pub trait Document<'a>: core::fmt::Debug {
 
 	/// Pushes a new element into the document's content
 	fn push(&self, elem: Box<dyn Element>) {
+		// Add reference
 		if let Some(refname) = elem
 			.as_referenceable()
 			.and_then(|reference| reference.reference_name())
@@ -128,7 +129,10 @@ pub trait Document<'a>: core::fmt::Debug {
 				refname.clone(),
 				ElemReference::Direct(self.content().borrow().len()),
 			);
-		} else if let Some(container) = self
+		} 
+		// Add contained references
+		else if let Some(container) =
+			self
 			.content()
 			.borrow()
 			.last()

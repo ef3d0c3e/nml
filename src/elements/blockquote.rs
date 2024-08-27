@@ -13,7 +13,6 @@ use blockquote_style::BlockquoteStyle;
 use regex::Match;
 use regex::Regex;
 use runtime_format::FormatArgs;
-use runtime_format::FormatError;
 use runtime_format::FormatKey;
 use runtime_format::FormatKeyError;
 
@@ -22,7 +21,6 @@ use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ContainerElement;
-use crate::document::element::DocumentEnd;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::elements::paragraph::Paragraph;
@@ -127,8 +125,7 @@ impl Element for Blockquote {
 
 				let mut in_paragraph = false;
 				for elem in &self.content {
-					if elem.downcast_ref::<DocumentEnd>().is_some() {
-					} else if elem.downcast_ref::<Blockquote>().is_some() {
+					if elem.downcast_ref::<Blockquote>().is_some() {
 						if in_paragraph {
 							result += "</p>";
 							in_paragraph = false;

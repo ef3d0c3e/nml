@@ -306,7 +306,7 @@ mod tests {
 			"".to_string(),
 			r#"
 Simple evals:
- * %< 1+1>%
+ * 1+1: %< 1+1>%
  * %<" 1+1>% = 2
  * %<! "**bold**">%
 
@@ -327,7 +327,7 @@ Evaluation: %<! make_ref("hello", "id")>%
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph;
 			ListMarker;
-			ListEntry {};
+			ListEntry;
 			ListEntry {
 				Text { content == "2" };
 				Text { content == " = 2" };
