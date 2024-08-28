@@ -137,9 +137,53 @@ a.inline-code {
 	content: "–";
 }
 
+/* TOC */
+.toc {
+	margin: auto;
+	margin-top: 1.8em;
+	width: 85%;
+	padding: 0.5em;
+	background-color: #1f1f1f;
+}
+
+.toc a {
+	text-decoration: none;
+	color: #0ff08b;
+}
+
+.toc ol {
+	margin: 0;
+	padding-left: 1.1em;
+}
+
+.toc span {
+	display: flex;
+	justify-content: center;
+}
+
 /* Sections */
 a.section-link {
+	display: none;
 	text-decoration: none;
+}
+
+h1:hover a.section-link {
+	display: inline;
+}
+h2:hover a.section-link {
+	display: inline;
+}
+h3:hover a.section-link {
+	display: inline;
+}
+h4:hover a.section-link {
+	display: inline;
+}
+h5:hover a.section-link {
+	display: inline;
+}
+h6:hover a.section-link {
+	display: inline;
 }
 
 /* Code blocks */
