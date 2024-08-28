@@ -28,17 +28,17 @@ use super::reference::InternalReference;
 
 #[derive(Debug)]
 pub struct Section {
-	pub(self) location: Token,
+	pub location: Token,
 	/// Title of the section
-	pub(self) title: String,
+	pub title: String,
 	/// Depth i.e number of '#'
-	pub(self) depth: usize,
+	pub depth: usize,
 	/// [`section_kind`]
-	pub(self) kind: u8,
+	pub kind: u8,
 	/// Section reference name
-	pub(self) reference: Option<String>,
+	pub reference: Option<String>,
 	/// Style of the section
-	pub(self) style: Rc<section_style::SectionStyle>,
+	pub style: Rc<section_style::SectionStyle>,
 }
 
 impl Element for Section {
