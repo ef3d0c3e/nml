@@ -6,6 +6,7 @@
 \definecolor{__color1}{HTML}{d5d5d5} \\
 \everymath{\color{__color1}\displaystyle}
 @tex.main.block_prepend = \color{__color1}
+@toc.title = Content
 
 @<
 function make_doc(categories, title, page_title)

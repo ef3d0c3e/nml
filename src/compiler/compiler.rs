@@ -209,7 +209,6 @@ impl<'a> Compiler<'a> {
 				}
 				result += r#"</head><body><div class="layout">"#;
 
-				// TODO: TOC
 				// TODO: Author, Date, Title, Div
 			}
 			Target::LATEX => {}

@@ -1,5 +1,5 @@
 @import ../template.nml
-@nav.previous = Blockquote
+@nav.previous = Code
 %<make_doc({"Blocks"}, "Blockquotes", "Blockquotes")>%
 
 # Blockquotes

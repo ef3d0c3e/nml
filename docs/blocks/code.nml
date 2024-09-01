@@ -1,0 +1,97 @@
+@import ../template.nml
+%<make_doc({"Blocks"}, "Code", "Code")>%
+
+# Inline code
+
+To insert inline blocks of code you can use the ``Plain Text, \``Language, Code\`` `` syntax.
+Where `Language` is optional but required if your `Code` contains a comma.
+
+**Examples:**
+ * ``Plain Text, \``C, int ioctl(int fd, unsigned long op, ...)\`` `` → ``C, int ioctl(int fd, unsigned long op, ...)``
+ * ``Plain Text, \``Rust, fn fact(x: u64) -> u64 { if x <= 1 { 1 } else { x * fact(x-1) } }\`` `` → ``Rust, fn fact(x: u64) -> u64 { if x <= 1 { 1 } else { x * fact(x-1) } }``
+
+Inline code are meant for code that only span a single line. If your code spans multiple lines, §{mini} will be used instead.
+
+#{mini} Mini code blocks
+
+To insert mini code blocks you can use the ``Plain Text, \``Language, Code\`` `` syntax.
+Where `Code` spans multiple lines.
+
+
+**Example:**
+#+LAYOUT_BEGIN Split
+``Plain Text, \``C, int factorial(int n)
+{
+	if (n <= 1)
+		return 1;
+	
+	return n * factorial(n-1);
+}
+\`` ``
+#+LAYOUT_NEXT
+``C, int factorial(int n)
+{
+	if (n <= 1)
+		return 1;
+	
+	return n * factorial(n-1);
+}
+``
+#+LAYOUT_END
+
+# Large code blocks
+
+To insert large code blocks you can use the ``Plain Text, `\``Language, Title\nCode`\`` `` syntax.
+The title is optional and can be omitted.
+
+**Examples:**
+#+LAYOUT_BEGIN Split
+``Plain Text, `\``Rust, Factorial
+fn factorial(n: u64) -> u64
+{
+	if n <= 1 {
+		return 1;
+	}
+	
+	n * factorial(n-1)
+}
+`\`` ``
+#+LAYOUT_NEXT
+```Rust, Factorial
+fn factorial(n: u64) -> u64
+{
+	if n <= 1 {
+		return 1;
+	}
+	
+	n * factorial(n-1)
+}
+```
+#+LAYOUT_END
+#+LAYOUT_BEGIN Split
+``Plain Text, `\``[line_offset=64] Rust
+fn factorial(n: u64) -> u64
+{
+	if n <= 1 {
+		return 1;
+	}
+	
+	n * factorial(n-1)
+}
+`\`` ``
+#+LAYOUT_NEXT
+```[line_offset=64] Rust
+fn factorial(n: u64) -> u64
+{
+	if n <= 1 {
+		return 1;
+	}
+	
+	n * factorial(n-1)
+}
+```
+#+LAYOUT_END
+
+## Properties
+
+Large code blocks support the `line_offset` property (defaults to 1). This sets the number of the first line of the code block.
