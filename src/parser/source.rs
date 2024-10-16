@@ -149,6 +149,87 @@ impl Clone for Cursor {
 	}
 }
 
+/// Cursor type used for the language server
+#[derive(Debug, Clone)]
+pub struct LineCursor {
+	pub pos: usize,
+	pub line: usize,
+	pub line_pos: usize,
+	pub source: Rc<dyn Source>,
+}
+
+impl LineCursor {
+	/// Creates a [`LineCursor`] at the begining of the source
+	pub fn new(source: Rc<dyn Source>) -> LineCursor
+	{
+		Self {
+			pos: 0,
+			line: 0,
+			line_pos: 0,
+			source,
+		}
+	}
+
+	/// Moves [`LineCursor`] to absolute position
+	///
+	/// # Error
+	/// This function will panic if [`pos`] is not utf8 aligned
+	pub fn move_to(&mut self, pos: usize) {
+		if pos > self.pos {
+			let start = self.pos;
+			eprintln!("slice{{{}}}, want={pos}", &self.source.content().as_str()[start..pos]);
+			let mut it = self.source.content().as_str()[start..] // pos+1
+				.chars()
+				.peekable();
+
+			let mut prev = self.source.content().as_str()[..start + 1]
+				.chars()
+				.rev()
+				.next();
+			eprintln!("prev={prev:#?}");
+			while self.pos < pos {
+				let c = it.next().unwrap();
+				let len = c.len_utf8();
+
+				if self.pos != 0 && prev == Some('\n') {
+					self.line += 1;
+					self.line_pos = 0;
+				} else {
+					self.line_pos += len;
+				}
+				self.pos += len;
+
+				eprintln!("({}, {c:#?}, {} {}, {prev:#?})", self.pos, self.line, self.line_pos);
+				prev = Some(c);
+			}
+			if self.pos != 0 && prev == Some('\n') {
+				self.line += 1;
+				self.line_pos = 0;
+			}
+		} else if pos < self.pos {
+			todo!("Going back is not supported");
+			self.source.content().as_str()[pos..self.pos]
+				.char_indices()
+				.rev()
+				.for_each(|(len, c)| {
+					self.pos -= len;
+					if c == '\n' {
+						self.line -= 1;
+					}
+				});
+			self.line_pos = self.source.content().as_str()[..self.pos]
+				.char_indices()
+				.rev()
+				.find(|(_, c)| *c == '\n')
+				.map(|(line_start, _)| self.pos - line_start)
+				.unwrap_or(0);
+		}
+
+		// May fail if pos is not utf8-aligned
+		assert_eq!(pos, self.pos);
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct Token {
 	pub range: Range<usize>,

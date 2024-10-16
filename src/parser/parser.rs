@@ -2,6 +2,7 @@ use ariadne::Label;
 use ariadne::Report;
 use std::any::Any;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
 use std::rc::Rc;
@@ -10,6 +11,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use super::customstyle::CustomStyleHolder;
 use super::layout::LayoutHolder;
 use super::rule::Rule;
+use super::semantics::Semantics;
 use super::source::Cursor;
 use super::source::Source;
 use super::state::RuleStateHolder;
@@ -69,17 +71,21 @@ pub struct SharedState {
 
 	/// The custom styles
 	pub custom_styles: RefCell<CustomStyleHolder>,
+
+	/// The semantic map
+	pub semantics: Option<RefCell<HashMap<Rc<dyn Source>, Semantics>>>,
 }
 
 impl SharedState {
 	/// Construct a new empty shared state
-	pub(self) fn new(parser: &dyn Parser) -> Self {
+	pub(self) fn new(parser: &dyn Parser, enable_semantics: bool) -> Self {
 		let s = Self {
 			rule_state: RefCell::new(RuleStateHolder::default()),
 			kernels: RefCell::new(KernelHolder::default()),
 			styles: RefCell::new(StyleHolder::default()),
 			layouts: RefCell::new(LayoutHolder::default()),
 			custom_styles: RefCell::new(CustomStyleHolder::default()),
+			semantics: enable_semantics.then_some(RefCell::new(HashMap::new())),
 		};
 
 		// Register default kernel
@@ -128,7 +134,25 @@ impl<'a, 'b> ParserState<'a, 'b> {
 		let shared = if let Some(parent) = &parent {
 			parent.shared.clone()
 		} else {
-			Rc::new(SharedState::new(parser))
+			Rc::new(SharedState::new(parser, false))
+		};
+
+		Self {
+			parser,
+			parent,
+			matches: RefCell::new(matches),
+			shared,
+		}
+	}
+
+	/// Constructs a new state with semantics enabled
+	/// See [`ParserState::new`] for mote information
+	pub fn new_with_semantics(parser: &'a dyn Parser, parent: Option<&'a ParserState<'a, 'b>>) -> Self {
+		let matches = parser.rules().iter().map(|_| (0, None)).collect::<Vec<_>>();
+		let shared = if let Some(parent) = &parent {
+			parent.shared.clone()
+		} else {
+			Rc::new(SharedState::new(parser, true))
 		};
 
 		Self {

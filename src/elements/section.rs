@@ -20,6 +20,8 @@ use mlua::Lua;
 use regex::Regex;
 use section_style::SectionLinkPos;
 use section_style::SectionStyle;
+use std::cell::RefCell;
+use std::cell::RefMut;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -45,7 +47,12 @@ impl Element for Section {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 	fn element_name(&self) -> &'static str { "Section" }
-	fn compile(&self, compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		_document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				// Section numbering
@@ -321,6 +328,28 @@ impl RegexRule for SectionRule {
 			}),
 		);
 
+		//if let Some(sems) = state.shared.semantics.and_then(|sems| {
+		//	RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source())).ok()
+		//})
+		/*if let Some(sems) = state.shared.semantics
+			.as_ref()
+			.and_then(
+				|sems| sems
+					.borrow_mut()
+					.get_mut(&token.source())
+					.map(|v| v)
+				)
+		{
+		}*/
+		if let Some(mut sems) = state.shared.semantics.as_ref().map(|sems| {
+			RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
+				.ok()
+				.unwrap()
+		}) {
+			// Do something with mutable value_for_key
+			sems.add(matches.get(1).unwrap().range(), 0, 0);
+		}
+
 		result
 	}
 
@@ -330,7 +359,13 @@ impl RegexRule for SectionRule {
 		bindings.push((
 			"push".to_string(),
 			lua.create_function(
-				|_, (title, depth, kind, reference): (String, usize, Option<String>, Option<String>)| {
+				|_,
+				 (title, depth, kind, reference): (
+					String,
+					usize,
+					Option<String>,
+					Option<String>,
+				)| {
 					let kind = match kind.as_deref().unwrap_or("") {
 						"*+" | "+*" => section_kind::NO_NUMBER | section_kind::NO_TOC,
 						"*" => section_kind::NO_NUMBER,
@@ -341,7 +376,9 @@ impl RegexRule for SectionRule {
 								to: Some("push".to_string()),
 								pos: 3,
 								name: Some("kind".to_string()),
-								cause: Arc::new(mlua::Error::external("Unknown section kind specified".to_string())),
+								cause: Arc::new(mlua::Error::external(
+									"Unknown section kind specified".to_string(),
+								)),
 							})
 						}
 					};
@@ -503,7 +540,8 @@ nml.section.push("6", 6, "", "refname")
 		let state = ParserState::new(&parser, None);
 		let (_, state) = parser.parse(state, source, None);
 
-		let style = state.shared
+		let style = state
+			.shared
 			.styles
 			.borrow()
 			.current(section_style::STYLE_KEY)
@@ -511,6 +549,30 @@ nml.section.push("6", 6, "", "refname")
 			.unwrap();
 
 		assert_eq!(style.link_pos, SectionLinkPos::None);
-		assert_eq!(style.link, ["a".to_string(), "b".to_string(), "c".to_string()]);
+		assert_eq!(
+			style.link,
+			["a".to_string(), "b".to_string(), "c".to_string()]
+		);
+	}
+
+	#[test]
+	fn semantics()
+	{
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+# 1
+##+ 2
+###* 3
+####+* 4
+#####*+ 5
+######{refname} 6
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source, None);
+		println!("{:#?}", state.shared.semantics);
 	}
 }

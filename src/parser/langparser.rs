@@ -10,6 +10,7 @@ use super::parser::Parser;
 use super::parser::ParserState;
 use super::parser::ReportColors;
 use super::rule::Rule;
+use super::semantics::Semantics;
 use super::source::Cursor;
 use super::source::Source;
 use super::source::Token;
@@ -58,6 +59,16 @@ impl Parser for LangParser {
 		parent: Option<&'doc dyn Document<'doc>>,
 	) -> (Box<dyn Document<'doc> + 'doc>, ParserState<'p, 'a>) {
 		let doc = LangDocument::new(source.clone(), parent);
+
+		// Insert semantics into state
+		if let Some(semantics) = state.shared.semantics.as_ref()
+		{
+			let mut b = semantics.borrow_mut();
+			if !b.contains_key(&source)
+			{
+				b.insert(source.clone(), Semantics::new(source.clone()));
+			}
+		}
 
 		let content = source.content();
 		let mut cursor = Cursor::new(0usize, doc.source()); // Cursor in file

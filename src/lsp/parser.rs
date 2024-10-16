@@ -1,18 +1,17 @@
-use std::{cell::{Ref, RefCell, RefMut}, collections::HashMap, rc::Rc};
+use std::rc::Rc;
 
-use crate::{document::{customstyle::{CustomStyle, CustomStyleHolder}, document::Document, element::Element, layout::{LayoutHolder, LayoutType}, style::{ElementStyle, StyleHolder}}, lua::kernel::{Kernel, KernelHolder}, parser::{parser::{Parser, ReportColors}, rule::Rule, source::{Cursor, Source}, state::StateHolder}};
+use crate::parser::source::Cursor;
+use crate::parser::source::Source;
 
 #[derive(Debug, Clone)]
-pub struct LineCursor
-{
+pub struct LineCursor {
 	pub pos: usize,
 	pub line: usize,
 	pub line_pos: usize,
 	pub source: Rc<dyn Source>,
 }
 
-impl LineCursor
-{
+impl LineCursor {
 	/// Creates [`LineCursor`] at position
 	///
 	/// # Error
@@ -20,63 +19,54 @@ impl LineCursor
 	///
 	/// Note: this is a convenience function, it should be used
 	/// with parsimony as it is expensive
-	pub fn at(&mut self, pos: usize)
-	{
-		if pos > self.pos
-		{
+	pub fn at(&mut self, pos: usize) {
+		if pos > self.pos {
 			let start = self.pos;
-			//eprintln!("slice{{{}}}, want={pos}", &self.source.content().as_str()[start..pos]);
-			let mut it = self.source.content()
-				.as_str()[start..] // pos+1
+			eprintln!("slice{{{}}}, want={pos}", &self.source.content().as_str()[start..pos]);
+			let mut it = self.source.content().as_str()[start..] // pos+1
 				.chars()
 				.peekable();
 
-			let mut prev = self.source.content()
-					.as_str()[..start+1]
-					.chars()
-					.rev()
-					.next();
-			//eprintln!("prev={prev:#?}");
-			while self.pos < pos
-			{
+			let mut prev = self.source.content().as_str()[..start + 1]
+				.chars()
+				.rev()
+				.next();
+			eprintln!("prev={prev:#?}");
+			while self.pos < pos {
 				let c = it.next().unwrap();
 				let len = c.len_utf8();
 
-				self.pos += len;
-				if prev == Some('\n')
-				{
+				if self.pos != 0 && prev == Some('\n') {
 					self.line += 1;
 					self.line_pos = 0;
-				}
-				else
-				{
+				} else {
 					self.line_pos += len;
 				}
+				self.pos += len;
 
-				//eprintln!("({}, {c:#?}) ({} {})", self.pos, self.line, self.line_pos);
+				eprintln!("({}, {c:#?}, {} {}, {prev:#?})", self.pos, self.line, self.line_pos);
 				prev = Some(c);
 			}
-		}
-		else if pos < self.pos
-		{
+			if self.pos != 0 && prev == Some('\n') {
+				self.line += 1;
+				self.line_pos = 0;
+			}
+		} else if pos < self.pos {
 			todo!("");
-			self.source.content()
-				.as_str()[pos..self.pos]
+			self.source.content().as_str()[pos..self.pos]
 				.char_indices()
 				.rev()
 				.for_each(|(len, c)| {
 					self.pos -= len;
-					if c == '\n'
-					{
+					if c == '\n' {
 						self.line -= 1;
 					}
 				});
-			self.line_pos = self.source.content()
-				.as_str()[..self.pos]
+			self.line_pos = self.source.content().as_str()[..self.pos]
 				.char_indices()
 				.rev()
 				.find(|(_, c)| *c == '\n')
-				.map(|(line_start, _)| self.pos-line_start)
+				.map(|(line_start, _)| self.pos - line_start)
 				.unwrap_or(0);
 		}
 
@@ -85,12 +75,11 @@ impl LineCursor
 	}
 }
 
-impl From<&LineCursor> for Cursor
-{
-    fn from(value: &LineCursor) -> Self {
+impl From<&LineCursor> for Cursor {
+	fn from(value: &LineCursor) -> Self {
 		Self {
 			pos: value.pos,
-			source: value.source.clone()
+			source: value.source.clone(),
 		}
-    }
+	}
 }
