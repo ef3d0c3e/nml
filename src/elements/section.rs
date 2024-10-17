@@ -328,26 +328,21 @@ impl RegexRule for SectionRule {
 			}),
 		);
 
-		//if let Some(sems) = state.shared.semantics.and_then(|sems| {
-		//	RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source())).ok()
-		//})
-		/*if let Some(sems) = state.shared.semantics
-			.as_ref()
-			.and_then(
-				|sems| sems
-					.borrow_mut()
-					.get_mut(&token.source())
-					.map(|v| v)
-				)
-		{
-		}*/
 		if let Some(mut sems) = state.shared.semantics.as_ref().map(|sems| {
 			RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
 				.ok()
 				.unwrap()
 		}) {
-			// Do something with mutable value_for_key
-			sems.add(matches.get(1).unwrap().range(), 0, 0);
+			sems.add(token.source(), matches.get(1).unwrap().range(), 0, 0);
+			if let Some(reference) = matches.get(2)
+			{
+				sems.add(token.source(), reference.start()-1..reference.end()+1, 1, 0);
+			}
+			if let Some(kind) = matches.get(3)
+			{
+				sems.add(token.source(), kind.range(), 3, 0);
+			}
+			//sems.add(token.source(), matches.get(5).unwrap().range(), 2, 0);
 		}
 
 		result
@@ -561,12 +556,7 @@ nml.section.push("6", 6, "", "refname")
 		let source = Rc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"
-# 1
-##+ 2
-###* 3
-####+* 4
-#####*+ 5
-######{refname} 6
+#{か} test
 		"#
 			.to_string(),
 			None,

@@ -17,6 +17,7 @@ use lsp::semantic::semantic_token_from_document;
 use parser::langparser::LangParser;
 use parser::parser::Parser;
 use parser::parser::ParserState;
+use parser::semantics::Semantics;
 use parser::source::SourceFile;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -51,9 +52,14 @@ impl Backend {
 		let parser = LangParser::default();
 		let (doc, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
 
-		self.semantic_token_map
-			.insert(params.uri.to_string(),
-			state.shared.semantics.);
+		if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
+			std::cell::RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&(source as Rc<dyn parser::source::Source>)))
+				.ok()
+				.unwrap()
+		}) {
+			self.semantic_token_map
+				.insert(params.uri.to_string(), sems.tokens.to_owned());
+		};
 	}
 }
 

@@ -13,7 +13,7 @@ pub struct Semantics
 	cursor: LineCursor,
 
 	/// Semantic tokens
-	tokens: Vec<SemanticToken>,
+	pub tokens: Vec<SemanticToken>,
 }
 
 impl Semantics
@@ -26,23 +26,40 @@ impl Semantics
 		}
 	}
 
-	pub fn add(&mut self, range: Range<usize>, token_type: u32, token_modifier: u32)
+	pub fn add(&mut self, source: Rc<dyn Source>, range: Range<usize>, token_type: u32, token_modifier: u32)
 	{
-		let current = self.cursor.clone();
+		let mut current = self.cursor.clone();
 		self.cursor.move_to(range.start);
 
-		let delta_line = self.cursor.line - current.line;
-		let delta_start = if delta_line == 0
+		while self.cursor.pos != range.end
 		{
-			self.cursor.line_pos - current.line_pos
-		} else { self.cursor.line_pos };
+			let end = source.content()[self.cursor.pos..].find('\n')
+				.unwrap_or(source.content().len() - self.cursor.pos);
+			let len = usize::min(range.end - self.cursor.pos, end);
 
-		self.tokens.push(SemanticToken{
-			delta_line: delta_line as u32,
-			delta_start: delta_start as u32,
-			length: 10,
-			token_type,
-			token_modifiers_bitset: token_modifier,
-		});
+			let delta_line = self.cursor.line - current.line;
+			let delta_start = if delta_line == 0
+			{
+				if let Some(last) = self.tokens.last()
+				{
+					self.cursor.line_pos - current.line_pos + last.length as usize
+				}
+				else
+				{
+					self.cursor.line_pos - current.line_pos
+				}
+			} else { self.cursor.line_pos };
+
+			eprintln!("CURRENT={:#?}, CURS={:#?}", current, self.cursor);
+			self.tokens.push(SemanticToken{
+				delta_line: delta_line as u32,
+				delta_start: delta_start as u32,
+				length: len as u32,
+				token_type,
+				token_modifiers_bitset: token_modifier,
+			});
+			current = self.cursor.clone();
+			self.cursor.move_to(self.cursor.pos + len);
+		}
 	}
 }
