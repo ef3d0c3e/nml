@@ -455,7 +455,7 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::validate_document;
+	use crate::{validate_document, validate_semantics};
 
 	use super::*;
 
@@ -555,13 +555,29 @@ nml.section.push("6", 6, "", "refname")
 		let source = Rc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"
-#{か} test
+# First section
+##{か}+ test
+#{refname}*+ Another section
 		"#
 			.to_string(),
 			None,
 		));
 		let parser = LangParser::default();
-		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source, None);
-		println!("{:#?}", state.shared.semantics);
+		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+
+		validate_semantics!(state, source.clone(), 0,
+			section_heading { delta_line == 1, delta_start == 0, length == 1 };
+			section_name { delta_line == 0, delta_start == 1 };
+
+			section_heading { delta_line == 1, delta_start == 0, length == 2 };
+			section_reference { delta_line == 0, delta_start == 2, length == 3 };
+			section_kind { delta_line == 0, delta_start == 3, length == 1 };
+			section_name { delta_line == 0, delta_start == 1 };
+
+			section_heading { delta_line == 1, delta_start == 0, length == 1 };
+			section_reference { delta_line == 0, delta_start == 1, length == 9 };
+			section_kind { delta_line == 0, delta_start == 9, length == 2 };
+			section_name { delta_line == 0, delta_start == 2 };
+			);
 	}
 }

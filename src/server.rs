@@ -9,7 +9,6 @@ mod parser;
 use std::rc::Rc;
 
 use dashmap::DashMap;
-use lsp::semantic::Tokens;
 use parser::langparser::LangParser;
 use parser::parser::Parser;
 use parser::parser::ParserState;
@@ -25,8 +24,6 @@ use tower_lsp::Server;
 struct Backend {
 	client: Client,
 	document_map: DashMap<String, String>,
-	//ast_map: DashMap<String, Vec<Box<dyn Element>>>,
-	//variables: DashMap<String, HashMap<String, Arc<dyn Variable + Send + Sync + 'static>>>,
 	semantic_token_map: DashMap<String, Vec<SemanticToken>>,
 }
 

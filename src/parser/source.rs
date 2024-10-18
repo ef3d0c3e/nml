@@ -5,7 +5,6 @@ use std::rc::Rc;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
-use unicode_width::UnicodeWidthChar;
 
 /// Trait for source content
 pub trait Source: Downcast {
@@ -153,9 +152,13 @@ impl Clone for Cursor {
 /// Cursor type used for the language server
 #[derive(Debug, Clone)]
 pub struct LineCursor {
+	/// Byte position in the source
 	pub pos: usize,
+	/// Line number
 	pub line: usize,
+	/// Position in the line
 	pub line_pos: usize,
+	/// Source
 	pub source: Rc<dyn Source>,
 }
 
@@ -171,14 +174,13 @@ impl LineCursor {
 		}
 	}
 
-	/// Moves [`LineCursor`] to absolute position
+	/// Moves [`LineCursor`] to an absolute byte position
 	///
 	/// # Error
 	/// This function will panic if [`pos`] is not utf8 aligned
 	pub fn move_to(&mut self, pos: usize) {
 		if self.pos < pos {
 			let start = self.pos;
-			//eprintln!("slice{{{}}}, want={pos}", &self.source.content().as_str()[start..pos]);
 			let mut it = self.source.content().as_str()[start..] // pos+1
 				.chars()
 				.peekable();
@@ -187,7 +189,6 @@ impl LineCursor {
 				.chars()
 				.rev()
 				.next();
-			//eprintln!("prev={prev:#?}");
 			while self.pos < pos {
 				let c = it.next().unwrap();
 				let len = c.len_utf8();
@@ -196,10 +197,8 @@ impl LineCursor {
 					self.line += 1;
 					self.line_pos = 0;
 				}	
-				self.line_pos += c.width().unwrap_or(1);
+				self.line_pos += 1;
 				self.pos += len;
-
-				//eprintln!("({}, {c:#?}, {} {}, {})", self.pos, self.line, self.line_pos, prev.unwrap_or(' '));
 				prev = Some(c);
 			}
 			if self.pos != 0 && prev == Some('\n') {

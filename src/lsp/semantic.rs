@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
@@ -143,6 +142,9 @@ impl Semantics {
 				.find('\n')
 				.unwrap_or(source.content().len() - cursor.pos);
 			let len = usize::min(range.end - cursor.pos, end);
+			let clen = source.content()[cursor.pos..cursor.pos+len]
+				.chars()
+				.fold(0, |clen, _| clen + 1);
 
 			let delta_line = cursor.line - current.line;
 			let delta_start = if delta_line == 0 {
@@ -159,7 +161,7 @@ impl Semantics {
 			tokens.push(SemanticToken {
 				delta_line: delta_line as u32,
 				delta_start: delta_start as u32,
-				length: len as u32,
+				length: clen as u32,
 				token_type: token.0,
 				token_modifiers_bitset: token.1
 			});
@@ -167,5 +169,74 @@ impl Semantics {
 			let pos = cursor.pos;
 			cursor.move_to(pos + len);
 		}
+	}
+}
+
+#[cfg(test)]
+pub mod tests {
+	#[macro_export]
+	macro_rules! validate_semantics {
+		($state:expr, $source:expr, $idx:expr,) => {};
+		($state:expr, $source:expr, $idx:expr, $token_name:ident { $($field:ident == $value:expr),* }; $($tail:tt)*) => {{
+			let token = $state.shared.semantics
+				.as_ref()
+				.unwrap()
+				.borrow()
+				.get(&($source as Rc<dyn Source>))
+				.unwrap()
+				.tokens
+				.borrow()
+				[$idx];
+			let token_type = $state.shared.semantics
+				.as_ref()
+				.unwrap()
+				.borrow()
+				.get(&($source as Rc<dyn Source>))
+				.unwrap()
+				.token
+				.$token_name;
+
+
+			let found_token = (token.token_type, token.token_modifiers_bitset);
+			assert!(found_token == token_type, "Invalid token at index {}, expected {}{token_type:#?}, got: {found_token:#?}",
+				$idx, stringify!($token_name));
+
+			$(
+				let val = &token.$field;
+				assert!(*val == $value, "Invalid field {} at index {}, expected {:#?}, found {:#?}",
+					stringify!($field),
+					$idx,
+					$value,
+					val);
+			)*
+
+			validate_semantics!($state, $source, ($idx+1), $($tail)*);
+		}};
+		($state:expr, $source:expr, $idx:expr, $token_name:ident; $($tail:tt)*) => {{
+			let token = $state.shared.semantics
+				.as_ref()
+				.unwrap()
+				.borrow()
+				.get(&($source as Rc<dyn Source>))
+				.unwrap()
+				.tokens
+				.borrow()
+				[$idx];
+			let token_type = $state.shared.semantics
+				.as_ref()
+				.unwrap()
+				.borrow()
+				.get(&($source as Rc<dyn Source>))
+				.unwrap()
+				.token
+				.$token_name;
+
+
+			let found_token = (token.token_type, token.token_modifiers_bitset);
+			assert!(found_token == token_type, "Invalid token at index {}, expected {}{token_type:#?}, got: {found_token:#?}",
+				$idx, stringify!($token_name));
+
+			validate_semantics!($state, $source, ($idx+1), $($tail)*);
+		}};
 	}
 }
