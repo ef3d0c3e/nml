@@ -4,6 +4,7 @@ mod document;
 mod elements;
 mod lua;
 mod parser;
+mod lsp;
 
 use std::env;
 use std::io::BufWriter;

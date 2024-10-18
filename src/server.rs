@@ -6,18 +6,13 @@ mod lsp;
 mod lua;
 mod parser;
 
-use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use dashmap::DashMap;
-use document::document::Document;
-use document::element::Element;
-use lsp::semantic::semantic_token_from_document;
+use lsp::semantic::Tokens;
 use parser::langparser::LangParser;
 use parser::parser::Parser;
 use parser::parser::ParserState;
-use parser::semantics::Semantics;
 use parser::source::SourceFile;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -58,14 +53,14 @@ impl Backend {
 				.unwrap()
 		}) {
 			self.semantic_token_map
-				.insert(params.uri.to_string(), sems.tokens.to_owned());
+				.insert(params.uri.to_string(), sems.tokens.borrow().to_owned());
 		};
 	}
 }
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-	async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+	async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
 		Ok(InitializeResult {
 			server_info: None,
 			capabilities: ServerCapabilities {
@@ -85,17 +80,17 @@ impl LanguageServer for Backend {
 							text_document_registration_options: {
 								TextDocumentRegistrationOptions {
 									document_selector: Some(vec![DocumentFilter {
-										language: Some("nml".to_string()),
-										scheme: Some("file".to_string()),
-										pattern: None,
+										language: Some("nml".into()),
+										scheme: Some("file".into()),
+										pattern: Some("*.nml".into()),
 									}]),
 								}
 							},
 							semantic_tokens_options: SemanticTokensOptions {
 								work_done_progress_options: WorkDoneProgressOptions::default(),
 								legend: SemanticTokensLegend {
-									token_types: lsp::semantic::LEGEND_TYPE.into(),
-									token_modifiers: vec![],
+									token_types: lsp::semantic::TOKEN_TYPE.into(),
+									token_modifiers: lsp::semantic::TOKEN_MODIFIERS.into(),
 								},
 								range: None, //Some(true),
 								full: Some(SemanticTokensFullOptions::Bool(true)),

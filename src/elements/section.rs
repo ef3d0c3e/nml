@@ -20,7 +20,6 @@ use mlua::Lua;
 use regex::Regex;
 use section_style::SectionLinkPos;
 use section_style::SectionStyle;
-use std::cell::RefCell;
 use std::cell::RefMut;
 use std::ops::Range;
 use std::rc::Rc;
@@ -333,16 +332,16 @@ impl RegexRule for SectionRule {
 				.ok()
 				.unwrap()
 		}) {
-			sems.add(token.source(), matches.get(1).unwrap().range(), 0, 0);
+			sems.add(token.source(), matches.get(1).unwrap().range(), sems.token.section_heading);
 			if let Some(reference) = matches.get(2)
 			{
-				sems.add(token.source(), reference.start()-1..reference.end()+1, 1, 0);
+				sems.add(token.source(), reference.start()-1..reference.end()+1, sems.token.section_reference);
 			}
 			if let Some(kind) = matches.get(3)
 			{
-				sems.add(token.source(), kind.range(), 3, 0);
+				sems.add(token.source(), kind.range(), sems.token.section_kind);
 			}
-			//sems.add(token.source(), matches.get(5).unwrap().range(), 2, 0);
+			sems.add(token.source(), matches.get(5).unwrap().range(), sems.token.section_name);
 		}
 
 		result

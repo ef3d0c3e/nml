@@ -199,7 +199,7 @@ impl LineCursor {
 				self.line_pos += c.width().unwrap_or(1);
 				self.pos += len;
 
-				eprintln!("({}, {c:#?}, {} {}, {})", self.pos, self.line, self.line_pos, prev.unwrap_or(' '));
+				//eprintln!("({}, {c:#?}, {} {}, {})", self.pos, self.line, self.line_pos, prev.unwrap_or(' '));
 				prev = Some(c);
 			}
 			if self.pos != 0 && prev == Some('\n') {

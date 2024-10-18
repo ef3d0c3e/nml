@@ -5,12 +5,12 @@ use crate::document::document::Document;
 use crate::document::element::DocumentEnd;
 use crate::document::langdocument::LangDocument;
 use crate::elements::text::Text;
+use crate::lsp::semantic::Semantics;
 
 use super::parser::Parser;
 use super::parser::ParserState;
 use super::parser::ReportColors;
 use super::rule::Rule;
-use super::semantics::Semantics;
 use super::source::Cursor;
 use super::source::Source;
 use super::source::Token;

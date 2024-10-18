@@ -1,130 +1,171 @@
 use std::any::Any;
+use std::cell::RefCell;
+use std::ops::Range;
+use std::rc::Rc;
 
 use tower_lsp::lsp_types::SemanticToken;
+use tower_lsp::lsp_types::SemanticTokenModifier;
 use tower_lsp::lsp_types::SemanticTokenType;
 
-use crate::document::document::Document;
-use crate::document::element::Element;
-use crate::elements::comment::Comment;
-use crate::elements::paragraph::Paragraph;
-use crate::elements::section::Section;
-use crate::parser::rule::Rule;
+use crate::parser::source::LineCursor;
+use crate::parser::source::Source;
 
-use super::parser::LineCursor;
 
-pub trait SemanticProvider: Rule {
-	fn get_semantic_tokens(
-		&self,
-		cursor: &LineCursor,
-		match_data: Box<dyn Any>,
-	) -> Vec<SemanticToken>;
-}
-
-pub mod nml_semantic {
-    use tower_lsp::lsp_types::SemanticTokenType;
-
-    pub const SECTION_HEADING: SemanticTokenType = SemanticTokenType::new("type");
-    pub const SECTION_NAME: SemanticTokenType = SemanticTokenType::new("string");
-    pub const REFERENCE: SemanticTokenType = SemanticTokenType::new("event");
-}
-
-pub const LEGEND_TYPE: &[SemanticTokenType] = &[
-	SemanticTokenType::COMMENT,
-	SemanticTokenType::VARIABLE,
-	SemanticTokenType::STRING,
-	SemanticTokenType::PARAMETER,
+pub const TOKEN_TYPE: &[SemanticTokenType] = &[
+    SemanticTokenType::NAMESPACE,
+    SemanticTokenType::TYPE,
+    SemanticTokenType::CLASS,
+    SemanticTokenType::ENUM,
+    SemanticTokenType::INTERFACE,
+    SemanticTokenType::STRUCT,
+    SemanticTokenType::TYPE_PARAMETER,
+    SemanticTokenType::PARAMETER,
+    SemanticTokenType::VARIABLE,
+    SemanticTokenType::PROPERTY,
+    SemanticTokenType::ENUM_MEMBER,
+    SemanticTokenType::EVENT,
+    SemanticTokenType::FUNCTION,
+    SemanticTokenType::METHOD,
+    SemanticTokenType::MACRO,
+    SemanticTokenType::KEYWORD,
+    SemanticTokenType::MODIFIER,
+    SemanticTokenType::COMMENT,
+    SemanticTokenType::STRING,
+    SemanticTokenType::NUMBER,
+    SemanticTokenType::REGEXP,
+    SemanticTokenType::OPERATOR,
+    SemanticTokenType::DECORATOR,
 ];
 
-// TODO...
-pub fn provide(
-	semantic_tokens: &mut Vec<SemanticToken>,
-	cursor: &mut LineCursor,
-	elem: &Box<dyn Element>,
-) {
-	if cursor.source != elem.location().source() {
-		return;
-	}
+pub const TOKEN_MODIFIERS: &[SemanticTokenModifier] = &[
+    SemanticTokenModifier::DECLARATION,
+    SemanticTokenModifier::DEFINITION,
+    SemanticTokenModifier::READONLY,
+    SemanticTokenModifier::STATIC,
+    SemanticTokenModifier::DEPRECATED,
+    SemanticTokenModifier::ABSTRACT,
+    SemanticTokenModifier::ASYNC,
+    SemanticTokenModifier::MODIFICATION,
+    SemanticTokenModifier::DOCUMENTATION,
+    SemanticTokenModifier::DEFAULT_LIBRARY,
+];
 
-	let prev = cursor.clone();
+fn token_index(name: &str) -> u32
+{
+	TOKEN_TYPE.iter()
+		.enumerate()
+		.find(|(_, token)| token.as_str() == name)
+		.map(|(index, _)| index as u32)
+		.unwrap_or(0)
+}
+fn modifier_index(name: &str) -> u32
+{
+	TOKEN_MODIFIERS.iter()
+		.enumerate()
+		.find(|(_, token)| token.as_str() == name)
+		.map(|(index, _)| index as u32)
+		.unwrap_or(0)
+}
+macro_rules! token {
+	($key:expr) => {
+		{
+			(token_index($key), 0)
+		}
+	};
+	($key:expr, $($mods:tt)*) => {
+		{
+			let mut bitset : u32 = 0;
+			$(
+				bitset |= 1 << modifier_index($mods);
+			)*
+				(token_index($key), bitset)
+		}
+	};
+}
 
-	/*if let Some(comm) = elem.downcast_ref::<Comment>() {
-		cursor.at(elem.location().start());
-		let delta_start = if cursor.line == prev.line {
-			cursor.line_pos - prev.line_pos
-		} else if cursor.line == 0 {
-			cursor.line_pos
-		} else {
-			cursor.line_pos + 1
-		};
-		semantic_tokens.push(SemanticToken {
-			delta_line: (cursor.line - prev.line) as u32,
-			delta_start: delta_start as u32,
-			length: (elem.location().end() - elem.location().start()) as u32,
-			token_type: 0,
-			token_modifiers_bitset: 0,
-		});
-	} else */if let Some(sect) = elem.downcast_ref::<Section>() {
-		cursor.at(elem.location().start() + 1);
-		eprintln!("section {cursor:#?}");
-		let delta_start = if cursor.line == prev.line {
-			cursor.line_pos - prev.line_pos
-		} else if cursor.line == 0 {
-			cursor.line_pos
-		} else {
-			0
-		};
-		semantic_tokens.push(SemanticToken {
-			delta_line: (cursor.line - prev.line) as u32,
-			delta_start: delta_start as u32,
-			length: (elem.location().end() - elem.location().start()) as u32,
-			token_type: 0,
-			token_modifiers_bitset: 0,
-		});
+#[derive(Debug)]
+pub struct Tokens
+{
+	pub section_heading: (u32, u32),
+	pub section_reference: (u32, u32),
+	pub section_kind: (u32, u32),
+	pub section_name: (u32, u32),
+}
+
+impl Tokens
+{
+	pub fn new() -> Self
+	{
+		Self {
+			section_heading : token!("number"),
+			section_reference : token!("enum", "async"),
+			section_kind : token!("enum"),
+			section_name : token!("string"),
+		}
 	}
 }
 
-pub fn semantic_token_from_document(document: &dyn Document) -> Vec<SemanticToken> {
-	let mut semantic_tokens = vec![];
+/// Semantics for a buffer
+#[derive(Debug)]
+pub struct Semantics {
+	/// The tokens
+	pub token: Tokens,
 
-	let source = document.source();
-	let mut cursor = LineCursor {
-		pos: 0,
-		line: 0,
-		line_pos: 0,
-		source: source.clone(),
-	};
-/*
-	semantic_tokens.push(SemanticToken {
-		delta_line: 2,
-		delta_start: 1,
-		length: 5,
-		token_type: 0,
-		token_modifiers_bitset: 0,
-	});
+	/// The current cursor
+	cursor: RefCell<LineCursor>,
 
-	semantic_tokens.push(SemanticToken {
-		delta_line: 1,
-		delta_start: 1,
-		length: 5,
-		token_type: 1,
-		token_modifiers_bitset: 0,
-	});*/
+	/// Semantic tokens
+	pub tokens: RefCell<Vec<SemanticToken>>,
+}
 
-	document.content().borrow()
-		.iter()
-		.for_each(|elem| {
-			if let Some(container) = elem.as_container()
-			{
-				container
-					.contained()
-					.iter()
-					.for_each(|elem| provide(&mut semantic_tokens, &mut cursor, elem));
-			}
-			else
-			{
-				provide(&mut semantic_tokens, &mut cursor, elem);
-			}
-		});
+impl Semantics {
+	pub fn new(source: Rc<dyn Source>) -> Semantics {
+		Self {
+			token: Tokens::new(),
+			cursor: RefCell::new(LineCursor::new(source)),
+			tokens: RefCell::new(vec![]),
+		}
+	}
 
-	semantic_tokens
+	pub fn add(
+		&self,
+		source: Rc<dyn Source>,
+		range: Range<usize>,
+		token: (u32, u32)
+	) {
+		let mut tokens = self.tokens.borrow_mut();
+		let mut cursor = self.cursor.borrow_mut();
+		let mut current = cursor.clone();
+		cursor.move_to(range.start);
+
+		while cursor.pos != range.end {
+			let end = source.content()[cursor.pos..]
+				.find('\n')
+				.unwrap_or(source.content().len() - cursor.pos);
+			let len = usize::min(range.end - cursor.pos, end);
+
+			let delta_line = cursor.line - current.line;
+			let delta_start = if delta_line == 0 {
+				if let Some(last) = tokens.last() {
+					cursor.line_pos - current.line_pos + last.length as usize
+				} else {
+					cursor.line_pos - current.line_pos
+				}
+			} else {
+				cursor.line_pos
+			};
+
+			//eprintln!("CURRENT={:#?}, CURS={:#?}", current, cursor);
+			tokens.push(SemanticToken {
+				delta_line: delta_line as u32,
+				delta_start: delta_start as u32,
+				length: len as u32,
+				token_type: token.0,
+				token_modifiers_bitset: token.1
+			});
+			current = cursor.clone();
+			let pos = cursor.pos;
+			cursor.move_to(pos + len);
+		}
+	}
 }
