@@ -38,7 +38,12 @@ impl Element for Link {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Link" }
-	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		cursor: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				let mut result = format!(
@@ -47,7 +52,9 @@ impl Element for Link {
 				);
 
 				for elem in &self.display {
-					result += elem.compile(compiler, document, cursor+result.len())?.as_str();
+					result += elem
+						.compile(compiler, document, cursor + result.len())?
+						.as_str();
 				}
 
 				result += "</a>";
@@ -135,9 +142,13 @@ impl RegexRule for LinkRule {
 					return reports;
 				}
 
-				if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+				if let Some((sems, tokens)) =
+					Semantics::from_source(token.source(), &state.shared.semantics)
 				{
-					sems.add(display.range().start-1..display.range().start, tokens.link_display_sep);
+					sems.add(
+						display.range().start - 1..display.range().start,
+						tokens.link_display_sep,
+					);
 				}
 				let source = Rc::new(VirtualSource::new(
 					Token::new(display.range(), token.source()),
@@ -212,20 +223,18 @@ impl RegexRule for LinkRule {
 			}),
 		);
 
-		//if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
-		//	RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
-		//		.ok()
-		//		.unwrap()
-		//}) {
-		//	let name = matches.get(1).unwrap().range();
-		//	sems.add(token.source(), name.start-1..name.start, sems.token.link_name_sep);
-		//	sems.add(token.source(), name.clone(), sems.token.link_name);
-		//	sems.add(token.source(), name.end..name.end+1, sems.token.link_name_sep);
-		//	let url = matches.get(2).unwrap().range();
-		//	sems.add(token.source(), url.start-1..url.start, sems.token.link_url_sep);
-		//	sems.add(token.source(), url.clone(), sems.token.link_url);
-		//	sems.add(token.source(), url.end..url.end+1, sems.token.link_url_sep);
-		//}
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
+		{
+			sems.add(
+				matches.get(1).unwrap().end()..matches.get(1).unwrap().end() + 1,
+				tokens.link_display_sep,
+			);
+			let url = matches.get(2).unwrap().range();
+			sems.add(url.start - 1..url.start, tokens.link_url_sep);
+			sems.add(url.clone(), tokens.link_url);
+			sems.add(url.end..url.end + 1, tokens.link_url_sep);
+		}
 
 		reports
 	}
@@ -257,9 +266,7 @@ impl RegexRule for LinkRule {
 									});
 									return;
 								}
-								Ok(mut paragraph) => {
-									std::mem::take(&mut paragraph.content)
-								}
+								Ok(mut paragraph) => std::mem::take(&mut paragraph.content),
 							};
 
 						ctx.state.push(
@@ -290,7 +297,8 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::{validate_document, validate_semantics};
+	use crate::validate_document;
+	use crate::validate_semantics;
 
 	use super::*;
 
@@ -353,8 +361,7 @@ nml.link.push("**BOLD link**", "another url")
 	}
 
 	#[test]
-	fn semantics()
-	{
+	fn semantics() {
 		let source = Rc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"
@@ -364,29 +371,20 @@ nml.link.push("**BOLD link**", "another url")
 			None,
 		));
 		let parser = LangParser::default();
-		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
-
-		println!("{:#?}", state.shared.semantics);
-		/*
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-[link](url)
-		"#
-			.to_string(),
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
 			None,
-		));
-		let parser = LangParser::default();
-		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+		);
 
 		validate_semantics!(state, source.clone(), 0,
-			link_name_sep { delta_line == 1, delta_start == 0, length == 1 };
-			link_name { delta_line == 0, delta_start == 1, length == 4 };
-			link_name_sep { delta_line == 0, delta_start == 4, length == 1 };
-			link_url_sep { delta_line == 0, delta_start == 1, length == 1 };
-			link_url { delta_line == 0, delta_start == 1, length == 3 };
-			link_url_sep { delta_line == 0, delta_start == 3, length == 1 };
-			);
-		*/
+		link_display_sep { delta_line == 1, delta_start == 0, length == 1 };
+		style_marker { delta_line == 0, delta_start == 3, length == 2 };
+		style_marker { delta_line == 0, delta_start == 3, length == 2 };
+		link_display_sep { delta_line == 0, delta_start == 3, length == 1 };
+		link_url_sep { delta_line == 0, delta_start == 1, length == 1 };
+		link_url { delta_line == 0, delta_start == 1, length == 3 };
+		link_url_sep { delta_line == 0, delta_start == 3, length == 1 };
+		);
 	}
 }

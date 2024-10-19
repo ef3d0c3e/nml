@@ -21,6 +21,7 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::references::validate_refname;
+use crate::lsp::semantic::Semantics;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -311,7 +312,7 @@ impl RegexRule for ReferenceRule {
 				.downcast_rc::<reference_style::ExternalReferenceStyle>()
 				.unwrap();
 
-			// §{#refname}
+			// &{#refname}
 			if refdoc.is_empty() {
 				state.push(
 					document,
@@ -322,7 +323,7 @@ impl RegexRule for ReferenceRule {
 						style,
 					}),
 				);
-			// §{docname#refname}
+			// &{docname#refname}
 			} else {
 				state.push(
 					document,
@@ -335,25 +336,26 @@ impl RegexRule for ReferenceRule {
 				);
 			}
 
-			/*
-			if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
-				RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
-					.ok()
-					.unwrap()
-			}) {
+			if let Some((sems, tokens)) =
+				Semantics::from_source(token.source(), &state.shared.semantics)
+			{
 				let link = matches.get(1).unwrap().range();
-				sems.add(token.source(), link.start-2..link.start-1, sems.token.reference_operator);
-				sems.add(token.source(), link.start-1..link.start, sems.token.reference_link_sep);
+				sems.add(link.start - 2..link.start - 1, tokens.reference_operator);
+				sems.add(link.start - 1..link.start, tokens.reference_link_sep);
 
-				if !refdoc.is_empty()
-				{
-					sems.add(token.source(), link.start.. refdoc.len()+link.start, sems.token.reference_doc);
+				if !refdoc.is_empty() {
+					sems.add(link.start..refdoc.len() + link.start, tokens.reference_doc);
 				}
-				sems.add(token.source(), refdoc.len()+link.start.. refdoc.len()+link.start+1, sems.token.reference_doc_sep);
-				sems.add(token.source(), refdoc.len()+link.start+1..link.end, sems.token.reference_link);
-				sems.add(token.source(), link.end..link.end+1, sems.token.reference_link_sep);
+				sems.add(
+					refdoc.len() + link.start..refdoc.len() + link.start + 1,
+					tokens.reference_doc_sep,
+				);
+				sems.add(
+					refdoc.len() + link.start + 1..link.end,
+					tokens.reference_link,
+				);
+				sems.add(link.end..link.end + 1, tokens.reference_link_sep);
 			}
-			*/
 		} else {
 			state.push(
 				document,
@@ -363,35 +365,26 @@ impl RegexRule for ReferenceRule {
 					caption,
 				}),
 			);
-			/*
-			if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
-				RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
-					.ok()
-					.unwrap()
-			}) {
+
+			if let Some((sems, tokens)) =
+				Semantics::from_source(token.source(), &state.shared.semantics)
+			{
 				let link = matches.get(1).unwrap().range();
-				sems.add(token.source(), link.start-2..link.start-1, sems.token.reference_operator);
-				sems.add(token.source(), link.start-1..link.start, sems.token.reference_link_sep);
-				sems.add(token.source(), link.clone(), sems.token.reference_link);
-				sems.add(token.source(), link.end..link.end+1, sems.token.reference_link_sep);
+				sems.add(link.start - 2..link.start - 1, tokens.reference_operator);
+				sems.add(link.start - 1..link.start, tokens.reference_link_sep);
+				sems.add(link.clone(), tokens.reference_link);
+				sems.add(link.end..link.end + 1, tokens.reference_link_sep);
 			}
-			*/
 		}
 
-		/*
-		if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
-			RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
-				.ok()
-				.unwrap()
-		}) {
-			if let Some(props) = matches.get(2).map(|m| m.range())
-			{
-				sems.add(token.source(), props.start-1..props.start, sems.token.reference_props_sep);
-				sems.add(token.source(), props.clone(), sems.token.reference_props);
-				sems.add(token.source(), props.end..props.end+1, sems.token.reference_props_sep);
-			}
+		if let (Some((sems, tokens)), Some(props)) = (
+			Semantics::from_source(token.source(), &state.shared.semantics),
+			matches.get(2).map(|m| m.range()),
+		) {
+			sems.add(props.start - 1..props.start, tokens.reference_props_sep);
+			sems.add(props.clone(), tokens.reference_props);
+			sems.add(props.end..props.end + 1, tokens.reference_props_sep);
 		}
-		*/
 
 		reports
 	}
@@ -446,9 +439,9 @@ mod tests {
 			r#"
 #{ref} Referenceable section
 
-§{ref}[caption=Section]
-§{ref}[caption=Another]
-§{ref2}[caption=Before]
+&{ref}[caption=Section]
+&{ref}[caption=Another]
+&{ref2}[caption=Before]
 
 #{ref2} Another section
 "#
@@ -475,9 +468,9 @@ mod tests {
 		let source = Rc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"
-§{DocA#ref}[caption=Section]
-§{DocB#ref}
-§{#ref}[caption='ref' from any document]
+&{DocA#ref}[caption=Section]
+&{DocB#ref}
+&{#ref}[caption='ref' from any document]
 "#
 			.to_string(),
 			None,
@@ -510,8 +503,8 @@ mod tests {
 @html.page_title = 1
 @compiler.output = b.html
 
-§{#ref}
-§{a#ref}
+&{#ref}
+&{a#ref}
 #{ref2} Another Referenceable section
 "#
 				.into(),
@@ -523,10 +516,10 @@ mod tests {
 	"format_specific": "[SPECIFIC {refdoc}:{refname}]"
 }
 
-§{#ref}[caption=from 0]
-§{#ref}
-§{#ref2}[caption=from 1]
-§{b#ref2}
+&{#ref}[caption=from 0]
+&{#ref}
+&{#ref2}[caption=from 1]
+&{b#ref2}
 "#
 				.into(),
 			],

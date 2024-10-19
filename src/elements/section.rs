@@ -552,7 +552,9 @@ nml.section.push("6", 6, "", "refname")
 		let source = Rc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"
-#{📫} test
+# First section
+##{📫}+ test
+#{refname}*+ Another section
 		"#
 			.to_string(),
 			None,
@@ -560,7 +562,6 @@ nml.section.push("6", 6, "", "refname")
 		let parser = LangParser::default();
 		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
 
-		println!("{:#?}", state.shared.semantics);
 		validate_semantics!(state, source.clone(), 0,
 			section_heading { delta_line == 1, delta_start == 0, length == 1 };
 			section_name { delta_line == 0, delta_start == 1 };

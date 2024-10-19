@@ -26,7 +26,12 @@ impl Element for Comment {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Invisible }
 	fn element_name(&self) -> &'static str { "Comment" }
-	fn compile(&self, _compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		_compiler: &Compiler,
+		_document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		Ok("".to_string())
 	}
 }
@@ -90,10 +95,11 @@ impl RegexRule for CommentRule {
 			}),
 		);
 
-		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
 		{
 			let comment = matches.get(1).unwrap().range();
-			sems.add(comment.start-2..comment.end, tokens.comment);
+			sems.add(comment.start - 2..comment.end, tokens.comment);
 		}
 
 		reports
@@ -108,7 +114,8 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::{validate_document, validate_semantics};
+	use crate::validate_document;
+	use crate::validate_semantics;
 
 	use super::*;
 
@@ -137,20 +144,23 @@ COMMENT ::Test
 	}
 
 	#[test]
-	fn semantic()
-	{
+	fn semantic() {
 		let source = Rc::new(SourceFile::with_content(
-				"".to_string(),
-				r#"
+			"".to_string(),
+			r#"
 ::Test
  ::Another
 	:: Another
 		"#
-		.to_string(),
-		None,
+			.to_string(),
+			None,
 		));
 		let parser = LangParser::default();
-		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+		);
 
 		validate_semantics!(state, source.clone(), 0,
 		comment { delta_line == 1, delta_start == 0, length == 6 };

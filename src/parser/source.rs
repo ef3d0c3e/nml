@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use unicode_width::UnicodeWidthChar;
 
 /// Trait for source content
 pub trait Source: Downcast + Debug {
@@ -24,17 +25,13 @@ impl core::fmt::Display for dyn Source {
 }
 
 impl std::cmp::PartialEq for dyn Source {
-	fn eq(&self, other: &Self) -> bool {
-		self.name() == other.name()
-	}
+	fn eq(&self, other: &Self) -> bool { self.name() == other.name() }
 }
 
 impl std::cmp::Eq for dyn Source {}
 
 impl std::hash::Hash for dyn Source {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.name().hash(state)
-	}
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) { self.name().hash(state) }
 }
 
 #[derive(Debug)]
@@ -48,12 +45,7 @@ impl SourceFile {
 	// TODO: Create a SourceFileRegistry holding already loaded files to avoid reloading them
 	pub fn new(path: String, location: Option<Token>) -> Result<Self, String> {
 		match fs::read_to_string(&path) {
-			Err(_) => {
-				Err(format!(
-					"Unable to read file content: `{}`",
-					path
-				))
-			}
+			Err(_) => Err(format!("Unable to read file content: `{}`", path)),
 			Ok(content) => Ok(Self {
 				location,
 				path,
@@ -70,22 +62,13 @@ impl SourceFile {
 		}
 	}
 
-	pub fn path(&self) -> &String
-	{
-		&self.path
-	}
+	pub fn path(&self) -> &String { &self.path }
 }
 
 impl Source for SourceFile {
-	fn location(&self) -> Option<&Token> {
-		self.location.as_ref()
-	}
-	fn name(&self) -> &String {
-		&self.path
-	}
-	fn content(&self) -> &String {
-		&self.content
-	}
+	fn location(&self) -> Option<&Token> { self.location.as_ref() }
+	fn name(&self) -> &String { &self.path }
+	fn content(&self) -> &String { &self.content }
 }
 
 #[derive(Debug)]
@@ -106,15 +89,9 @@ impl VirtualSource {
 }
 
 impl Source for VirtualSource {
-	fn location(&self) -> Option<&Token> {
-		Some(&self.location)
-	}
-	fn name(&self) -> &String {
-		&self.name
-	}
-	fn content(&self) -> &String {
-		&self.content
-	}
+	fn location(&self) -> Option<&Token> { Some(&self.location) }
+	fn name(&self) -> &String { &self.name }
+	fn content(&self) -> &String { &self.content }
 }
 
 #[derive(Debug)]
@@ -124,9 +101,7 @@ pub struct Cursor {
 }
 
 impl Cursor {
-	pub fn new(pos: usize, source: Rc<dyn Source>) -> Self {
-		Self { pos, source }
-	}
+	pub fn new(pos: usize, source: Rc<dyn Source>) -> Self { Self { pos, source } }
 
 	/// Creates [`cursor`] at [`new_pos`] in the same [`file`]
 	pub fn at(&self, new_pos: usize) -> Self {
@@ -145,9 +120,7 @@ impl Clone for Cursor {
 		}
 	}
 
-	fn clone_from(&mut self, source: &Self) {
-		*self = source.clone()
-	}
+	fn clone_from(&mut self, source: &Self) { *self = source.clone() }
 }
 
 /// Cursor type used for the language server
@@ -165,8 +138,7 @@ pub struct LineCursor {
 
 impl LineCursor {
 	/// Creates a [`LineCursor`] at the begining of the source
-	pub fn new(source: Rc<dyn Source>) -> LineCursor
-	{
+	pub fn new(source: Rc<dyn Source>) -> LineCursor {
 		Self {
 			pos: 0,
 			line: 0,
@@ -182,14 +154,9 @@ impl LineCursor {
 	pub fn move_to(&mut self, pos: usize) {
 		if self.pos < pos {
 			let start = self.pos;
-			let mut it = self.source.content().as_str()[start..]
-				.chars()
-				.peekable();
+			let mut it = self.source.content().as_str()[start..].chars().peekable();
 
-			let mut prev = self.source.content().as_str()[..start]
-				.chars()
-				.rev()
-				.next();
+			let mut prev = self.source.content().as_str()[..start].chars().rev().next();
 			while self.pos < pos {
 				let c = it.next().unwrap();
 				let len = c.len_utf8();
@@ -197,8 +164,8 @@ impl LineCursor {
 				if self.pos != start && prev == Some('\n') {
 					self.line += 1;
 					self.line_pos = 0;
-				}	
-				self.line_pos += 1;
+				}
+				self.line_pos += c.width().unwrap_or(1);
 				self.pos += len;
 				prev = Some(c);
 			}
@@ -214,9 +181,7 @@ impl LineCursor {
 				.rev()
 				.peekable();
 
-			let mut prev = self.source.content().as_str()[start..]
-				.chars()
-				.next();
+			let mut prev = self.source.content().as_str()[start..].chars().next();
 			while self.pos > pos {
 				let c = it.next().unwrap();
 				let len = c.len_utf8();
@@ -224,8 +189,8 @@ impl LineCursor {
 				if self.pos != start && prev == Some('\n') {
 					self.line -= 1;
 					self.line_pos = 0;
-				}	
-				self.line_pos -= 1;
+				}
+				self.line_pos -= c.width().unwrap_or(1);
 				self.pos -= len;
 				prev = Some(c);
 			}
@@ -247,13 +212,9 @@ pub struct Token {
 }
 
 impl Token {
-	pub fn new(range: Range<usize>, source: Rc<dyn Source>) -> Self {
-		Self { range, source }
-	}
+	pub fn new(range: Range<usize>, source: Rc<dyn Source>) -> Self { Self { range, source } }
 
-	pub fn source(&self) -> Rc<dyn Source> {
-		self.source.clone()
-	}
+	pub fn source(&self) -> Rc<dyn Source> { self.source.clone() }
 
 	/// Construct Token from a range
 	pub fn from(start: &Cursor, end: &Cursor) -> Self {
@@ -265,11 +226,7 @@ impl Token {
 		}
 	}
 
-	pub fn start(&self) -> usize {
-		self.range.start
-	}
+	pub fn start(&self) -> usize { self.range.start }
 
-	pub fn end(&self) -> usize {
-		self.range.end
-	}
+	pub fn end(&self) -> usize { self.range.end }
 }

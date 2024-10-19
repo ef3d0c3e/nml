@@ -134,7 +134,7 @@ impl Tokens {
 
 			link_display_sep: token!("macro"),
 			link_url_sep: token!("macro"),
-			link_url: token!("operator", "readonly", "abstract", "abstract"),
+			link_url: token!("function", "readonly", "abstract", "abstract"),
 
 			style_marker: token!("operator"),
 
@@ -170,10 +170,8 @@ pub struct SemanticsData {
 	pub tokens: RefCell<Vec<SemanticToken>>,
 }
 
-impl SemanticsData
-{
-	pub fn new(source: Rc<dyn Source>) -> Self
-	{
+impl SemanticsData {
+	pub fn new(source: Rc<dyn Source>) -> Self {
 		Self {
 			cursor: RefCell::new(LineCursor::new(source)),
 			tokens: RefCell::new(vec![]),
@@ -192,9 +190,8 @@ impl<'a> Semantics<'a> {
 	fn from_source_impl(
 		source: Rc<dyn Source>,
 		semantics: &'a Option<RefCell<SemanticsHolder>>,
-		range: Range<usize>)
-		-> Option<(Self, Ref<'a, Tokens>)>
-	{
+		range: Range<usize>,
+	) -> Option<(Self, Ref<'a, Tokens>)> {
 		if let Some(location) = source
 			.clone()
 			.downcast_rc::<VirtualSource>()
@@ -228,7 +225,7 @@ impl<'a> Semantics<'a> {
 		}
 		return None;
 	}
-	
+
 	pub fn from_source(
 		source: Rc<dyn Source>,
 		semantics: &'a Option<RefCell<SemanticsHolder>>,
@@ -238,12 +235,13 @@ impl<'a> Semantics<'a> {
 		}
 		let range = source.location().map_or_else(
 			|| 0..source.content().len(),
-			|location| location.range.clone());
+			|location| location.range.clone(),
+		);
 		return Self::from_source_impl(source, semantics, range);
 	}
 
 	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
-		let range = self.range.start+range.start..self.range.start+range.end;
+		let range = self.range.start + range.start..self.range.start + range.end;
 		let mut tokens = self.sems.tokens.borrow_mut();
 		let mut cursor = self.sems.cursor.borrow_mut();
 		let mut current = cursor.clone();
@@ -270,8 +268,7 @@ impl<'a> Semantics<'a> {
 				token_type: token.0,
 				token_modifiers_bitset: token.1,
 			});
-			if cursor.pos + len == range.end
-			{
+			if cursor.pos + len == range.end {
 				break;
 			}
 			current = cursor.clone();
