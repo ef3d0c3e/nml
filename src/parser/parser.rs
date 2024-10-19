@@ -21,7 +21,7 @@ use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::elements::paragraph::Paragraph;
-use crate::lsp::semantic::Semantics;
+use crate::lsp::semantic::SemanticsHolder;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
 use crate::parser::source::SourceFile;
@@ -72,8 +72,8 @@ pub struct SharedState {
 	/// The custom styles
 	pub custom_styles: RefCell<CustomStyleHolder>,
 
-	/// The semantic map
-	pub semantics: Option<RefCell<HashMap<Rc<dyn Source>, Semantics>>>,
+	/// The semantics
+	pub semantics: Option<RefCell<SemanticsHolder>>,
 }
 
 impl SharedState {
@@ -85,7 +85,7 @@ impl SharedState {
 			styles: RefCell::new(StyleHolder::default()),
 			layouts: RefCell::new(LayoutHolder::default()),
 			custom_styles: RefCell::new(CustomStyleHolder::default()),
-			semantics: enable_semantics.then_some(RefCell::new(HashMap::new())),
+			semantics: enable_semantics.then_some(RefCell::new(SemanticsHolder::new())),
 		};
 
 		// Register default kernel

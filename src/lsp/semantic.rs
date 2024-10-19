@@ -1,65 +1,70 @@
+use std::cell::Ref;
 use std::cell::RefCell;
+use std::cell::RefMut;
+use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
 use tower_lsp::lsp_types::SemanticToken;
 use tower_lsp::lsp_types::SemanticTokenModifier;
 use tower_lsp::lsp_types::SemanticTokenType;
+use unicode_width::UnicodeWidthStr;
 
 use crate::parser::source::LineCursor;
 use crate::parser::source::Source;
-
+use crate::parser::source::SourceFile;
+use crate::parser::source::VirtualSource;
 
 pub const TOKEN_TYPE: &[SemanticTokenType] = &[
-    SemanticTokenType::NAMESPACE,
-    SemanticTokenType::TYPE,
-    SemanticTokenType::CLASS,
-    SemanticTokenType::ENUM,
-    SemanticTokenType::INTERFACE,
-    SemanticTokenType::STRUCT,
-    SemanticTokenType::TYPE_PARAMETER,
-    SemanticTokenType::PARAMETER,
-    SemanticTokenType::VARIABLE,
-    SemanticTokenType::PROPERTY,
-    SemanticTokenType::ENUM_MEMBER,
-    SemanticTokenType::EVENT,
-    SemanticTokenType::FUNCTION,
-    SemanticTokenType::METHOD,
-    SemanticTokenType::MACRO,
-    SemanticTokenType::KEYWORD,
-    SemanticTokenType::MODIFIER,
-    SemanticTokenType::COMMENT,
-    SemanticTokenType::STRING,
-    SemanticTokenType::NUMBER,
-    SemanticTokenType::REGEXP,
-    SemanticTokenType::OPERATOR,
-    SemanticTokenType::DECORATOR,
+	SemanticTokenType::NAMESPACE,
+	SemanticTokenType::TYPE,
+	SemanticTokenType::CLASS,
+	SemanticTokenType::ENUM,
+	SemanticTokenType::INTERFACE,
+	SemanticTokenType::STRUCT,
+	SemanticTokenType::TYPE_PARAMETER,
+	SemanticTokenType::PARAMETER,
+	SemanticTokenType::VARIABLE,
+	SemanticTokenType::PROPERTY,
+	SemanticTokenType::ENUM_MEMBER,
+	SemanticTokenType::EVENT,
+	SemanticTokenType::FUNCTION,
+	SemanticTokenType::METHOD,
+	SemanticTokenType::MACRO,
+	SemanticTokenType::KEYWORD,
+	SemanticTokenType::MODIFIER,
+	SemanticTokenType::COMMENT,
+	SemanticTokenType::STRING,
+	SemanticTokenType::NUMBER,
+	SemanticTokenType::REGEXP,
+	SemanticTokenType::OPERATOR,
+	SemanticTokenType::DECORATOR,
 ];
 
 pub const TOKEN_MODIFIERS: &[SemanticTokenModifier] = &[
-    SemanticTokenModifier::DECLARATION,
-    SemanticTokenModifier::DEFINITION,
-    SemanticTokenModifier::READONLY,
-    SemanticTokenModifier::STATIC,
-    SemanticTokenModifier::DEPRECATED,
-    SemanticTokenModifier::ABSTRACT,
-    SemanticTokenModifier::ASYNC,
-    SemanticTokenModifier::MODIFICATION,
-    SemanticTokenModifier::DOCUMENTATION,
-    SemanticTokenModifier::DEFAULT_LIBRARY,
+	SemanticTokenModifier::DECLARATION,
+	SemanticTokenModifier::DEFINITION,
+	SemanticTokenModifier::READONLY,
+	SemanticTokenModifier::STATIC,
+	SemanticTokenModifier::DEPRECATED,
+	SemanticTokenModifier::ABSTRACT,
+	SemanticTokenModifier::ASYNC,
+	SemanticTokenModifier::MODIFICATION,
+	SemanticTokenModifier::DOCUMENTATION,
+	SemanticTokenModifier::DEFAULT_LIBRARY,
 ];
 
-fn token_index(name: &str) -> u32
-{
-	TOKEN_TYPE.iter()
+fn token_index(name: &str) -> u32 {
+	TOKEN_TYPE
+		.iter()
 		.enumerate()
 		.find(|(_, token)| token.as_str() == name)
 		.map(|(index, _)| index as u32)
 		.unwrap_or(0)
 }
-fn modifier_index(name: &str) -> u32
-{
-	TOKEN_MODIFIERS.iter()
+fn modifier_index(name: &str) -> u32 {
+	TOKEN_MODIFIERS
+		.iter()
 		.enumerate()
 		.find(|(_, token)| token.as_str() == name)
 		.map(|(index, _)| index as u32)
@@ -71,45 +76,93 @@ macro_rules! token {
 			(token_index($key), 0)
 		}
 	};
-	($key:expr, $($mods:tt)*) => {
+	($key:expr, $($mods:tt),*) => {
 		{
 			let mut bitset : u32 = 0;
 			$(
 				bitset |= 1 << modifier_index($mods);
 			)*
-				(token_index($key), bitset)
+			(token_index($key), bitset)
 		}
 	};
 }
 
 #[derive(Debug)]
-pub struct Tokens
-{
+pub struct Tokens {
 	pub section_heading: (u32, u32),
 	pub section_reference: (u32, u32),
 	pub section_kind: (u32, u32),
 	pub section_name: (u32, u32),
+
+	pub comment: (u32, u32),
+
+	pub link_display_sep: (u32, u32),
+	pub link_url_sep: (u32, u32),
+	pub link_url: (u32, u32),
+
+	pub style_marker: (u32, u32),
+
+	pub import_import: (u32, u32),
+	pub import_as_sep: (u32, u32),
+	pub import_as: (u32, u32),
+	pub import_path: (u32, u32),
+
+	pub reference_operator: (u32, u32),
+	pub reference_link_sep: (u32, u32),
+	pub reference_doc_sep: (u32, u32),
+	pub reference_doc: (u32, u32),
+	pub reference_link: (u32, u32),
+	pub reference_props_sep: (u32, u32),
+	pub reference_props: (u32, u32),
+
+	pub variable_operator: (u32, u32),
+	pub variable_kind: (u32, u32),
+	pub variable_name: (u32, u32),
+	pub variable_sep: (u32, u32),
+	pub variable_value: (u32, u32),
 }
 
-impl Tokens
-{
-	pub fn new() -> Self
-	{
+impl Tokens {
+	pub fn new() -> Self {
 		Self {
-			section_heading : token!("number"),
-			section_reference : token!("enum", "async"),
-			section_kind : token!("enum"),
-			section_name : token!("string"),
+			section_heading: token!("number"),
+			section_reference: token!("enum", "async"),
+			section_kind: token!("enum"),
+			section_name: token!("string"),
+
+			comment: token!("comment"),
+
+			link_display_sep: token!("macro"),
+			link_url_sep: token!("macro"),
+			link_url: token!("operator", "readonly", "abstract", "abstract"),
+
+			style_marker: token!("operator"),
+
+			import_import: token!("macro"),
+			import_as_sep: token!("operator"),
+			import_as: token!("operator"),
+			import_path: token!("function"),
+
+			reference_operator: token!("operator"),
+			reference_link_sep: token!("operator"),
+			reference_doc_sep: token!("function"),
+			reference_doc: token!("function"),
+			reference_link: token!("macro"),
+			reference_props_sep: token!("operator"),
+			reference_props: token!("enum"),
+
+			variable_operator: token!("operator"),
+			variable_kind: token!("operator"),
+			variable_name: token!("macro"),
+			variable_sep: token!("operator"),
+			variable_value: token!("function"),
 		}
 	}
 }
 
-/// Semantics for a buffer
+/// Per file semantic tokens
 #[derive(Debug)]
-pub struct Semantics {
-	/// The tokens
-	pub token: Tokens,
-
+pub struct SemanticsData {
 	/// The current cursor
 	cursor: RefCell<LineCursor>,
 
@@ -117,57 +170,128 @@ pub struct Semantics {
 	pub tokens: RefCell<Vec<SemanticToken>>,
 }
 
-impl Semantics {
-	pub fn new(source: Rc<dyn Source>) -> Semantics {
+impl SemanticsData
+{
+	pub fn new(source: Rc<dyn Source>) -> Self
+	{
 		Self {
-			token: Tokens::new(),
 			cursor: RefCell::new(LineCursor::new(source)),
 			tokens: RefCell::new(vec![]),
 		}
 	}
+}
 
-	pub fn add(
-		&self,
+#[derive(Debug)]
+pub struct Semantics<'a> {
+	pub(self) sems: Ref<'a, SemanticsData>,
+	pub(self) source: Rc<dyn Source>,
+	pub(self) range: Range<usize>,
+}
+
+impl<'a> Semantics<'a> {
+	fn from_source_impl(
 		source: Rc<dyn Source>,
-		range: Range<usize>,
-		token: (u32, u32)
-	) {
-		let mut tokens = self.tokens.borrow_mut();
-		let mut cursor = self.cursor.borrow_mut();
+		semantics: &'a Option<RefCell<SemanticsHolder>>,
+		range: Range<usize>)
+		-> Option<(Self, Ref<'a, Tokens>)>
+	{
+		if let Some(location) = source
+			.clone()
+			.downcast_rc::<VirtualSource>()
+			.ok()
+			.as_ref()
+			.map(|parent| parent.location())
+			.unwrap_or(None)
+		{
+			return Self::from_source_impl(location.source(), semantics, range);
+		} else if let Some(source) = source.clone().downcast_rc::<SourceFile>().ok() {
+			return Ref::filter_map(
+				semantics.as_ref().unwrap().borrow(),
+				|semantics: &SemanticsHolder| {
+					semantics.sems.get(&(source.clone() as Rc<dyn Source>))
+				},
+			)
+			.ok()
+			.map(|sems| {
+				(
+					Self {
+						sems,
+						source,
+						range,
+					},
+					Ref::map(
+						semantics.as_ref().unwrap().borrow(),
+						|semantics: &SemanticsHolder| &semantics.tokens,
+					),
+				)
+			});
+		}
+		return None;
+	}
+	
+	pub fn from_source(
+		source: Rc<dyn Source>,
+		semantics: &'a Option<RefCell<SemanticsHolder>>,
+	) -> Option<(Self, Ref<'a, Tokens>)> {
+		if semantics.is_none() {
+			return None;
+		}
+		let range = source.location().map_or_else(
+			|| 0..source.content().len(),
+			|location| location.range.clone());
+		return Self::from_source_impl(source, semantics, range);
+	}
+
+	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
+		let range = self.range.start+range.start..self.range.start+range.end;
+		let mut tokens = self.sems.tokens.borrow_mut();
+		let mut cursor = self.sems.cursor.borrow_mut();
 		let mut current = cursor.clone();
 		cursor.move_to(range.start);
 
 		while cursor.pos != range.end {
-			let end = source.content()[cursor.pos..]
+			let end = self.source.content()[cursor.pos..range.end]
 				.find('\n')
-				.unwrap_or(source.content().len() - cursor.pos);
+				.unwrap_or(self.source.content().len() - cursor.pos);
 			let len = usize::min(range.end - cursor.pos, end);
-			let clen = source.content()[cursor.pos..cursor.pos+len]
-				.chars()
-				.fold(0, |clen, _| clen + 1);
+			let clen = self.source.content()[cursor.pos..cursor.pos + len].width(); // TODO Fix issue with CJK characters
 
 			let delta_line = cursor.line - current.line;
 			let delta_start = if delta_line == 0 {
-				if let Some(last) = tokens.last() {
-					cursor.line_pos - current.line_pos + last.length as usize
-				} else {
-					cursor.line_pos - current.line_pos
-				}
+				cursor.line_pos - current.line_pos
 			} else {
 				cursor.line_pos
 			};
 
-			//eprintln!("CURRENT={:#?}, CURS={:#?}", current, cursor);
 			tokens.push(SemanticToken {
 				delta_line: delta_line as u32,
 				delta_start: delta_start as u32,
 				length: clen as u32,
 				token_type: token.0,
-				token_modifiers_bitset: token.1
+				token_modifiers_bitset: token.1,
 			});
+			if cursor.pos + len == range.end
+			{
+				break;
+			}
 			current = cursor.clone();
 			let pos = cursor.pos;
 			cursor.move_to(pos + len);
+		}
+	}
+}
+
+#[derive(Debug)]
+pub struct SemanticsHolder {
+	pub tokens: Tokens,
+	pub sems: HashMap<Rc<dyn Source>, SemanticsData>,
+}
+
+impl SemanticsHolder {
+	pub fn new() -> Self {
+		Self {
+			tokens: Tokens::new(),
+			sems: HashMap::new(),
 		}
 	}
 }
@@ -182,6 +306,7 @@ pub mod tests {
 				.as_ref()
 				.unwrap()
 				.borrow()
+				.sems
 				.get(&($source as Rc<dyn Source>))
 				.unwrap()
 				.tokens
@@ -191,11 +316,8 @@ pub mod tests {
 				.as_ref()
 				.unwrap()
 				.borrow()
-				.get(&($source as Rc<dyn Source>))
-				.unwrap()
-				.token
+				.tokens
 				.$token_name;
-
 
 			let found_token = (token.token_type, token.token_modifiers_bitset);
 			assert!(found_token == token_type, "Invalid token at index {}, expected {}{token_type:#?}, got: {found_token:#?}",
@@ -217,6 +339,7 @@ pub mod tests {
 				.as_ref()
 				.unwrap()
 				.borrow()
+				.sems
 				.get(&($source as Rc<dyn Source>))
 				.unwrap()
 				.tokens
@@ -226,9 +349,7 @@ pub mod tests {
 				.as_ref()
 				.unwrap()
 				.borrow()
-				.get(&($source as Rc<dyn Source>))
-				.unwrap()
-				.token
+				.tokens
 				.$token_name;
 
 

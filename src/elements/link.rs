@@ -4,6 +4,7 @@ use crate::document::document::Document;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
@@ -134,6 +135,10 @@ impl RegexRule for LinkRule {
 					return reports;
 				}
 
+				if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+				{
+					sems.add(display.range().start-1..display.range().start, tokens.link_display_sep);
+				}
 				let source = Rc::new(VirtualSource::new(
 					Token::new(display.range(), token.source()),
 					"Link Display".to_string(),
@@ -201,11 +206,26 @@ impl RegexRule for LinkRule {
 		state.push(
 			document,
 			Box::new(Link {
-				location: token,
+				location: token.clone(),
 				display: link_display,
 				url: link_url,
 			}),
 		);
+
+		//if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
+		//	RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
+		//		.ok()
+		//		.unwrap()
+		//}) {
+		//	let name = matches.get(1).unwrap().range();
+		//	sems.add(token.source(), name.start-1..name.start, sems.token.link_name_sep);
+		//	sems.add(token.source(), name.clone(), sems.token.link_name);
+		//	sems.add(token.source(), name.end..name.end+1, sems.token.link_name_sep);
+		//	let url = matches.get(2).unwrap().range();
+		//	sems.add(token.source(), url.start-1..url.start, sems.token.link_url_sep);
+		//	sems.add(token.source(), url.clone(), sems.token.link_url);
+		//	sems.add(token.source(), url.end..url.end+1, sems.token.link_url_sep);
+		//}
 
 		reports
 	}
@@ -270,7 +290,7 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::validate_document;
+	use crate::{validate_document, validate_semantics};
 
 	use super::*;
 
@@ -330,5 +350,43 @@ nml.link.push("**BOLD link**", "another url")
 				};
 			};
 		);
+	}
+
+	#[test]
+	fn semantics()
+	{
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+[li**n**k](url)
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+
+		println!("{:#?}", state.shared.semantics);
+		/*
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+[link](url)
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+
+		validate_semantics!(state, source.clone(), 0,
+			link_name_sep { delta_line == 1, delta_start == 0, length == 1 };
+			link_name { delta_line == 0, delta_start == 1, length == 4 };
+			link_name_sep { delta_line == 0, delta_start == 4, length == 1 };
+			link_url_sep { delta_line == 0, delta_start == 1, length == 1 };
+			link_url { delta_line == 0, delta_start == 1, length == 3 };
+			link_url_sep { delta_line == 0, delta_start == 3, length == 1 };
+			);
+		*/
 	}
 }

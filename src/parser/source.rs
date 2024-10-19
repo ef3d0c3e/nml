@@ -7,7 +7,7 @@ use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
 /// Trait for source content
-pub trait Source: Downcast {
+pub trait Source: Downcast + Debug {
 	/// Gets the source's location
 	fn location(&self) -> Option<&Token>;
 	/// Gets the source's name
@@ -20,12 +20,6 @@ impl_downcast!(Source);
 impl core::fmt::Display for dyn Source {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.name())
-	}
-}
-
-impl core::fmt::Debug for dyn Source {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "Source{{{}}}", self.name())
 	}
 }
 
@@ -43,6 +37,7 @@ impl std::hash::Hash for dyn Source {
 	}
 }
 
+#[derive(Debug)]
 pub struct SourceFile {
 	location: Option<Token>,
 	path: String,
@@ -74,6 +69,11 @@ impl SourceFile {
 			content,
 		}
 	}
+
+	pub fn path(&self) -> &String
+	{
+		&self.path
+	}
 }
 
 impl Source for SourceFile {
@@ -88,6 +88,7 @@ impl Source for SourceFile {
 	}
 }
 
+#[derive(Debug)]
 pub struct VirtualSource {
 	location: Token,
 	name: String,
@@ -181,7 +182,7 @@ impl LineCursor {
 	pub fn move_to(&mut self, pos: usize) {
 		if self.pos < pos {
 			let start = self.pos;
-			let mut it = self.source.content().as_str()[start..] // pos+1
+			let mut it = self.source.content().as_str()[start..]
 				.chars()
 				.peekable();
 
@@ -193,7 +194,7 @@ impl LineCursor {
 				let c = it.next().unwrap();
 				let len = c.len_utf8();
 
-				if self.pos != 0 && prev == Some('\n') {
+				if self.pos != start && prev == Some('\n') {
 					self.line += 1;
 					self.line_pos = 0;
 				}	
@@ -201,12 +202,37 @@ impl LineCursor {
 				self.pos += len;
 				prev = Some(c);
 			}
-			if self.pos != 0 && prev == Some('\n') {
+			if self.pos != start && prev == Some('\n') {
 				self.line += 1;
 				self.line_pos = 0;
 			}
 		} else if self.pos > pos {
-			panic!("Going back is not supported");
+			panic!();
+			let start = self.pos;
+			let mut it = self.source.content().as_str()[..start]
+				.chars()
+				.rev()
+				.peekable();
+
+			let mut prev = self.source.content().as_str()[start..]
+				.chars()
+				.next();
+			while self.pos > pos {
+				let c = it.next().unwrap();
+				let len = c.len_utf8();
+
+				if self.pos != start && prev == Some('\n') {
+					self.line -= 1;
+					self.line_pos = 0;
+				}	
+				self.line_pos -= 1;
+				self.pos -= len;
+				prev = Some(c);
+			}
+			if self.pos != start && prev == Some('\n') {
+				self.line -= 1;
+				self.line_pos = 0;
+			}
 		}
 
 		// May fail if pos is not utf8-aligned

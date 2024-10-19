@@ -1,3 +1,4 @@
+use std::cell::RefMut;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
@@ -177,7 +178,7 @@ impl ReferenceRule {
 			),
 		);
 		Self {
-			re: [Regex::new(r"§\{(.*?)\}(\[((?:\\.|[^\\\\])*?)\])?").unwrap()],
+			re: [Regex::new(r"&\{(.*?)\}(?:\[((?:\\.|[^\\\\])*?)\])?").unwrap()],
 			properties: PropertyParser { properties: props },
 		}
 	}
@@ -284,7 +285,7 @@ impl RegexRule for ReferenceRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(3))
+		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(2))
 		{
 			Ok(pm) => pm,
 			Err(report) => {
@@ -315,7 +316,7 @@ impl RegexRule for ReferenceRule {
 				state.push(
 					document,
 					Box::new(ExternalReference {
-						location: token,
+						location: token.clone(),
 						reference: CrossReference::Unspecific(refname),
 						caption,
 						style,
@@ -326,23 +327,71 @@ impl RegexRule for ReferenceRule {
 				state.push(
 					document,
 					Box::new(ExternalReference {
-						location: token,
-						reference: CrossReference::Specific(refdoc, refname),
+						location: token.clone(),
+						reference: CrossReference::Specific(refdoc.clone(), refname),
 						caption,
 						style,
 					}),
 				);
 			}
+
+			/*
+			if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
+				RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
+					.ok()
+					.unwrap()
+			}) {
+				let link = matches.get(1).unwrap().range();
+				sems.add(token.source(), link.start-2..link.start-1, sems.token.reference_operator);
+				sems.add(token.source(), link.start-1..link.start, sems.token.reference_link_sep);
+
+				if !refdoc.is_empty()
+				{
+					sems.add(token.source(), link.start.. refdoc.len()+link.start, sems.token.reference_doc);
+				}
+				sems.add(token.source(), refdoc.len()+link.start.. refdoc.len()+link.start+1, sems.token.reference_doc_sep);
+				sems.add(token.source(), refdoc.len()+link.start+1..link.end, sems.token.reference_link);
+				sems.add(token.source(), link.end..link.end+1, sems.token.reference_link_sep);
+			}
+			*/
 		} else {
 			state.push(
 				document,
 				Box::new(InternalReference {
-					location: token,
+					location: token.clone(),
 					refname,
 					caption,
 				}),
 			);
+			/*
+			if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
+				RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
+					.ok()
+					.unwrap()
+			}) {
+				let link = matches.get(1).unwrap().range();
+				sems.add(token.source(), link.start-2..link.start-1, sems.token.reference_operator);
+				sems.add(token.source(), link.start-1..link.start, sems.token.reference_link_sep);
+				sems.add(token.source(), link.clone(), sems.token.reference_link);
+				sems.add(token.source(), link.end..link.end+1, sems.token.reference_link_sep);
+			}
+			*/
 		}
+
+		/*
+		if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
+			RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
+				.ok()
+				.unwrap()
+		}) {
+			if let Some(props) = matches.get(2).map(|m| m.range())
+			{
+				sems.add(token.source(), props.start-1..props.start, sems.token.reference_props_sep);
+				sems.add(token.source(), props.clone(), sems.token.reference_props);
+				sems.add(token.source(), props.end..props.end+1, sems.token.reference_props_sep);
+			}
+		}
+		*/
 
 		reports
 	}

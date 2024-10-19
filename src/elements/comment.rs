@@ -2,6 +2,7 @@ use crate::compiler::compiler::Compiler;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lsp::semantic::Semantics;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -89,6 +90,12 @@ impl RegexRule for CommentRule {
 			}),
 		);
 
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+		{
+			let comment = matches.get(1).unwrap().range();
+			sems.add(comment.start-2..comment.end, tokens.comment);
+		}
+
 		reports
 	}
 }
@@ -101,7 +108,7 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::validate_document;
+	use crate::{validate_document, validate_semantics};
 
 	use super::*;
 
@@ -126,6 +133,29 @@ COMMENT ::Test
 				Comment { content == "Commented line" };
 				Text; Comment { content == "Test" };
 			};
+		);
+	}
+
+	#[test]
+	fn semantic()
+	{
+		let source = Rc::new(SourceFile::with_content(
+				"".to_string(),
+				r#"
+::Test
+ ::Another
+	:: Another
+		"#
+		.to_string(),
+		None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+
+		validate_semantics!(state, source.clone(), 0,
+		comment { delta_line == 1, delta_start == 0, length == 6 };
+		comment { delta_line == 1, delta_start == 1, length == 9 };
+		comment { delta_line == 1, delta_start == 1, length == 10 };
 		);
 	}
 }

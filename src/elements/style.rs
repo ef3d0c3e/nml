@@ -4,6 +4,7 @@ use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
@@ -199,6 +200,11 @@ impl RegexRule for StyleRule {
 					style_state.toggled[index].is_none(),
 				)),
 			);
+
+			if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+			{
+				sems.add(token.start()..token.end(), tokens.style_marker);
+			}
 		} else {
 			panic!("Invalid state at `{STATE_NAME}`");
 		}
@@ -279,7 +285,7 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::validate_document;
+	use crate::{validate_document, validate_semantics};
 
 	use super::*;
 
@@ -362,6 +368,34 @@ terminated here%<nml.style.toggle("Italic")>%
 				Style { kind == 3, close == true }; // `
 				Style { kind == 2, close == true }; // __
 			};
+		);
+	}
+
+	#[test]
+	fn semantic()
+	{
+		let source = Rc::new(SourceFile::with_content(
+				"".to_string(),
+				r#"
+**test** `another`
+__test__ *another*
+		"#
+		.to_string(),
+		None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+
+		validate_semantics!(state, source.clone(), 0,
+		style_marker { delta_line == 1, delta_start == 0, length == 2 };
+		style_marker { delta_line == 0, delta_start == 6, length == 2 };
+		style_marker { delta_line == 0, delta_start == 3, length == 1 };
+		style_marker { delta_line == 0, delta_start == 8, length == 1 };
+
+		style_marker { delta_line == 1, delta_start == 0, length == 2 };
+		style_marker { delta_line == 0, delta_start == 6, length == 2 };
+		style_marker { delta_line == 0, delta_start == 3, length == 1 };
+		style_marker { delta_line == 0, delta_start == 8, length == 1 };
 		);
 	}
 }

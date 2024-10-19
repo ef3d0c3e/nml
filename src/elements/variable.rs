@@ -15,6 +15,7 @@ use ariadne::ReportKind;
 use mlua::Function;
 use mlua::Lua;
 use regex::Regex;
+use std::cell::RefMut;
 use std::ops::Range;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -255,6 +256,24 @@ impl RegexRule for VariableRule {
 				return result;
 			}
 		}
+
+		//if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
+		//	RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
+		//		.ok()
+		//		.unwrap()
+		//}) {
+		//	let name = matches.get(2).unwrap().range();
+		//	if let Some(kind) = matches.get(1).map(|m| m.range()) {
+		//		sems.add(token.source(), kind.start-1..kind.start, sems.token.variable_operator);
+		//		sems.add(token.source(), kind, sems.token.variable_kind);
+		//	} else {
+		//		sems.add(token.source(), name.start-1..name.start, sems.token.variable_operator);
+		//	}
+		//	sems.add(token.source(), name.clone(), sems.token.variable_name);
+		//	sems.add(token.source(), name.end..name.end+1, sems.token.variable_sep);
+		//	let value = matches.get(3).unwrap().range();
+		//	sems.add(token.source(), value.clone(), sems.token.variable_value);
+		//}
 
 		result
 	}

@@ -4,6 +4,7 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
+use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
@@ -20,7 +21,6 @@ use mlua::Lua;
 use regex::Regex;
 use section_style::SectionLinkPos;
 use section_style::SectionStyle;
-use std::cell::RefMut;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -327,21 +327,18 @@ impl RegexRule for SectionRule {
 			}),
 		);
 
-		if let Some(mut sems) = state.shared.semantics.as_ref().map(|sems| {
-			RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
-				.ok()
-				.unwrap()
-		}) {
-			sems.add(token.source(), matches.get(1).unwrap().range(), sems.token.section_heading);
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+		{
+			sems.add(matches.get(1).unwrap().range(), tokens.section_heading);
 			if let Some(reference) = matches.get(2)
 			{
-				sems.add(token.source(), reference.start()-1..reference.end()+1, sems.token.section_reference);
+				sems.add(reference.start()-1..reference.end()+1, tokens.section_reference);
 			}
 			if let Some(kind) = matches.get(3)
 			{
-				sems.add(token.source(), kind.range(), sems.token.section_kind);
+				sems.add(kind.range(), tokens.section_kind);
 			}
-			sems.add(token.source(), matches.get(5).unwrap().range(), sems.token.section_name);
+			sems.add(matches.get(5).unwrap().range(), tokens.section_name);
 		}
 
 		result
@@ -555,9 +552,7 @@ nml.section.push("6", 6, "", "refname")
 		let source = Rc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"
-# First section
-##{か}+ test
-#{refname}*+ Another section
+#{📫} test
 		"#
 			.to_string(),
 			None,
@@ -565,13 +560,14 @@ nml.section.push("6", 6, "", "refname")
 		let parser = LangParser::default();
 		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
 
+		println!("{:#?}", state.shared.semantics);
 		validate_semantics!(state, source.clone(), 0,
 			section_heading { delta_line == 1, delta_start == 0, length == 1 };
 			section_name { delta_line == 0, delta_start == 1 };
 
 			section_heading { delta_line == 1, delta_start == 0, length == 2 };
-			section_reference { delta_line == 0, delta_start == 2, length == 3 };
-			section_kind { delta_line == 0, delta_start == 3, length == 1 };
+			section_reference { delta_line == 0, delta_start == 2, length == 4 };
+			section_kind { delta_line == 0, delta_start == 4, length == 1 };
 			section_name { delta_line == 0, delta_start == 1 };
 
 			section_heading { delta_line == 1, delta_start == 0, length == 1 };

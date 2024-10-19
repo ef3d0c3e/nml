@@ -42,16 +42,23 @@ impl Backend {
 		// Which will require a dyn Document to work
 		let source = Rc::new(SourceFile::with_content(params.uri.to_string(), params.text.clone(), None));
 		let parser = LangParser::default();
-		let (doc, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+		let (_doc, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
 
-		if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
-			std::cell::RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&(source as Rc<dyn parser::source::Source>)))
-				.ok()
-				.unwrap()
-		}) {
-			self.semantic_token_map
-				.insert(params.uri.to_string(), sems.tokens.borrow().to_owned());
-		};
+		if let Some(sems) = state.shared.semantics.as_ref()
+		{
+			let borrow = sems.borrow();
+			for (source, sem) in &borrow.sems
+			{
+				if let Some(path) = source.clone().downcast_rc::<SourceFile>()
+					.ok()
+					.map(|source| source.path().to_owned())
+				{
+					self.semantic_token_map
+						.insert(path, sem.tokens.replace(vec![]));
+				}
+			}
+
+		}
 	}
 }
 
@@ -59,7 +66,6 @@ impl Backend {
 impl LanguageServer for Backend {
 	async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
 		Ok(InitializeResult {
-			server_info: None,
 			capabilities: ServerCapabilities {
 				text_document_sync: Some(TextDocumentSyncCapability::Kind(
 					TextDocumentSyncKind::FULL,
@@ -98,6 +104,10 @@ impl LanguageServer for Backend {
 				),
 				..ServerCapabilities::default()
 			},
+			server_info: Some(ServerInfo {
+				name: "nmlls".into(),
+				version: Some("0.1".into())
+			}),
 		})
 	}
 

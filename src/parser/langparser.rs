@@ -6,6 +6,7 @@ use crate::document::element::DocumentEnd;
 use crate::document::langdocument::LangDocument;
 use crate::elements::text::Text;
 use crate::lsp::semantic::Semantics;
+use crate::lsp::semantic::SemanticsData;
 
 use super::parser::Parser;
 use super::parser::ParserState;
@@ -13,6 +14,7 @@ use super::parser::ReportColors;
 use super::rule::Rule;
 use super::source::Cursor;
 use super::source::Source;
+use super::source::SourceFile;
 use super::source::Token;
 use super::util;
 
@@ -61,12 +63,12 @@ impl Parser for LangParser {
 		let doc = LangDocument::new(source.clone(), parent);
 
 		// Insert semantics into state
-		if let Some(semantics) = state.shared.semantics.as_ref()
+		if let (Some(_), Some(semantics)) = (source.clone().downcast_rc::<SourceFile>().ok(), state.shared.semantics.as_ref())
 		{
 			let mut b = semantics.borrow_mut();
-			if !b.contains_key(&source)
+			if !b.sems.contains_key(&source)
 			{
-				b.insert(source.clone(), Semantics::new(source.clone()));
+				b.sems.insert(source.clone(), SemanticsData::new(source.clone()));
 			}
 		}
 
