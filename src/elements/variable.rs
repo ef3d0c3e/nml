@@ -2,6 +2,7 @@ use crate::document::document::Document;
 use crate::document::variable::BaseVariable;
 use crate::document::variable::PathVariable;
 use crate::document::variable::Variable;
+use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
@@ -15,7 +16,6 @@ use ariadne::ReportKind;
 use mlua::Function;
 use mlua::Lua;
 use regex::Regex;
-use std::cell::RefMut;
 use std::ops::Range;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -257,23 +257,20 @@ impl RegexRule for VariableRule {
 			}
 		}
 
-		//if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
-		//	RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
-		//		.ok()
-		//		.unwrap()
-		//}) {
-		//	let name = matches.get(2).unwrap().range();
-		//	if let Some(kind) = matches.get(1).map(|m| m.range()) {
-		//		sems.add(token.source(), kind.start-1..kind.start, sems.token.variable_operator);
-		//		sems.add(token.source(), kind, sems.token.variable_kind);
-		//	} else {
-		//		sems.add(token.source(), name.start-1..name.start, sems.token.variable_operator);
-		//	}
-		//	sems.add(token.source(), name.clone(), sems.token.variable_name);
-		//	sems.add(token.source(), name.end..name.end+1, sems.token.variable_sep);
-		//	let value = matches.get(3).unwrap().range();
-		//	sems.add(token.source(), value.clone(), sems.token.variable_value);
-		//}
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+		{
+			let name = matches.get(2).unwrap().range();
+			if let Some(kind) = matches.get(1).map(|m| m.range()) {
+				sems.add(kind.start-1..kind.start, tokens.variable_operator);
+				sems.add(kind, tokens.variable_kind);
+			} else {
+				sems.add(name.start-1..name.start, tokens.variable_operator);
+			}
+			sems.add(name.clone(), tokens.variable_name);
+			sems.add(name.end..name.end+1, tokens.variable_sep);
+			let value = matches.get(3).unwrap().range();
+			sems.add(value.clone(), tokens.variable_value);
+		}
 
 		result
 	}
@@ -434,7 +431,15 @@ impl RegexRule for VariableSubstitutionRule {
 			_ => panic!("Unknown error"),
 		};
 
-		variable.parse(state, token, document);
+		variable.parse(state, token.clone(), document);
+
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+		{
+			let name = matches.get(1).unwrap().range();
+			sems.add(name.start-1..name.start, tokens.variable_sub_sep);
+			sems.add(name.clone(), tokens.variable_sub_name);
+			sems.add(name.end..name.end+1, tokens.variable_sub_sep);
+		}
 
 		result
 	}

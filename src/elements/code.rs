@@ -24,6 +24,7 @@ use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
@@ -122,8 +123,9 @@ impl Code {
 				.as_str();
 			}
 
-			result +=
-				"<div class=\"code-block-content\"><table cellspacing=\"0\">".to_string().as_str();
+			result += "<div class=\"code-block-content\"><table cellspacing=\"0\">"
+				.to_string()
+				.as_str();
 			for (line_id, line) in self.code.split('\n').enumerate() {
 				result += "<tr><td class=\"code-block-gutter\">";
 
@@ -134,20 +136,13 @@ impl Code {
 				// Code
 				result += "</td><td class=\"code-block-line\"><pre>";
 				match h.highlight_line(line, Code::get_syntaxes()) {
-					Err(e) => {
-						return Err(format!(
-							"Error highlighting line `{line}`: {}",
-							e
-						))
-					}
+					Err(e) => return Err(format!("Error highlighting line `{line}`: {}", e)),
 					Ok(regions) => {
 						match syntect::html::styled_line_to_highlighted_html(
 							&regions[..],
 							syntect::html::IncludeBackground::No,
 						) {
-							Err(e) => {
-								return Err(format!("Error highlighting code: {}", e))
-							}
+							Err(e) => return Err(format!("Error highlighting code: {}", e)),
 							Ok(highlighted) => {
 								result += if highlighted.is_empty() {
 									"<br>"
@@ -169,20 +164,13 @@ impl Code {
 				result += "<tr><td class=\"code-block-line\"><pre>";
 				// Code
 				match h.highlight_line(line, Code::get_syntaxes()) {
-					Err(e) => {
-						return Err(format!(
-							"Error highlighting line `{line}`: {}",
-							e
-						))
-					}
+					Err(e) => return Err(format!("Error highlighting line `{line}`: {}", e)),
 					Ok(regions) => {
 						match syntect::html::styled_line_to_highlighted_html(
 							&regions[..],
 							syntect::html::IncludeBackground::No,
 						) {
-							Err(e) => {
-								return Err(format!("Error highlighting code: {}", e))
-							}
+							Err(e) => return Err(format!("Error highlighting code: {}", e)),
 							Ok(highlighted) => {
 								result += if highlighted.is_empty() {
 									"<br>"
@@ -199,21 +187,13 @@ impl Code {
 		} else if self.block == CodeKind::Inline {
 			result += "<a class=\"inline-code\"><code>";
 			match h.highlight_line(self.code.as_str(), Code::get_syntaxes()) {
-				Err(e) => {
-					return Err(format!(
-						"Error highlighting line `{}`: {}",
-						self.code,
-						e
-					))
-				}
+				Err(e) => return Err(format!("Error highlighting line `{}`: {}", self.code, e)),
 				Ok(regions) => {
 					match syntect::html::styled_line_to_highlighted_html(
 						&regions[..],
 						syntect::html::IncludeBackground::No,
 					) {
-						Err(e) => {
-							return Err(format!("Error highlighting code: {}", e))
-						}
+						Err(e) => return Err(format!("Error highlighting code: {}", e)),
 						Ok(highlighted) => result += highlighted.as_str(),
 					}
 				}
@@ -245,9 +225,12 @@ impl Cached for Code {
 		let mut hasher = Sha512::new();
 		hasher.input((self.block as usize).to_be_bytes().as_slice());
 		hasher.input(self.line_offset.to_be_bytes().as_slice());
-		if let Some(theme) = self.theme
-			.as_ref() { hasher.input(theme.as_bytes()) }
-		if let Some(name) = self.name.as_ref() { hasher.input(name.as_bytes()) }
+		if let Some(theme) = self.theme.as_ref() {
+			hasher.input(theme.as_bytes())
+		}
+		if let Some(name) = self.name.as_ref() {
+			hasher.input(name.as_bytes())
+		}
 		hasher.input(self.language.as_bytes());
 		hasher.input(self.code.as_bytes());
 
@@ -262,7 +245,12 @@ impl Element for Code {
 
 	fn element_name(&self) -> &'static str { "Code Block" }
 
-	fn compile(&self, compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		_document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				static CACHE_INIT: Once = Once::new();
@@ -319,7 +307,7 @@ impl CodeRule {
 				)
 				.unwrap(),
 				Regex::new(
-					r"``(?:\[((?:\\.|[^\\\\])*?)\])?(?:(.*?),)?((?:\\(?:.|\n)|[^\\\\])*?)``",
+					r"``(?:\[((?:\\.|[^\\\\])*?)\])?(?:(.*?)(?:,|\n))?((?:\\(?:.|\n)|[^\\\\])*?)``",
 				)
 				.unwrap(),
 			],
@@ -452,7 +440,8 @@ impl RegexRule for CodeRule {
 		}
 
 		let theme = document
-			.get_variable("code.theme").map(|var| var.to_string());
+			.get_variable("code.theme")
+			.map(|var| var.to_string());
 
 		if index == 0
 		// Block
@@ -539,6 +528,45 @@ impl RegexRule for CodeRule {
 			);
 		}
 
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
+		{
+			let range = matches
+				.get(0)
+				.map(|m| {
+					if token.source().content().as_bytes()[m.start()] == b'\n' {
+						m.start() + 1..m.end()
+					} else {
+						m.range()
+					}
+				})
+				.unwrap();
+			sems.add(
+				range.start..range.start + if index == 0 { 3 } else { 2 },
+				tokens.code_sep,
+			);
+			if let Some(props) = matches.get(1).map(|m| m.range()) {
+				sems.add(props.start - 1..props.start, tokens.code_props_sep);
+				sems.add(props.clone(), tokens.code_props);
+				sems.add(props.end..props.end + 1, tokens.code_props_sep);
+			}
+			if let Some(lang) = matches.get(2).map(|m| m.range()) {
+				sems.add(lang.clone(), tokens.code_lang);
+			}
+			if index == 0 {
+				if let Some(title) = matches.get(3).map(|m| m.range()) {
+					sems.add(title.clone(), tokens.code_title);
+				}
+				sems.add(matches.get(4).unwrap().range(), tokens.code_content);
+			} else {
+				sems.add(matches.get(3).unwrap().range(), tokens.code_content);
+			}
+			sems.add(
+				range.end - if index == 0 { 3 } else { 2 }..range.end,
+				tokens.code_sep,
+			);
+		}
+
 		reports
 	}
 
@@ -551,7 +579,8 @@ impl RegexRule for CodeRule {
 					ctx.as_ref().map(|ctx| {
 						let theme = ctx
 							.document
-							.get_variable("code.theme").map(|var| var.to_string());
+							.get_variable("code.theme")
+							.map(|var| var.to_string());
 
 						ctx.state.push(
 							ctx.document,
@@ -581,7 +610,8 @@ impl RegexRule for CodeRule {
 						ctx.as_ref().map(|ctx| {
 							let theme = ctx
 								.document
-								.get_variable("code.theme").map(|var| var.to_string());
+								.get_variable("code.theme")
+								.map(|var| var.to_string());
 
 							ctx.state.push(
 								ctx.document,
@@ -618,7 +648,8 @@ impl RegexRule for CodeRule {
 						ctx.as_ref().map(|ctx| {
 							let theme = ctx
 								.document
-								.get_variable("code.theme").map(|var| var.to_string());
+								.get_variable("code.theme")
+								.map(|var| var.to_string());
 
 							ctx.state.push(
 								ctx.document,
@@ -651,6 +682,7 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
+	use crate::validate_semantics;
 
 	#[test]
 	fn code_block() {
@@ -753,5 +785,41 @@ fn fact(n: usize) -> usize
 		assert_eq!(found[2].name, None);
 		assert_eq!(found[2].code, "std::vector<std::vector<int>> u;");
 		assert_eq!(found[2].line_offset, 1);
+	}
+
+	#[test]
+	fn semantic() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+```[line_offset=15] C, Title
+test code
+```
+``C, Single Line``
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+		);
+		validate_semantics!(state, source.clone(), 0,
+			code_sep { delta_line == 1, delta_start == 0, length == 3 };
+			code_props_sep { delta_line == 0, delta_start == 3, length == 1 };
+			code_props { delta_line == 0, delta_start == 1, length == 14 };
+			code_props_sep { delta_line == 0, delta_start == 14, length == 1 };
+			code_lang { delta_line == 0, delta_start == 1, length == 2 };
+			code_title { delta_line == 0, delta_start == 3, length == 6 };
+			code_content { delta_line == 1, delta_start == 0, length == 10 };
+			code_sep { delta_line == 1, delta_start == 0, length == 3 };
+
+			code_sep { delta_line == 1, delta_start == 0, length == 2 };
+			code_lang { delta_line == 0, delta_start == 2, length == 1 };
+			code_content { delta_line == 0, delta_start == 2, length == 12 };
+			code_sep { delta_line == 0, delta_start == 12, length == 2 };
+		);
 	}
 }

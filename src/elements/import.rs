@@ -1,5 +1,6 @@
 use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
+use crate::lsp::semantic::Semantics;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -180,12 +181,9 @@ impl RegexRule for ImportRule {
 			);
 		}
 
-		/*
-		if let Some(sems) = state.shared.semantics.as_ref().map(|sems| {
-			RefMut::filter_map(sems.borrow_mut(), |sems| sems.get_mut(&token.source()))
-				.ok()
-				.unwrap()
-		}) {
+		
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+		{
 			// @import
 			let import = if token.source().content().as_bytes()[matches.get(0).unwrap().start()] == b'\n'
 			{
@@ -195,19 +193,18 @@ impl RegexRule for ImportRule {
 			{
 				matches.get(0).unwrap().start()
 			};
-			sems.add(token.source(), import..import + 7, sems.token.import_import);
+			sems.add(import..import + 7, tokens.import_import);
 
 			if let Some(import_as) = matches.get(1)
 			{
-				sems.add(token.source(), import_as.start()-1..import_as.start(), sems.token.import_as_sep);
-				sems.add(token.source(), import_as.range(), sems.token.import_as);
-				sems.add(token.source(), import_as.end()..import_as.end()+1, sems.token.import_as_sep);
+				sems.add(import_as.start()-1..import_as.start(), tokens.import_as_sep);
+				sems.add(import_as.range(), tokens.import_as);
+				sems.add(import_as.end()..import_as.end()+1, tokens.import_as_sep);
 			}
 				
 			let path = matches.get(2).unwrap().range();
-			sems.add(token.source(), path, sems.token.import_path);
+			sems.add(path, tokens.import_path);
 		}
-		*/
 
 		result
 	}

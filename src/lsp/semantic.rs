@@ -85,6 +85,7 @@ macro_rules! token {
 	};
 }
 
+/// Predefined list of tokens
 #[derive(Debug)]
 pub struct Tokens {
 	pub section_heading: (u32, u32),
@@ -118,6 +119,16 @@ pub struct Tokens {
 	pub variable_name: (u32, u32),
 	pub variable_sep: (u32, u32),
 	pub variable_value: (u32, u32),
+
+	pub variable_sub_sep: (u32, u32),
+	pub variable_sub_name: (u32, u32),
+
+	pub code_sep: (u32, u32),
+	pub code_props_sep: (u32, u32),
+	pub code_props: (u32, u32),
+	pub code_lang: (u32, u32),
+	pub code_title: (u32, u32),
+	pub code_content: (u32, u32),
 }
 
 impl Tokens {
@@ -154,6 +165,16 @@ impl Tokens {
 			variable_name: token!("macro"),
 			variable_sep: token!("operator"),
 			variable_value: token!("function"),
+
+			variable_sub_sep: token!("operator"),
+			variable_sub_name: token!("macro"),
+
+			code_sep: token!("operator"),
+			code_props_sep: token!("operator"),
+			code_props: token!("enum"),
+			code_lang: token!("function"),
+			code_title: token!("number"),
+			code_content: token!("string"),
 		}
 	}
 }
@@ -248,7 +269,7 @@ impl<'a> Semantics<'a> {
 		while cursor.pos != range.end {
 			let end = self.source.content()[cursor.pos..range.end]
 				.find('\n')
-				.unwrap_or(self.source.content().len() - cursor.pos);
+				.unwrap_or(self.source.content().len() - 1) + 1;
 			let len = usize::min(range.end - cursor.pos, end);
 			let clen = self.source.content()[cursor.pos..cursor.pos + len]
 				.chars()
