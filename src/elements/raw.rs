@@ -3,6 +3,7 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -39,7 +40,12 @@ impl Element for Raw {
 
 	fn element_name(&self) -> &'static str { "Raw" }
 
-	fn compile(&self, _compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		_compiler: &Compiler,
+		_document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		Ok(self.content.clone())
 	}
 }
@@ -73,9 +79,12 @@ impl RawRule {
 
 impl RegexRule for RawRule {
 	fn name(&self) -> &'static str { "Raw" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Variable Substitution") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
+
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
 	fn on_regex_match(
 		&self,
@@ -271,7 +280,7 @@ mod tests {
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
-use crate::parser::source::SourceFile;
+	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 
 	#[test]
@@ -285,7 +294,12 @@ Break{?[kind=block] Raw?}NewParagraph{?<b>?}
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph;
@@ -308,7 +322,12 @@ Break%<nml.raw.push("block", "Raw")>%NewParagraph%<nml.raw.push("inline", "<b>")
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 		Paragraph;

@@ -7,6 +7,7 @@ use rusqlite::Connection;
 
 use crate::document::document::Document;
 use crate::parser::langparser::LangParser;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::source::Source;
@@ -25,7 +26,7 @@ fn parse(
 ) -> Result<Box<dyn Document<'static>>, String> {
 	// Parse
 	//let source = SourceFile::new(input.to_string(), None).unwrap();
-	let (doc, _) = parser.parse(ParserState::new(parser, None), source.clone(), None);
+	let (doc, _) = parser.parse(ParserState::new(parser, None), source.clone(), None, ParseMode::default());
 
 	if debug_opts.contains(&"ast".to_string()) {
 		println!("-- BEGIN AST DEBUGGING --");

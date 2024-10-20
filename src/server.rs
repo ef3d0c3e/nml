@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use dashmap::DashMap;
 use parser::langparser::LangParser;
+use parser::parser::ParseMode;
 use parser::parser::Parser;
 use parser::parser::ParserState;
 use parser::source::SourceFile;
@@ -42,7 +43,7 @@ impl Backend {
 		// Which will require a dyn Document to work
 		let source = Rc::new(SourceFile::with_content(params.uri.to_string(), params.text.clone(), None));
 		let parser = LangParser::default();
-		let (_doc, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+		let (_doc, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None, ParseMode::default());
 
 		if let Some(sems) = state.shared.semantics.as_ref()
 		{

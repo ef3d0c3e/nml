@@ -6,6 +6,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -167,9 +168,12 @@ static STATE_NAME: &str = "elements.style";
 
 impl RegexRule for StyleRule {
 	fn name(&self) -> &'static str { "Style" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Layout") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
+
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
 	fn on_regex_match(
 		&self,
@@ -316,7 +320,12 @@ __`UNDERLINE+EM`__
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
@@ -357,7 +366,12 @@ terminated here%<nml.style.toggle("Italic")>%
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
@@ -399,6 +413,7 @@ __teかst__ *another*
 			ParserState::new_with_semantics(&parser, None),
 			source.clone(),
 			None,
+			ParseMode::default(),
 		);
 
 		validate_semantics!(state, source.clone(), 0,

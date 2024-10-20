@@ -6,6 +6,7 @@ use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -168,9 +169,12 @@ pub mod section_kind {
 
 impl RegexRule for SectionRule {
 	fn name(&self) -> &'static str { "Section" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Custom Style") }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
+
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
 
 	fn on_regex_match(
 		&self,
@@ -327,15 +331,17 @@ impl RegexRule for SectionRule {
 			}),
 		);
 
-		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
 		{
 			sems.add(matches.get(1).unwrap().range(), tokens.section_heading);
-			if let Some(reference) = matches.get(2)
-			{
-				sems.add(reference.start()-1..reference.end()+1, tokens.section_reference);
+			if let Some(reference) = matches.get(2) {
+				sems.add(
+					reference.start() - 1..reference.end() + 1,
+					tokens.section_reference,
+				);
 			}
-			if let Some(kind) = matches.get(3)
-			{
+			if let Some(kind) = matches.get(3) {
 				sems.add(kind.range(), tokens.section_kind);
 			}
 			sems.add(matches.get(5).unwrap().range(), tokens.section_name);
@@ -452,7 +458,8 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::{validate_document, validate_semantics};
+	use crate::validate_document;
+	use crate::validate_semantics;
 
 	use super::*;
 
@@ -472,7 +479,12 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Section { depth == 1, title == "1" };
@@ -502,7 +514,12 @@ nml.section.push("6", 6, "", "refname")
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Section { depth == 1, title == "1" };
@@ -529,7 +546,7 @@ nml.section.push("6", 6, "", "refname")
 		));
 		let parser = LangParser::default();
 		let state = ParserState::new(&parser, None);
-		let (_, state) = parser.parse(state, source, None);
+		let (_, state) = parser.parse(state, source, None, ParseMode::default());
 
 		let style = state
 			.shared
@@ -547,8 +564,7 @@ nml.section.push("6", 6, "", "refname")
 	}
 
 	#[test]
-	fn semantics()
-	{
+	fn semantics() {
 		let source = Rc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"
@@ -560,21 +576,26 @@ nml.section.push("6", 6, "", "refname")
 			None,
 		));
 		let parser = LangParser::default();
-		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+			ParseMode::default(),
+		);
 
 		validate_semantics!(state, source.clone(), 0,
-			section_heading { delta_line == 1, delta_start == 0, length == 1 };
-			section_name { delta_line == 0, delta_start == 1 };
+		section_heading { delta_line == 1, delta_start == 0, length == 1 };
+		section_name { delta_line == 0, delta_start == 1 };
 
-			section_heading { delta_line == 1, delta_start == 0, length == 2 };
-			section_reference { delta_line == 0, delta_start == 2, length == 4 };
-			section_kind { delta_line == 0, delta_start == 4, length == 1 };
-			section_name { delta_line == 0, delta_start == 1 };
+		section_heading { delta_line == 1, delta_start == 0, length == 2 };
+		section_reference { delta_line == 0, delta_start == 2, length == 4 };
+		section_kind { delta_line == 0, delta_start == 4, length == 1 };
+		section_name { delta_line == 0, delta_start == 1 };
 
-			section_heading { delta_line == 1, delta_start == 0, length == 1 };
-			section_reference { delta_line == 0, delta_start == 1, length == 9 };
-			section_kind { delta_line == 0, delta_start == 9, length == 2 };
-			section_name { delta_line == 0, delta_start == 2 };
-			);
+		section_heading { delta_line == 1, delta_start == 0, length == 1 };
+		section_reference { delta_line == 0, delta_start == 1, length == 9 };
+		section_kind { delta_line == 0, delta_start == 9, length == 2 };
+		section_name { delta_line == 0, delta_start == 2 };
+		);
 	}
 }

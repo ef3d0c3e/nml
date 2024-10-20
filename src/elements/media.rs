@@ -21,6 +21,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::document::references::validate_refname;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -72,14 +73,21 @@ impl Element for Media {
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		cursor: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				let mut result = String::new();
 
 				result.push_str("<div class=\"media\">");
 				for medium in &self.media {
-					result += medium.compile(compiler, document, cursor+result.len())?.as_str();
+					result += medium
+						.compile(compiler, document, cursor + result.len())?
+						.as_str();
 				}
 				result.push_str("</div>");
 
@@ -132,7 +140,12 @@ impl Element for Medium {
 
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		cursor: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				let mut result = String::new();
@@ -145,10 +158,18 @@ impl Element for Medium {
 					.width
 					.as_ref()
 					.map_or(String::new(), |w| format!(r#" style="width:{w};""#));
-				result.push_str(format!(r#"<div id="{}" class="medium"{width}>"#, self.refid(compiler, refcount)).as_str());
+				result.push_str(
+					format!(
+						r#"<div id="{}" class="medium"{width}>"#,
+						self.refid(compiler, refcount)
+					)
+					.as_str(),
+				);
 				result += match self.media_type {
 					MediaType::IMAGE => format!(r#"<a href="{0}"><img src="{0}"></a>"#, self.uri),
-					MediaType::VIDEO => format!(r#"<video controls{width}><source src="{0}"></video>"#, self.uri
+					MediaType::VIDEO => format!(
+						r#"<video controls{width}><source src="{0}"></video>"#,
+						self.uri
 					),
 					MediaType::AUDIO => {
 						format!(r#"<audio controls src="{0}"{width}></audio>"#, self.uri)
@@ -158,17 +179,17 @@ impl Element for Medium {
 
 				let caption = self
 					.caption
-					.as_ref().map(|cap| format!(
-							" {}",
-							Compiler::sanitize(compiler.target(), cap.as_str())
-						))
+					.as_ref()
+					.map(|cap| format!(" {}", Compiler::sanitize(compiler.target(), cap.as_str())))
 					.unwrap_or_default();
 
 				result.push_str(
 					format!(r#"<p class="medium-refname">({refcount}){caption}</p>"#).as_str(),
 				);
 				if let Some(paragraph) = self.description.as_ref() {
-					result += paragraph.compile(compiler, document, cursor+result.len())?.as_str();
+					result += paragraph
+						.compile(compiler, document, cursor + result.len())?
+						.as_str();
 				}
 				result.push_str("</div>");
 
@@ -214,9 +235,7 @@ impl ReferenceableElement for Medium {
 		}
 	}
 
-	fn refid(&self, _compiler: &Compiler, refid: usize) -> String {
-		format!("medium-{refid}")
-	}
+	fn refid(&self, _compiler: &Compiler, refid: usize) -> String { format!("medium-{refid}") }
 }
 
 #[auto_registry::auto_registry(registry = "rules", path = "crate::elements::media")]
@@ -324,9 +343,12 @@ impl MediaRule {
 
 impl RegexRule for MediaRule {
 	fn name(&self) -> &'static str { "Media" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Graphviz") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
+
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
 
 	fn on_regex_match<'a>(
 		&self,
@@ -433,13 +455,15 @@ impl RegexRule for MediaRule {
 			.get("width", |_, value| -> Result<String, ()> {
 				Ok(value.clone())
 			})
-			.ok().map(|(_, s)| s);
+			.ok()
+			.map(|(_, s)| s);
 
 		let caption = properties
 			.get("caption", |_, value| -> Result<String, ()> {
 				Ok(value.clone())
 			})
-			.ok().map(|(_, value)| value);
+			.ok()
+			.map(|(_, value)| value);
 
 		let description = match matches.get(4) {
 			Some(content) => {
@@ -546,7 +570,12 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		let borrow = doc.content().borrow();
 		let group = borrow.first().as_ref().unwrap().as_container().unwrap();

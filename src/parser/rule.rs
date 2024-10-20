@@ -1,4 +1,5 @@
 use super::layout::LayoutHolder;
+use super::parser::ParseMode;
 use super::parser::ParserState;
 use super::source::Cursor;
 use super::source::Source;
@@ -73,7 +74,13 @@ pub trait Rule: Downcast {
 	fn previous(&self) -> Option<&'static str>;
 
 	/// Finds the next match starting from [`cursor`]
-	fn next_match(&self, state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)>;
+	fn next_match(
+		&self,
+		mode: &ParseMode,
+		state: &ParserState,
+		cursor: &Cursor,
+	) -> Option<(usize, Box<dyn Any>)>;
+
 	/// Callback when rule matches
 	fn on_match<'a>(
 		&self,
@@ -110,6 +117,9 @@ pub trait RegexRule {
 	/// Returns the rule's regexes
 	fn regexes(&self) -> &[regex::Regex];
 
+	/// Wheter parsing for the rule is enabled
+	fn enabled(&self, mode: &ParseMode, index: usize) -> bool;
+
 	/// Callback on regex rule match
 	fn on_regex_match<'a>(
 		&self,
@@ -127,13 +137,22 @@ pub trait RegexRule {
 
 impl<T: RegexRule + 'static> Rule for T {
 	fn name(&self) -> &'static str { RegexRule::name(self) }
+
 	fn previous(&self) -> Option<&'static str> { RegexRule::previous(self) }
 
 	/// Finds the next match starting from [`cursor`]
-	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(
+		&self,
+		mode: &ParseMode,
+		_state: &ParserState,
+		cursor: &Cursor,
+	) -> Option<(usize, Box<dyn Any>)> {
 		let content = cursor.source.content();
 		let mut found: Option<(usize, usize)> = None;
 		self.regexes().iter().enumerate().for_each(|(id, re)| {
+			if !RegexRule::enabled(self, mode, id) {
+				return;
+			}
 			if let Some(m) = re.find_at(content.as_str(), cursor.pos) {
 				found = found
 					.map(|(f_pos, f_id)| {

@@ -147,7 +147,10 @@ impl<'a, 'b> ParserState<'a, 'b> {
 
 	/// Constructs a new state with semantics enabled
 	/// See [`ParserState::new`] for mote information
-	pub fn new_with_semantics(parser: &'a dyn Parser, parent: Option<&'a ParserState<'a, 'b>>) -> Self {
+	pub fn new_with_semantics(
+		parser: &'a dyn Parser,
+		parent: Option<&'a ParserState<'a, 'b>>,
+	) -> Self {
 		let matches = parser.rules().iter().map(|_| (0, None)).collect::<Vec<_>>();
 		let shared = if let Some(parent) = &parent {
 			parent.shared.clone()
@@ -199,7 +202,11 @@ impl<'a, 'b> ParserState<'a, 'b> {
 	/// Notes that the result of every call to [`Rule::next_match`] gets stored
 	/// in a table: [`ParserState::matches`]. Until the cursor steps over a
 	/// position in the table, `next_match` won't be called.
-	pub fn update_matches(&self, cursor: &Cursor) -> (Cursor, Option<(usize, Box<dyn Any>)>) {
+	pub fn update_matches(
+		&self,
+		mode: &ParseMode,
+		cursor: &Cursor,
+	) -> (Cursor, Option<(usize, Box<dyn Any>)>) {
 		let mut matches_borrow = self.matches.borrow_mut();
 
 		self.parser
@@ -212,7 +219,7 @@ impl<'a, 'b> ParserState<'a, 'b> {
 					return;
 				}
 
-				(*matched_at, *match_data) = match rule.next_match(self, cursor) {
+				(*matched_at, *match_data) = match rule.next_match(&mode, self, cursor) {
 					None => (usize::MAX, None),
 					Some((mut pos, mut data)) => {
 						// Check if escaped
@@ -233,7 +240,7 @@ impl<'a, 'b> ParserState<'a, 'b> {
 							}
 
 							// Find next potential match
-							(pos, data) = match rule.next_match(self, &cursor.at(pos + 1)) {
+							(pos, data) = match rule.next_match(&mode, self, &cursor.at(pos + 1)) {
 								Some((new_pos, new_data)) => (new_pos, new_data),
 								None => (usize::MAX, data), // Stop iterating
 							}
@@ -308,28 +315,44 @@ impl<'a, 'b> ParserState<'a, 'b> {
 	/// # Error
 	///
 	/// Returns an error if `rule_name` was not found in the parser's ruleset.
-	pub fn reset_match(&self, rule_name: &str) -> Result<(), String>
-	{
-		if self.parser.rules().iter()
+	pub fn reset_match(&self, rule_name: &str) -> Result<(), String> {
+		if self
+			.parser
+			.rules()
+			.iter()
 			.zip(self.matches.borrow_mut().iter_mut())
 			.try_for_each(|(rule, (match_pos, match_data))| {
-				if rule.name() != rule_name { return Ok(()) }
+				if rule.name() != rule_name {
+					return Ok(());
+				}
 
 				*match_pos = 0;
 				match_data.take();
 				Err(())
-			}).is_ok()
+			})
+			.is_ok()
 		{
 			return Err(format!("Could not find rule: {rule_name}"));
 		}
 
 		// Resurcively reset
-		if let Some(parent) = self.parent
-		{
+		if let Some(parent) = self.parent {
 			return parent.reset_match(rule_name);
 		}
 
 		Ok(())
+	}
+}
+
+pub struct ParseMode {
+	pub paragraph_only: bool,
+}
+
+impl Default for ParseMode {
+	fn default() -> Self {
+		Self {
+			paragraph_only: false,
+		}
 	}
 }
 
@@ -365,6 +388,7 @@ pub trait Parser {
 		state: ParserState<'p, 'a>,
 		source: Rc<dyn Source>,
 		parent: Option<&'doc dyn Document<'doc>>,
+		mode: ParseMode,
 	) -> (Box<dyn Document<'doc> + 'doc>, ParserState<'p, 'a>);
 
 	/// Parse [`Source`] into an already existing [`Document`]
@@ -384,6 +408,7 @@ pub trait Parser {
 		state: ParserState<'p, 'a>,
 		source: Rc<dyn Source>,
 		document: &'doc dyn Document<'doc>,
+		mode: ParseMode,
 	) -> ParserState<'p, 'a>;
 
 	/// Adds a rule to the parser.
@@ -444,8 +469,11 @@ pub trait Parser {
 
 					if let Some(_s) = source.downcast_ref::<VirtualSource>() {
 						let start = location.start()
-							+ if location.source().content().as_bytes()[location.start()]
-								== b'\n' { 1 } else { 0 };
+							+ if location.source().content().as_bytes()[location.start()] == b'\n' {
+								1
+							} else {
+								0
+							};
 						report.labels.push(
 							Label::new((location.source(), start..location.end()))
 								.with_message("In evaluation of")

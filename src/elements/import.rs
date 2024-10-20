@@ -1,6 +1,7 @@
 use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
 use crate::lsp::semantic::Semantics;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -43,9 +44,12 @@ impl ImportRule {
 
 impl RegexRule for ImportRule {
 	fn name(&self) -> &'static str { "Import" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Paragraph") }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
+
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
 
 	fn on_regex_match<'a>(
 		&self,
@@ -165,7 +169,10 @@ impl RegexRule for ImportRule {
 		};
 
 		state.with_state(|new_state| {
-			let (import_doc, _) = new_state.parser.parse(new_state, import, Some(document));
+			let (import_doc, _) =
+				new_state
+					.parser
+					.parse(new_state, import, Some(document), ParseMode::default());
 			document.merge(import_doc.content(), import_doc.scope(), Some(&import_as));
 		});
 
@@ -181,27 +188,27 @@ impl RegexRule for ImportRule {
 			);
 		}
 
-		
-		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
 		{
 			// @import
-			let import = if token.source().content().as_bytes()[matches.get(0).unwrap().start()] == b'\n'
-			{
-				matches.get(0).unwrap().start() + 1
-			}
-			else
-			{
-				matches.get(0).unwrap().start()
-			};
+			let import =
+				if token.source().content().as_bytes()[matches.get(0).unwrap().start()] == b'\n' {
+					matches.get(0).unwrap().start() + 1
+				} else {
+					matches.get(0).unwrap().start()
+				};
 			sems.add(import..import + 7, tokens.import_import);
 
-			if let Some(import_as) = matches.get(1)
-			{
-				sems.add(import_as.start()-1..import_as.start(), tokens.import_as_sep);
+			if let Some(import_as) = matches.get(1) {
+				sems.add(
+					import_as.start() - 1..import_as.start(),
+					tokens.import_as_sep,
+				);
 				sems.add(import_as.range(), tokens.import_as);
-				sems.add(import_as.end()..import_as.end()+1, tokens.import_as_sep);
+				sems.add(import_as.end()..import_as.end() + 1, tokens.import_as_sep);
 			}
-				
+
 			let path = matches.get(2).unwrap().range();
 			sems.add(path, tokens.import_path);
 		}

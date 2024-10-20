@@ -2,9 +2,9 @@ mod cache;
 mod compiler;
 mod document;
 mod elements;
+mod lsp;
 mod lua;
 mod parser;
-mod lsp;
 
 use std::env;
 use std::io::BufWriter;

@@ -1,4 +1,5 @@
 use crate::lua::kernel::Kernel;
+use crate::parser::parser::ParseMode;
 use std::any::Any;
 use std::cell::Ref;
 use std::cell::RefCell;
@@ -140,10 +141,13 @@ impl RuleState for CustomStyleState {
 			let paragraph = document.last_element::<Paragraph>().unwrap();
 			let paragraph_end = paragraph
 				.content
-				.last().map(|last| (
+				.last()
+				.map(|last| {
+					(
 						last.location().source(),
 						last.location().end() - 1..last.location().end(),
-					))
+					)
+				})
 				.unwrap();
 
 			reports.push(
@@ -179,14 +183,20 @@ static STATE_NAME: &str = "elements.custom_style";
 pub struct CustomStyleRule;
 
 impl CustomStyleRule {
-	pub fn new() -> Self { Self{} }
+	pub fn new() -> Self { Self {} }
 }
 
 impl Rule for CustomStyleRule {
 	fn name(&self) -> &'static str { "Custom Style" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Style") }
 
-	fn next_match(&self, state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(
+		&self,
+		_mode: &ParseMode,
+		state: &ParserState,
+		cursor: &Cursor,
+	) -> Option<(usize, Box<dyn Any>)> {
 		let content = cursor.source.content();
 
 		let mut closest_match = usize::MAX;
@@ -479,6 +489,7 @@ mod tests {
 	use crate::elements::raw::Raw;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::ParseMode;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
@@ -512,7 +523,12 @@ pre |styled| post °Hello°.
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
@@ -556,7 +572,12 @@ pre [styled] post (Hello).
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

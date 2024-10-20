@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use crate::lua::kernel::CTX;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyMapError;
@@ -189,9 +190,12 @@ impl GraphRule {
 
 impl RegexRule for GraphRule {
 	fn name(&self) -> &'static str { "Graphviz" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Tex") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
+
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
 
 	fn on_regex_match(
 		&self,
@@ -441,7 +445,12 @@ Another graph
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Graphviz { width == "200px", dot == "Some graph..." };
@@ -461,7 +470,12 @@ Another graph
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Graphviz { width == "200px", dot == "Some graph..." };

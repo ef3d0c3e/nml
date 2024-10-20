@@ -22,6 +22,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::references::validate_refname;
 use crate::lsp::semantic::Semantics;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -227,9 +228,12 @@ impl ReferenceRule {
 
 impl RegexRule for ReferenceRule {
 	fn name(&self) -> &'static str { "Reference" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Text") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
+
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
 	fn on_regex_match<'a>(
 		&self,
@@ -449,7 +453,12 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Section;
@@ -476,7 +485,12 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

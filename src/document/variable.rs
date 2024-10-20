@@ -1,5 +1,6 @@
 use super::document::Document;
 use crate::elements::text::Text;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
@@ -63,7 +64,7 @@ impl Variable for BaseVariable {
 		));
 
 		state.with_state(|new_state| {
-			let _ = new_state.parser.parse_into(new_state, source, document);
+			let _ = new_state.parser.parse_into(new_state, source, document, ParseMode::default());
 		});
 	}
 }

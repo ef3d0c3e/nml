@@ -26,6 +26,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -309,8 +310,7 @@ impl CodeRule {
 				Regex::new(
 					r"``(?:\[((?:\\.|[^\\\\])*?)\])?(?:([^\r\n`]*?)(?:,|\n))?((?:\\(?:.|\n)|[^\\\\])*?)``",
 				)
-				.unwrap()
-
+				.unwrap(),
 			],
 			properties: PropertyParser { properties: props },
 		}
@@ -319,9 +319,14 @@ impl CodeRule {
 
 impl RegexRule for CodeRule {
 	fn name(&self) -> &'static str { "Code" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Blockquote") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
+
+	fn enabled(&self, mode: &ParseMode, id: usize) -> bool {
+		return !mode.paragraph_only || id != 0;
+	}
 
 	fn on_regex_match(
 		&self,
@@ -710,7 +715,12 @@ fn fact(n: usize) -> usize
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		let borrow = doc.content().borrow();
 		let found = borrow
@@ -756,7 +766,12 @@ fn fact(n: usize) -> usize
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		let borrow = doc.content().borrow();
 		let found = borrow
@@ -806,6 +821,7 @@ test code
 			ParserState::new_with_semantics(&parser, None),
 			source.clone(),
 			None,
+			ParseMode::default(),
 		);
 		validate_semantics!(state, source.clone(), 0,
 			code_sep { delta_line == 1, delta_start == 0, length == 3 };

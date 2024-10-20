@@ -5,9 +5,9 @@ use crate::document::document::Document;
 use crate::document::element::DocumentEnd;
 use crate::document::langdocument::LangDocument;
 use crate::elements::text::Text;
-use crate::lsp::semantic::Semantics;
 use crate::lsp::semantic::SemanticsData;
 
+use super::parser::ParseMode;
 use super::parser::Parser;
 use super::parser::ParserState;
 use super::parser::ReportColors;
@@ -37,8 +37,7 @@ impl LangParser {
 		};
 
 		// Register rules
-		for rule in super::rule::get_rule_registry()
-		{
+		for rule in super::rule::get_rule_registry() {
 			s.add_rule(rule).unwrap();
 		}
 
@@ -59,16 +58,19 @@ impl Parser for LangParser {
 		state: ParserState<'p, 'a>,
 		source: Rc<dyn Source>,
 		parent: Option<&'doc dyn Document<'doc>>,
+		mode: ParseMode,
 	) -> (Box<dyn Document<'doc> + 'doc>, ParserState<'p, 'a>) {
 		let doc = LangDocument::new(source.clone(), parent);
 
 		// Insert semantics into state
-		if let (Some(_), Some(semantics)) = (source.clone().downcast_rc::<SourceFile>().ok(), state.shared.semantics.as_ref())
-		{
+		if let (Some(_), Some(semantics)) = (
+			source.clone().downcast_rc::<SourceFile>().ok(),
+			state.shared.semantics.as_ref(),
+		) {
 			let mut b = semantics.borrow_mut();
-			if !b.sems.contains_key(&source)
-			{
-				b.sems.insert(source.clone(), SemanticsData::new(source.clone()));
+			if !b.sems.contains_key(&source) {
+				b.sems
+					.insert(source.clone(), SemanticsData::new(source.clone()));
 			}
 		}
 
@@ -86,7 +88,7 @@ impl Parser for LangParser {
 		}
 
 		loop {
-			let (rule_pos, mut result) = state.update_matches(&cursor);
+			let (rule_pos, mut result) = state.update_matches(&mode, &cursor);
 
 			// Unmatched content
 			let text_content =
@@ -125,13 +127,12 @@ impl Parser for LangParser {
 			super::state::Scope::DOCUMENT,
 		));
 
-		if parent.is_none()
-		{
+		if parent.is_none() {
 			state.push(
 				&doc,
 				Box::new(DocumentEnd(Token::new(
-							doc.source().content().len()..doc.source().content().len(),
-							doc.source(),
+					doc.source().content().len()..doc.source().content().len(),
+					doc.source(),
 				))),
 			);
 		}
@@ -144,12 +145,13 @@ impl Parser for LangParser {
 		state: ParserState<'p, 'a>,
 		source: Rc<dyn Source>,
 		document: &'doc dyn Document<'doc>,
+		mode: ParseMode,
 	) -> ParserState<'p, 'a> {
 		let content = source.content();
 		let mut cursor = Cursor::new(0usize, source.clone());
 
 		loop {
-			let (rule_pos, mut result) = state.update_matches(&cursor);
+			let (rule_pos, mut result) = state.update_matches(&mode, &cursor);
 
 			// Unmatched content
 			let text_content =

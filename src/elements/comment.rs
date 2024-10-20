@@ -3,6 +3,7 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lsp::semantic::Semantics;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
@@ -55,6 +56,8 @@ impl RegexRule for CommentRule {
 	fn previous(&self) -> Option<&'static str> { None }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
+
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
 	fn on_regex_match(
 		&self,
@@ -132,7 +135,12 @@ COMMENT ::Test
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
@@ -160,6 +168,7 @@ COMMENT ::Test
 			ParserState::new_with_semantics(&parser, None),
 			source.clone(),
 			None,
+			ParseMode::default(),
 		);
 
 		validate_semantics!(state, source.clone(), 0,

@@ -6,6 +6,7 @@ use crate::document::element::Element;
 use crate::lua::kernel::CTX;
 use crate::parser::layout::LayoutHolder;
 use crate::parser::layout::LayoutType;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -232,7 +233,12 @@ impl Element for Layout {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 	fn element_name(&self) -> &'static str { "Layout" }
-	fn compile(&self, compiler: &Compiler, document: &dyn Document, _cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		self.layout
 			.compile(self.token, self.id, &self.properties, compiler, document)
 	}
@@ -379,9 +385,12 @@ static STATE_NAME: &str = "elements.layout";
 
 impl RegexRule for LayoutRule {
 	fn name(&self) -> &'static str { "Layout" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Media") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
+
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
 
 	fn on_regex_match(
 		&self,
@@ -897,7 +906,12 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Layout { token == LayoutToken::Begin, id == 0 };
@@ -949,7 +963,12 @@ mod tests {
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Layout { token == LayoutToken::Begin, id == 0 };

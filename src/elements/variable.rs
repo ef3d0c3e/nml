@@ -4,6 +4,7 @@ use crate::document::variable::PathVariable;
 use crate::document::variable::Variable;
 use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -119,9 +120,12 @@ impl VariableRule {
 
 impl RegexRule for VariableRule {
 	fn name(&self) -> &'static str { "Variable" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Element Style") }
 
 	fn regexes(&self) -> &[Regex] { &self.re }
+
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
 
 	fn on_regex_match(
 		&self,
@@ -257,17 +261,18 @@ impl RegexRule for VariableRule {
 			}
 		}
 
-		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
 		{
 			let name = matches.get(2).unwrap().range();
 			if let Some(kind) = matches.get(1).map(|m| m.range()) {
-				sems.add(kind.start-1..kind.start, tokens.variable_operator);
+				sems.add(kind.start - 1..kind.start, tokens.variable_operator);
 				sems.add(kind, tokens.variable_kind);
 			} else {
-				sems.add(name.start-1..name.start, tokens.variable_operator);
+				sems.add(name.start - 1..name.start, tokens.variable_operator);
 			}
 			sems.add(name.clone(), tokens.variable_name);
-			sems.add(name.end..name.end+1, tokens.variable_sep);
+			sems.add(name.end..name.end + 1, tokens.variable_sep);
 			let value = matches.get(3).unwrap().range();
 			sems.add(value.clone(), tokens.variable_value);
 		}
@@ -297,8 +302,7 @@ impl RegexRule for VariableRule {
 				let mut value: Option<String> = None;
 				CTX.with_borrow(|ctx| {
 					ctx.as_ref().map(|ctx| {
-						if let Some(var) = ctx.document.get_variable(name.as_str())
-						{
+						if let Some(var) = ctx.document.get_variable(name.as_str()) {
 							value = Some(var.to_string());
 						}
 					})
@@ -328,9 +332,12 @@ impl VariableSubstitutionRule {
 
 impl RegexRule for VariableSubstitutionRule {
 	fn name(&self) -> &'static str { "Variable Substitution" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Variable") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
+
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
 	fn on_regex_match<'a>(
 		&self,
@@ -351,7 +358,9 @@ impl RegexRule for VariableSubstitutionRule {
 							.with_message("Empty variable name")
 							.with_label(
 								Label::new((token.source(), matches.get(0).unwrap().range()))
-									.with_message("Missing variable name for substitution".to_string())
+									.with_message(
+										"Missing variable name for substitution".to_string(),
+									)
 									.with_color(state.parser.colors().error),
 							)
 							.finish(),
@@ -366,7 +375,9 @@ impl RegexRule for VariableSubstitutionRule {
 							.with_message("Invalid variable name")
 							.with_label(
 								Label::new((token.source(), name.range()))
-									.with_message("Variable names contains leading spaces".to_string())
+									.with_message(
+										"Variable names contains leading spaces".to_string(),
+									)
 									.with_color(state.parser.colors().error),
 							)
 							.with_help("Remove leading spaces")
@@ -382,7 +393,9 @@ impl RegexRule for VariableSubstitutionRule {
 							.with_message("Invalid variable name")
 							.with_label(
 								Label::new((token.source(), name.range()))
-									.with_message("Variable names contains trailing spaces".to_string())
+									.with_message(
+										"Variable names contains trailing spaces".to_string(),
+									)
 									.with_color(state.parser.colors().error),
 							)
 							.with_help("Remove trailing spaces")
@@ -392,20 +405,21 @@ impl RegexRule for VariableSubstitutionRule {
 					return result;
 				}
 				// Invalid name
-				if let Err(msg) = VariableRule::validate_name(state.parser.colors(), name.as_str()) {
-    						result.push(
-    							Report::build(ReportKind::Error, token.source(), name.start())
-    								.with_message("Invalid variable name")
-    								.with_label(
-    									Label::new((token.source(), name.range()))
-    										.with_message(msg)
-    										.with_color(state.parser.colors().error),
-    								)
-    								.finish(),
-    						);
+				if let Err(msg) = VariableRule::validate_name(state.parser.colors(), name.as_str())
+				{
+					result.push(
+						Report::build(ReportKind::Error, token.source(), name.start())
+							.with_message("Invalid variable name")
+							.with_label(
+								Label::new((token.source(), name.range()))
+									.with_message(msg)
+									.with_color(state.parser.colors().error),
+							)
+							.finish(),
+					);
 
-    						return result;
-    					}
+					return result;
+				}
 
 				// Get variable
 				match document.get_variable(name.as_str()) {
@@ -433,12 +447,13 @@ impl RegexRule for VariableSubstitutionRule {
 
 		variable.parse(state, token.clone(), document);
 
-		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
 		{
 			let name = matches.get(1).unwrap().range();
-			sems.add(name.start-1..name.start, tokens.variable_sub_sep);
+			sems.add(name.start - 1..name.start, tokens.variable_sub_sep);
 			sems.add(name.clone(), tokens.variable_sub_name);
-			sems.add(name.end..name.end+1, tokens.variable_sub_sep);
+			sems.add(name.end..name.end + 1, tokens.variable_sub_sep);
 		}
 
 		result

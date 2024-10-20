@@ -11,6 +11,7 @@ use crate::document::document::Document;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -48,7 +49,12 @@ impl Element for Paragraph {
 
 	fn element_name(&self) -> &'static str { "Paragraph" }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		cursor: usize,
+	) -> Result<String, String> {
 		if self.content.is_empty() {
 			return Ok(String::new());
 		}
@@ -63,7 +69,9 @@ impl Element for Paragraph {
 				result.push_str("<p>");
 
 				for elems in &self.content {
-					result += elems.compile(compiler, document, cursor+result.len())?.as_str();
+					result += elems
+						.compile(compiler, document, cursor + result.len())?
+						.as_str();
 				}
 
 				result.push_str("</p>");
@@ -106,11 +114,18 @@ impl ParagraphRule {
 
 impl Rule for ParagraphRule {
 	fn name(&self) -> &'static str { "Paragraph" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Comment") }
 
-	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(
+		&self,
+		_mode: &ParseMode,
+		_state: &ParserState,
+		cursor: &Cursor,
+	) -> Option<(usize, Box<dyn Any>)> {
 		self.re
-			.find_at(cursor.source.content(), cursor.pos).map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
+			.find_at(cursor.source.content(), cursor.pos)
+			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
 	}
 
 	fn on_match(
@@ -166,7 +181,12 @@ Last paragraph
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

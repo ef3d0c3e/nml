@@ -60,7 +60,8 @@ macro_rules! impl_elementstyle {
 				serde_json::from_str::<$t>(json)
 					.map_err(|e| e.to_string())
 					.map(|obj| {
-						std::rc::Rc::new(obj) as std::rc::Rc<dyn $crate::parser::style::ElementStyle>
+						std::rc::Rc::new(obj)
+							as std::rc::Rc<dyn $crate::parser::style::ElementStyle>
 					})
 			}
 

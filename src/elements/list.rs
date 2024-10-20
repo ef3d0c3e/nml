@@ -12,6 +12,7 @@ use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lsp::semantic::Semantics;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -269,9 +270,18 @@ impl ListRule {
 
 impl Rule for ListRule {
 	fn name(&self) -> &'static str { "List" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Raw") }
 
-	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(
+		&self,
+		mode: &ParseMode,
+		_state: &ParserState,
+		cursor: &Cursor,
+	) -> Option<(usize, Box<dyn Any>)> {
+		if mode.paragraph_only {
+			return None;
+		}
 		self.start_re
 			.find_at(cursor.source.content(), cursor.pos)
 			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
@@ -406,6 +416,7 @@ impl Rule for ListRule {
 
 				// Parse entry content
 				let token = Token::new(entry_start..end_cursor.pos, end_cursor.source.clone());
+				//println!("content={}", entry_content);
 				let entry_src = Rc::new(VirtualSource::new(
 					token.clone(),
 					"List Entry".to_string(),
@@ -475,7 +486,8 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::{validate_document, validate_semantics};
+	use crate::validate_document;
+	use crate::validate_semantics;
 
 	#[test]
 	fn parser() {
@@ -498,7 +510,7 @@ mod tests {
 		));
 		let parser = LangParser::default();
 		let state = ParserState::new(&parser, None);
-		let (doc, _) = parser.parse(state, source, None);
+		let (doc, _) = parser.parse(state, source, None, ParseMode::default());
 
 		validate_document!(doc.content().borrow(), 0,
 			ListMarker { numbered == false, kind == MarkerKind::Open };
@@ -549,7 +561,8 @@ mod tests {
  *[offset=5] First **bold**
 	Second line
  *- Another
->@
+
+
 		"#
 			.to_string(),
 			None,
@@ -559,6 +572,7 @@ mod tests {
 			ParserState::new_with_semantics(&parser, None),
 			source.clone(),
 			None,
+			ParseMode::default(),
 		);
 		validate_semantics!(state, source.clone(), 0,
 			list_bullet { delta_line == 1, delta_start == 1, length == 1 };

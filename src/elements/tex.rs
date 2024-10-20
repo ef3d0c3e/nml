@@ -29,6 +29,7 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -114,7 +115,9 @@ impl FormattedTex {
 		}
 
 		let mut result = String::new();
-		if let Err(e) = process.stdout.unwrap().read_to_string(&mut result) { panic!("Unable to read `latex2svg` stdout: {}", e) }
+		if let Err(e) = process.stdout.unwrap().read_to_string(&mut result) {
+			panic!("Unable to read `latex2svg` stdout: {}", e)
+		}
 		println!("Done!");
 
 		Ok(result)
@@ -303,9 +306,12 @@ impl TexRule {
 
 impl RegexRule for TexRule {
 	fn name(&self) -> &'static str { "Tex" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Code") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
+
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
 	fn on_regex_match(
 		&self,
@@ -407,14 +413,16 @@ impl RegexRule for TexRule {
 			.get("caption", |_, value| -> Result<String, ()> {
 				Ok(value.clone())
 			})
-			.ok().map(|(_, value)| value);
+			.ok()
+			.map(|(_, value)| value);
 
 		// Environ
 		let tex_env = properties
 			.get("env", |_, value| -> Result<String, ()> {
 				Ok(value.clone())
 			})
-			.ok().map(|(_, value)| value)
+			.ok()
+			.map(|(_, value)| value)
 			.unwrap();
 
 		state.push(
@@ -548,7 +556,12 @@ $[kind=block,env=another] e^{i\pi}=-1$
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
@@ -576,7 +589,12 @@ $[env=another] e^{i\pi}=-1$
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {

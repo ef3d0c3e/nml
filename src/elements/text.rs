@@ -11,6 +11,7 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lua::kernel::CTX;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -24,12 +25,7 @@ pub struct Text {
 }
 
 impl Text {
-	pub fn new(location: Token, content: String) -> Text {
-		Text {
-			location,
-			content,
-		}
-	}
+	pub fn new(location: Token, content: String) -> Text { Text { location, content } }
 }
 
 impl Element for Text {
@@ -37,7 +33,12 @@ impl Element for Text {
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Text" }
 
-	fn compile(&self, compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		_document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		Ok(Compiler::sanitize(compiler.target(), self.content.as_str()))
 	}
 }
@@ -51,9 +52,15 @@ impl TextRule {
 
 impl Rule for TextRule {
 	fn name(&self) -> &'static str { "Text" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Link") }
 
-	fn next_match(&self, _state: &ParserState, _cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(
+		&self,
+		_mode: &ParseMode,
+		_state: &ParserState,
+		_cursor: &Cursor,
+	) -> Option<(usize, Box<dyn Any>)> {
 		None
 	}
 

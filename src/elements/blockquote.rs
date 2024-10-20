@@ -25,6 +25,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::elements::paragraph::Paragraph;
 use crate::elements::text::Text;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -233,7 +234,15 @@ impl Rule for BlockquoteRule {
 
 	fn previous(&self) -> Option<&'static str> { Some("List") }
 
-	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(
+		&self,
+		mode: &ParseMode,
+		_state: &ParserState,
+		cursor: &Cursor,
+	) -> Option<(usize, Box<dyn Any>)> {
+		if mode.paragraph_only {
+			return None;
+		}
 		self.start_re
 			.find_at(cursor.source.content(), cursor.pos)
 			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
@@ -310,7 +319,7 @@ impl Rule for BlockquoteRule {
 			let parsed_doc = state.with_state(|new_state| {
 				new_state
 					.parser
-					.parse(new_state, entry_src, Some(document))
+					.parse(new_state, entry_src, Some(document), ParseMode::default())
 					.0
 			});
 
@@ -447,7 +456,12 @@ END
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph { Text{ content == "BEFORE" }; };
@@ -496,7 +510,12 @@ AFTER
 			None,
 		));
 		let parser = LangParser::default();
-		let (_, state) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (_, state) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		let style = state
 			.shared

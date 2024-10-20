@@ -1,3 +1,4 @@
+use crate::parser::parser::ParseMode;
 use crate::parser::style::ElementStyle;
 use std::any::Any;
 use std::ops::Range;
@@ -59,11 +60,18 @@ impl ElemStyleRule {
 
 impl Rule for ElemStyleRule {
 	fn name(&self) -> &'static str { "Element Style" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Script") }
 
-	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(
+		&self,
+		_mode: &ParseMode,
+		_state: &ParserState,
+		cursor: &Cursor,
+	) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re
-			.find_at(cursor.source.content(), cursor.pos).map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
+			.find_at(cursor.source.content(), cursor.pos)
+			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
 	}
 
 	fn on_match<'a>(
@@ -132,7 +140,9 @@ impl Rule for ElemStyleRule {
 						.with_message("Invalid Style Value")
 						.with_label(
 							Label::new((cursor.source.clone(), matches.get(0).unwrap().range()))
-								.with_message("Unable to parse json string after style key".to_string())
+								.with_message(
+									"Unable to parse json string after style key".to_string(),
+								)
 								.with_color(state.parser.colors().error),
 						)
 						.finish(),

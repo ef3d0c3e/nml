@@ -2,6 +2,7 @@ use crate::document::document::Document;
 use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelContext;
+use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
 use crate::parser::rule::RegexRule;
@@ -79,9 +80,12 @@ impl ScriptRule {
 
 impl RegexRule for ScriptRule {
 	fn name(&self) -> &'static str { "Script" }
+
 	fn previous(&self) -> Option<&'static str> { Some("Import") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
+
+	fn enabled(&self, mode: &ParseMode, id: usize) -> bool { !mode.paragraph_only || id != 0 }
 
 	fn on_regex_match<'a>(
 		&self,
@@ -244,9 +248,12 @@ impl RegexRule for ScriptRule {
 								)) as Rc<dyn Source>;
 
 								state.with_state(|new_state| {
-									new_state
-										.parser
-										.parse_into(new_state, parse_source, document);
+									new_state.parser.parse_into(
+										new_state,
+										parse_source,
+										document,
+										ParseMode::default(),
+									);
 								})
 							}
 						}
@@ -350,7 +357,12 @@ Evaluation: %<! make_ref("hello", "id")>%
 			None,
 		));
 		let parser = LangParser::default();
-		let (doc, _) = parser.parse(ParserState::new(&parser, None), source, None);
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph;
@@ -393,6 +405,7 @@ end
 			ParserState::new_with_semantics(&parser, None),
 			source.clone(),
 			None,
+			ParseMode::default(),
 		);
 		validate_semantics!(state, source.clone(), 0,
 			script_sep { delta_line == 1, delta_start == 0, length == 2 };

@@ -8,6 +8,7 @@ use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::elements::paragraph::Paragraph;
 
+use super::parser::ParseMode;
 use super::parser::ParserState;
 use super::source::Source;
 
@@ -143,7 +144,7 @@ pub fn parse_paragraph<'a>(
 	let parsed = state.with_state(|new_state| -> Box<dyn Document> {
 		new_state
 			.parser
-			.parse(new_state, source.clone(), Some(document))
+			.parse(new_state, source.clone(), Some(document), ParseMode { paragraph_only: true })
 			.0
 	});
 	if parsed.content().borrow().len() > 1 {
