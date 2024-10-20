@@ -1,4 +1,5 @@
 use crate::document::document::Document;
+use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelContext;
 use crate::parser::parser::ParserState;
@@ -151,7 +152,7 @@ impl RegexRule for ScriptRule {
 		let source = Rc::new(VirtualSource::new(
 			Token::new(kernel_range, token.source()),
 			format!(
-				"{}#{}:lua_kernel@{kernel_name}",
+				":LUA:{kernel_name}#{}#{}",
 				token.source().name(),
 				matches.get(0).unwrap().start()
 			),
@@ -170,10 +171,7 @@ impl RegexRule for ScriptRule {
 							.with_message("Invalid kernel code")
 							.with_label(
 								Label::new((source.clone(), 0..source.content().len()))
-									.with_message(format!(
-										"Kernel execution failed:\n{}",
-										e
-									))
+									.with_message(format!("Kernel execution failed:\n{}", e))
 									.with_color(state.parser.colors().error),
 							)
 							.finish(),
@@ -213,10 +211,7 @@ impl RegexRule for ScriptRule {
 								.with_message("Invalid kernel code")
 								.with_label(
 									Label::new((source.clone(), 0..source.content().len()))
-										.with_message(format!(
-											"Kernel evaluation failed:\n{}",
-											e
-										))
+										.with_message(format!("Kernel evaluation failed:\n{}", e))
 										.with_color(state.parser.colors().error),
 								)
 								.finish(),
@@ -283,6 +278,38 @@ impl RegexRule for ScriptRule {
 			document,
 		};
 
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
+		{
+			let range = matches
+				.get(0)
+				.map(|m| {
+					if token.source().content().as_bytes()[m.start()] == b'\n' {
+						m.start() + 1..m.end()
+					} else {
+						m.range()
+					}
+				})
+				.unwrap();
+			sems.add(range.start..range.start + 2, tokens.script_sep);
+			if index == 0 {
+				if let Some(kernel) = matches.get(1).map(|m| m.range()) {
+					sems.add(kernel, tokens.script_kernel);
+				}
+				sems.add(matches.get(2).unwrap().range(), tokens.script_content);
+			} else {
+				if let Some(kernel) = matches.get(1).map(|m| m.range()) {
+					sems.add(kernel.start - 1..kernel.start, tokens.script_kernel_sep);
+					sems.add(kernel.clone(), tokens.script_kernel);
+					sems.add(kernel.end..kernel.end + 1, tokens.script_kernel_sep);
+				}
+				if let Some(kind) = matches.get(2).map(|m| m.range()) {
+					sems.add(kind, tokens.script_kind);
+				}
+				sems.add(matches.get(3).unwrap().range(), tokens.script_content);
+			}
+			sems.add(range.end - 2..range.end, tokens.script_sep);
+		}
 		kernel.run_with_context(ctx, execute)
 	}
 }
@@ -299,6 +326,7 @@ mod tests {
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
+	use crate::validate_semantics;
 
 	#[test]
 	fn parser() {
@@ -342,6 +370,45 @@ Evaluation: %<! make_ref("hello", "id")>%
 				Text; Text;
 				Link { url == "#id" } { Text { content == "hello" }; };
 			};
+		);
+	}
+
+	#[test]
+	fn semantic() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+%<[test]! "Hello World">%
+@<main
+function add(x, y)
+	return x + y
+end
+>@
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+		);
+		validate_semantics!(state, source.clone(), 0,
+			script_sep { delta_line == 1, delta_start == 0, length == 2 };
+			script_kernel_sep { delta_line == 0, delta_start == 2, length == 1 };
+			script_kernel { delta_line == 0, delta_start == 1, length == 4 };
+			script_kernel_sep { delta_line == 0, delta_start == 4, length == 1 };
+			script_kind { delta_line == 0, delta_start == 1, length == 1 };
+			script_content { delta_line == 0, delta_start == 1, length == 14 };
+			script_sep { delta_line == 0, delta_start == 14, length == 2 };
+
+			script_sep { delta_line == 1, delta_start == 0, length == 2 };
+			script_kernel { delta_line == 0, delta_start == 2, length == 4 };
+			script_content { delta_line == 1, delta_start == 0, length == 19 };
+			script_content { delta_line == 1, delta_start == 0, length == 14 };
+			script_content { delta_line == 1, delta_start == 0, length == 3 };
+			script_sep { delta_line == 1, delta_start == 0, length == 2 };
 		);
 	}
 }

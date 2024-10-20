@@ -47,7 +47,12 @@ impl Element for Style {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Style" }
-	fn compile(&self, compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		_document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				Ok([
@@ -100,10 +105,13 @@ impl RuleState for StyleState {
 				let paragraph = document.last_element::<Paragraph>().unwrap();
 				let paragraph_end = paragraph
 					.content
-					.last().map(|last| (
+					.last()
+					.map(|last| {
+						(
 							last.location().source(),
 							last.location().end() - 1..last.location().end(),
-						))
+						)
+					})
 					.unwrap();
 
 				reports.push(
@@ -201,7 +209,8 @@ impl RegexRule for StyleRule {
 				)),
 			);
 
-			if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.semantics)
+			if let Some((sems, tokens)) =
+				Semantics::from_source(token.source(), &state.shared.semantics)
 			{
 				sems.add(token.start()..token.end(), tokens.style_marker);
 			}
@@ -228,7 +237,9 @@ impl RegexRule for StyleRule {
 							to: Some("toggle".to_string()),
 							pos: 1,
 							name: Some("style".to_string()),
-							cause: Arc::new(mlua::Error::external("Unknown style specified".to_string())),
+							cause: Arc::new(mlua::Error::external(
+								"Unknown style specified".to_string(),
+							)),
 						})
 					}
 				};
@@ -285,7 +296,8 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::{validate_document, validate_semantics};
+	use crate::validate_document;
+	use crate::validate_semantics;
 
 	use super::*;
 
@@ -372,19 +384,22 @@ terminated here%<nml.style.toggle("Italic")>%
 	}
 
 	#[test]
-	fn semantic()
-	{
+	fn semantic() {
 		let source = Rc::new(SourceFile::with_content(
-				"".to_string(),
-				r#"
+			"".to_string(),
+			r#"
 **te📫st** `another`
 __teかst__ *another*
 		"#
-		.to_string(),
-		None,
+			.to_string(),
+			None,
 		));
 		let parser = LangParser::default();
-		let (_, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None);
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+		);
 
 		validate_semantics!(state, source.clone(), 0,
 		style_marker { delta_line == 1, delta_start == 0, length == 2 };

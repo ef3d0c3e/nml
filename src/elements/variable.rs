@@ -47,7 +47,7 @@ pub struct VariableRule {
 impl VariableRule {
 	pub fn new() -> Self {
 		Self {
-			re: [Regex::new(r"(?:^|\n)@([^[:alpha:]])?(.*?)=((?:\\\n|.)*)").unwrap()],
+			re: [Regex::new(r"(?:^|\n)@(')?(.*?)=((?:\\\n|.)*)").unwrap()],
 			kinds: vec![("".into(), "Regular".into()), ("'".into(), "Path".into())],
 		}
 	}

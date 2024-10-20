@@ -11,6 +11,7 @@ use crate::document::document::DocumentAccessors;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lsp::semantic::Semantics;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -48,7 +49,12 @@ impl Element for ListMarker {
 
 	fn element_name(&self) -> &'static str { "List Marker" }
 
-	fn compile(&self, compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		_document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => match (self.kind, self.numbered) {
 				(MarkerKind::Close, true) => Ok("</ol>".to_string()),
@@ -76,21 +82,26 @@ impl Element for ListEntry {
 
 	fn element_name(&self) -> &'static str { "List Entry" }
 
-	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		cursor: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				let mut result = String::new();
-				if let Some((numbered, number)) = self.numbering.last()
-				{
+				if let Some((numbered, number)) = self.numbering.last() {
 					if *numbered {
 						result += format!("<li value=\"{number}\">").as_str();
-					}
-					else {
+					} else {
 						result += "<li>";
 					}
 				}
 				for elem in &self.content {
-					result += elem.compile(compiler, document, cursor+result.len())?.as_str();
+					result += elem
+						.compile(compiler, document, cursor + result.len())?
+						.as_str();
 				}
 				result += "</li>";
 				Ok(result)
@@ -137,7 +148,7 @@ impl ListRule {
 		Self {
 			start_re: Regex::new(r"(?:^|\n)(?:[^\S\r\n]+)([*-]+)(?:\[((?:\\.|[^\\\\])*?)\])?(.*)")
 				.unwrap(),
-			continue_re: Regex::new(r"(?:^|\n)([^\S\r\n]+)([^\s].*)").unwrap(),
+			continue_re: Regex::new(r"(?:^|\n)([^\S\r\n].*)").unwrap(),
 			properties: PropertyParser { properties: props },
 		}
 	}
@@ -262,7 +273,8 @@ impl Rule for ListRule {
 
 	fn next_match(&self, _state: &ParserState, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.start_re
-			.find_at(cursor.source.content(), cursor.pos).map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
+			.find_at(cursor.source.content(), cursor.pos)
+			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
 	}
 
 	fn on_match<'a>(
@@ -304,7 +316,7 @@ impl Rule for ListRule {
 								)
 								.finish(),
 							);
-							break;
+							return (cursor.at(captures.get(0).unwrap().end()), reports);
 						}
 						Ok(props) => (offset, bullet) = props,
 					}
@@ -323,19 +335,34 @@ impl Rule for ListRule {
 					offset.unwrap_or(usize::MAX),
 				);
 
+				if let Some((sems, tokens)) =
+					Semantics::from_source(cursor.source.clone(), &state.shared.semantics)
+				{
+					sems.add(captures.get(1).unwrap().range(), tokens.list_bullet);
+					if let Some(props) = captures.get(2).map(|m| m.range()) {
+						sems.add(props.start - 1..props.start, tokens.list_props_sep);
+						sems.add(props.clone(), tokens.list_props);
+						sems.add(props.end..props.end + 1, tokens.list_props_sep);
+					}
+				}
+
 				// Content
-				let entry_start = captures.get(0).unwrap().start();
+				let entry_start = captures.get(3).unwrap().start();
 				let mut entry_content = captures.get(3).unwrap().as_str().to_string();
 				let mut spacing: Option<(Range<usize>, &str)> = None;
 				while let Some(captures) = self.continue_re.captures_at(content, end_cursor.pos) {
 					// Break if next element is another entry
 					if captures.get(0).unwrap().start() != end_cursor.pos
 						|| captures
-							.get(2)
+							.get(1)
 							.unwrap()
 							.as_str()
 							.find(['*', '-'])
-							== Some(0)
+							.map(|delim| {
+								captures.get(1).unwrap().as_str()[0..delim]
+									.chars()
+									.fold(true, |val, c| val && c.is_whitespace())
+							}) == Some(true)
 					{
 						break;
 					}
@@ -373,8 +400,8 @@ impl Rule for ListRule {
 						spacing = Some((captures.get(1).unwrap().range(), current_spacing));
 					}
 
-					entry_content += " ";
-					entry_content += captures.get(2).unwrap().as_str();
+					entry_content += "\n";
+					entry_content += captures.get(1).unwrap().as_str();
 				}
 
 				// Parse entry content
@@ -401,7 +428,6 @@ impl Rule for ListRule {
 					}
 					Ok(mut paragraph) => std::mem::take(&mut paragraph.content),
 				};
-
 
 				if let Some(previous_depth) = document
 					.last_element::<ListEntry>()
@@ -449,7 +475,7 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::validate_document;
+	use crate::{validate_document, validate_semantics};
 
 	#[test]
 	fn parser() {
@@ -512,6 +538,36 @@ mod tests {
 			ListMarker { numbered == false, kind == MarkerKind::Close };
 			ListMarker { numbered == true, kind == MarkerKind::Close };
 			ListMarker { numbered == false, kind == MarkerKind::Close };
+		);
+	}
+
+	#[test]
+	fn semantic() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+ *[offset=5] First **bold**
+	Second line
+ *- Another
+>@
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+		);
+		validate_semantics!(state, source.clone(), 0,
+			list_bullet { delta_line == 1, delta_start == 1, length == 1 };
+			list_props_sep { delta_line == 0, delta_start == 1, length == 1 };
+			list_props { delta_line == 0, delta_start == 1, length == 8 };
+			list_props_sep { delta_line == 0, delta_start == 8, length == 1 };
+			style_marker { delta_line == 0, delta_start == 8, length == 2 };
+			style_marker { delta_line == 0, delta_start == 6, length == 2 };
+			list_bullet { delta_line == 2, delta_start == 1, length == 2 };
 		);
 	}
 }

@@ -129,6 +129,16 @@ pub struct Tokens {
 	pub code_lang: (u32, u32),
 	pub code_title: (u32, u32),
 	pub code_content: (u32, u32),
+
+	pub script_sep: (u32, u32),
+	pub script_kernel_sep: (u32, u32),
+	pub script_kernel: (u32, u32),
+	pub script_kind: (u32, u32),
+	pub script_content: (u32, u32),
+
+	pub list_bullet: (u32, u32),
+	pub list_props_sep: (u32, u32),
+	pub list_props: (u32, u32),
 }
 
 impl Tokens {
@@ -175,6 +185,16 @@ impl Tokens {
 			code_lang: token!("function"),
 			code_title: token!("number"),
 			code_content: token!("string"),
+
+			script_sep: token!("operator"),
+			script_kernel_sep: token!("operator"),
+			script_kernel: token!("function"),
+			script_kind: token!("function"),
+			script_content: token!("string"),
+
+			list_bullet: token!("macro"),
+			list_props_sep: token!("operator"),
+			list_props: token!("enum"),
 		}
 	}
 }
@@ -211,6 +231,10 @@ impl<'a> Semantics<'a> {
 		semantics: &'a Option<RefCell<SemanticsHolder>>,
 		range: Range<usize>,
 	) -> Option<(Self, Ref<'a, Tokens>)> {
+		if source.name().starts_with(":LUA:") && source.downcast_ref::<VirtualSource>().is_some() {
+			return None;
+		}
+
 		if let Some(location) = source
 			.clone()
 			.downcast_rc::<VirtualSource>()
@@ -269,7 +293,8 @@ impl<'a> Semantics<'a> {
 		while cursor.pos != range.end {
 			let end = self.source.content()[cursor.pos..range.end]
 				.find('\n')
-				.unwrap_or(self.source.content().len() - 1) + 1;
+				.unwrap_or(self.source.content().len() - 1)
+				+ 1;
 			let len = usize::min(range.end - cursor.pos, end);
 			let clen = self.source.content()[cursor.pos..cursor.pos + len]
 				.chars()
