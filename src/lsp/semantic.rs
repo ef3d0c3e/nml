@@ -1,6 +1,5 @@
 use std::cell::Ref;
 use std::cell::RefCell;
-use std::cell::RefMut;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
@@ -8,7 +7,6 @@ use std::rc::Rc;
 use tower_lsp::lsp_types::SemanticToken;
 use tower_lsp::lsp_types::SemanticTokenModifier;
 use tower_lsp::lsp_types::SemanticTokenType;
-use unicode_width::UnicodeWidthStr;
 
 use crate::parser::source::LineCursor;
 use crate::parser::source::Source;
@@ -252,7 +250,9 @@ impl<'a> Semantics<'a> {
 				.find('\n')
 				.unwrap_or(self.source.content().len() - cursor.pos);
 			let len = usize::min(range.end - cursor.pos, end);
-			let clen = self.source.content()[cursor.pos..cursor.pos + len].width(); // TODO Fix issue with CJK characters
+			let clen = self.source.content()[cursor.pos..cursor.pos + len]
+				.chars()
+				.fold(0, |acc, c| acc + c.len_utf16());
 
 			let delta_line = cursor.line - current.line;
 			let delta_start = if delta_line == 0 {

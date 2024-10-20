@@ -5,7 +5,6 @@ use std::rc::Rc;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
-use unicode_width::UnicodeWidthChar;
 
 /// Trait for source content
 pub trait Source: Downcast + Debug {
@@ -159,14 +158,13 @@ impl LineCursor {
 			let mut prev = self.source.content().as_str()[..start].chars().rev().next();
 			while self.pos < pos {
 				let c = it.next().unwrap();
-				let len = c.len_utf8();
 
 				if self.pos != start && prev == Some('\n') {
 					self.line += 1;
 					self.line_pos = 0;
 				}
-				self.line_pos += c.width().unwrap_or(1);
-				self.pos += len;
+				self.line_pos += c.len_utf16();
+				self.pos += c.len_utf8();
 				prev = Some(c);
 			}
 			if self.pos != start && prev == Some('\n') {
@@ -190,8 +188,8 @@ impl LineCursor {
 					self.line -= 1;
 					self.line_pos = 0;
 				}
-				self.line_pos -= c.width().unwrap_or(1);
-				self.pos -= len;
+				self.line_pos -= c.len_utf16();
+				self.pos -= c.len_utf8();
 				prev = Some(c);
 			}
 			if self.pos != start && prev == Some('\n') {

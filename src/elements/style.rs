@@ -377,8 +377,8 @@ terminated here%<nml.style.toggle("Italic")>%
 		let source = Rc::new(SourceFile::with_content(
 				"".to_string(),
 				r#"
-**test** `another`
-__test__ *another*
+**te📫st** `another`
+__teかst__ *another*
 		"#
 		.to_string(),
 		None,
@@ -388,12 +388,12 @@ __test__ *another*
 
 		validate_semantics!(state, source.clone(), 0,
 		style_marker { delta_line == 1, delta_start == 0, length == 2 };
-		style_marker { delta_line == 0, delta_start == 6, length == 2 };
+		style_marker { delta_line == 0, delta_start == 6 + '📫'.len_utf16() as u32, length == 2 };
 		style_marker { delta_line == 0, delta_start == 3, length == 1 };
 		style_marker { delta_line == 0, delta_start == 8, length == 1 };
 
 		style_marker { delta_line == 1, delta_start == 0, length == 2 };
-		style_marker { delta_line == 0, delta_start == 6, length == 2 };
+		style_marker { delta_line == 0, delta_start == 6 + 'か'.len_utf16() as u32, length == 2 };
 		style_marker { delta_line == 0, delta_start == 3, length == 1 };
 		style_marker { delta_line == 0, delta_start == 8, length == 1 };
 		);
