@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::iter::Peekable;
+use std::ops::Range;
 use std::rc::Rc;
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -7,10 +9,14 @@ use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::elements::paragraph::Paragraph;
+use crate::parser::source::original_range;
 
 use super::parser::ParseMode;
 use super::parser::ParserState;
 use super::source::Source;
+use super::source::SourceFile;
+use super::source::Token;
+use super::source::VirtualSource;
 
 /// Processes text for escape characters and paragraphing
 pub fn process_text(document: &dyn Document, content: &str) -> String {
@@ -88,6 +94,73 @@ pub fn process_text(document: &dyn Document, content: &str) -> String {
 	processed
 }
 
+/// Transforms source into a new [`VirtualSource`]. Transforms range from source by
+/// detecting escaped tokens.
+///
+pub fn escape_source(source: Rc<dyn Source>, range: Range<usize>, name: String, escape: char, token: &'static str) -> Rc<dyn Source>
+{
+	let content = &source.content()[range.clone()];
+
+	let mut processed = String::new();
+	let mut escaped = 0;
+	let mut token_it = token.chars().peekable();
+	let mut offset = 0isize;
+	let mut offsets : Vec<(usize, isize)> = vec!();
+	for (pos, c) in content.chars().enumerate()
+	{
+		if c == escape {
+			escaped += 1;
+		} else if escaped % 2 == 1 && token_it.peek().map_or(false, |p| *p == c) {
+			let _ = token_it.next();
+			if token_it.peek().is_none() {
+				(0..(escaped / 2)).for_each(|_| processed.push(escape));
+				if ( escaped + 1) / 2 != 0
+				{
+					offset += (escaped + 1) / 2;
+					offsets.push((pos - token.len() - escaped as usize / 2, offset));
+				}
+				escaped = 0;
+				token_it = token.chars().peekable();
+				processed.push_str(token);
+			}
+		} else {
+			if escaped != 0 {
+				// Add escapes
+				(0..escaped).for_each(|_| processed.push('\\'));
+				token_it = token.chars().peekable();
+				escaped = 0;
+			}
+			processed.push(c);
+		}
+	}
+	// Add trailing escapes
+	(0..escaped).for_each(|_| processed.push('\\'));
+
+	Rc::new(VirtualSource::new_offsets(
+		Token::new(range, source),
+		name,
+		processed,
+		offsets
+	))
+}
+
+pub fn app()
+{
+	let mut s = String::new();
+
+	let source = Rc::new(SourceFile::with_content(
+		"test".to_string(),
+		"a\\\\\\```b".into(),
+		None,
+	));
+	let src = escape_source(source.clone(), 0..source.content().len(), "sub".to_string(), '\\', "```");
+	println!("{}", src.content());
+	let range = 0..src.content().len();
+	println!("{:#?}", range);
+	let orange = original_range(src.clone(), range);
+	println!("{:#?}", orange);
+}
+
 /// Processed a string and escapes a single token out of it
 /// Escaped characters other than the [`token`] will be not be treated as escaped
 ///
@@ -96,6 +169,8 @@ pub fn process_text(document: &dyn Document, content: &str) -> String {
 /// assert_eq!(process_escaped('\\', "%", "escaped: \\%, also escaped: \\\\\\%, untouched: \\a"),
 /// "escaped: %, also escaped: \\%, untouched: \\a");
 /// ```
+/// TODO: Make this function return a delta to pass to the semantics, maybe store it in the virtualsource, so this function should return a source...
+#[deprecated]
 pub fn process_escaped<S: AsRef<str>>(escape: char, token: &'static str, content: S) -> String {
 	let mut processed = String::new();
 	let mut escaped = 0;

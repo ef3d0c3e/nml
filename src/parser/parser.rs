@@ -2,7 +2,6 @@ use ariadne::Label;
 use ariadne::Report;
 use std::any::Any;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
 use std::rc::Rc;

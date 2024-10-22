@@ -3,6 +3,7 @@ use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::layout::LayoutHolder;
 use crate::parser::layout::LayoutType;
@@ -516,6 +517,25 @@ impl RegexRule for LayoutRule {
 							|| panic!("Invalid state at: `{STATE_NAME}`"),
 							|s| s.stack.push((vec![token.clone()], layout_type.clone())),
 						);
+
+					if let Some((sems, tokens)) =
+						Semantics::from_source(token.source(), &state.shared.semantics)
+					{
+						let start = matches.get(0).map(|m| {
+							m.start() + token.source().content()[m.start()..].find('#').unwrap()
+						}).unwrap();
+						sems.add(start..start + 2, tokens.layout_sep);
+						sems.add(
+							start + 2..start + 2 + "LAYOUT_BEGIN".len(),
+							tokens.layout_token,
+						);
+						if let Some(props) = matches.get(1).map(|m| m.range()) {
+							sems.add(props.start - 1..props.start, tokens.layout_props_sep);
+							sems.add(props.clone(), tokens.layout_props);
+							sems.add(props.end..props.end + 1, tokens.layout_props_sep);
+						}
+						sems.add(matches.get(2).unwrap().range(), tokens.layout_type);
+					}
 				}
 			};
 			return reports;
@@ -578,6 +598,24 @@ impl RegexRule for LayoutRule {
 				}
 			};
 
+			if let Some((sems, tokens)) =
+				Semantics::from_source(token.source(), &state.shared.semantics)
+			{
+				let start = matches.get(0).map(|m| {
+					m.start() + token.source().content()[m.start()..].find('#').unwrap()
+				}).unwrap();
+				sems.add(start..start + 2, tokens.layout_sep);
+				sems.add(
+					start + 2..start + 2 + "LAYOUT_NEXT".len(),
+					tokens.layout_token,
+				);
+				if let Some(props) = matches.get(1).map(|m| m.range()) {
+					sems.add(props.start - 1..props.start, tokens.layout_props_sep);
+					sems.add(props.clone(), tokens.layout_props);
+					sems.add(props.end..props.end + 1, tokens.layout_props_sep);
+				}
+			}
+
 			tokens.push(token.clone());
 			(
 				tokens.len() - 1,
@@ -585,6 +623,7 @@ impl RegexRule for LayoutRule {
 				layout_type.clone(),
 				properties,
 			)
+
 		} else {
 			// LAYOUT_END
 			let mut rule_state_borrow = rule_state.as_ref().borrow_mut();
@@ -644,6 +683,25 @@ impl RegexRule for LayoutRule {
 			let layout_type = layout_type.clone();
 			let id = tokens.len();
 			layout_state.stack.pop();
+
+			if let Some((sems, tokens)) =
+				Semantics::from_source(token.source(), &state.shared.semantics)
+			{
+				let start = matches.get(0).map(|m| {
+					m.start() + token.source().content()[m.start()..].find('#').unwrap()
+				}).unwrap();
+				sems.add(start..start + 2, tokens.layout_sep);
+				sems.add(
+					start + 2..start + 2 + "LAYOUT_END".len(),
+					tokens.layout_token,
+				);
+				if let Some(props) = matches.get(1).map(|m| m.range()) {
+					sems.add(props.start - 1..props.start, tokens.layout_props_sep);
+					sems.add(props.clone(), tokens.layout_props);
+					sems.add(props.end..props.end + 1, tokens.layout_props_sep);
+				}
+			}
+
 			(id, LayoutToken::End, layout_type, properties)
 		};
 
@@ -879,7 +937,7 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::validate_document;
+	use crate::{validate_document, validate_semantics};
 
 	use super::*;
 
@@ -994,6 +1052,39 @@ mod tests {
 			};
 			Layout { token == LayoutToken::End, id == 2 };
 			Layout { token == LayoutToken::End, id == 2 };
+		);
+	}
+
+	#[test]
+	fn semantic() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+#+LAYOUT_BEGIN Split
+	#+LAYOUT_NEXT[style=aa]
+#+LAYOUT_END
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+			ParseMode::default(),
+		);
+		validate_semantics!(state, source.clone(), 0,
+			layout_sep { delta_line == 1, delta_start == 0, length == 2 };
+			layout_token { delta_line == 0, delta_start == 2, length == 12 };
+			layout_type { delta_line == 0, delta_start == 12, length == 6 };
+			layout_sep { delta_line == 1, delta_start == 1, length == 2 };
+			layout_token { delta_line == 0, delta_start == 2, length == 11 };
+			layout_props_sep { delta_line == 0, delta_start == 11, length == 1 };
+			layout_props { delta_line == 0, delta_start == 1, length == 8 };
+			layout_props_sep { delta_line == 0, delta_start == 8, length == 1 };
+			layout_sep { delta_line == 1, delta_start == 0, length == 2 };
+			layout_token { delta_line == 0, delta_start == 2, length == 10 };
 		);
 	}
 }

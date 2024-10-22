@@ -14,7 +14,6 @@ use ariadne::Report;
 use ariadne::ReportKind;
 use regex::Captures;
 use regex::Regex;
-use std::cell::RefMut;
 use std::ops::Range;
 use std::rc::Rc;
 

@@ -12,8 +12,6 @@ pub trait Variable {
 	fn location(&self) -> &Token;
 
 	fn name(&self) -> &str;
-	/// Parse variable from string, returns an error message on failure
-	fn from_string(&mut self, str: &str) -> Option<String>;
 
 	/// Converts variable to a string
 	fn to_string(&self) -> String;
@@ -48,11 +46,6 @@ impl Variable for BaseVariable {
 	fn location(&self) -> &Token { &self.location }
 
 	fn name(&self) -> &str { self.name.as_str() }
-
-	fn from_string(&mut self, str: &str) -> Option<String> {
-		self.value = str.to_string();
-		None
-	}
 
 	fn to_string(&self) -> String { self.value.clone() }
 
@@ -90,11 +83,6 @@ impl Variable for PathVariable {
 	fn location(&self) -> &Token { &self.location }
 
 	fn name(&self) -> &str { self.name.as_str() }
-
-	fn from_string(&mut self, str: &str) -> Option<String> {
-		self.path = std::fs::canonicalize(str).unwrap();
-		None
-	}
 
 	fn to_string(&self) -> String { self.path.to_str().unwrap().to_string() }
 

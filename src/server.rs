@@ -65,7 +65,7 @@ impl Backend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-	async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+	async fn initialize(&self, _params: InitializeParams) -> Result<InitializeResult> {
 		Ok(InitializeResult {
 			capabilities: ServerCapabilities {
 				text_document_sync: Some(TextDocumentSyncCapability::Kind(
@@ -139,9 +139,9 @@ impl LanguageServer for Backend {
 		.await
 	}
 
-	async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-		let uri = params.text_document_position.text_document.uri;
-		let position = params.text_document_position.position;
+	async fn completion(&self, _params: CompletionParams) -> Result<Option<CompletionResponse>> {
+		//let uri = params.text_document_position.text_document.uri;
+		//let position = params.text_document_position.position;
 		let completions = || -> Option<Vec<CompletionItem>> {
 			let mut ret = Vec::with_capacity(0);
 

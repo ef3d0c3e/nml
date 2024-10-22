@@ -359,7 +359,6 @@ impl Rule for ListRule {
 				// Content
 				let entry_start = captures.get(3).unwrap().start();
 				let mut entry_content = captures.get(3).unwrap().as_str().to_string();
-				let mut spacing: Option<(Range<usize>, &str)> = None;
 				while let Some(captures) = self.continue_re.captures_at(content, end_cursor.pos) {
 					// Break if next element is another entry
 					if captures.get(0).unwrap().start() != end_cursor.pos
@@ -379,44 +378,12 @@ impl Rule for ListRule {
 					// Advance cursor
 					end_cursor = end_cursor.at(captures.get(0).unwrap().end());
 
-					// Spacing
-					let current_spacing = captures.get(1).unwrap().as_str();
-					if let Some(spacing) = &spacing {
-						if spacing.1 != current_spacing {
-							reports.push(
-								Report::build(
-									ReportKind::Warning,
-									cursor.source.clone(),
-									captures.get(1).unwrap().start(),
-								)
-								.with_message("Invalid list entry spacing")
-								.with_label(
-									Label::new((
-										cursor.source.clone(),
-										captures.get(1).unwrap().range(),
-									))
-									.with_message("Spacing for list entries do not match")
-									.with_color(state.parser.colors().warning),
-								)
-								.with_label(
-									Label::new((cursor.source.clone(), spacing.0.clone()))
-										.with_message("Previous spacing")
-										.with_color(state.parser.colors().warning),
-								)
-								.finish(),
-							);
-						}
-					} else {
-						spacing = Some((captures.get(1).unwrap().range(), current_spacing));
-					}
-
 					entry_content += "\n";
 					entry_content += captures.get(1).unwrap().as_str();
 				}
 
 				// Parse entry content
 				let token = Token::new(entry_start..end_cursor.pos, end_cursor.source.clone());
-				//println!("content={}", entry_content);
 				let entry_src = Rc::new(VirtualSource::new(
 					token.clone(),
 					"List Entry".to_string(),
@@ -561,8 +528,6 @@ mod tests {
  *[offset=5] First **bold**
 	Second line
  *- Another
-
-
 		"#
 			.to_string(),
 			None,

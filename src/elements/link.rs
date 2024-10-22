@@ -127,8 +127,8 @@ impl RegexRule for LinkRule {
 					);
 					return reports;
 				}
-				let processed = util::process_escaped('\\', "]", display.as_str());
-				if processed.is_empty() {
+				let display_source = util::escape_source(token.source(), display.range(), "Link Display".into(), '\\', "](");
+				if display_source.content().is_empty() {
 					reports.push(
 						Report::build(ReportKind::Error, token.source(), display.start())
 							.with_message("Empty link name")
@@ -137,7 +137,7 @@ impl RegexRule for LinkRule {
 									.with_message(format!(
 										"Link name is empty. Once processed, `{}` yields `{}`",
 										display.as_str().fg(state.parser.colors().highlight),
-										processed.fg(state.parser.colors().highlight),
+										display_source.fg(state.parser.colors().highlight),
 									))
 									.with_color(state.parser.colors().error),
 							)
@@ -154,12 +154,7 @@ impl RegexRule for LinkRule {
 						tokens.link_display_sep,
 					);
 				}
-				let source = Rc::new(VirtualSource::new(
-					Token::new(display.range(), token.source()),
-					"Link Display".to_string(),
-					processed,
-				));
-				match util::parse_paragraph(state, source, document) {
+				match util::parse_paragraph(state, display_source, document) {
 					Err(err) => {
 						reports.push(
 							Report::build(ReportKind::Error, token.source(), display.start())
@@ -376,6 +371,22 @@ nml.link.push("**BOLD link**", "another url")
 
 	#[test]
 	fn semantics() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#" - [la(*testi*nk](url)
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+			ParseMode::default(),
+		);
+		println!("{:#?}", state.shared.semantics);
+		return;
 		let source = Rc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"

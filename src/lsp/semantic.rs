@@ -8,6 +8,7 @@ use tower_lsp::lsp_types::SemanticToken;
 use tower_lsp::lsp_types::SemanticTokenModifier;
 use tower_lsp::lsp_types::SemanticTokenType;
 
+use crate::parser::source::original_range;
 use crate::parser::source::LineCursor;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
@@ -139,6 +140,22 @@ pub struct Tokens {
 	pub list_bullet: (u32, u32),
 	pub list_props_sep: (u32, u32),
 	pub list_props: (u32, u32),
+
+	pub raw_sep: (u32, u32),
+	pub raw_props_sep: (u32, u32),
+	pub raw_props: (u32, u32),
+	pub raw_content: (u32, u32),
+
+	pub tex_sep: (u32, u32),
+	pub tex_props_sep: (u32, u32),
+	pub tex_props: (u32, u32),
+	pub tex_content: (u32, u32),
+
+	pub layout_sep: (u32, u32),
+	pub layout_token: (u32, u32),
+	pub layout_props_sep: (u32, u32),
+	pub layout_props: (u32, u32),
+	pub layout_type: (u32, u32),
 }
 
 impl Tokens {
@@ -160,7 +177,7 @@ impl Tokens {
 			import_import: token!("macro"),
 			import_as_sep: token!("operator"),
 			import_as: token!("operator"),
-			import_path: token!("function"),
+			import_path: token!("parameter"),
 
 			reference_operator: token!("operator"),
 			reference_link_sep: token!("operator"),
@@ -174,7 +191,7 @@ impl Tokens {
 			variable_kind: token!("operator"),
 			variable_name: token!("macro"),
 			variable_sep: token!("operator"),
-			variable_value: token!("function"),
+			variable_value: token!("parameter"),
 
 			variable_sub_sep: token!("operator"),
 			variable_sub_name: token!("macro"),
@@ -195,6 +212,22 @@ impl Tokens {
 			list_bullet: token!("macro"),
 			list_props_sep: token!("operator"),
 			list_props: token!("enum"),
+
+			raw_sep: token!("operator"),
+			raw_props_sep: token!("operator"),
+			raw_props: token!("enum"),
+			raw_content: token!("string"),
+
+			tex_sep: token!("modifier"),
+			tex_props_sep: token!("operator"),
+			tex_props: token!("enum"),
+			tex_content: token!("string"),
+
+			layout_sep: token!("number"),
+			layout_token: token!("number"),
+			layout_props_sep: token!("operator"),
+			layout_props: token!("enum"),
+			layout_type: token!("function"),
 		}
 	}
 }
@@ -221,15 +254,17 @@ impl SemanticsData {
 #[derive(Debug)]
 pub struct Semantics<'a> {
 	pub(self) sems: Ref<'a, SemanticsData>,
+	// TODO
+	pub(self) original_source: Rc<dyn Source>,
+	/// The resolved parent source
 	pub(self) source: Rc<dyn Source>,
-	pub(self) range: Range<usize>,
 }
 
 impl<'a> Semantics<'a> {
 	fn from_source_impl(
 		source: Rc<dyn Source>,
 		semantics: &'a Option<RefCell<SemanticsHolder>>,
-		range: Range<usize>,
+		original_source: Rc<dyn Source>,
 	) -> Option<(Self, Ref<'a, Tokens>)> {
 		if source.name().starts_with(":LUA:") && source.downcast_ref::<VirtualSource>().is_some() {
 			return None;
@@ -243,7 +278,8 @@ impl<'a> Semantics<'a> {
 			.map(|parent| parent.location())
 			.unwrap_or(None)
 		{
-			return Self::from_source_impl(location.source(), semantics, range);
+			//let range = location.range.start+range.start..location.range.start+range.end;
+			return Self::from_source_impl(location.source(), semantics, original_source);
 		} else if let Some(source) = source.clone().downcast_rc::<SourceFile>().ok() {
 			return Ref::filter_map(
 				semantics.as_ref().unwrap().borrow(),
@@ -257,7 +293,7 @@ impl<'a> Semantics<'a> {
 					Self {
 						sems,
 						source,
-						range,
+						original_source,
 					},
 					Ref::map(
 						semantics.as_ref().unwrap().borrow(),
@@ -276,18 +312,15 @@ impl<'a> Semantics<'a> {
 		if semantics.is_none() {
 			return None;
 		}
-		let range = source.location().map_or_else(
-			|| 0..source.content().len(),
-			|location| location.range.clone(),
-		);
-		return Self::from_source_impl(source, semantics, range);
+		return Self::from_source_impl(source.clone(), semantics, source);
 	}
 
 	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
-		let range = self.range.start + range.start..self.range.start + range.end;
+		let range = original_range(self.original_source.clone(), range).1;
 		let mut tokens = self.sems.tokens.borrow_mut();
 		let mut cursor = self.sems.cursor.borrow_mut();
 		let mut current = cursor.clone();
+		println!("range={range:#?}");
 		cursor.move_to(range.start);
 
 		while cursor.pos != range.end {

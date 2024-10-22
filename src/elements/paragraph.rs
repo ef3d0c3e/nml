@@ -32,8 +32,6 @@ pub struct Paragraph {
 }
 
 impl Paragraph {
-	pub fn is_empty(&self) -> bool { self.content.is_empty() }
-
 	pub fn find_back<P: FnMut(&&Box<dyn Element + 'static>) -> bool>(
 		&self,
 		predicate: P,

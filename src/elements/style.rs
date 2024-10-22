@@ -9,6 +9,7 @@ use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
+use crate::parser::source::original_range;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::state::RuleState;

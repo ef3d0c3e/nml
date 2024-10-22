@@ -70,11 +70,48 @@ impl Source for SourceFile {
 	fn content(&self) -> &String { &self.content }
 }
 
+/// Stores the offsets in a virtual source
+///
+/// # Example
+///
+/// Let's say you make a virtual source from the following: "Con\]tent" -> "Con]tent"
+/// Then at position 3, an offset of 1 will be created to account for the removed '\'
+#[derive(Debug)]
+struct SourceOffset
+{
+	/// Stores the total offsets
+	offsets: Vec<(usize, isize)>,
+}
+
+impl SourceOffset
+{
+	/// Get the offset position
+	pub fn position(&self, pos: usize) -> usize
+	{
+		match self.offsets.binary_search_by_key(&pos, |&(orig, _)| orig)
+		{
+			Ok(idx) => (pos as isize + self.offsets[idx].1) as usize,
+			Err(idx) => {
+				if idx == 0
+				{
+					pos
+				}
+				else
+				{
+					(pos as isize + self.offsets[idx - 1].1) as usize
+				}
+			},
+		}
+	}
+}
+
 #[derive(Debug)]
 pub struct VirtualSource {
 	location: Token,
 	name: String,
 	content: String,
+	/// Offset relative to the [`location`]'s source
+	offsets: Option<SourceOffset>,
 }
 
 impl VirtualSource {
@@ -83,6 +120,16 @@ impl VirtualSource {
 			location,
 			name,
 			content,
+			offsets: None,
+		}
+	}
+
+	pub fn new_offsets(location: Token, name: String, content: String, offsets: Vec<(usize, isize)>) -> Self {
+		Self {
+			location,
+			name,
+			content,
+			offsets: Some(SourceOffset { offsets }),
 		}
 	}
 }
@@ -91,6 +138,49 @@ impl Source for VirtualSource {
 	fn location(&self) -> Option<&Token> { Some(&self.location) }
 	fn name(&self) -> &String { &self.name }
 	fn content(&self) -> &String { &self.content }
+}
+
+/// Transforms a position to it's position in the oldest parent source
+pub fn original_position(source: Rc<dyn Source>, mut pos: usize) -> (Rc<dyn Source>, usize)
+{
+	// Apply offsets
+	if let Some(offsets) =
+		source.downcast_ref::<VirtualSource>()
+		.and_then(|source| source.offsets.as_ref())
+	{
+		pos = offsets.position(pos);
+	}
+
+	// Recurse to parent
+	if let Some(parent) = source.location()
+	{
+		return original_position(parent.source.clone(), parent.range.start + pos);
+	}
+
+	return (source, pos);
+}
+
+/// Transforms a range to the oldest parent source
+///
+/// This function takes a range from a source and attempts to get the range's position in the oldest parent
+pub fn original_range(source: Rc<dyn Source>, mut range: Range<usize>) -> (Rc<dyn Source>, Range<usize>)
+{
+	// Apply offsets
+	if let Some(offsets) =
+		source.downcast_ref::<VirtualSource>()
+		.and_then(|source| source.offsets.as_ref())
+	{
+		range = offsets.position(range.start) .. offsets.position(range.end);
+	}
+
+	// Recurse to parent
+	if let Some(parent) = source.location()
+	{
+		//println!("FOUND PARENT={}", parent.source().name());
+		return original_range(parent.source.clone(), parent.range.start + range.start..parent.range.start + range.end);
+	}
+
+	return (source, range);
 }
 
 #[derive(Debug)]
@@ -151,6 +241,7 @@ impl LineCursor {
 	/// # Error
 	/// This function will panic if [`pos`] is not utf8 aligned
 	pub fn move_to(&mut self, pos: usize) {
+		println!("pos={pos}");
 		if self.pos < pos {
 			let start = self.pos;
 			let mut it = self.source.content().as_str()[start..].chars().peekable();
@@ -173,29 +264,6 @@ impl LineCursor {
 			}
 		} else if self.pos > pos {
 			panic!();
-			let start = self.pos;
-			let mut it = self.source.content().as_str()[..start]
-				.chars()
-				.rev()
-				.peekable();
-
-			let mut prev = self.source.content().as_str()[start..].chars().next();
-			while self.pos > pos {
-				let c = it.next().unwrap();
-				let len = c.len_utf8();
-
-				if self.pos != start && prev == Some('\n') {
-					self.line -= 1;
-					self.line_pos = 0;
-				}
-				self.line_pos -= c.len_utf16();
-				self.pos -= c.len_utf8();
-				prev = Some(c);
-			}
-			if self.pos != start && prev == Some('\n') {
-				self.line -= 1;
-				self.line_pos = 0;
-			}
 		}
 
 		// May fail if pos is not utf8-aligned

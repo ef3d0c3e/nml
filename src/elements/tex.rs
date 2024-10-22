@@ -28,6 +28,7 @@ use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
@@ -429,7 +430,7 @@ impl RegexRule for TexRule {
 			document,
 			Box::new(Tex {
 				mathmode: index == 1,
-				location: token,
+				location: token.clone(),
 				kind: tex_kind,
 				env: tex_env.to_string(),
 				tex: tex_content,
@@ -437,6 +438,19 @@ impl RegexRule for TexRule {
 			}),
 		);
 
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
+		{
+			let range = token.range;
+			sems.add(range.start..range.start + if index == 0 { 2 } else { 1 }, tokens.tex_sep);
+			if let Some(props) = matches.get(1).map(|m| m.range()) {
+				sems.add(props.start - 1..props.start, tokens.tex_props_sep);
+				sems.add(props.clone(), tokens.tex_props);
+				sems.add(props.end..props.end + 1, tokens.tex_props_sep);
+			}
+			sems.add(matches.get(2).unwrap().range(), tokens.tex_content);
+			sems.add(range.end - if index == 0 { 2 } else { 1 }..range.end, tokens.tex_sep);
+		}
 		reports
 	}
 
@@ -536,7 +550,7 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::validate_document;
+	use crate::{validate_document, validate_semantics};
 
 	use super::*;
 
@@ -607,4 +621,32 @@ $[env=another] e^{i\pi}=-1$
 			};
 		);
 	}
+
+	#[test]
+	fn semantic() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+$[kind=inline]\LaTeX$
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+			ParseMode::default(),
+		);
+		validate_semantics!(state, source.clone(), 0,
+			tex_sep { delta_line == 1, delta_start == 0, length == 1 };
+			tex_props_sep { delta_line == 0, delta_start == 1, length == 1 };
+			tex_props { delta_line == 0, delta_start == 1, length == 11 };
+			tex_props_sep { delta_line == 0, delta_start == 11, length == 1 };
+			tex_content { delta_line == 0, delta_start == 1, length == 6 };
+			tex_sep { delta_line == 0, delta_start == 6, length == 1 };
+		);
+	}
+
 }

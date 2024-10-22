@@ -2,6 +2,7 @@ use crate::compiler::compiler::Compiler;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
@@ -227,6 +228,21 @@ impl RegexRule for RawRule {
 			}),
 		);
 
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
+		{
+			let range = matches.get(0).unwrap().range();
+			sems.add(range.start..range.start+2, tokens.raw_sep);
+			if let Some(props) = matches.get(1).map(|m| m.range())
+			{
+				sems.add(props.start - 1..props.start, tokens.raw_props_sep);
+				sems.add(props.clone(), tokens.raw_props);
+				sems.add(props.end..props.end + 1, tokens.raw_props_sep);
+			}
+			sems.add(matches.get(2).unwrap().range(), tokens.raw_content);
+			sems.add(range.end-2..range.end, tokens.raw_sep);
+		}
+
 		reports
 	}
 
@@ -281,7 +297,7 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::validate_document;
+	use crate::{validate_document, validate_semantics};
 
 	#[test]
 	fn parser() {
@@ -336,6 +352,37 @@ Break%<nml.raw.push("block", "Raw")>%NewParagraph%<nml.raw.push("inline", "<b>")
 			Text;
 			Raw { kind == ElemKind::Inline, content == "<b>" };
 		};
+		);
+	}
+
+	#[test]
+	fn semantic() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+{?[kind=block] Raw?}
+{?<b>?}
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+			ParseMode::default(),
+		);
+		validate_semantics!(state, source.clone(), 0,
+			raw_sep { delta_line == 1, delta_start == 0, length == 2 };
+			raw_props_sep { delta_line == 0, delta_start == 2, length == 1 };
+			raw_props { delta_line == 0, delta_start == 1, length == 10 };
+			raw_props_sep { delta_line == 0, delta_start == 10, length == 1 };
+			raw_content { delta_line == 0, delta_start == 1, length == 4 };
+			raw_sep { delta_line == 0, delta_start == 4, length == 2 };
+			raw_sep { delta_line == 1, delta_start == 0, length == 2 };
+			raw_content { delta_line == 0, delta_start == 2, length == 3 };
+			raw_sep { delta_line == 0, delta_start == 3, length == 2 };
 		);
 	}
 }
