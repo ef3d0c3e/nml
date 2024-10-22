@@ -97,6 +97,9 @@ pub fn process_text(document: &dyn Document, content: &str) -> String {
 /// Transforms source into a new [`VirtualSource`]. Transforms range from source by
 /// detecting escaped tokens.
 ///
+/// # Notes
+///
+/// If you only need to escape content that won't be parsed, use [`process_escaped`] instead.
 pub fn escape_source(source: Rc<dyn Source>, range: Range<usize>, name: String, escape: char, token: &'static str) -> Rc<dyn Source>
 {
 	let content = &source.content()[range.clone()];
@@ -144,23 +147,6 @@ pub fn escape_source(source: Rc<dyn Source>, range: Range<usize>, name: String, 
 	))
 }
 
-pub fn app()
-{
-	let mut s = String::new();
-
-	let source = Rc::new(SourceFile::with_content(
-		"test".to_string(),
-		"a\\\\\\```b".into(),
-		None,
-	));
-	let src = escape_source(source.clone(), 0..source.content().len(), "sub".to_string(), '\\', "```");
-	println!("{}", src.content());
-	let range = 0..src.content().len();
-	println!("{:#?}", range);
-	let orange = original_range(src.clone(), range);
-	println!("{:#?}", orange);
-}
-
 /// Processed a string and escapes a single token out of it
 /// Escaped characters other than the [`token`] will be not be treated as escaped
 ///
@@ -169,9 +155,12 @@ pub fn app()
 /// assert_eq!(process_escaped('\\', "%", "escaped: \\%, also escaped: \\\\\\%, untouched: \\a"),
 /// "escaped: %, also escaped: \\%, untouched: \\a");
 /// ```
-/// TODO: Make this function return a delta to pass to the semantics, maybe store it in the virtualsource, so this function should return a source...
-#[deprecated]
-pub fn process_escaped<S: AsRef<str>>(escape: char, token: &'static str, content: S) -> String {
+///
+/// # Notes
+///
+/// If you need to create a source, do not use this function, use [`escape_source`] instead
+/// as it will populate an offsets to get accurate diagnostics and semantics.
+pub fn escape_text<S: AsRef<str>>(escape: char, token: &'static str, content: S) -> String {
 	let mut processed = String::new();
 	let mut escaped = 0;
 	let mut token_it = token.chars().peekable();
@@ -522,7 +511,7 @@ mod tests {
 	#[test]
 	fn process_escaped_tests() {
 		assert_eq!(
-			process_escaped(
+			escape_text(
 				'\\',
 				"%",
 				"escaped: \\%, also escaped: \\\\\\%, untouched: \\a"
@@ -530,27 +519,27 @@ mod tests {
 			"escaped: %, also escaped: \\%, untouched: \\a"
 		);
 		assert_eq!(
-			process_escaped('"', "><)))°>", "Escaped fish: \"><)))°>"),
+			escape_text('"', "><)))°>", "Escaped fish: \"><)))°>"),
 			"Escaped fish: ><)))°>".to_string()
 		);
 		assert_eq!(
-			process_escaped('\\', "]", "Escaped \\]"),
+			escape_text('\\', "]", "Escaped \\]"),
 			"Escaped ]".to_string()
 		);
 		assert_eq!(
-			process_escaped('\\', "]", "Unescaped \\\\]"),
+			escape_text('\\', "]", "Unescaped \\\\]"),
 			"Unescaped \\\\]".to_string()
 		);
 		assert_eq!(
-			process_escaped('\\', "]", "Escaped \\\\\\]"),
+			escape_text('\\', "]", "Escaped \\\\\\]"),
 			"Escaped \\]".to_string()
 		);
 		assert_eq!(
-			process_escaped('\\', "]", "Unescaped \\\\\\\\]"),
+			escape_text('\\', "]", "Unescaped \\\\\\\\]"),
 			"Unescaped \\\\\\\\]".to_string()
 		);
-		assert_eq!(process_escaped('\\', ")", "A\\)B\\"), "A)B".to_string(),);
-		assert_eq!(process_escaped('\\', ")", "A\\)B\\\\"), "A)B\\".to_string(),);
+		assert_eq!(escape_text('\\', ")", "A\\)B\\"), "A)B".to_string(),);
+		assert_eq!(escape_text('\\', ")", "A\\)B\\\\"), "A)B\\".to_string(),);
 	}
 
 	#[test]

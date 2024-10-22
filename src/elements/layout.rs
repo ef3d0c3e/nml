@@ -15,7 +15,7 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
-use crate::parser::util::process_escaped;
+use crate::parser::util::escape_text;
 use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
@@ -361,7 +361,7 @@ impl LayoutRule {
 			},
 			Some(props) => {
 				let trimmed = props.as_str().trim_start().trim_end();
-				let content = process_escaped('\\', "]", trimmed);
+				let content = escape_text('\\', "]", trimmed);
 				match layout_type.parse_properties(content.as_str()) {
 					Ok(props) => Ok(props),
 					Err(err) => {

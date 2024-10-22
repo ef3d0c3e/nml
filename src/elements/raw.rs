@@ -118,7 +118,7 @@ impl RegexRule for RawRule {
 			}
 			Some(content) => {
 				let processed =
-					util::process_escaped('\\', "?}", content.as_str().trim_start().trim_end());
+					util::escape_text('\\', "?}", content.as_str().trim_start().trim_end());
 
 				if processed.is_empty() {
 					reports.push(
@@ -155,7 +155,7 @@ impl RegexRule for RawRule {
 			},
 			Some(props) => {
 				let processed =
-					util::process_escaped('\\', "]", props.as_str().trim_start().trim_end());
+					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
 				match self.properties.parse(processed.as_str()) {
 					Err(e) => {
 						reports.push(

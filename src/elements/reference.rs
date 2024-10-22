@@ -206,7 +206,7 @@ impl ReferenceRule {
 			},
 			Some(props) => {
 				let processed =
-					util::process_escaped('\\', "]", props.as_str().trim_start().trim_end());
+					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
 				match self.properties.parse(processed.as_str()) {
 					Err(e) => Err(
 						Report::build(ReportKind::Error, token.source(), props.start())

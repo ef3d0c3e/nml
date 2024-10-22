@@ -320,7 +320,6 @@ impl<'a> Semantics<'a> {
 		let mut tokens = self.sems.tokens.borrow_mut();
 		let mut cursor = self.sems.cursor.borrow_mut();
 		let mut current = cursor.clone();
-		println!("range={range:#?}");
 		cursor.move_to(range.start);
 
 		while cursor.pos != range.end {

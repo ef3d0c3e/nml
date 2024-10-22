@@ -20,7 +20,7 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::util;
-use crate::parser::util::process_escaped;
+use crate::parser::util::escape_text;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
@@ -196,7 +196,7 @@ impl ListRule {
 	}
 
 	fn parse_properties(&self, m: Match) -> Result<(Option<usize>, Option<String>), String> {
-		let processed = process_escaped('\\', "]", m.as_str());
+		let processed = escape_text('\\', "]", m.as_str());
 		let pm = self.properties.parse(processed.as_str())?;
 
 		let offset = match pm.get("offset", |_, s| s.parse::<usize>()) {

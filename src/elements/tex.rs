@@ -286,7 +286,7 @@ impl TexRule {
 			},
 			Some(props) => {
 				let processed =
-					util::process_escaped('\\', "]", props.as_str().trim_start().trim_end());
+					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
 				match self.properties.parse(processed.as_str()) {
 					Err(e) => Err(
 						Report::build(ReportKind::Error, token.source(), props.start())
@@ -344,7 +344,7 @@ impl RegexRule for TexRule {
 				return reports;
 			}
 			Some(content) => {
-				let processed = util::process_escaped(
+				let processed = util::escape_text(
 					'\\',
 					["|$", "$"][index],
 					content.as_str().trim_start().trim_end(),

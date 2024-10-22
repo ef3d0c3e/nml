@@ -227,7 +227,7 @@ impl RegexRule for GraphRule {
 				return reports;
 			}
 			Some(content) => {
-				let processed = util::process_escaped(
+				let processed = util::escape_text(
 					'\\',
 					"[/graph]",
 					content.as_str().trim_start().trim_end(),
@@ -270,7 +270,7 @@ impl RegexRule for GraphRule {
 			},
 			Some(props) => {
 				let processed =
-					util::process_escaped('\\', "]", props.as_str().trim_start().trim_end());
+					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
 				match self.properties.parse(processed.as_str()) {
 					Err(e) => {
 						reports.push(

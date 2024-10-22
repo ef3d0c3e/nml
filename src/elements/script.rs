@@ -10,6 +10,7 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::util;
+use crate::parser::util::escape_source;
 use ariadne::Fmt;
 use ariadne::Label;
 use ariadne::Report;
@@ -127,41 +128,27 @@ impl RegexRule for ScriptRule {
 			}
 		};
 
-		let kernel_data = matches
-			.get(if index == 0 { 2 } else { 3 })
-			.and_then(|code| {
-				let trimmed = code.as_str().trim_start().trim_end();
-				(!trimmed.is_empty()).then_some((trimmed, code.range()))
-			})
-			.or_else(|| {
-				reports.push(
-					Report::build(ReportKind::Warning, token.source(), token.start())
-						.with_message("Invalid kernel code")
-						.with_label(
-							Label::new((token.source(), token.start() + 1..token.end()))
-								.with_message("Kernel code is empty")
-								.with_color(state.parser.colors().warning),
-						)
-						.finish(),
-				);
-
-				None
-			});
-
-		if kernel_data.is_none() {
-			return reports;
-		}
-
-		let (kernel_content, kernel_range) = kernel_data.unwrap();
-		let source = Rc::new(VirtualSource::new(
-			Token::new(kernel_range, token.source()),
-			format!(
+		let script_range = matches.get(if index == 0 { 2 } else { 3 }).unwrap().range();
+		let source = escape_source(token.source(), script_range.clone(), format!(
 				":LUA:{kernel_name}#{}#{}",
 				token.source().name(),
 				matches.get(0).unwrap().start()
-			),
-			util::process_escaped('\\', ">@", kernel_content),
-		)) as Rc<dyn Source>;
+			), '\\', ">@");
+		if source.content().is_empty()		
+		{
+			reports.push(
+				Report::build(ReportKind::Warning, token.source(), token.start())
+					.with_message("Invalid kernel code")
+					.with_label(
+						Label::new((token.source(), script_range))
+							.with_message("Kernel code is empty")
+							.with_color(state.parser.colors().warning),
+					)
+					.finish(),
+			);
+			return reports;
+		}
+
 
 		let execute = |lua: &Lua| {
 			let chunk = lua.load(source.content()).set_name(kernel_name);

@@ -176,7 +176,6 @@ pub fn original_range(source: Rc<dyn Source>, mut range: Range<usize>) -> (Rc<dy
 	// Recurse to parent
 	if let Some(parent) = source.location()
 	{
-		//println!("FOUND PARENT={}", parent.source().name());
 		return original_range(parent.source.clone(), parent.range.start + range.start..parent.range.start + range.end);
 	}
 
@@ -241,7 +240,6 @@ impl LineCursor {
 	/// # Error
 	/// This function will panic if [`pos`] is not utf8 aligned
 	pub fn move_to(&mut self, pos: usize) {
-		println!("pos={pos}");
 		if self.pos < pos {
 			let start = self.pos;
 			let mut it = self.source.content().as_str()[start..].chars().peekable();

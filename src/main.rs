@@ -41,7 +41,7 @@ fn main() -> ExitCode {
 	let args: Vec<String> = env::args().collect();
 	let program = args[0].clone();
 
-	let mut opts = Options::new();
+	slet mut opts = Options::new();
 	opts.optopt("i", "input", "Input path", "PATH");
 	opts.optopt("o", "output", "Output path", "PATH");
 	opts.optopt("d", "database", "Cache database location", "PATH");

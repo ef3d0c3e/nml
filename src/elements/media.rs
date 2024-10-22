@@ -306,7 +306,7 @@ impl MediaRule {
 			},
 			Some(props) => {
 				let processed =
-					util::process_escaped('\\', "]", props.as_str().trim_start().trim_end());
+					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
 				match self.properties.parse(processed.as_str()) {
 					Err(e) => Err(
 						Report::build(ReportKind::Error, token.source(), props.start())
@@ -382,7 +382,7 @@ impl RegexRule for MediaRule {
 			matches.get(2).unwrap(),
 			MediaRule::validate_uri(matches.get(2).unwrap().as_str()),
 		) {
-			(_, Ok(uri)) => util::process_escaped('\\', ")", uri),
+			(_, Ok(uri)) => util::escape_text('\\', ")", uri),
 			(m, Err(err)) => {
 				reports.push(
 					Report::build(ReportKind::Error, token.source(), m.start())
