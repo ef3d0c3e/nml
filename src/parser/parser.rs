@@ -1,5 +1,3 @@
-use ariadne::Label;
-use ariadne::Report;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -9,6 +7,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use super::customstyle::CustomStyleHolder;
 use super::layout::LayoutHolder;
+use super::reports::Report;
 use super::rule::Rule;
 use super::source::Cursor;
 use super::source::Source;
@@ -434,7 +433,9 @@ pub trait Parser {
 
 	/// Handles the reports produced by parsing. The default is to output them
 	/// to stderr, but you are free to modify it.
-	fn handle_reports(&self, reports: Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+	fn handle_reports(&self, reports: Vec<Report>) {
+		todo!(); // TODO
+		/*
 		for mut report in reports {
 			let mut sources: HashSet<Rc<dyn Source>> = HashSet::new();
 			fn recurse_source(sources: &mut HashSet<Rc<dyn Source>>, source: Rc<dyn Source>) {
@@ -483,5 +484,6 @@ pub trait Parser {
 			});
 			report.eprint(ariadne::sources(cache)).unwrap()
 		}
+		*/
 	}
 }

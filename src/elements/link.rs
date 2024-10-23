@@ -14,9 +14,6 @@ use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::util;
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -25,6 +22,8 @@ use regex::Regex;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 #[derive(Debug)]
 pub struct Link {
@@ -109,39 +108,37 @@ impl RegexRule for LinkRule {
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let link_display = match matches.get(1) {
 			Some(display) => {
 				if display.as_str().is_empty() {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), display.start())
-							.with_message("Empty link name")
-							.with_label(
-								Label::new((token.source().clone(), display.range()))
-									.with_message("Link name is empty")
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Empty Link Display".into(),
+						span(
+							display.range(),
+							"Link display is empty".into()
+						)
 					);
 					return reports;
 				}
 				let display_source = util::escape_source(token.source(), display.range(), "Link Display".into(), '\\', "](");
 				if display_source.content().is_empty() {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), display.start())
-							.with_message("Empty link name")
-							.with_label(
-								Label::new((token.source(), display.range()))
-									.with_message(format!(
-										"Link name is empty. Once processed, `{}` yields `{}`",
-										display.as_str().fg(state.parser.colors().highlight),
-										display_source.fg(state.parser.colors().highlight),
-									))
-									.with_color(state.parser.colors().error),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Empty Link Display".into(),
+						span(
+							display.range(),
+							format!(
+								"Link name is empty. Once processed, `{}` yields `{}`",
+								display.as_str().fg(state.parser.colors().highlight),
+								display_source.fg(state.parser.colors().highlight),
 							)
-							.finish(),
+						)
 					);
 					return reports;
 				}
@@ -156,15 +153,14 @@ impl RegexRule for LinkRule {
 				}
 				match util::parse_paragraph(state, display_source, document) {
 					Err(err) => {
-						reports.push(
-							Report::build(ReportKind::Error, token.source(), display.start())
-								.with_message("Failed to parse link display")
-								.with_label(
-									Label::new((token.source(), display.range()))
-										.with_message(err.to_string())
-										.with_color(state.parser.colors().error),
-								)
-								.finish(),
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Link Display".into(),
+							span(
+								display.range(),
+								format!("Failed to parse link display:\n{err}")
+							)
 						);
 						return reports;
 					}
@@ -177,34 +173,32 @@ impl RegexRule for LinkRule {
 		let link_url = match matches.get(2) {
 			Some(url) => {
 				if url.as_str().is_empty() {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), url.start())
-							.with_message("Empty link url")
-							.with_label(
-								Label::new((token.source(), url.range()))
-									.with_message("Link url is empty")
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Empty Link URL".into(),
+						span(
+							url.range(),
+							"Link url is empty".into()
+						)
 					);
 					return reports;
 				}
 				let text_content = util::process_text(document, url.as_str());
 
 				if text_content.is_empty() {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), url.start())
-							.with_message("Empty link url")
-							.with_label(
-								Label::new((token.source(), url.range()))
-									.with_message(format!(
-										"Link url is empty. Once processed, `{}` yields `{}`",
-										url.as_str().fg(state.parser.colors().highlight),
-										text_content.as_str().fg(state.parser.colors().highlight),
-									))
-									.with_color(state.parser.colors().error),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Empty Link URL".into(),
+						span(
+							url.range(),
+							format!(
+								"Link url is empty. Once processed, `{}` yields `{}`",
+								url.as_str().fg(state.parser.colors().highlight),
+								text_content.as_str().fg(state.parser.colors().highlight),
 							)
-							.finish(),
+						)
 					);
 					return reports;
 				}

@@ -12,14 +12,13 @@ use crate::parser::source::VirtualSource;
 use crate::parser::util;
 use crate::parser::util::escape_source;
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
 use std::ops::Range;
 use std::rc::Rc;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 use super::text::Text;
 
@@ -95,7 +94,7 @@ impl RegexRule for ScriptRule {
 		document: &'a dyn Document<'a>,
 		token: Token,
 		matches: Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let kernel_name = match matches.get(1) {
@@ -104,15 +103,14 @@ impl RegexRule for ScriptRule {
 				match ScriptRule::validate_kernel_name(state.parser.colors(), name.as_str()) {
 					Ok(name) => name,
 					Err(e) => {
-						reports.push(
-							Report::build(ReportKind::Error, token.source(), name.start())
-								.with_message("Invalid kernel name")
-								.with_label(
-									Label::new((token.source(), name.range()))
-										.with_message(e)
-										.with_color(state.parser.colors().error),
-								)
-								.finish(),
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Kernel Name".into(),
+							span(
+								name.range(),
+								e
+							)
 						);
 						return reports;
 					}
@@ -136,15 +134,14 @@ impl RegexRule for ScriptRule {
 			), '\\', ">@");
 		if source.content().is_empty()		
 		{
-			reports.push(
-				Report::build(ReportKind::Warning, token.source(), token.start())
-					.with_message("Invalid kernel code")
-					.with_label(
-						Label::new((token.source(), script_range))
-							.with_message("Kernel code is empty")
-							.with_color(state.parser.colors().warning),
-					)
-					.finish(),
+			report_warn!(
+				&mut reports,
+				token.source(),
+				"Invalid Kernel Code".into(),
+				span(
+					script_range,
+					"Kernel code is empty".into(),
+				)
 			);
 			return reports;
 		}
@@ -157,15 +154,14 @@ impl RegexRule for ScriptRule {
 			// Exec
 			{
 				if let Err(e) = chunk.exec() {
-					reports.push(
-						Report::build(ReportKind::Error, source.clone(), 0)
-							.with_message("Invalid kernel code")
-							.with_label(
-								Label::new((source.clone(), 0..source.content().len()))
-									.with_message(format!("Kernel execution failed:\n{}", e))
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						source.clone(),
+						"Invalid Kernel Code".into(),
+						span(
+							0..source.content().len(),
+							format!("Kernel execution failed:\n{}", e)
+						)
 					);
 					return reports;
 				}
@@ -178,15 +174,14 @@ impl RegexRule for ScriptRule {
 					Some(kind) => match self.validate_kind(state.parser.colors(), kind.as_str()) {
 						Ok(kind) => kind,
 						Err(msg) => {
-							reports.push(
-								Report::build(ReportKind::Error, token.source(), kind.start())
-									.with_message("Invalid kernel code kind")
-									.with_label(
-										Label::new((token.source(), kind.range()))
-											.with_message(msg)
-											.with_color(state.parser.colors().error),
-									)
-									.finish(),
+							report_err!(
+								&mut reports,
+								token.source(),
+								"Invalid Kernel Code Kind".into(),
+								span(
+									kind.range(),
+									msg
+								)
 							);
 							return reports;
 						}
@@ -197,15 +192,14 @@ impl RegexRule for ScriptRule {
 				// Eval
 				{
 					if let Err(e) = chunk.eval::<()>() {
-						reports.push(
-							Report::build(ReportKind::Error, source.clone(), 0)
-								.with_message("Invalid kernel code")
-								.with_label(
-									Label::new((source.clone(), 0..source.content().len()))
-										.with_message(format!("Kernel evaluation failed:\n{}", e))
-										.with_color(state.parser.colors().error),
-								)
-								.finish(),
+						report_err!(
+							&mut reports,
+							source.clone(),
+							"Invalid Kernel Code".into(),
+							span(
+								0..source.content().len(),
+								format!("Kernel evaluation failed:\n{}", e)
+							)
 						);
 					}
 				} else
@@ -245,18 +239,14 @@ impl RegexRule for ScriptRule {
 							}
 						}
 						Err(e) => {
-							reports.push(
-								Report::build(ReportKind::Error, source.clone(), 0)
-									.with_message("Invalid kernel code")
-									.with_label(
-										Label::new((source.clone(), 0..source.content().len()))
-											.with_message(format!(
-												"Kernel evaluation failed:\n{}",
-												e
-											))
-											.with_color(state.parser.colors().error),
-									)
-									.finish(),
+							report_err!(
+								&mut reports,
+								source.clone(),
+								"Invalid Kernel Code".into(),
+								span(
+									0..source.content().len(),
+									format!("Kernel evaluation failed:\n{}", e)
+								)
 							);
 						}
 					}

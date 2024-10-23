@@ -2,9 +2,6 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use reference_style::ExternalReferenceStyle;
 use regex::Captures;
 use regex::Match;
@@ -32,6 +29,8 @@ use crate::parser::util;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyMap;
 use crate::parser::util::PropertyParser;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 #[derive(Debug)]
 pub struct InternalReference {
@@ -186,39 +185,43 @@ impl ReferenceRule {
 
 	fn parse_properties(
 		&self,
-		colors: &ReportColors,
+		mut reports: &mut Vec<Report>,
 		token: &Token,
 		m: &Option<Match>,
-	) -> Result<PropertyMap, Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Option<PropertyMap> {
 		match m {
 			None => match self.properties.default() {
-				Ok(properties) => Ok(properties),
-				Err(e) => Err(
-					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Invalid Media Properties")
-						.with_label(
-							Label::new((token.source().clone(), token.range.clone()))
-								.with_message(format!("Media is missing required property: {e}"))
-								.with_color(colors.error),
+				Ok(properties) => Some(properties),
+				Err(e) => {
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Reference Properties".into(),
+						span(
+							token.range.clone(),
+							format!("Reference is missing required property: {e}")
 						)
-						.finish(),
-				),
+					);
+					None
+				}
 			},
 			Some(props) => {
 				let processed =
 					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
 				match self.properties.parse(processed.as_str()) {
-					Err(e) => Err(
-						Report::build(ReportKind::Error, token.source(), props.start())
-							.with_message("Invalid Media Properties")
-							.with_label(
-								Label::new((token.source().clone(), props.range()))
-									.with_message(e)
-									.with_color(colors.error),
+					Err(e) => {
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Reference Properties".into(),
+							span(
+								props.range(),
+								e
 							)
-							.finish(),
-					),
-					Ok(properties) => Ok(properties),
+						);
+						None
+					},
+					Ok(properties) => Some(properties),
 				}
 			}
 		}
@@ -241,7 +244,7 @@ impl RegexRule for ReferenceRule {
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let (refdoc, refname) = if let Some(refname_match) = matches.get(1) {
@@ -252,14 +255,14 @@ impl RegexRule for ReferenceRule {
 				match validate_refname(document, refname_match.as_str().split_at(sep + 1).1, false)
 				{
 					Err(err) => {
-						reports.push(
-							Report::build(ReportKind::Error, token.source(), refname_match.start())
-								.with_message("Invalid Reference Refname")
-								.with_label(
-									Label::new((token.source().clone(), refname_match.range()))
-										.with_message(err),
-								)
-								.finish(),
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Reference Refname".into(),
+							span(
+								refname_match.range(),
+								err
+							)
 						);
 						return reports;
 					}
@@ -270,14 +273,14 @@ impl RegexRule for ReferenceRule {
 			{
 				match validate_refname(document, refname_match.as_str(), false) {
 					Err(err) => {
-						reports.push(
-							Report::build(ReportKind::Error, token.source(), refname_match.start())
-								.with_message("Invalid Reference Refname")
-								.with_label(
-									Label::new((token.source().clone(), refname_match.range()))
-										.with_message(err),
-								)
-								.finish(),
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Reference Refname".into(),
+							span(
+								refname_match.range(),
+								err
+							)
 						);
 						return reports;
 					}
@@ -289,13 +292,10 @@ impl RegexRule for ReferenceRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(2))
+		let properties = match self.parse_properties(&mut reports, &token, &matches.get(2))
 		{
-			Ok(pm) => pm,
-			Err(report) => {
-				reports.push(report);
-				return reports;
-			}
+			Some(pm) => pm,
+			None => return reports,
 		};
 
 		let caption = properties

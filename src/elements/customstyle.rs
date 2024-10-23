@@ -9,9 +9,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -29,6 +26,8 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 use super::paragraph::Paragraph;
 
@@ -50,7 +49,7 @@ impl CustomStyle for LuaCustomStyle {
 		location: Token,
 		state: &ParserState,
 		document: &'a dyn Document<'a>,
-	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let kernel: Ref<'_, Kernel> =
 			Ref::map(state.shared.kernels.borrow(), |b| b.get("main").unwrap());
 		//let kernel = RefMut::map(parser_state.shared.kernels.borrow(), |ker| ker.get("main").unwrap());
@@ -64,19 +63,12 @@ impl CustomStyle for LuaCustomStyle {
 		kernel.run_with_context(ctx, |lua| {
 			let chunk = lua.load(self.start.as_str());
 			if let Err(err) = chunk.eval::<()>() {
-				reports.push(
-					Report::build(ReportKind::Error, location.source(), location.start())
-						.with_message("Lua execution failed")
-						.with_label(
-							Label::new((location.source(), location.range.clone()))
-								.with_message(err.to_string())
-								.with_color(state.parser.colors().error),
-						)
-						.with_note(format!(
+				report_err!(&mut reports, location.source(), "Lua execution failed".into(),
+						span(location.range.clone(), err.to_string()),
+						note(format!(
 							"When trying to start custom style {}",
 							self.name().fg(state.parser.colors().info)
 						))
-						.finish(),
 				);
 			}
 		});
@@ -89,7 +81,7 @@ impl CustomStyle for LuaCustomStyle {
 		location: Token,
 		state: &ParserState,
 		document: &'a dyn Document<'a>,
-	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let kernel: Ref<'_, Kernel> =
 			Ref::map(state.shared.kernels.borrow(), |b| b.get("main").unwrap());
 		let ctx = KernelContext {
@@ -102,19 +94,12 @@ impl CustomStyle for LuaCustomStyle {
 		kernel.run_with_context(ctx, |lua| {
 			let chunk = lua.load(self.end.as_str());
 			if let Err(err) = chunk.eval::<()>() {
-				reports.push(
-					Report::build(ReportKind::Error, location.source(), location.start())
-						.with_message("Lua execution failed")
-						.with_label(
-							Label::new((location.source(), location.range.clone()))
-								.with_message(err.to_string())
-								.with_color(state.parser.colors().error),
-						)
-						.with_note(format!(
+				report_err!(&mut reports, location.source(), "Lua execution failed".into(),
+					span(location.range.clone(), err.to_string()),
+					note(format!(
 							"When trying to end custom style {}",
 							self.name().fg(state.parser.colors().info)
-						))
-						.finish(),
+					))
 				);
 			}
 		});
@@ -130,11 +115,11 @@ struct CustomStyleState {
 impl RuleState for CustomStyleState {
 	fn scope(&self) -> Scope { Scope::PARAGRAPH }
 
-	fn on_remove<'a>(
+	fn on_remove(
 		&self,
 		state: &ParserState,
 		document: &dyn Document,
-	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		self.toggled.iter().for_each(|(style, token)| {
@@ -150,26 +135,13 @@ impl RuleState for CustomStyleState {
 				})
 				.unwrap();
 
-			reports.push(
-				Report::build(ReportKind::Error, token.source(), token.start())
-					.with_message("Unterminated Custom Style")
-					.with_label(
-						Label::new((token.source(), token.range.clone()))
-							.with_order(1)
-							.with_message(format!(
+			report_err!(&mut reports, token.source(), "Unterminated Custom Style".into(),
+						span(token.range.clone(), format!(
 								"Style {} starts here",
 								style.fg(state.parser.colors().info)
-							))
-							.with_color(state.parser.colors().error),
-					)
-					.with_label(
-						Label::new(paragraph_end)
-							.with_order(1)
-							.with_message("Paragraph ends here".to_string())
-							.with_color(state.parser.colors().error),
-					)
-					.with_note("Styles cannot span multiple documents (i.e @import)")
-					.finish(),
+							)),
+						span(paragraph_end.1, "Paragraph ends here".into()),
+						note("Styles cannot span multiple documents (i.e @import)".into())
 			);
 		});
 
@@ -248,7 +220,7 @@ impl Rule for CustomStyleRule {
 		document: &'a dyn Document<'a>,
 		cursor: Cursor,
 		match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+	) -> (Cursor, Vec<Report>) {
 		let (style, end) = match_data
 			.downcast_ref::<(Rc<dyn CustomStyle>, bool)>()
 			.unwrap();
@@ -299,22 +271,16 @@ impl Rule for CustomStyleRule {
 					let token =
 						Token::new(cursor.pos..cursor.pos + s_end.len(), cursor.source.clone());
 					if style_state.toggled.get(style.name()).is_none() {
-						return (
-							cursor.at(cursor.pos + s_end.len()),
-							vec![
-								Report::build(ReportKind::Error, token.source(), token.start())
-									.with_message("Invalid End of Style")
-									.with_label(
-										Label::new((token.source(), token.range.clone()))
-											.with_order(1)
-											.with_message(format!(
-											"Cannot end style {} here, is it not started anywhere",
+						let mut reports = vec![];
+						report_err!(&mut reports, token.source(), "Invalid End of Style".into(),
+						span(token.range.clone(), format!(
+											"Cannot end style {} here, it does not started anywhere",
 											style.name().fg(state.parser.colors().info)
 										))
-											.with_color(state.parser.colors().error),
-									)
-									.finish(),
-							],
+						);
+						return (
+							cursor.at(cursor.pos + s_end.len()),
+							reports
 						);
 					}
 
@@ -327,33 +293,20 @@ impl Rule for CustomStyleRule {
 						cursor.source.clone(),
 					);
 					if let Some(start_token) = style_state.toggled.get(style.name()) {
+						let mut reports = vec![];
+						report_err!(&mut reports, token.source(), "Invalid Start of Style".into(),
+							span(token.range.clone(), format!(
+									"When trying to start custom style {}",
+									self.name().fg(state.parser.colors().info)
+							)),
+							span(start_token.range.clone(), format!(
+									"Style {} previously starts here",
+									self.name().fg(state.parser.colors().info)
+							)),
+						);
 						return (
 							cursor.at(cursor.pos + s_end.len()),
-							vec![Report::build(
-								ReportKind::Error,
-								start_token.source(),
-								start_token.start(),
-							)
-							.with_message("Invalid Start of Style")
-							.with_label(
-								Label::new((token.source(), token.range.clone()))
-									.with_order(1)
-									.with_message(format!(
-										"Style cannot {} starts here",
-										style.name().fg(state.parser.colors().info)
-									))
-									.with_color(state.parser.colors().error),
-							)
-							.with_label(
-								Label::new((start_token.source(), start_token.range.clone()))
-									.with_order(2)
-									.with_message(format!(
-										"Style {} starts previously here",
-										style.name().fg(state.parser.colors().info)
-									))
-									.with_color(state.parser.colors().error),
-							)
-							.finish()],
+							reports
 						);
 					}
 

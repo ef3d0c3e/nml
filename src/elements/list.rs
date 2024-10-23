@@ -14,9 +14,9 @@ use crate::document::element::Element;
 use crate::lsp::semantic::Semantics;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::Report;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::util;
@@ -24,9 +24,8 @@ use crate::parser::util::escape_text;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 use regex::Match;
 use regex::Regex;
 
@@ -293,7 +292,7 @@ impl Rule for ListRule {
 		document: &'a dyn Document<'a>,
 		cursor: Cursor,
 		_match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+	) -> (Cursor, Vec<Report>) {
 		let mut reports = vec![];
 
 		let content = cursor.source.content();
@@ -312,19 +311,8 @@ impl Rule for ListRule {
 				if let Some(properties) = captures.get(2) {
 					match self.parse_properties(properties) {
 						Err(err) => {
-							reports.push(
-								Report::build(
-									ReportKind::Warning,
-									cursor.source.clone(),
-									properties.start(),
-								)
-								.with_message("Invalid List Entry Properties")
-								.with_label(
-									Label::new((cursor.source.clone(), properties.range()))
-										.with_message(err)
-										.with_color(state.parser.colors().warning),
-								)
-								.finish(),
+							report_err!(&mut reports, cursor.source.clone(), "Invalid List Entry Properties".into(),
+								span(properties.range(), err)
 							);
 							return (cursor.at(captures.get(0).unwrap().end()), reports);
 						}
@@ -391,15 +379,8 @@ impl Rule for ListRule {
 				));
 				let parsed_content = match util::parse_paragraph(state, entry_src, document) {
 					Err(err) => {
-						reports.push(
-							Report::build(ReportKind::Warning, token.source(), token.range.start)
-								.with_message("Unable to Parse List Entry")
-								.with_label(
-									Label::new((token.source(), token.range.clone()))
-										.with_message(err)
-										.with_color(state.parser.colors().warning),
-								)
-								.finish(),
+						report_warn!(&mut reports, token.source(), "Unable to parse List Entry".into(),
+							span(token.range.clone(), err.into())
 						);
 						// Return an empty paragraph
 						vec![]

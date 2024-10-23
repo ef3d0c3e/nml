@@ -10,9 +10,6 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use mlua::Function;
@@ -41,6 +38,8 @@ use crate::parser::util::Property;
 use crate::parser::util::PropertyMap;
 use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 #[derive(Debug, PartialEq, Eq)]
 enum TexKind {
@@ -266,39 +265,45 @@ impl TexRule {
 
 	fn parse_properties(
 		&self,
+		mut reports: &mut Vec<Report>,
 		colors: &ReportColors,
 		token: &Token,
 		m: &Option<Match>,
-	) -> Result<PropertyMap, Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Option<PropertyMap> {
 		match m {
 			None => match self.properties.default() {
-				Ok(properties) => Ok(properties),
-				Err(e) => Err(
-					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Invalid Tex Properties")
-						.with_label(
-							Label::new((token.source().clone(), token.range.clone()))
-								.with_message(format!("Tex is missing required property: {e}"))
-								.with_color(colors.error),
+				Ok(properties) => Some(properties),
+				Err(e) =>
+				{
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Tex Properties".into(),
+						span(
+							token.range.clone(),
+							format!("Tex is missing required property: {e}")
 						)
-						.finish(),
-				),
+					);
+					None
+				}
 			},
 			Some(props) => {
 				let processed =
 					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
 				match self.properties.parse(processed.as_str()) {
-					Err(e) => Err(
-						Report::build(ReportKind::Error, token.source(), props.start())
-							.with_message("Invalid Tex Properties")
-							.with_label(
-								Label::new((token.source().clone(), props.range()))
-									.with_message(e)
-									.with_color(colors.error),
+					Err(e) => {
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Tex Properties".into(),
+							span(
+								props.range(),
+								e
 							)
-							.finish(),
-					),
-					Ok(properties) => Ok(properties),
+						);
+						None
+					},
+					Ok(properties) => Some(properties),
 				}
 			}
 		}
@@ -321,25 +326,24 @@ impl RegexRule for TexRule {
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let tex_content = match matches.get(2) {
 			// Unterminated `$`
 			None => {
-				reports.push(
-					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Unterminated Tex Code")
-						.with_label(
-							Label::new((token.source().clone(), token.range.clone()))
-								.with_message(format!(
-									"Missing terminating `{}` after first `{}`",
-									["|$", "$"][index].fg(state.parser.colors().info),
-									["$|", "$"][index].fg(state.parser.colors().info)
-								))
-								.with_color(state.parser.colors().error),
+				report_err!(
+					&mut reports,
+					token.source(),
+					"Unterminated Tex Code".into(),
+					span(
+						token.range.clone(),
+						format!(
+							"Missing terminating `{}` after first `{}`",
+							["|$", "$"][index].fg(state.parser.colors().info),
+							["$|", "$"][index].fg(state.parser.colors().info)
 						)
-						.finish(),
+					)
 				);
 				return reports;
 			}
@@ -351,15 +355,14 @@ impl RegexRule for TexRule {
 				);
 
 				if processed.is_empty() {
-					reports.push(
-						Report::build(ReportKind::Warning, token.source(), content.start())
-							.with_message("Empty Tex Code")
-							.with_label(
-								Label::new((token.source().clone(), content.range()))
-									.with_message("Tex code is empty")
-									.with_color(state.parser.colors().warning),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Empty Tex Code".into(),
+						span(
+							content.range(),
+							"Tex code is empty".into()
+						)
 					);
 				}
 				processed
@@ -367,13 +370,10 @@ impl RegexRule for TexRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(1))
+		let properties = match self.parse_properties(&mut reports, state.parser.colors(), &token, &matches.get(1))
 		{
-			Ok(pm) => pm,
-			Err(report) => {
-				reports.push(report);
-				return reports;
-			}
+			Some(pm) => pm,
+			None => return reports,
 		};
 
 		// Tex kind
@@ -383,19 +383,19 @@ impl RegexRule for TexRule {
 			Ok((_prop, kind)) => kind,
 			Err(e) => match e {
 				PropertyMapError::ParseError((prop, err)) => {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), token.start())
-							.with_message("Invalid Tex Property")
-							.with_label(
-								Label::new((token.source().clone(), token.range.clone()))
-									.with_message(format!(
-										"Property `kind: {}` cannot be converted: {}",
-										prop.fg(state.parser.colors().info),
-										err.fg(state.parser.colors().error)
-									))
-									.with_color(state.parser.colors().warning),
+
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Tex Property".into(),
+						span(
+							token.range.clone(),
+							format!(
+								"Property `kind: {}` cannot be converted: {}",
+								prop.fg(state.parser.colors().info),
+								err.fg(state.parser.colors().error)
 							)
-							.finish(),
+						)
 					);
 					return reports;
 				}

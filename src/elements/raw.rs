@@ -6,25 +6,21 @@ use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
 use crate::parser::util::{self};
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
 use std::collections::HashMap;
-use std::ops::Range;
-use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -94,25 +90,24 @@ impl RegexRule for RawRule {
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let raw_content = match matches.get(2) {
 			// Unterminated
 			None => {
-				reports.push(
-					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Unterminated Raw Code")
-						.with_label(
-							Label::new((token.source().clone(), token.range.clone()))
-								.with_message(format!(
-									"Missing terminating `{}` after first `{}`",
-									"?}".fg(state.parser.colors().info),
-									"{?".fg(state.parser.colors().info)
-								))
-								.with_color(state.parser.colors().error),
+				report_err!(
+					&mut reports,
+					token.source(),
+					"Unterminated Raw Code".into(),
+					span(
+						token.range.clone(),
+						format!(
+							"Missing terminating `{}` after first `{}`",
+							"?}".fg(state.parser.colors().info),
+							"{?".fg(state.parser.colors().info)
 						)
-						.finish(),
+					)
 				);
 				return reports;
 			}
@@ -121,15 +116,11 @@ impl RegexRule for RawRule {
 					util::escape_text('\\', "?}", content.as_str().trim_start().trim_end());
 
 				if processed.is_empty() {
-					reports.push(
-						Report::build(ReportKind::Warning, token.source(), content.start())
-							.with_message("Empty Raw Code")
-							.with_label(
-								Label::new((token.source().clone(), content.range()))
-									.with_message("Raw code is empty")
-									.with_color(state.parser.colors().warning),
-							)
-							.finish(),
+					report_warn!(
+						&mut reports,
+						token.source(),
+						"Empty Raw Code".into(),
+						span(content.range(), "Raw code is empty".into())
 					);
 				}
 				processed
@@ -140,15 +131,14 @@ impl RegexRule for RawRule {
 			None => match self.properties.default() {
 				Ok(properties) => properties,
 				Err(e) => {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), token.start())
-							.with_message("Invalid Raw Code")
-							.with_label(
-								Label::new((token.source().clone(), token.range.clone()))
-									.with_message(format!("Raw code is missing properties: {e}"))
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Raw Code".into(),
+						span(
+							token.range.clone(),
+							format!("Raw code is missing properties: {e}")
+						)
 					);
 					return reports;
 				}
@@ -158,15 +148,11 @@ impl RegexRule for RawRule {
 					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
 				match self.properties.parse(processed.as_str()) {
 					Err(e) => {
-						reports.push(
-							Report::build(ReportKind::Error, token.source(), props.start())
-								.with_message("Invalid Raw Code Properties")
-								.with_label(
-									Label::new((token.source().clone(), props.range()))
-										.with_message(e)
-										.with_color(state.parser.colors().error),
-								)
-								.finish(),
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Raw Code Properties".into(),
+							span(props.range(), e)
 						);
 						return reports;
 					}
@@ -181,38 +167,33 @@ impl RegexRule for RawRule {
 			Ok((_prop, kind)) => kind,
 			Err(e) => match e {
 				PropertyMapError::ParseError((prop, err)) => {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), token.start())
-							.with_message("Invalid Raw Code Property")
-							.with_label(
-								Label::new((token.source().clone(), token.range.clone()))
-									.with_message(format!(
-										"Property `kind: {}` cannot be converted: {}",
-										prop.fg(state.parser.colors().info),
-										err.fg(state.parser.colors().error)
-									))
-									.with_color(state.parser.colors().warning),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Raw Code Properties".into(),
+						span(
+							token.range.clone(),
+							format!(
+								"Property `kind: {}` cannot be converted: {}",
+								prop.fg(state.parser.colors().info),
+								err.fg(state.parser.colors().error)
 							)
-							.finish(),
+						)
 					);
 					return reports;
 				}
 				PropertyMapError::NotFoundError(err) => {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), token.start())
-							.with_message("Invalid Code Property")
-							.with_label(
-								Label::new((
-									token.source().clone(),
-									token.start() + 1..token.end(),
-								))
-								.with_message(format!(
-									"Property `{}` is missing",
-									err.fg(state.parser.colors().info)
-								))
-								.with_color(state.parser.colors().warning),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Raw Code Properties".into(),
+						span(
+							token.range.clone(),
+							format!(
+								"Property `{}` is missing",
+								err.fg(state.parser.colors().info)
 							)
-							.finish(),
+						)
 					);
 					return reports;
 				}
@@ -232,15 +213,14 @@ impl RegexRule for RawRule {
 			Semantics::from_source(token.source(), &state.shared.semantics)
 		{
 			let range = matches.get(0).unwrap().range();
-			sems.add(range.start..range.start+2, tokens.raw_sep);
-			if let Some(props) = matches.get(1).map(|m| m.range())
-			{
+			sems.add(range.start..range.start + 2, tokens.raw_sep);
+			if let Some(props) = matches.get(1).map(|m| m.range()) {
 				sems.add(props.start - 1..props.start, tokens.raw_props_sep);
 				sems.add(props.clone(), tokens.raw_props);
 				sems.add(props.end..props.end + 1, tokens.raw_props_sep);
 			}
 			sems.add(matches.get(2).unwrap().range(), tokens.raw_content);
-			sems.add(range.end-2..range.end, tokens.raw_sep);
+			sems.add(range.end - 2..range.end, tokens.raw_sep);
 		}
 
 		reports
@@ -297,7 +277,8 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::{validate_document, validate_semantics};
+	use crate::validate_document;
+	use crate::validate_semantics;
 
 	#[test]
 	fn parser() {

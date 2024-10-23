@@ -6,9 +6,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -18,9 +15,10 @@ use regex::Regex;
 use crate::document::document::Document;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
-use crate::parser::source::Source;
 
 #[auto_registry::auto_registry(registry = "rules", path = "crate::elements::elemstyle")]
 pub struct ElemStyleRule {
@@ -80,7 +78,7 @@ impl Rule for ElemStyleRule {
 		_document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
 		_match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+	) -> (Cursor, Vec<Report>) {
 		let mut reports = vec![];
 		let matches = self
 			.start_re
@@ -93,33 +91,28 @@ impl Rule for ElemStyleRule {
 
 			// Check if empty
 			if trimmed.is_empty() {
-				reports.push(
-					Report::build(ReportKind::Error, cursor.source.clone(), key.start())
-						.with_message("Empty Style Key")
-						.with_label(
-							Label::new((cursor.source.clone(), key.range()))
-								.with_message("Expected a non-empty style key".to_string())
-								.with_color(state.parser.colors().error),
-						)
-						.finish(),
+				report_err!(
+					&mut reports,
+					cursor.source.clone(),
+					"Empty Style Key".into(),
+					span(key.range(), "Expected a non-empty style key".into()),
 				);
 				return (cursor, reports);
 			}
 
 			// Check if key exists
 			if !state.shared.styles.borrow().is_registered(trimmed) {
-				reports.push(
-					Report::build(ReportKind::Error, cursor.source.clone(), key.start())
-						.with_message("Unknown Style Key")
-						.with_label(
-							Label::new((cursor.source.clone(), key.range()))
-								.with_message(format!(
-									"Could not find a style with key: {}",
-									trimmed.fg(state.parser.colors().info)
-								))
-								.with_color(state.parser.colors().error),
+				report_err!(
+					&mut reports,
+					cursor.source.clone(),
+					"Unknown Style Key".into(),
+					span(
+						key.range(),
+						format!(
+							"Could not find a style with key: {}",
+							trimmed.fg(state.parser.colors().info)
 						)
-						.finish(),
+					),
 				);
 
 				return (cursor, reports);
@@ -135,17 +128,14 @@ impl Rule for ElemStyleRule {
 			&cursor.source.clone().content().as_str()[cursor.pos..],
 		) {
 			None => {
-				reports.push(
-					Report::build(ReportKind::Error, cursor.source.clone(), cursor.pos)
-						.with_message("Invalid Style Value")
-						.with_label(
-							Label::new((cursor.source.clone(), matches.get(0).unwrap().range()))
-								.with_message(
-									"Unable to parse json string after style key".to_string(),
-								)
-								.with_color(state.parser.colors().error),
-						)
-						.finish(),
+				report_err!(
+					&mut reports,
+					cursor.source.clone(),
+					"Invalid Style Value".into(),
+					span(
+						matches.get(0).unwrap().range(),
+						"Unable to parse json string after style key".into()
+					)
 				);
 				return (cursor, reports);
 			}
@@ -155,22 +145,18 @@ impl Rule for ElemStyleRule {
 				// Attempt to deserialize
 				match style.from_json(json) {
 					Err(err) => {
-						reports.push(
-							Report::build(ReportKind::Error, cursor.source.clone(), cursor.pos)
-								.with_message("Invalid Style Value")
-								.with_label(
-									Label::new((
-										cursor.source.clone(),
-										cursor.pos..cursor.pos + json.len(),
-									))
-									.with_message(format!(
+						report_err!(
+							&mut reports,
+							cursor.source.clone(),
+							"Invalid Style Value".into(),
+							span(
+								cursor.pos..cursor.pos + json.len(),
+								format!(
 										"Failed to serialize `{}` into style with key `{}`: {err}",
 										json.fg(state.parser.colors().highlight),
 										style.key().fg(state.parser.colors().info)
-									))
-									.with_color(state.parser.colors().error),
 								)
-								.finish(),
+							)
 						);
 						return (cursor, reports);
 					}

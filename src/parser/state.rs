@@ -1,16 +1,14 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::Range;
 use std::rc::Rc;
 
-use ariadne::Report;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
 use crate::document::document::Document;
 
 use super::parser::ParserState;
-use super::source::Source;
+use super::reports::Report;
 
 /// Scope for state objects
 #[derive(PartialEq, PartialOrd, Debug)]
@@ -30,11 +28,11 @@ pub trait RuleState: Downcast {
 	fn scope(&self) -> Scope;
 
 	/// Callback called when state goes out of scope
-	fn on_remove<'a>(
+	fn on_remove(
 		&self,
 		state: &ParserState,
 		document: &dyn Document,
-	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>>;
+	) -> Vec<Report>;
 }
 impl_downcast!(RuleState);
 
@@ -72,7 +70,7 @@ impl RuleStateHolder {
 		state: &ParserState,
 		document: &dyn Document,
 		scope: Scope,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		self.states.retain(|_name, rule_state| {

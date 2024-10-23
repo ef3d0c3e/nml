@@ -4,9 +4,6 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use regex::Captures;
 use regex::Match;
 use regex::Regex;
@@ -34,6 +31,8 @@ use crate::parser::util::Property;
 use crate::parser::util::PropertyMap;
 use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 use super::paragraph::Paragraph;
 use super::reference::InternalReference;
@@ -286,39 +285,43 @@ impl MediaRule {
 
 	fn parse_properties(
 		&self,
-		colors: &ReportColors,
+		mut reports: &mut Vec<Report>,
 		token: &Token,
 		m: &Option<Match>,
-	) -> Result<PropertyMap, Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Option<PropertyMap> {
 		match m {
 			None => match self.properties.default() {
-				Ok(properties) => Ok(properties),
-				Err(e) => Err(
-					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Invalid Media Properties")
-						.with_label(
-							Label::new((token.source().clone(), token.range.clone()))
-								.with_message(format!("Media is missing required property: {e}"))
-								.with_color(colors.error),
+				Ok(properties) => Some(properties),
+				Err(e) => {
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Media Properties".into(),
+						span(
+							token.range.clone(),
+							format!("Media is missing required property: {e}")
 						)
-						.finish(),
-				),
+					);
+					None
+				}
 			},
 			Some(props) => {
 				let processed =
 					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
 				match self.properties.parse(processed.as_str()) {
-					Err(e) => Err(
-						Report::build(ReportKind::Error, token.source(), props.start())
-							.with_message("Invalid Media Properties")
-							.with_label(
-								Label::new((token.source().clone(), props.range()))
-									.with_message(e)
-									.with_color(colors.error),
+					Err(e) => {
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Media Properties".into(),
+							span(
+								props.range(),
+								e
 							)
-							.finish(),
-					),
-					Ok(properties) => Ok(properties),
+						);
+						None
+					},
+					Ok(properties) => Some(properties),
 				}
 			}
 		}
@@ -357,7 +360,7 @@ impl RegexRule for MediaRule {
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let refname = match (
@@ -366,13 +369,14 @@ impl RegexRule for MediaRule {
 		) {
 			(_, Ok(refname)) => refname.to_string(),
 			(m, Err(err)) => {
-				reports.push(
-					Report::build(ReportKind::Error, token.source(), m.start())
-						.with_message("Invalid Media Refname")
-						.with_label(
-							Label::new((token.source().clone(), m.range())).with_message(err),
-						)
-						.finish(),
+				report_err!(
+					&mut reports,
+					token.source(),
+					"Invalid Media Refname".into(),
+					span(
+						m.range(),
+						err
+					)
 				);
 				return reports;
 			}
@@ -384,26 +388,24 @@ impl RegexRule for MediaRule {
 		) {
 			(_, Ok(uri)) => util::escape_text('\\', ")", uri),
 			(m, Err(err)) => {
-				reports.push(
-					Report::build(ReportKind::Error, token.source(), m.start())
-						.with_message("Invalid Media URI")
-						.with_label(
-							Label::new((token.source().clone(), m.range())).with_message(err),
-						)
-						.finish(),
+				report_err!(
+					&mut reports,
+					token.source(),
+					"Invalid Media URI".into(),
+					span(
+						m.range(),
+						err
+					)
 				);
 				return reports;
 			}
 		};
 
 		// Properties
-		let properties = match self.parse_properties(state.parser.colors(), &token, &matches.get(3))
+		let properties = match self.parse_properties(&mut reports, &token, &matches.get(3))
 		{
-			Ok(pm) => pm,
-			Err(report) => {
-				reports.push(report);
-				return reports;
-			}
+			Some(pm) => pm,
+			None => return reports,
 		};
 
 		let media_type =
@@ -415,36 +417,31 @@ impl RegexRule for MediaRule {
 					Ok((_prop, kind)) => kind,
 					Err(e) => match e {
 						PropertyMapError::ParseError((prop, err)) => {
-							reports.push(
-								Report::build(ReportKind::Error, token.source(), token.start())
-									.with_message("Invalid Media Property")
-									.with_label(
-										Label::new((token.source().clone(), token.range.clone()))
-											.with_message(format!(
-												"Property `type: {}` cannot be converted: {}",
-												prop.fg(state.parser.colors().info),
-												err.fg(state.parser.colors().error)
-											))
-											.with_color(state.parser.colors().warning),
+							report_err!(
+								&mut reports,
+								token.source(),
+								"Invalid Media Property".into(),
+								span(
+									token.start()+1..token.end(),
+									format!(
+										"Property `type: {}` cannot be converted: {}",
+										prop.fg(state.parser.colors().info),
+										err.fg(state.parser.colors().error)
 									)
-									.finish(),
+								)
 							);
 							return reports;
 						}
 						PropertyMapError::NotFoundError(err) => {
-							reports.push(
-							Report::build(ReportKind::Error, token.source(), token.start())
-							.with_message("Invalid Media Property")
-							.with_label(
-								Label::new((
-										token.source().clone(),
-										token.start() + 1..token.end(),
-								))
-								.with_message(format!("{err}. Required because mediatype could not be detected"))
-								.with_color(state.parser.colors().error),
-							)
-							.finish(),
-						);
+							report_err!(
+								&mut reports,
+								token.source(),
+								"Invalid Media Property".into(),
+								span(
+									token.start()+1..token.end(),
+									format!("{err}. Required because mediatype could not be detected")
+								)
+							);
 							return reports;
 						}
 					},
@@ -478,17 +475,16 @@ impl RegexRule for MediaRule {
 					match parse_paragraph(state, source, document) {
 						Ok(paragraph) => Some(*paragraph),
 						Err(err) => {
-							reports.push(
-								Report::build(ReportKind::Error, token.source(), content.start())
-									.with_message("Invalid Media Description")
-									.with_label(
-										Label::new((token.source().clone(), content.range()))
-											.with_message(format!(
-												"Could not parse description: {err}"
-											))
-											.with_color(state.parser.colors().error),
+							report_err!(
+								&mut reports,
+								token.source(),
+								"Invalid Media Description".into(),
+								span(
+									content.range(),
+									format!(
+										"Could not parse description: {err}"
 									)
-									.finish(),
+								)
 							);
 							return reports;
 						}
@@ -522,15 +518,15 @@ impl RegexRule for MediaRule {
 			caption,
 			description,
 		})) {
-			reports.push(
-				Report::build(ReportKind::Error, token.source(), token.start())
-					.with_message("Invalid Media")
-					.with_label(
-						Label::new((token.source().clone(), token.range.clone()))
-							.with_message(err)
-							.with_color(state.parser.colors().error),
-					)
-					.finish(),
+			report_err!(
+				&mut reports,
+				token.source(),
+				"Invalid Media".into(),
+				span(
+					token.range.clone(),
+					err
+
+				)
 			);
 		}
 

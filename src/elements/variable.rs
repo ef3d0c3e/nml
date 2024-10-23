@@ -11,15 +11,14 @@ use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use mlua::Function;
 use mlua::Lua;
 use regex::Regex;
 use std::ops::Range;
 use std::rc::Rc;
 use std::str::FromStr;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum VariableKind {
@@ -134,8 +133,8 @@ impl RegexRule for VariableRule {
 		document: &dyn Document,
 		token: Token,
 		matches: regex::Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
-		let mut result = vec![];
+	) -> Vec<Report> {
+		let mut reports = vec![];
 		// [Optional] variable kind
 		let var_kind = match matches.get(1) {
 			Some(kind) => {
@@ -148,18 +147,18 @@ impl RegexRule for VariableRule {
 
 				// Unknown kind specified
 				if r.is_none() {
-					result.push(
-						Report::build(ReportKind::Error, token.source(), kind.start())
-							.with_message("Unknown variable kind")
-							.with_label(
-								Label::new((token.source(), kind.range()))
-									.with_message(format!(
-										"Variable kind `{}` is unknown",
-										kind.as_str().fg(state.parser.colors().highlight)
-									))
-									.with_color(state.parser.colors().error),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Unknowm Variable Kind".into(),
+						span(
+							kind.range(),
+							format!(
+								"Variable kind `{}` is unknown",
+								kind.as_str().fg(state.parser.colors().highlight)
 							)
-							.with_help(format!(
+						),
+						help(format!(
 								"Leave empty for regular variables. Available variable kinds:{}",
 								self.kinds.iter().skip(1).fold(
 									"".to_string(),
@@ -169,14 +168,12 @@ impl RegexRule for VariableRule {
 											char.fg(state.parser.colors().highlight),
 											name.fg(state.parser.colors().info)
 										)
-										.as_str()
+											.as_str()
 									}
 								)
-							))
-							.finish(),
+						))
 					);
-
-					return result;
+					return reports;
 				}
 
 				r.unwrap().0
@@ -188,21 +185,20 @@ impl RegexRule for VariableRule {
 			Some(name) => match VariableRule::validate_name(state.parser.colors(), name.as_str()) {
 				Ok(var_name) => var_name,
 				Err(msg) => {
-					result.push(
-						Report::build(ReportKind::Error, token.source(), name.start())
-							.with_message("Invalid variable name")
-							.with_label(
-								Label::new((token.source(), name.range()))
-									.with_message(format!(
-										"Variable name `{}` is not allowed. {msg}",
-										name.as_str().fg(state.parser.colors().highlight)
-									))
-									.with_color(state.parser.colors().error),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Variable Name".into(),
+						span(
+							name.range(),
+							format!(
+								"Variable name `{}` is not allowed. {msg}",
+								name.as_str().fg(state.parser.colors().highlight)
 							)
-							.finish(),
+						),
 					);
 
-					return result;
+					return reports;
 				}
 			},
 			_ => panic!("Unknown variable name"),
@@ -212,21 +208,20 @@ impl RegexRule for VariableRule {
 			Some(value) => match VariableRule::validate_value(value.as_str()) {
 				Ok(var_value) => var_value,
 				Err(msg) => {
-					result.push(
-						Report::build(ReportKind::Error, token.source(), value.start())
-							.with_message("Invalid variable value")
-							.with_label(
-								Label::new((token.source(), value.range()))
-									.with_message(format!(
-										"Variable value `{}` is not allowed. {msg}",
-										value.as_str().fg(state.parser.colors().highlight)
-									))
-									.with_color(state.parser.colors().error),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Variable Value".into(),
+						span(
+							value.range(),
+							format!(
+								"Variable value `{}` is not allowed. {msg}",
+								value.as_str().fg(state.parser.colors().highlight)
 							)
-							.finish(),
+						),
 					);
 
-					return result;
+					return reports;
 				}
 			},
 			_ => panic!("Invalid variable value"),
@@ -242,22 +237,21 @@ impl RegexRule for VariableRule {
 			Ok(variable) => document.add_variable(variable),
 			Err(msg) => {
 				let m = matches.get(0).unwrap();
-				result.push(
-					Report::build(ReportKind::Error, token.source(), m.start())
-						.with_message("Unable to create variable")
-						.with_label(
-							Label::new((token.source(), m.start() + 1..m.end()))
-								.with_message(format!(
+				report_err!(
+					&mut reports,
+					token.source(),
+					"Unable to Create Variable".into(),
+					span(
+						m.start() + 1..m.end(),
+							format!(
 									"Unable to create variable `{}`. {}",
 									var_name.fg(state.parser.colors().highlight),
 									msg
-								))
-								.with_color(state.parser.colors().error),
-						)
-						.finish(),
+								)
+					),
 				);
 
-				return result;
+				return reports;
 			}
 		}
 
@@ -277,7 +271,7 @@ impl RegexRule for VariableRule {
 			sems.add(value.clone(), tokens.variable_value);
 		}
 
-		result
+		reports
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
@@ -346,98 +340,87 @@ impl RegexRule for VariableSubstitutionRule {
 		document: &'a dyn Document<'a>,
 		token: Token,
 		matches: regex::Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
-		let mut result = vec![];
+	) -> Vec<Report> {
+		let mut reports = vec![];
 
 		let variable = match matches.get(1) {
 			Some(name) => {
 				// Empty name
 				if name.as_str().is_empty() {
-					result.push(
-						Report::build(ReportKind::Error, token.source(), name.start())
-							.with_message("Empty variable name")
-							.with_label(
-								Label::new((token.source(), matches.get(0).unwrap().range()))
-									.with_message(
-										"Missing variable name for substitution".to_string(),
-									)
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Empty Variable Name".into(),
+						span(
+							name.range(),
+							"Missing variable name for substitution".into(),
+						)
 					);
 
-					return result;
+					return reports;
 				}
 				// Leading spaces
 				else if name.as_str().trim_start() != name.as_str() {
-					result.push(
-						Report::build(ReportKind::Error, token.source(), name.start())
-							.with_message("Invalid variable name")
-							.with_label(
-								Label::new((token.source(), name.range()))
-									.with_message(
-										"Variable names contains leading spaces".to_string(),
-									)
-									.with_color(state.parser.colors().error),
-							)
-							.with_help("Remove leading spaces")
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Variable Name".into(),
+						span(
+							name.range(),
+							"Variable names contains leading spaces".into(),
+						),
+						help("Remove leading spaces".into())
 					);
 
-					return result;
+					return reports;
 				}
 				// Trailing spaces
 				else if name.as_str().trim_end() != name.as_str() {
-					result.push(
-						Report::build(ReportKind::Error, token.source(), name.start())
-							.with_message("Invalid variable name")
-							.with_label(
-								Label::new((token.source(), name.range()))
-									.with_message(
-										"Variable names contains trailing spaces".to_string(),
-									)
-									.with_color(state.parser.colors().error),
-							)
-							.with_help("Remove trailing spaces")
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Variable Name".into(),
+						span(
+							name.range(),
+							"Variable names contains trailing spaces".into(),
+						),
+						help("Remove trailing spaces".into())
 					);
 
-					return result;
+					return reports;
 				}
 				// Invalid name
 				if let Err(msg) = VariableRule::validate_name(state.parser.colors(), name.as_str())
 				{
-					result.push(
-						Report::build(ReportKind::Error, token.source(), name.start())
-							.with_message("Invalid variable name")
-							.with_label(
-								Label::new((token.source(), name.range()))
-									.with_message(msg)
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Variable Name".into(),
+						span(
+							name.range(),
+							msg
+						)
 					);
 
-					return result;
+					return reports;
 				}
 
 				// Get variable
 				match document.get_variable(name.as_str()) {
 					None => {
-						result.push(
-							Report::build(ReportKind::Error, token.source(), name.start())
-								.with_message("Unknown variable name")
-								.with_label(
-									Label::new((token.source(), name.range()))
-										.with_message(format!(
-											"Unable to find variable with name: `{}`",
-											name.as_str().fg(state.parser.colors().highlight)
-										))
-										.with_color(state.parser.colors().error),
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Unknown Variable Name".into(),
+							span(
+								name.range(),
+								format!(
+									"Unable to find variable with name: `{}`",
+									name.as_str().fg(state.parser.colors().highlight)
 								)
-								.finish(),
+							)
 						);
-						return result;
+						return reports;
 					}
 					Some(var) => var,
 				}
@@ -456,6 +439,6 @@ impl RegexRule for VariableSubstitutionRule {
 			sems.add(name.end..name.end + 1, tokens.variable_sub_sep);
 		}
 
-		result
+		reports
 	}
 }

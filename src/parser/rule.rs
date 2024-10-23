@@ -1,12 +1,12 @@
 use super::layout::LayoutHolder;
 use super::parser::ParseMode;
 use super::parser::ParserState;
+use super::reports::Report;
 use super::source::Cursor;
 use super::source::Source;
 use super::source::Token;
 use super::style::StyleHolder;
 use crate::document::document::Document;
-use ariadne::Report;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 use mlua::Function;
@@ -88,7 +88,7 @@ pub trait Rule: Downcast {
 		document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
 		match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>);
+	) -> (Cursor, Vec<Report>);
 
 	/// Registers lua bindings
 	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
@@ -128,7 +128,7 @@ pub trait RegexRule {
 		document: &'a (dyn Document<'a> + 'a),
 		token: Token,
 		matches: regex::Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>;
+	) -> Vec<Report>;
 
 	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 	fn register_styles(&self, _holder: &mut StyleHolder) {}
@@ -175,7 +175,7 @@ impl<T: RegexRule + 'static> Rule for T {
 		document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
 		match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+	) -> (Cursor, Vec<Report>) {
 		let content = cursor.source.content();
 		let index = match_data.downcast::<usize>().unwrap();
 		let re = &self.regexes()[*index];

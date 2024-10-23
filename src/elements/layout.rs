@@ -17,9 +17,6 @@ use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
 use crate::parser::util::escape_text;
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -34,6 +31,8 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LayoutToken {
@@ -253,11 +252,11 @@ struct LayoutState {
 impl RuleState for LayoutState {
 	fn scope(&self) -> Scope { Scope::DOCUMENT }
 
-	fn on_remove<'a>(
+	fn on_remove(
 		&self,
 		state: &ParserState,
 		document: &dyn Document,
-	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let doc_borrow = document.content().borrow();
@@ -265,25 +264,23 @@ impl RuleState for LayoutState {
 
 		for (tokens, layout_type) in &self.stack {
 			let start = tokens.first().unwrap();
-			reports.push(
-				Report::build(ReportKind::Error, start.source(), start.start())
-					.with_message("Unterminated Layout")
-					.with_label(
-						Label::new((start.source(), start.range.start + 1..start.range.end))
-							.with_order(1)
-							.with_message(format!(
-								"Layout {} stars here",
-								layout_type.name().fg(state.parser.colors().info)
-							))
-							.with_color(state.parser.colors().error),
+			report_err!(
+				&mut reports,
+				start.source(),
+				"Unterminated Layout".into(),
+				span(
+					start.source(),
+					start.range.start+1..start.range.end,
+					format!(
+						"Layout {} stars here",
+						layout_type.name().fg(state.parser.colors().info)
 					)
-					.with_label(
-						Label::new((at.source(), at.range.clone()))
-							.with_order(2)
-							.with_message("Document ends here".to_string())
-							.with_color(state.parser.colors().error),
-					)
-					.finish(),
+				),
+				span(
+					at.source(),
+					at.range.clone(),
+					"Document ends here".into()
+				)
 			);
 		}
 
@@ -340,24 +337,26 @@ impl LayoutRule {
 	}
 
 	pub fn parse_properties<'a>(
-		colors: &ReportColors,
+		mut reports: &mut Vec<Report>,
 		token: &Token,
 		layout_type: Rc<dyn LayoutType>,
 		properties: Option<Match>,
-	) -> Result<Option<Box<dyn Any>>, Report<'a, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Option<Box<dyn Any>> {
 		match properties {
 			None => match layout_type.parse_properties("") {
-				Ok(props) => Ok(props),
-				Err(err) => Err(
-					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Unable to parse layout properties")
-						.with_label(
-							Label::new((token.source(), token.range.clone()))
-								.with_message(err)
-								.with_color(colors.error),
+				Ok(props) => props,
+				Err(err) => {
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Layout Properties".into(),
+						span(
+							token.range.clone(),
+							format!("Layout is missing required property: {eee}")
 						)
-						.finish(),
-				),
+					);
+					None
+				}
 			},
 			Some(props) => {
 				let trimmed = props.as_str().trim_start().trim_end();

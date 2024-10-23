@@ -4,9 +4,6 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use blockquote_style::AuthorPos::After;
 use blockquote_style::AuthorPos::Before;
 use blockquote_style::BlockquoteStyle;
@@ -36,6 +33,8 @@ use crate::parser::style::StyleHolder;
 use crate::parser::util::escape_text;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyParser;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 #[derive(Debug)]
 pub struct Blockquote {
@@ -254,7 +253,7 @@ impl Rule for BlockquoteRule {
 		document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
 		_match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+	) -> (Cursor, Vec<Report>) {
 		let mut reports = vec![];
 
 		let content = cursor.source.content();
@@ -273,19 +272,8 @@ impl Rule for BlockquoteRule {
 			if let Some(properties) = captures.get(1) {
 				match self.parse_properties(properties) {
 					Err(err) => {
-						reports.push(
-							Report::build(
-								ReportKind::Warning,
-								cursor.source.clone(),
-								properties.start(),
-							)
-							.with_message("Invalid Blockquote Properties")
-							.with_label(
-								Label::new((cursor.source.clone(), properties.range()))
-									.with_message(err)
-									.with_color(state.parser.colors().warning),
-							)
-							.finish(),
+						report_err!(&mut reports, cursor.source.clone(), "Invalid Blockquote Properties".into(),
+								span(properties.range(), err)
 						);
 						return (end_cursor, reports);
 					}
@@ -342,15 +330,8 @@ impl Rule for BlockquoteRule {
 				} else if elem.downcast_ref::<Blockquote>().is_some() {
 					parsed_content.push(elem);
 				} else {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), token.range.start)
-							.with_message("Unable to Parse Blockquote Entry")
-							.with_label(
-								Label::new((token.source(), token.range.clone()))
-									.with_message("Blockquotes may only contain paragraphs and other blockquotes")
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(&mut reports, token.source(), "Unable to Parse Blockquote Entry".into(),
+						span(token.range.clone(), "Blockquotes may only contain paragraphs and other blockquotes".into())
 					);
 					return (end_cursor, reports);
 				}

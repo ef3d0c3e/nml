@@ -2,7 +2,6 @@ use std::any::Any;
 use std::ops::Range;
 use std::rc::Rc;
 
-use ariadne::Report;
 use mlua::Function;
 use mlua::Lua;
 
@@ -17,6 +16,7 @@ use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
+use crate::parser::reports::*;
 
 #[derive(Debug)]
 pub struct Text {
@@ -70,7 +70,7 @@ impl Rule for TextRule {
 		_document: &dyn Document,
 		_cursor: Cursor,
 		_match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+	) -> (Cursor, Vec<Report>) {
 		panic!("Text cannot match");
 	}
 

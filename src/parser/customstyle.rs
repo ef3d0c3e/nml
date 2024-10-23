@@ -1,13 +1,12 @@
 use std::collections::HashMap;
-use std::ops::Range;
 use std::rc::Rc;
 use std::ops::Deref;
 
-use ariadne::Report;
-
 use crate::document::document::Document;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
+
+use crate::parser::reports::*;
+
 
 use super::parser::ParserState;
 
@@ -28,13 +27,13 @@ pub trait CustomStyle: core::fmt::Debug {
 		location: Token,
 		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
-	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>>;
+	) -> Vec<Report>;
 	fn on_end<'a>(
 		&self,
 		location: Token,
 		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
-	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>>;
+	) -> Vec<Report>;
 }
 
 #[derive(Default)]

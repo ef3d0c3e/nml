@@ -14,9 +14,6 @@ use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use mlua::Function;
 use regex::Captures;
 use regex::Regex;
@@ -24,6 +21,8 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 use super::paragraph::Paragraph;
 
@@ -87,11 +86,11 @@ impl StyleState {
 impl RuleState for StyleState {
 	fn scope(&self) -> Scope { Scope::PARAGRAPH }
 
-	fn on_remove<'a>(
+	fn on_remove(
 		&self,
 		state: &ParserState,
 		document: &dyn Document,
-	) -> Vec<Report<'a, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		self.toggled
@@ -114,27 +113,22 @@ impl RuleState for StyleState {
 						)
 					})
 					.unwrap();
-
-				reports.push(
-					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Unterminated Style")
-						.with_label(
-							Label::new((token.source(), token.range.clone()))
-								.with_order(1)
-								.with_message(format!(
-									"Style {} starts here",
-									name.fg(state.parser.colors().info)
-								))
-								.with_color(state.parser.colors().error),
+				report_err!(
+					&mut reports,
+					token.source(),
+					"Unterminated Style".into(),
+					span(
+						token.range.clone(),
+						format!(
+							"Style {} starts here",
+							name.fg(state.parser.colors().info)
 						)
-						.with_label(
-							Label::new(paragraph_end)
-								.with_order(1)
-								.with_message("Paragraph ends here".to_string())
-								.with_color(state.parser.colors().error),
-						)
-						.with_note("Styles cannot span multiple documents (i.e @import)")
-						.finish(),
+					),
+					span(
+						paragraph_end.1,
+						"Paragraph ends here".into()
+					),
+					note("Styles cannot span multiple documents (i.e @import)".into())
 				);
 			});
 
@@ -182,7 +176,7 @@ impl RegexRule for StyleRule {
 		document: &dyn Document,
 		token: Token,
 		_matches: Captures,
-	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let query = state.shared.rule_state.borrow().get(STATE_NAME);
 		let style_state = match query {
 			Some(state) => state,

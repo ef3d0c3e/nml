@@ -13,9 +13,6 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::style::StyleHolder;
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -25,6 +22,8 @@ use section_style::SectionStyle;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 use super::reference::InternalReference;
 
@@ -183,22 +182,22 @@ impl RegexRule for SectionRule {
 		document: &dyn Document,
 		token: Token,
 		matches: regex::Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
-		let mut result = vec![];
+	) -> Vec<Report> {
+		let mut reports = vec![];
 		let section_depth = match matches.get(1) {
 			Some(depth) => {
 				if depth.len() > 6 {
-					result.push(
-					Report::build(ReportKind::Error, token.source(), depth.start())
-						.with_message("Invalid section depth")
-						.with_label(
-							Label::new((token.source(), depth.range()))
-							.with_message(format!("Section is of depth {}, which is greather than {} (maximum depth allowed)",
-                            depth.len().fg(state.parser.colors().info),
-                            6.fg(state.parser.colors().info)))
-							.with_color(state.parser.colors().error))
-						.finish());
-					return result;
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Section Depth".into(),
+						span(
+							depth.range(),
+							format!("Section is of depth {}, which is greather than {} (maximum depth allowed)",
+							depth.len().fg(state.parser.colors().info),
+							6.fg(state.parser.colors().info))
+						)
+					);
 				}
 
 				depth.len()
@@ -215,25 +214,27 @@ impl RegexRule for SectionRule {
 					if let Some(elem_reference) = document.get_reference(refname.as_str()) {
 						let elem = document.get_from_reference(&elem_reference).unwrap();
 
-						result.push(
-						Report::build(ReportKind::Warning, token.source(), refname.start())
-						.with_message("Duplicate reference name")
-						.with_label(
-							Label::new((token.source(), refname.range()))
-							.with_message(format!("Reference with name `{}` is already defined in `{}`",
+
+						report_warn!(
+							&mut reports,
+							token.source(),
+							"Duplicate Reference Name".into(),
+							span(
+								refname.range(),
+								format!("Reference with name `{}` is already defined in `{}`. `{}` conflicts with previously defined reference to {}",
 									refname.as_str().fg(state.parser.colors().highlight),
-									elem.location().source().name().as_str().fg(state.parser.colors().highlight)))
-							.with_message(format!("`{}` conflicts with previously defined reference to {}",
+									elem.location().source().name().as_str().fg(state.parser.colors().highlight),
 									refname.as_str().fg(state.parser.colors().highlight),
-									elem.element_name().fg(state.parser.colors().highlight)))
-							.with_color(state.parser.colors().warning))
-						.with_label(
-							Label::new((elem.location().source(), elem.location().start()..elem.location().end() ))
-							.with_message(format!("`{}` previously defined here",
-								refname.as_str().fg(state.parser.colors().highlight)))
-							.with_color(state.parser.colors().warning))
-						.with_note("Previous reference was overwritten".to_string())
-						.finish());
+									elem.element_name().fg(state.parser.colors().highlight))
+							),
+							span(
+								elem.location().source(),
+								elem.location().start()..elem.location().end(),
+								format!("`{}` previously defined here",
+									refname.as_str().fg(state.parser.colors().highlight))
+							),
+							note("Previous reference was overwritten".into())
+						);
 					}
 					Some(refname.as_str().to_string())
 				},
@@ -247,19 +248,20 @@ impl RegexRule for SectionRule {
 				"+" => section_kind::NO_TOC,
 				"" => section_kind::NONE,
 				_ => {
-					result.push(
-							Report::build(ReportKind::Error, token.source(), kind.start())
-							.with_message("Invalid section numbering kind")
-							.with_label(
-								Label::new((token.source(), kind.range()))
-								.with_message(format!("Section numbering kind must be a combination of `{}` for unnumbered, and `{}` for non-listing; got `{}`",
-										"*".fg(state.parser.colors().info),
-										"+".fg(state.parser.colors().info),
-										kind.as_str().fg(state.parser.colors().highlight)))
-								.with_color(state.parser.colors().error))
-								.with_help("Leave empty for a numbered listed section".to_string())
-							.finish());
-					return result;
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Section Numbering Kind".into(),
+						span(
+							kind.range(),
+							format!("Section numbering kind must be a combination of `{}` for unnumbered, and `{}` for non-listing; got `{}`",
+								"*".fg(state.parser.colors().info),
+								"+".fg(state.parser.colors().info),
+								kind.as_str().fg(state.parser.colors().highlight))
+						),
+						help("Leave empty for a numbered listed section".into())
+					);
+					return reports;
 				}
 			},
 			_ => section_kind::NONE,
@@ -278,31 +280,31 @@ impl RegexRule for SectionRule {
 				if section_name.is_empty()
 				// No name
 				{
-					result.push(
-						Report::build(ReportKind::Error, token.source(), name.start())
-							.with_message("Missing section name")
-							.with_label(
-								Label::new((token.source(), name.range()))
-									.with_message("Sections require a name before line end")
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Missing Section Name".into(),
+						span(
+							name.range(),
+							"Section name must be specified before line end".into()
+						),
 					);
-					return result;
+					return reports;
 				}
 
 				// No spacing
 				if split == 0 {
-					result.push(
-						Report::build(ReportKind::Warning, token.source(), name.start())
-						.with_message("Missing section spacing")
-						.with_label(
-							Label::new((token.source(), name.range()))
-							.with_message("Sections require at least one whitespace before the section's name")
-							.with_color(state.parser.colors().warning))
-                        .with_help(format!("Add a space before `{}`", section_name.fg(state.parser.colors().highlight)))
-						.finish());
-					return result;
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Missing Section Spacing".into(),
+						span(
+							name.range(),
+							"Sections require at least one whitespace before the section's name".into()
+						),
+                        help(format!("Add a space before `{}`", section_name.fg(state.parser.colors().highlight)))
+					);
+					return reports;
 				}
 
 				section_name.to_string()
@@ -347,7 +349,7 @@ impl RegexRule for SectionRule {
 			sems.add(matches.get(5).unwrap().range(), tokens.section_name);
 		}
 
-		result
+		reports
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {

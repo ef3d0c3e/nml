@@ -3,7 +3,7 @@ use std::{ops::Range, rc::Rc};
 use super::{parser::Parser, source::{Source, SourcePosition, Token}};
 
 #[derive(Debug)]
-enum ReportKind
+pub enum ReportKind
 {
 	Error,
 	Warning,
@@ -21,18 +21,20 @@ impl Into<ariadne::ReportKind<'static>> for &ReportKind
 }
 
 #[derive(Debug)]
-struct ReportSpan
+pub struct ReportSpan
 {
 	pub token: Token,
 	pub message: String
 }
 
 #[derive(Debug)]
-struct Report
+pub struct Report
 {
 	pub kind: ReportKind,
 	pub source: Rc<dyn Source>,
 	pub message: String,
+	pub note: Option<String>,
+	pub help: Option<String>,
 	pub spans: Vec<ReportSpan>,
 }
 
@@ -86,36 +88,69 @@ impl Report
 	}
 }
 
-macro_rules! report_label {
-	($spans:expr, $psource:expr,) => {{ }};
-	($spans:expr, $psource:expr, span($source:expr, $range:expr, $message:expr), $(, $($tail:tt)*)?) => {{
-		$spans.push(ReportSpan {
-			token: Token::new($range, $source),
-			message: $message,
-		});
-		report_label!($spans, $psource, $($($tail)*)?);
-	}};
-	($spans:expr, $psource:expr, span($range:expr, $message:expr) $(, $($tail:tt)*)?) => {{
-		$spans.push(ReportSpan {
-			token: Token::new($range, $psource),
-			message: $message,
-		});
-		report_label!($spans, $psource, $($($tail)*)?);
-	}}
-}
-
+pub mod macros
+{
+	pub use super::*;
 #[macro_export]
-macro_rules! report_err {
-	($reports:expr, $source:expr, $message:expr, $($tail:tt)*) => {{
-		let mut spans = Vec::new();
-		report_label!(spans, $source.clone(), $($tail)*);
-		$reports.push(Report {
-			kind: ReportKind::Error,
-			source: $source,
-			message: $message,
-			spans,
-		});
-	}}
+	macro_rules! report_label {
+		($r:expr,) => {{ }};
+		($r:expr, span($source:expr, $range:expr, $message:expr), $(, $($tail:tt)*)?) => {{
+			$r.spans.push(ReportSpan {
+				token: crate::parser::source::Token::Token::new($range, $source),
+				message: $message,
+			});
+			report_label!($r, $($($tail)*)?);
+		}};
+		($r:expr, span($range:expr, $message:expr) $(, $($tail:tt)*)?) => {{
+			$r.spans.push(ReportSpan {
+				token: crate::parser::source::Token::new($range, $r.source.clone()),
+				message: $message,
+			});
+			report_label!($r, $($($tail)*)?);
+		}};
+		($r:expr, note($message:expr) $(, $($tail:tt)*)?) => {{
+			$r.note = Some($message);
+			report_label!($r, $($($tail)*)?);
+		}};
+		($r:expr, help($message:expr) $(, $($tail:tt)*)?) => {{
+			$r.help = Some($message);
+			report_label!($r, $($($tail)*)?);
+		}}
+	}
+
+	#[macro_export]
+	macro_rules! report_err {
+		($reports:expr, $source:expr, $message:expr, $($tail:tt)*) => {{
+			let mut r = Report {
+				kind: ReportKind::Error,
+				source: $source,
+				message: $message,
+				note: None,
+				help: None,
+				spans: vec![],
+			};
+			report_label!(r, $($tail)*);
+			$reports.push(r);
+		}}
+	}
+
+	#[macro_export]
+	macro_rules! report_warn {
+		($reports:expr, $source:expr, $message:expr, $($tail:tt)*) => {{
+			let mut r = Report {
+				kind: ReportKind::Warning,
+				source: $source,
+				message: $message,
+				note: None,
+				help: None,
+				spans: vec![],
+			};
+			report_label!(r, $($tail)*);
+			$reports.push(r);
+		}}
+	}
+
+	pub use crate::*;
 }
 
 #[cfg(test)]
@@ -140,7 +175,6 @@ Dolor
 		));
 
 		let mut reports = vec![];
-
 		//let la = report_label!(source.clone(), 5..9, "Msg".into());
 		report_err!(&mut reports, source.clone(), "Some message".into(),
 			span(5..9, "Msg".into()),
