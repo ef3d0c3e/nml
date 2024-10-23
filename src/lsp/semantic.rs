@@ -8,10 +8,10 @@ use tower_lsp::lsp_types::SemanticToken;
 use tower_lsp::lsp_types::SemanticTokenModifier;
 use tower_lsp::lsp_types::SemanticTokenType;
 
-use crate::parser::source::original_range;
 use crate::parser::source::LineCursor;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
+use crate::parser::source::SourcePosition;
 use crate::parser::source::VirtualSource;
 
 pub const TOKEN_TYPE: &[SemanticTokenType] = &[
@@ -278,7 +278,6 @@ impl<'a> Semantics<'a> {
 			.map(|parent| parent.location())
 			.unwrap_or(None)
 		{
-			//let range = location.range.start+range.start..location.range.start+range.end;
 			return Self::from_source_impl(location.source(), semantics, original_source);
 		} else if let Some(source) = source.clone().downcast_rc::<SourceFile>().ok() {
 			return Ref::filter_map(
@@ -316,7 +315,7 @@ impl<'a> Semantics<'a> {
 	}
 
 	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
-		let range = original_range(self.original_source.clone(), range).1;
+		let range = self.original_source.original_range(range).1;
 		let mut tokens = self.sems.tokens.borrow_mut();
 		let mut cursor = self.sems.cursor.borrow_mut();
 		let mut current = cursor.clone();

@@ -230,7 +230,7 @@ impl RegexRule for ScriptRule {
 							{
 								let parse_source = Rc::new(VirtualSource::new(
 									Token::new(0..source.content().len(), source.clone()),
-									format!("parse({})", source.name()),
+									format!(":LUA:parse({})", source.name()),
 									result,
 								)) as Rc<dyn Source>;
 

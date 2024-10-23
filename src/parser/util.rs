@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::iter::Peekable;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -9,12 +8,10 @@ use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::elements::paragraph::Paragraph;
-use crate::parser::source::original_range;
 
 use super::parser::ParseMode;
 use super::parser::ParserState;
 use super::source::Source;
-use super::source::SourceFile;
 use super::source::Token;
 use super::source::VirtualSource;
 

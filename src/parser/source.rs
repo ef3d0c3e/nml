@@ -17,6 +17,17 @@ pub trait Source: Downcast + Debug {
 }
 impl_downcast!(Source);
 
+pub trait SourcePosition
+{
+	/// Transforms a position to it's position in the oldest parent source
+	fn original_position(&self, pos: usize) -> (Rc<dyn Source>, usize);
+
+	/// Transforms a range to the oldest parent source
+	///
+	/// This function takes a range from a source and attempts to get the range's position in the oldest parent
+	fn original_range(&self, range: Range<usize>) -> (Rc<dyn Source>, Range<usize>);
+}
+
 impl core::fmt::Display for dyn Source {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.name())
@@ -140,46 +151,55 @@ impl Source for VirtualSource {
 	fn content(&self) -> &String { &self.content }
 }
 
-/// Transforms a position to it's position in the oldest parent source
-pub fn original_position(source: Rc<dyn Source>, mut pos: usize) -> (Rc<dyn Source>, usize)
+impl SourcePosition for Rc<dyn Source>
 {
-	// Apply offsets
-	if let Some(offsets) =
-		source.downcast_ref::<VirtualSource>()
-		.and_then(|source| source.offsets.as_ref())
-	{
-		pos = offsets.position(pos);
-	}
+    fn original_position(&self, mut pos: usize) -> (Rc<dyn Source>, usize) {
+		// Stop recursion
+		if self.downcast_ref::<SourceFile>().is_some()
+		{
+			return (self.clone(), pos);
+		}
 
-	// Recurse to parent
-	if let Some(parent) = source.location()
-	{
-		return original_position(parent.source.clone(), parent.range.start + pos);
-	}
+		// Apply offsets
+		if let Some(offsets) =
+			self.downcast_ref::<VirtualSource>()
+				.and_then(|source| source.offsets.as_ref())
+		{
+			pos = offsets.position(pos);
+		}
 
-	return (source, pos);
-}
+		// Recurse to parent
+		if let Some(parent) = self.location()
+		{
+			return parent.source().original_position(parent.range.start + pos);
+		}
 
-/// Transforms a range to the oldest parent source
-///
-/// This function takes a range from a source and attempts to get the range's position in the oldest parent
-pub fn original_range(source: Rc<dyn Source>, mut range: Range<usize>) -> (Rc<dyn Source>, Range<usize>)
-{
-	// Apply offsets
-	if let Some(offsets) =
-		source.downcast_ref::<VirtualSource>()
-		.and_then(|source| source.offsets.as_ref())
-	{
-		range = offsets.position(range.start) .. offsets.position(range.end);
-	}
+		return (self.clone(), pos);
+    }
 
-	// Recurse to parent
-	if let Some(parent) = source.location()
-	{
-		return original_range(parent.source.clone(), parent.range.start + range.start..parent.range.start + range.end);
-	}
+    fn original_range(&self, mut range: Range<usize>) -> (Rc<dyn Source>, Range<usize>) {
+		// Stop recursion
+		if self.downcast_ref::<SourceFile>().is_some()
+		{
+			return (self.clone(), range);
+		}
 
-	return (source, range);
+		// Apply offsets
+		if let Some(offsets) =
+			self.downcast_ref::<VirtualSource>()
+				.and_then(|source| source.offsets.as_ref())
+		{
+			range = offsets.position(range.start) .. offsets.position(range.end);
+		}
+
+		// Recurse to parent
+		if let Some(parent) = self.location()
+		{
+			return parent.source.original_range(parent.range.start + range.start..parent.range.start + range.end);
+		}
+
+		return (self.clone(), range);
+    }
 }
 
 #[derive(Debug)]
