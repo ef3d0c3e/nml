@@ -8,8 +8,9 @@ use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::style::StyleHolder;
 use ariadne::Fmt;
@@ -19,11 +20,8 @@ use mlua::Lua;
 use regex::Regex;
 use section_style::SectionLinkPos;
 use section_style::SectionStyle;
-use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 use super::reference::InternalReference;
 
@@ -300,9 +298,13 @@ impl RegexRule for SectionRule {
 						"Missing Section Spacing".into(),
 						span(
 							name.range(),
-							"Sections require at least one whitespace before the section's name".into()
+							"Sections require at least one whitespace before the section's name"
+								.into()
 						),
-                        help(format!("Add a space before `{}`", section_name.fg(state.parser.colors().highlight)))
+						help(format!(
+							"Add a space before `{}`",
+							section_name.fg(state.parser.colors().highlight)
+						))
 					);
 					return reports;
 				}

@@ -9,9 +9,9 @@ use crate::parser::layout::LayoutHolder;
 use crate::parser::layout::LayoutType;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
-use crate::parser::parser::ReportColors;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
@@ -31,8 +31,6 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LayoutToken {
@@ -252,11 +250,7 @@ struct LayoutState {
 impl RuleState for LayoutState {
 	fn scope(&self) -> Scope { Scope::DOCUMENT }
 
-	fn on_remove(
-		&self,
-		state: &ParserState,
-		document: &dyn Document,
-	) -> Vec<Report> {
+	fn on_remove(&self, state: &ParserState, document: &dyn Document) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let doc_borrow = document.content().borrow();
@@ -270,17 +264,13 @@ impl RuleState for LayoutState {
 				"Unterminated Layout".into(),
 				span(
 					start.source(),
-					start.range.start+1..start.range.end,
+					start.range.start + 1..start.range.end,
 					format!(
 						"Layout {} stars here",
 						layout_type.name().fg(state.parser.colors().info)
 					)
 				),
-				span(
-					at.source(),
-					at.range.clone(),
-					"Document ends here".into()
-				)
+				span(at.source(), at.range.clone(), "Document ends here".into())
 			);
 		}
 
@@ -363,15 +353,11 @@ impl LayoutRule {
 				match layout_type.parse_properties(content.as_str()) {
 					Ok(props) => Ok(props),
 					Err(err) => {
-
 						report_err!(
 							&mut reports,
 							token.source(),
 							"Invalid Layout Properties".into(),
-							span(
-								props.range(),
-								err
-							)
+							span(props.range(), err)
 						);
 						Err(())
 					}
@@ -473,7 +459,6 @@ impl RegexRule for LayoutRule {
 										trimmed.fg(state.parser.colors().highlight)
 									)
 								)
-
 							);
 							return reports;
 						}
@@ -514,9 +499,12 @@ impl RegexRule for LayoutRule {
 					if let Some((sems, tokens)) =
 						Semantics::from_source(token.source(), &state.shared.semantics)
 					{
-						let start = matches.get(0).map(|m| {
-							m.start() + token.source().content()[m.start()..].find('#').unwrap()
-						}).unwrap();
+						let start = matches
+							.get(0)
+							.map(|m| {
+								m.start() + token.source().content()[m.start()..].find('#').unwrap()
+							})
+							.unwrap();
 						sems.add(start..start + 2, tokens.layout_sep);
 						sems.add(
 							start + 2..start + 2 + "LAYOUT_BEGIN".len(),
@@ -546,10 +534,7 @@ impl RegexRule for LayoutRule {
 						&mut reports,
 						token.source(),
 						"Invalid #+LAYOUT_NEXT".into(),
-						span(
-							token.range.clone(),
-							"No active layout found".into()
-						)
+						span(token.range.clone(), "No active layout found".into())
 					);
 					return reports;
 				}
@@ -583,15 +568,16 @@ impl RegexRule for LayoutRule {
 				matches.get(1),
 			) {
 				Ok(props) => props,
-				Err(rep) => return reports,
+				Err(()) => return reports,
 			};
 
 			if let Some((sems, tokens)) =
 				Semantics::from_source(token.source(), &state.shared.semantics)
 			{
-				let start = matches.get(0).map(|m| {
-					m.start() + token.source().content()[m.start()..].find('#').unwrap()
-				}).unwrap();
+				let start = matches
+					.get(0)
+					.map(|m| m.start() + token.source().content()[m.start()..].find('#').unwrap())
+					.unwrap();
 				sems.add(start..start + 2, tokens.layout_sep);
 				sems.add(
 					start + 2..start + 2 + "LAYOUT_NEXT".len(),
@@ -611,7 +597,6 @@ impl RegexRule for LayoutRule {
 				layout_type.clone(),
 				properties,
 			)
-
 		} else {
 			// LAYOUT_END
 			let mut rule_state_borrow = rule_state.as_ref().borrow_mut();
@@ -623,10 +608,7 @@ impl RegexRule for LayoutRule {
 						&mut reports,
 						token.source(),
 						"Invalid #+LAYOUT_NEXT".into(),
-						span(
-							token.range.clone(),
-							"No active layout found".into()
-						)
+						span(token.range.clone(), "No active layout found".into())
 					);
 					return reports;
 				}
@@ -660,7 +642,7 @@ impl RegexRule for LayoutRule {
 				matches.get(1),
 			) {
 				Ok(props) => props,
-				Err(rep) => return reports,
+				Err(()) => return reports,
 			};
 
 			let layout_type = layout_type.clone();
@@ -670,9 +652,10 @@ impl RegexRule for LayoutRule {
 			if let Some((sems, tokens)) =
 				Semantics::from_source(token.source(), &state.shared.semantics)
 			{
-				let start = matches.get(0).map(|m| {
-					m.start() + token.source().content()[m.start()..].find('#').unwrap()
-				}).unwrap();
+				let start = matches
+					.get(0)
+					.map(|m| m.start() + token.source().content()[m.start()..].find('#').unwrap())
+					.unwrap();
 				sems.add(start..start + 2, tokens.layout_sep);
 				sems.add(
 					start + 2..start + 2 + "LAYOUT_END".len(),
@@ -920,7 +903,8 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::{validate_document, validate_semantics};
+	use crate::validate_document;
+	use crate::validate_semantics;
 
 	use super::*;
 

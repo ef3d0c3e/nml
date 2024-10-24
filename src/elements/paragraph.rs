@@ -10,11 +10,10 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::*;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
-use crate::parser::reports::*;
 
 // TODO: Full refactor
 // Problem is that document parsed from other sources i.e by variables
@@ -151,14 +150,13 @@ impl Rule for ParagraphRule {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::rc::Rc;
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
-
+	use std::rc::Rc;
 
 	#[test]
 	fn parse() {

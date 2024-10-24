@@ -1,10 +1,10 @@
+pub mod customstyle;
 pub mod langparser;
+pub mod layout;
 pub mod parser;
+pub mod reports;
 pub mod rule;
 pub mod source;
 pub mod state;
-pub mod util;
 pub mod style;
-pub mod layout;
-pub mod customstyle;
-pub mod reports;
+pub mod util;

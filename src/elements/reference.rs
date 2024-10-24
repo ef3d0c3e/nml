@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::ops::Range;
 use std::rc::Rc;
 
 use reference_style::ExternalReferenceStyle;
@@ -20,17 +19,15 @@ use crate::document::references::validate_refname;
 use crate::lsp::semantic::Semantics;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
-use crate::parser::parser::ReportColors;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::style::StyleHolder;
 use crate::parser::util;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyMap;
 use crate::parser::util::PropertyParser;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 #[derive(Debug)]
 pub struct InternalReference {
@@ -149,7 +146,7 @@ impl Element for ExternalReference {
 						format!("Failed to format ExternalReference style `{format_string}`: {err}")
 					})?;
 
-					result += format!("\">{}</a>", args.to_string()).as_str();
+					result += format!("\">{}</a>", args).as_str();
 				}
 				// Add crossreference
 				compiler.insert_crossreference(crossreference_pos, self.reference.clone());
@@ -214,13 +211,10 @@ impl ReferenceRule {
 							&mut reports,
 							token.source(),
 							"Invalid Reference Properties".into(),
-							span(
-								props.range(),
-								e
-							)
+							span(props.range(), e)
 						);
 						None
-					},
+					}
 					Ok(properties) => Some(properties),
 				}
 			}
@@ -259,10 +253,7 @@ impl RegexRule for ReferenceRule {
 							&mut reports,
 							token.source(),
 							"Invalid Reference Refname".into(),
-							span(
-								refname_match.range(),
-								err
-							)
+							span(refname_match.range(), err)
 						);
 						return reports;
 					}
@@ -277,10 +268,7 @@ impl RegexRule for ReferenceRule {
 							&mut reports,
 							token.source(),
 							"Invalid Reference Refname".into(),
-							span(
-								refname_match.range(),
-								err
-							)
+							span(refname_match.range(), err)
 						);
 						return reports;
 					}
@@ -292,8 +280,7 @@ impl RegexRule for ReferenceRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(&mut reports, &token, &matches.get(2))
-		{
+		let properties = match self.parse_properties(&mut reports, &token, &matches.get(2)) {
 			Some(pm) => pm,
 			None => return reports,
 		};

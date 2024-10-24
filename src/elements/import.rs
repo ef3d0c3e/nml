@@ -4,17 +4,15 @@ use crate::lsp::semantic::Semantics;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
 use crate::parser::source::Token;
 use ariadne::Fmt;
 use regex::Captures;
 use regex::Regex;
-use std::ops::Range;
 use std::rc::Rc;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 use super::paragraph::Paragraph;
 

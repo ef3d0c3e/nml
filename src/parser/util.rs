@@ -97,25 +97,28 @@ pub fn process_text(document: &dyn Document, content: &str) -> String {
 /// # Notes
 ///
 /// If you only need to escape content that won't be parsed, use [`process_escaped`] instead.
-pub fn escape_source(source: Rc<dyn Source>, range: Range<usize>, name: String, escape: char, token: &'static str) -> Rc<dyn Source>
-{
+pub fn escape_source(
+	source: Rc<dyn Source>,
+	range: Range<usize>,
+	name: String,
+	escape: char,
+	token: &'static str,
+) -> Rc<dyn Source> {
 	let content = &source.content()[range.clone()];
 
 	let mut processed = String::new();
 	let mut escaped = 0;
 	let mut token_it = token.chars().peekable();
 	let mut offset = 0isize;
-	let mut offsets : Vec<(usize, isize)> = vec!();
-	for (pos, c) in content.chars().enumerate()
-	{
+	let mut offsets: Vec<(usize, isize)> = vec![];
+	for (pos, c) in content.chars().enumerate() {
 		if c == escape {
 			escaped += 1;
 		} else if escaped % 2 == 1 && token_it.peek().map_or(false, |p| *p == c) {
 			let _ = token_it.next();
 			if token_it.peek().is_none() {
 				(0..(escaped / 2)).for_each(|_| processed.push(escape));
-				if ( escaped + 1) / 2 != 0
-				{
+				if (escaped + 1) / 2 != 0 {
 					offset += (escaped + 1) / 2;
 					offsets.push((pos - token.len() - escaped as usize / 2, offset));
 				}
@@ -140,7 +143,7 @@ pub fn escape_source(source: Rc<dyn Source>, range: Range<usize>, name: String, 
 		Token::new(range, source),
 		name,
 		processed,
-		offsets
+		offsets,
 	))
 }
 
@@ -205,7 +208,14 @@ pub fn parse_paragraph<'a>(
 	let parsed = state.with_state(|new_state| -> Box<dyn Document> {
 		new_state
 			.parser
-			.parse(new_state, source.clone(), Some(document), ParseMode { paragraph_only: true })
+			.parse(
+				new_state,
+				source.clone(),
+				Some(document),
+				ParseMode {
+					paragraph_only: true,
+				},
+			)
 			.0
 	});
 	if parsed.content().borrow().len() > 1 {

@@ -23,17 +23,16 @@ use crate::elements::paragraph::Paragraph;
 use crate::elements::text::Text;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::style::StyleHolder;
 use crate::parser::util::escape_text;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyParser;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 #[derive(Debug)]
 pub struct Blockquote {
@@ -271,8 +270,11 @@ impl Rule for BlockquoteRule {
 			if let Some(properties) = captures.get(1) {
 				match self.parse_properties(properties) {
 					Err(err) => {
-						report_err!(&mut reports, cursor.source.clone(), "Invalid Blockquote Properties".into(),
-								span(properties.range(), err)
+						report_err!(
+							&mut reports,
+							cursor.source.clone(),
+							"Invalid Blockquote Properties".into(),
+							span(properties.range(), err)
 						);
 						return (end_cursor, reports);
 					}
@@ -329,8 +331,14 @@ impl Rule for BlockquoteRule {
 				} else if elem.downcast_ref::<Blockquote>().is_some() {
 					parsed_content.push(elem);
 				} else {
-					report_err!(&mut reports, token.source(), "Unable to Parse Blockquote Entry".into(),
-						span(token.range.clone(), "Blockquotes may only contain paragraphs and other blockquotes".into())
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Unable to Parse Blockquote Entry".into(),
+						span(
+							token.range.clone(),
+							"Blockquotes may only contain paragraphs and other blockquotes".into()
+						)
 					);
 					return (end_cursor, reports);
 				}

@@ -50,7 +50,12 @@ pub trait Element: Downcast + core::fmt::Debug {
 	fn as_container(&self) -> Option<&dyn ContainerElement> { None }
 
 	/// Compiles element
-	fn compile(&self, compiler: &Compiler, document: &dyn Document, cursor: usize) -> Result<String, String>;
+	fn compile(
+		&self,
+		compiler: &Compiler,
+		document: &dyn Document,
+		cursor: usize,
+	) -> Result<String, String>;
 }
 impl_downcast!(Element);
 
@@ -93,7 +98,12 @@ impl Element for DocumentEnd {
 
 	fn element_name(&self) -> &'static str { "Document End" }
 
-	fn compile(&self, _compiler: &Compiler, _document: &dyn Document, _cursor: usize) -> Result<String, String> {
+	fn compile(
+		&self,
+		_compiler: &Compiler,
+		_document: &dyn Document,
+		_cursor: usize,
+	) -> Result<String, String> {
 		Ok(String::new())
 	}
 }

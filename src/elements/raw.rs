@@ -6,8 +6,8 @@ use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
-use crate::parser::reports::*;
 use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
 use crate::parser::util::Property;
@@ -272,8 +272,6 @@ impl RegexRule for RawRule {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::parser::source::Source;
-	use std::rc::Rc;
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
@@ -281,6 +279,7 @@ mod tests {
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 	use crate::validate_semantics;
+	use std::rc::Rc;
 
 	#[test]
 	fn parser() {

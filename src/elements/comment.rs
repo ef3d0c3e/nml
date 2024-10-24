@@ -5,15 +5,12 @@ use crate::document::element::Element;
 use crate::lsp::semantic::Semantics;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use regex::Captures;
 use regex::Regex;
-use std::ops::Range;
-use std::rc::Rc;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 #[derive(Debug)]
 pub struct Comment {
@@ -77,10 +74,7 @@ impl RegexRule for CommentRule {
 						&mut reports,
 						token.source(),
 						"Empty Comment".into(),
-						span(
-							comment.range(),
-							"Comment is empty".into()
-						)
+						span(comment.range(), "Comment is empty".into())
 					);
 				}
 
@@ -117,6 +111,7 @@ mod tests {
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 	use crate::validate_semantics;
+	use std::rc::Rc;
 
 	use super::*;
 

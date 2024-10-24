@@ -8,8 +8,9 @@ use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
@@ -18,11 +19,8 @@ use mlua::Function;
 use regex::Captures;
 use regex::Regex;
 use std::cell::RefCell;
-use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 use super::paragraph::Paragraph;
 
@@ -86,11 +84,7 @@ impl StyleState {
 impl RuleState for StyleState {
 	fn scope(&self) -> Scope { Scope::PARAGRAPH }
 
-	fn on_remove(
-		&self,
-		state: &ParserState,
-		document: &dyn Document,
-	) -> Vec<Report> {
+	fn on_remove(&self, state: &ParserState, document: &dyn Document) -> Vec<Report> {
 		let mut reports = vec![];
 
 		self.toggled
@@ -119,15 +113,9 @@ impl RuleState for StyleState {
 					"Unterminated Style".into(),
 					span(
 						token.range.clone(),
-						format!(
-							"Style {} starts here",
-							name.fg(state.parser.colors().info)
-						)
+						format!("Style {} starts here", name.fg(state.parser.colors().info))
 					),
-					span(
-						paragraph_end.1,
-						"Paragraph ends here".into()
-					),
+					span(paragraph_end.1, "Paragraph ends here".into()),
 					note("Styles cannot span multiple documents (i.e @import)".into())
 				);
 			});

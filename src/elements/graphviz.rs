@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::ops::Range;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Once;
 
@@ -29,12 +27,11 @@ use crate::compiler::compiler::Target;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::util;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 #[derive(Debug)]
 struct Graphviz {
@@ -225,21 +222,14 @@ impl RegexRule for GraphRule {
 				return reports;
 			}
 			Some(content) => {
-				let processed = util::escape_text(
-					'\\',
-					"[/graph]",
-					content.as_str(),
-				);
+				let processed = util::escape_text('\\', "[/graph]", content.as_str());
 
 				if processed.is_empty() {
 					report_err!(
 						&mut reports,
 						token.source(),
 						"Empty Graph Code".into(),
-						span(
-							content.range(),
-							"Graph code is empty".into()
-						)
+						span(content.range(), "Graph code is empty".into())
 					);
 					return reports;
 				}
@@ -273,10 +263,7 @@ impl RegexRule for GraphRule {
 							&mut reports,
 							token.source(),
 							"Invalid Graph Properties".into(),
-							span(
-								props.range(),
-								e
-							)
+							span(props.range(), e)
 						);
 						return reports;
 					}
@@ -299,10 +286,10 @@ impl RegexRule for GraphRule {
 						span(
 							token.range.clone(),
 							format!(
-										"Property `{}` cannot be converted: {}",
-										prop.fg(state.parser.colors().info),
-										err.fg(state.parser.colors().error)
-									)
+								"Property `{}` cannot be converted: {}",
+								prop.fg(state.parser.colors().info),
+								err.fg(state.parser.colors().error)
+							)
 						)
 					);
 					return reports;
@@ -312,10 +299,7 @@ impl RegexRule for GraphRule {
 						&mut reports,
 						token.source(),
 						"Invalid Graph Property".into(),
-						span(
-							token.start() + 1..token.end(),
-							err
-						)
+						span(token.start() + 1..token.end(), err)
 					);
 					return reports;
 				}
@@ -412,6 +396,7 @@ mod tests {
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
+	use std::rc::Rc;
 
 	use super::*;
 

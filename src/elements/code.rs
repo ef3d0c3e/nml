@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::ops::Range;
-use std::rc::Rc;
 use std::sync::Once;
 
 use ariadne::Fmt;
@@ -25,16 +23,15 @@ use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
 use crate::parser::util::{self};
 use lazy_static::lazy_static;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CodeKind {
@@ -323,9 +320,7 @@ impl RegexRule for CodeRule {
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-	fn enabled(&self, mode: &ParseMode, id: usize) -> bool {
-		return !mode.paragraph_only || id != 0;
-	}
+	fn enabled(&self, mode: &ParseMode, id: usize) -> bool { !mode.paragraph_only || id != 0 }
 
 	fn on_regex_match(
 		&self,
@@ -362,10 +357,7 @@ impl RegexRule for CodeRule {
 							&mut reports,
 							token.source(),
 							"Invalid Code Properties".into(),
-							span(
-								props.range(),
-								e
-							)
+							span(props.range(), e)
 						);
 						return reports;
 					}
@@ -383,10 +375,7 @@ impl RegexRule for CodeRule {
 						&mut reports,
 						token.source(),
 						"Missing Code Language".into(),
-						span(
-							lang.range(),
-							"No language specified".into()
-						)
+						span(lang.range(), "No language specified".into())
 					);
 
 					return reports;
@@ -431,10 +420,7 @@ impl RegexRule for CodeRule {
 				&mut reports,
 				token.source(),
 				"Empty Code Content".into(),
-				span(
-					token.range.clone(),
-					"Code content cannot be empty".into()
-				)
+				span(token.range.clone(), "Code content cannot be empty".into())
 			);
 			return reports;
 		}
@@ -450,45 +436,44 @@ impl RegexRule for CodeRule {
 				let code_name = name.as_str().trim_end().trim_start().to_string();
 				(!code_name.is_empty()).then_some(code_name)
 			});
-			let line_offset =
-				match properties.get("line_offset", |prop, value| {
-					value.parse::<usize>().map_err(|e| (prop, e))
-				}) {
-					Ok((_prop, offset)) => offset,
-					Err(e) => {
-						match e {
-							PropertyMapError::ParseError((prop, err)) => {
-								report_err!(
-									&mut reports,
-									token.source(),
-									"Invalid Code Property".into(),
-									span(
-										token.start()+1..token.end(),
-										format!("Property `line_offset: {}` cannot be converted: {}",
-											prop.fg(state.parser.colors().info),
-											err.fg(state.parser.colors().error))
-									)
-								);
-								return reports;
-							}
-							PropertyMapError::NotFoundError(err) => {
-								report_err!(
-									&mut reports,
-									token.source(),
-									"Invalid Code Property".into(),
-									span(
-										token.start()+1..token.end(),
-										format!(
-											"Property `{}` doesn't exist",
-											err.fg(state.parser.colors().info)
-										)
-									)
-								);
-								return reports;
-							}
-						}
+			let line_offset = match properties.get("line_offset", |prop, value| {
+				value.parse::<usize>().map_err(|e| (prop, e))
+			}) {
+				Ok((_prop, offset)) => offset,
+				Err(e) => match e {
+					PropertyMapError::ParseError((prop, err)) => {
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Code Property".into(),
+							span(
+								token.start() + 1..token.end(),
+								format!(
+									"Property `line_offset: {}` cannot be converted: {}",
+									prop.fg(state.parser.colors().info),
+									err.fg(state.parser.colors().error)
+								)
+							)
+						);
+						return reports;
 					}
-				};
+					PropertyMapError::NotFoundError(err) => {
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Code Property".into(),
+							span(
+								token.start() + 1..token.end(),
+								format!(
+									"Property `{}` doesn't exist",
+									err.fg(state.parser.colors().info)
+								)
+							)
+						);
+						return reports;
+					}
+				},
+			};
 
 			state.push(
 				document,
@@ -680,6 +665,7 @@ mod tests {
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
 	use crate::validate_semantics;
+	use std::rc::Rc;
 
 	#[test]
 	fn code_block() {

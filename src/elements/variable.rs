@@ -7,18 +7,16 @@ use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use ariadne::Fmt;
 use mlua::Function;
 use mlua::Lua;
 use regex::Regex;
-use std::ops::Range;
 use std::rc::Rc;
 use std::str::FromStr;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum VariableKind {
@@ -159,18 +157,18 @@ impl RegexRule for VariableRule {
 							)
 						),
 						help(format!(
-								"Leave empty for regular variables. Available variable kinds:{}",
-								self.kinds.iter().skip(1).fold(
-									"".to_string(),
-									|acc, (char, name)| {
-										acc + format!(
-											"\n - `{}` : {}",
-											char.fg(state.parser.colors().highlight),
-											name.fg(state.parser.colors().info)
-										)
-											.as_str()
-									}
-								)
+							"Leave empty for regular variables. Available variable kinds:{}",
+							self.kinds
+								.iter()
+								.skip(1)
+								.fold("".to_string(), |acc, (char, name)| {
+									acc + format!(
+										"\n - `{}` : {}",
+										char.fg(state.parser.colors().highlight),
+										name.fg(state.parser.colors().info)
+									)
+									.as_str()
+								})
 						))
 					);
 					return reports;
@@ -243,11 +241,11 @@ impl RegexRule for VariableRule {
 					"Unable to Create Variable".into(),
 					span(
 						m.start() + 1..m.end(),
-							format!(
-									"Unable to create variable `{}`. {}",
-									var_name.fg(state.parser.colors().highlight),
-									msg
-								)
+						format!(
+							"Unable to create variable `{}`. {}",
+							var_name.fg(state.parser.colors().highlight),
+							msg
+						)
 					),
 				);
 
@@ -396,10 +394,7 @@ impl RegexRule for VariableSubstitutionRule {
 						&mut reports,
 						token.source(),
 						"Invalid Variable Name".into(),
-						span(
-							name.range(),
-							msg
-						)
+						span(name.range(), msg)
 					);
 
 					return reports;

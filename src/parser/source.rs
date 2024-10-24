@@ -17,8 +17,7 @@ pub trait Source: Downcast + Debug {
 }
 impl_downcast!(Source);
 
-pub trait SourcePosition
-{
+pub trait SourcePosition {
 	/// Transforms a position to it's position in the oldest parent source
 	fn original_position(&self, pos: usize) -> (Rc<dyn Source>, usize);
 
@@ -88,30 +87,23 @@ impl Source for SourceFile {
 /// Let's say you make a virtual source from the following: "Con\]tent" -> "Con]tent"
 /// Then at position 3, an offset of 1 will be created to account for the removed '\'
 #[derive(Debug)]
-struct SourceOffset
-{
+struct SourceOffset {
 	/// Stores the total offsets
 	offsets: Vec<(usize, isize)>,
 }
 
-impl SourceOffset
-{
+impl SourceOffset {
 	/// Get the offset position
-	pub fn position(&self, pos: usize) -> usize
-	{
-		match self.offsets.binary_search_by_key(&pos, |&(orig, _)| orig)
-		{
+	pub fn position(&self, pos: usize) -> usize {
+		match self.offsets.binary_search_by_key(&pos, |&(orig, _)| orig) {
 			Ok(idx) => (pos as isize + self.offsets[idx].1) as usize,
 			Err(idx) => {
-				if idx == 0
-				{
+				if idx == 0 {
 					pos
-				}
-				else
-				{
+				} else {
 					(pos as isize + self.offsets[idx - 1].1) as usize
 				}
-			},
+			}
 		}
 	}
 }
@@ -135,7 +127,12 @@ impl VirtualSource {
 		}
 	}
 
-	pub fn new_offsets(location: Token, name: String, content: String, offsets: Vec<(usize, isize)>) -> Self {
+	pub fn new_offsets(
+		location: Token,
+		name: String,
+		content: String,
+		offsets: Vec<(usize, isize)>,
+	) -> Self {
 		Self {
 			location,
 			name,
@@ -151,55 +148,52 @@ impl Source for VirtualSource {
 	fn content(&self) -> &String { &self.content }
 }
 
-impl SourcePosition for Rc<dyn Source>
-{
-    fn original_position(&self, mut pos: usize) -> (Rc<dyn Source>, usize) {
+impl SourcePosition for Rc<dyn Source> {
+	fn original_position(&self, mut pos: usize) -> (Rc<dyn Source>, usize) {
 		// Stop recursion
-		if self.downcast_ref::<SourceFile>().is_some()
-		{
+		if self.downcast_ref::<SourceFile>().is_some() {
 			return (self.clone(), pos);
 		}
 
 		// Apply offsets
-		if let Some(offsets) =
-			self.downcast_ref::<VirtualSource>()
-				.and_then(|source| source.offsets.as_ref())
+		if let Some(offsets) = self
+			.downcast_ref::<VirtualSource>()
+			.and_then(|source| source.offsets.as_ref())
 		{
 			pos = offsets.position(pos);
 		}
 
 		// Recurse to parent
-		if let Some(parent) = self.location()
-		{
+		if let Some(parent) = self.location() {
 			return parent.source().original_position(parent.range.start + pos);
 		}
 
-		return (self.clone(), pos);
-    }
+		(self.clone(), pos)
+	}
 
-    fn original_range(&self, mut range: Range<usize>) -> (Rc<dyn Source>, Range<usize>) {
+	fn original_range(&self, mut range: Range<usize>) -> (Rc<dyn Source>, Range<usize>) {
 		// Stop recursion
-		if self.downcast_ref::<SourceFile>().is_some()
-		{
+		if self.downcast_ref::<SourceFile>().is_some() {
 			return (self.clone(), range);
 		}
 
 		// Apply offsets
-		if let Some(offsets) =
-			self.downcast_ref::<VirtualSource>()
-				.and_then(|source| source.offsets.as_ref())
+		if let Some(offsets) = self
+			.downcast_ref::<VirtualSource>()
+			.and_then(|source| source.offsets.as_ref())
 		{
-			range = offsets.position(range.start) .. offsets.position(range.end);
+			range = offsets.position(range.start)..offsets.position(range.end);
 		}
 
 		// Recurse to parent
-		if let Some(parent) = self.location()
-		{
-			return parent.source.original_range(parent.range.start + range.start..parent.range.start + range.end);
+		if let Some(parent) = self.location() {
+			return parent
+				.source
+				.original_range(parent.range.start + range.start..parent.range.start + range.end);
 		}
 
-		return (self.clone(), range);
-    }
+		(self.clone(), range)
+	}
 }
 
 #[derive(Debug)]
@@ -264,7 +258,7 @@ impl LineCursor {
 			let start = self.pos;
 			let mut it = self.source.content().as_str()[start..].chars().peekable();
 
-			let mut prev = self.source.content().as_str()[..start].chars().rev().next();
+			let mut prev = self.source.content().as_str()[..start].chars().next_back();
 			while self.pos < pos {
 				let c = it.next().unwrap();
 

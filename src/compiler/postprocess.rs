@@ -67,7 +67,9 @@ impl PostProcess {
 			}
 			if let Some((found_ref, found_doc)) = &found_ref {
 				let found_borrow = found_doc.borrow();
-				let found_path = found_borrow.get_variable("compiler.output").ok_or("Unable to get the output. Aborting postprocessing.".to_string())?;
+				let found_path = found_borrow
+					.get_variable("compiler.output")
+					.ok_or("Unable to get the output. Aborting postprocessing.".to_string())?;
 				let insert_content = format!("{found_path}#{found_ref}");
 				content.insert_str(pos + offset, insert_content.as_str());
 				offset += insert_content.len();

@@ -28,11 +28,7 @@ pub trait RuleState: Downcast {
 	fn scope(&self) -> Scope;
 
 	/// Callback called when state goes out of scope
-	fn on_remove(
-		&self,
-		state: &ParserState,
-		document: &dyn Document,
-	) -> Vec<Report>;
+	fn on_remove(&self, state: &ParserState, document: &dyn Document) -> Vec<Report>;
 }
 impl_downcast!(RuleState);
 

@@ -1,7 +1,6 @@
 use crate::parser::parser::ParseMode;
 use crate::parser::style::ElementStyle;
 use std::any::Any;
-use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -152,9 +151,9 @@ impl Rule for ElemStyleRule {
 							span(
 								cursor.pos..cursor.pos + json.len(),
 								format!(
-										"Failed to serialize `{}` into style with key `{}`: {err}",
-										json.fg(state.parser.colors().highlight),
-										style.key().fg(state.parser.colors().info)
+									"Failed to serialize `{}` into style with key `{}`: {err}",
+									json.fg(state.parser.colors().highlight),
+									style.key().fg(state.parser.colors().info)
 								)
 							)
 						);

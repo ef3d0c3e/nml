@@ -32,9 +32,8 @@ pub enum CrossReference {
 }
 
 impl core::fmt::Display for CrossReference {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self
-		{
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
 			CrossReference::Unspecific(name) => write!(f, "#{name}"),
 			CrossReference::Specific(doc_name, name) => write!(f, "{doc_name}#{name}"),
 		}
@@ -74,8 +73,7 @@ impl Scope {
 				));
 
 				// Variables
-				self.variables
-					.extend(other.variables.drain());
+				self.variables.extend(other.variables.drain());
 			}
 			false => {
 				// References
@@ -129,10 +127,9 @@ pub trait Document<'a>: core::fmt::Debug {
 				refname.clone(),
 				ElemReference::Direct(self.content().borrow().len()),
 			);
-		} 
+		}
 		// Add contained references
-		else if let Some(container) =
-			self
+		else if let Some(container) = self
 			.content()
 			.borrow()
 			.last()
@@ -168,9 +165,7 @@ pub trait Document<'a>: core::fmt::Debug {
 
 	fn get_variable(&self, name: &str) -> Option<Rc<dyn Variable>> {
 		match self.scope().borrow().variables.get(name) {
-			Some(variable) => {
-				Some(variable.clone())
-			}
+			Some(variable) => Some(variable.clone()),
 
 			// Continue search recursively
 			None => match self.parent() {
@@ -193,11 +188,13 @@ pub trait Document<'a>: core::fmt::Debug {
 		scope: &RefCell<Scope>,
 		merge_as: Option<&String>,
 	) {
-		if let Some(merge_as) = merge_as { self.scope().borrow_mut().merge(
-  				&mut scope.borrow_mut(),
-  				merge_as,
-  				self.content().borrow().len(),
-  			) }
+		if let Some(merge_as) = merge_as {
+			self.scope().borrow_mut().merge(
+				&mut scope.borrow_mut(),
+				merge_as,
+				self.content().borrow().len(),
+			)
+		}
 
 		// Content
 		self.content()
@@ -206,10 +203,7 @@ pub trait Document<'a>: core::fmt::Debug {
 	}
 
 	fn get_reference(&self, refname: &str) -> Option<ElemReference> {
-		self.scope()
-			.borrow()
-			.referenceable
-			.get(refname).copied()
+		self.scope().borrow().referenceable.get(refname).copied()
 	}
 
 	fn get_from_reference(

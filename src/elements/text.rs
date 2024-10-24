@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::ops::Range;
-use std::rc::Rc;
 
 use mlua::Function;
 use mlua::Lua;
@@ -12,11 +10,10 @@ use crate::document::element::Element;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::*;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
-use crate::parser::reports::*;
 
 #[derive(Debug)]
 pub struct Text {

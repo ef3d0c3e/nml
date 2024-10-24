@@ -13,9 +13,9 @@ pub enum ReportKind {
 	Warning,
 }
 
-impl Into<ariadne::ReportKind<'static>> for &ReportKind {
-	fn into(self) -> ariadne::ReportKind<'static> {
-		match self {
+impl From<&ReportKind> for ariadne::ReportKind<'static> {
+	fn from(val: &ReportKind) -> Self {
+		match val {
 			ReportKind::Error => ariadne::ReportKind::Error,
 			ReportKind::Warning => ariadne::ReportKind::Warning,
 		}
@@ -59,7 +59,7 @@ impl Report {
 		for span in &self.spans {
 			let (osource, opos) = span.token.source().original_position(span.token.start());
 
-			if &osource == &source && opos < start {
+			if osource == source.clone() && opos < start {
 				start = opos;
 			}
 		}
@@ -97,20 +97,20 @@ impl Report {
 }
 
 pub mod macros {
-	pub use super::*;
+
 	#[macro_export]
 	macro_rules! report_label {
 		($r:expr,) => {{ }};
 		($r:expr, span($source:expr, $range:expr, $message:expr) $(, $($tail:tt)*)?) => {{
 			$r.spans.push(ReportSpan {
-				token: crate::parser::source::Token::new($range, $source),
+				token: $crate::parser::source::Token::new($range, $source),
 				message: $message,
 			});
 			report_label!($r, $($($tail)*)?);
 		}};
 		($r:expr, span($range:expr, $message:expr) $(, $($tail:tt)*)?) => {{
 			$r.spans.push(ReportSpan {
-				token: crate::parser::source::Token::new($range, $r.source.clone()),
+				token: $crate::parser::source::Token::new($range, $r.source.clone()),
 				message: $message,
 			});
 			report_label!($r, $($($tail)*)?);

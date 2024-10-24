@@ -1,7 +1,5 @@
 use std::any::Any;
 use std::cell::RefCell;
-use std::collections::HashSet;
-use std::ops::Range;
 use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -22,8 +20,6 @@ use crate::elements::paragraph::Paragraph;
 use crate::lsp::semantic::SemanticsHolder;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
-use crate::parser::source::SourceFile;
-use crate::parser::source::VirtualSource;
 use ariadne::Color;
 
 #[derive(Debug)]
@@ -217,7 +213,7 @@ impl<'a, 'b> ParserState<'a, 'b> {
 					return;
 				}
 
-				(*matched_at, *match_data) = match rule.next_match(&mode, self, cursor) {
+				(*matched_at, *match_data) = match rule.next_match(mode, self, cursor) {
 					None => (usize::MAX, None),
 					Some((mut pos, mut data)) => {
 						// Check if escaped
@@ -238,7 +234,7 @@ impl<'a, 'b> ParserState<'a, 'b> {
 							}
 
 							// Find next potential match
-							(pos, data) = match rule.next_match(&mode, self, &cursor.at(pos + 1)) {
+							(pos, data) = match rule.next_match(mode, self, &cursor.at(pos + 1)) {
 								Some((new_pos, new_data)) => (new_pos, new_data),
 								None => (usize::MAX, data), // Stop iterating
 							}
@@ -342,16 +338,9 @@ impl<'a, 'b> ParserState<'a, 'b> {
 	}
 }
 
+#[derive(Default)]
 pub struct ParseMode {
 	pub paragraph_only: bool,
-}
-
-impl Default for ParseMode {
-	fn default() -> Self {
-		Self {
-			paragraph_only: false,
-		}
-	}
 }
 
 pub trait Parser {

@@ -1,5 +1,8 @@
+pub mod blockquote;
 pub mod code;
 pub mod comment;
+pub mod customstyle;
+pub mod elemstyle;
 pub mod graphviz;
 pub mod import;
 pub mod layout;
@@ -15,6 +18,3 @@ pub mod style;
 pub mod tex;
 pub mod text;
 pub mod variable;
-pub mod elemstyle;
-pub mod customstyle;
-pub mod blockquote;

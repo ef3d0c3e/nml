@@ -26,7 +26,12 @@ fn parse(
 ) -> Result<Box<dyn Document<'static>>, String> {
 	// Parse
 	//let source = SourceFile::new(input.to_string(), None).unwrap();
-	let (doc, _) = parser.parse(ParserState::new(parser, None), source.clone(), None, ParseMode::default());
+	let (doc, _) = parser.parse(
+		ParserState::new(parser, None),
+		source.clone(),
+		None,
+		ParseMode::default(),
+	);
 
 	if debug_opts.contains(&"ast".to_string()) {
 		println!("-- BEGIN AST DEBUGGING --");
@@ -159,7 +164,10 @@ pub fn process(
 /// Processes sources from in-memory strings
 /// This function is indented for testing
 #[cfg(test)]
-pub fn process_from_memory(target: Target, sources: Vec<String>) -> Result<Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>, String> {
+pub fn process_from_memory(
+	target: Target,
+	sources: Vec<String>,
+) -> Result<Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>, String> {
 	let mut compiled = vec![];
 
 	let parser = LangParser::default();

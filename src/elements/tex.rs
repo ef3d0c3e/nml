@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 use std::io::Read;
 use std::io::Write;
-use std::ops::Range;
 use std::process::Command;
 use std::process::Stdio;
-use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Once;
@@ -29,17 +27,15 @@ use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
-use crate::parser::parser::ReportColors;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::util;
 use crate::parser::util::Property;
 use crate::parser::util::PropertyMap;
 use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 #[derive(Debug, PartialEq, Eq)]
 enum TexKind {
@@ -266,15 +262,13 @@ impl TexRule {
 	fn parse_properties(
 		&self,
 		mut reports: &mut Vec<Report>,
-		colors: &ReportColors,
 		token: &Token,
 		m: &Option<Match>,
 	) -> Option<PropertyMap> {
 		match m {
 			None => match self.properties.default() {
 				Ok(properties) => Some(properties),
-				Err(e) =>
-				{
+				Err(e) => {
 					report_err!(
 						&mut reports,
 						token.source(),
@@ -296,13 +290,10 @@ impl TexRule {
 							&mut reports,
 							token.source(),
 							"Invalid Tex Properties".into(),
-							span(
-								props.range(),
-								e
-							)
+							span(props.range(), e)
 						);
 						None
-					},
+					}
 					Ok(properties) => Some(properties),
 				}
 			}
@@ -359,10 +350,7 @@ impl RegexRule for TexRule {
 						&mut reports,
 						token.source(),
 						"Empty Tex Code".into(),
-						span(
-							content.range(),
-							"Tex code is empty".into()
-						)
+						span(content.range(), "Tex code is empty".into())
 					);
 				}
 				processed
@@ -370,8 +358,7 @@ impl RegexRule for TexRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(&mut reports, state.parser.colors(), &token, &matches.get(1))
-		{
+		let properties = match self.parse_properties(&mut reports, &token, &matches.get(1)) {
 			Some(pm) => pm,
 			None => return reports,
 		};
@@ -383,7 +370,6 @@ impl RegexRule for TexRule {
 			Ok((_prop, kind)) => kind,
 			Err(e) => match e {
 				PropertyMapError::ParseError((prop, err)) => {
-
 					report_err!(
 						&mut reports,
 						token.source(),
@@ -442,14 +428,20 @@ impl RegexRule for TexRule {
 			Semantics::from_source(token.source(), &state.shared.semantics)
 		{
 			let range = token.range;
-			sems.add(range.start..range.start + if index == 0 { 2 } else { 1 }, tokens.tex_sep);
+			sems.add(
+				range.start..range.start + if index == 0 { 2 } else { 1 },
+				tokens.tex_sep,
+			);
 			if let Some(props) = matches.get(1).map(|m| m.range()) {
 				sems.add(props.start - 1..props.start, tokens.tex_props_sep);
 				sems.add(props.clone(), tokens.tex_props);
 				sems.add(props.end..props.end + 1, tokens.tex_props_sep);
 			}
 			sems.add(matches.get(2).unwrap().range(), tokens.tex_content);
-			sems.add(range.end - if index == 0 { 2 } else { 1 }..range.end, tokens.tex_sep);
+			sems.add(
+				range.end - if index == 0 { 2 } else { 1 }..range.end,
+				tokens.tex_sep,
+			);
 		}
 		reports
 	}
@@ -550,7 +542,9 @@ mod tests {
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;
-	use crate::{validate_document, validate_semantics};
+	use crate::validate_document;
+	use crate::validate_semantics;
+	use std::rc::Rc;
 
 	use super::*;
 
@@ -648,5 +642,4 @@ $[kind=inline]\LaTeX$
 			tex_sep { delta_line == 0, delta_start == 6, length == 1 };
 		);
 	}
-
 }

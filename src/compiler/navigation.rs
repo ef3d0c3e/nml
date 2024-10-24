@@ -239,7 +239,7 @@ pub fn create_navigation(
 		nav.entries
 			.sort_by(|l, r| NavEntries::sort_entry(&entrymap, l.title.as_str(), r.title.as_str()));
 
-		for (_, child) in &mut nav.children {
+		for child in nav.children.values_mut() {
 			sort_entries(child);
 		}
 	}

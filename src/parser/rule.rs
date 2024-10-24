@@ -3,7 +3,6 @@ use super::parser::ParseMode;
 use super::parser::ParserState;
 use super::reports::Report;
 use super::source::Cursor;
-use super::source::Source;
 use super::source::Token;
 use super::style::StyleHolder;
 use crate::document::document::Document;
@@ -14,8 +13,6 @@ use mlua::Lua;
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::ops::Range;
-use std::rc::Rc;
 
 macro_rules! create_registry {
 	( $($construct:expr),+ $(,)? ) => {{
@@ -184,10 +181,10 @@ impl<T: RegexRule + 'static> Rule for T {
 		let token = Token::new(captures.get(0).unwrap().range(), cursor.source.clone());
 
 		let token_end = token.end();
-		return (
+		(
 			cursor.at(token_end),
 			self.on_regex_match(*index, state, document, token, captures),
-		);
+		)
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {

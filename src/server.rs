@@ -40,16 +40,25 @@ impl Backend {
 
 		// TODO: Create a custom parser for the lsp
 		// Which will require a dyn Document to work
-		let source = Rc::new(SourceFile::with_content(params.uri.to_string(), params.text.clone(), None));
+		let source = Rc::new(SourceFile::with_content(
+			params.uri.to_string(),
+			params.text.clone(),
+			None,
+		));
 		let parser = LangParser::default();
-		let (_doc, state) = parser.parse(ParserState::new_with_semantics(&parser, None), source.clone(), None, ParseMode::default());
+		let (_doc, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+			ParseMode::default(),
+		);
 
-		if let Some(sems) = state.shared.semantics.as_ref()
-		{
+		if let Some(sems) = state.shared.semantics.as_ref() {
 			let borrow = sems.borrow();
-			for (source, sem) in &borrow.sems
-			{
-				if let Some(path) = source.clone().downcast_rc::<SourceFile>()
+			for (source, sem) in &borrow.sems {
+				if let Some(path) = source
+					.clone()
+					.downcast_rc::<SourceFile>()
 					.ok()
 					.map(|source| source.path().to_owned())
 				{
@@ -57,14 +66,16 @@ impl Backend {
 						.insert(path, sem.tokens.replace(vec![]));
 				}
 			}
-
 		}
 	}
 }
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-	async fn initialize(&self, _params: InitializeParams) -> tower_lsp::jsonrpc::Result<InitializeResult> {
+	async fn initialize(
+		&self,
+		_params: InitializeParams,
+	) -> tower_lsp::jsonrpc::Result<InitializeResult> {
 		Ok(InitializeResult {
 			capabilities: ServerCapabilities {
 				text_document_sync: Some(TextDocumentSyncCapability::Kind(
@@ -106,7 +117,7 @@ impl LanguageServer for Backend {
 			},
 			server_info: Some(ServerInfo {
 				name: "nmlls".into(),
-				version: Some("0.1".into())
+				version: Some("0.1".into()),
 			}),
 		})
 	}
@@ -138,7 +149,10 @@ impl LanguageServer for Backend {
 		.await
 	}
 
-	async fn completion(&self, _params: CompletionParams) -> tower_lsp::jsonrpc::Result<Option<CompletionResponse>> {
+	async fn completion(
+		&self,
+		_params: CompletionParams,
+	) -> tower_lsp::jsonrpc::Result<Option<CompletionResponse>> {
 		//let uri = params.text_document_position.text_document.uri;
 		//let position = params.text_document_position.position;
 		let completions = || -> Option<Vec<CompletionItem>> {

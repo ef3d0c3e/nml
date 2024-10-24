@@ -31,9 +31,7 @@ impl<'a> LangDocument<'a> {
 impl<'a> Document<'a> for LangDocument<'a> {
 	fn source(&self) -> Rc<dyn Source> { self.source.clone() }
 
-	fn parent(&self) -> Option<&'a dyn Document<'a>> {
-		self.parent.map(|p| p as &dyn Document<'a>)
-	}
+	fn parent(&self) -> Option<&'a dyn Document<'a>> { self.parent.map(|p| p as &dyn Document<'a>) }
 
 	fn content(&self) -> &RefCell<Vec<Box<dyn Element>>> { &self.content }
 

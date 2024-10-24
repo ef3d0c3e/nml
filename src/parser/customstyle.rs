@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::ops::Deref;
+use std::rc::Rc;
 
 use crate::document::document::Document;
 use crate::parser::source::Token;
 
 use crate::parser::reports::*;
-
 
 use super::parser::ParserState;
 
@@ -43,8 +42,7 @@ pub struct CustomStyleHolder {
 
 impl CustomStyleHolder {
 	pub fn get(&self, style_name: &str) -> Option<Rc<dyn CustomStyle>> {
-		self.custom_styles
-			.get(style_name).cloned()
+		self.custom_styles.get(style_name).cloned()
 	}
 
 	pub fn insert(&mut self, style: Rc<dyn CustomStyle>) {
@@ -53,9 +51,7 @@ impl CustomStyleHolder {
 }
 
 impl Deref for CustomStyleHolder {
-    type Target = HashMap<String, Rc<dyn CustomStyle>>;
+	type Target = HashMap<String, Rc<dyn CustomStyle>>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.custom_styles
-    }
+	fn deref(&self) -> &Self::Target { &self.custom_styles }
 }

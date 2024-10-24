@@ -5,6 +5,8 @@ use crate::lua::kernel::KernelContext;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
@@ -16,8 +18,6 @@ use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
 use std::rc::Rc;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 use super::text::Text;
 
@@ -106,10 +106,7 @@ impl RegexRule for ScriptRule {
 							&mut reports,
 							token.source(),
 							"Invalid Kernel Name".into(),
-							span(
-								name.range(),
-								e
-							)
+							span(name.range(), e)
 						);
 						return reports;
 					}
@@ -126,25 +123,26 @@ impl RegexRule for ScriptRule {
 		};
 
 		let script_range = matches.get(if index == 0 { 2 } else { 3 }).unwrap().range();
-		let source = escape_source(token.source(), script_range.clone(), format!(
+		let source = escape_source(
+			token.source(),
+			script_range.clone(),
+			format!(
 				":LUA:{kernel_name}#{}#{}",
 				token.source().name(),
 				matches.get(0).unwrap().start()
-			), '\\', ">@");
-		if source.content().is_empty()		
-		{
+			),
+			'\\',
+			">@",
+		);
+		if source.content().is_empty() {
 			report_warn!(
 				&mut reports,
 				token.source(),
 				"Invalid Kernel Code".into(),
-				span(
-					script_range,
-					"Kernel code is empty".into()
-				)
+				span(script_range, "Kernel code is empty".into())
 			);
 			return reports;
 		}
-
 
 		let execute = |lua: &Lua| {
 			let chunk = lua.load(source.content()).set_name(kernel_name);
@@ -177,10 +175,7 @@ impl RegexRule for ScriptRule {
 								&mut reports,
 								token.source(),
 								"Invalid Kernel Code Kind".into(),
-								span(
-									kind.range(),
-									msg
-								)
+								span(kind.range(), msg)
 							);
 							return reports;
 						}

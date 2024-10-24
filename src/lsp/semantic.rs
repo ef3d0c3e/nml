@@ -279,7 +279,7 @@ impl<'a> Semantics<'a> {
 			.unwrap_or(None)
 		{
 			return Self::from_source_impl(location.source(), semantics, original_source);
-		} else if let Some(source) = source.clone().downcast_rc::<SourceFile>().ok() {
+		} else if let Ok(source) = source.clone().downcast_rc::<SourceFile>() {
 			return Ref::filter_map(
 				semantics.as_ref().unwrap().borrow(),
 				|semantics: &SemanticsHolder| {
@@ -301,7 +301,7 @@ impl<'a> Semantics<'a> {
 				)
 			});
 		}
-		return None;
+		None
 	}
 
 	pub fn from_source(
@@ -311,7 +311,7 @@ impl<'a> Semantics<'a> {
 		if semantics.is_none() {
 			return None;
 		}
-		return Self::from_source_impl(source.clone(), semantics, source);
+		Self::from_source_impl(source.clone(), semantics, source)
 	}
 
 	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
@@ -381,7 +381,7 @@ pub mod tests {
 				.unwrap()
 				.borrow()
 				.sems
-				.get(&($source as Rc<dyn Source>))
+				.get(&($source as std::rc::Rc<dyn crate::parser::source::Source>))
 				.unwrap()
 				.tokens
 				.borrow()
@@ -414,7 +414,7 @@ pub mod tests {
 				.unwrap()
 				.borrow()
 				.sems
-				.get(&($source as Rc<dyn Source>))
+				.get(&($source as std::rc::Rc<dyn crate::parser::source::Source>))
 				.unwrap()
 				.tokens
 				.borrow()

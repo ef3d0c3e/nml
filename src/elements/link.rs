@@ -8,8 +8,9 @@ use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::util;
@@ -19,11 +20,8 @@ use mlua::Function;
 use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
-use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 #[derive(Debug)]
 pub struct Link {
@@ -118,14 +116,17 @@ impl RegexRule for LinkRule {
 						&mut reports,
 						token.source(),
 						"Empty Link Display".into(),
-						span(
-							display.range(),
-							"Link display is empty".into()
-						)
+						span(display.range(), "Link display is empty".into())
 					);
 					return reports;
 				}
-				let display_source = util::escape_source(token.source(), display.range(), "Link Display".into(), '\\', "](");
+				let display_source = util::escape_source(
+					token.source(),
+					display.range(),
+					"Link Display".into(),
+					'\\',
+					"](",
+				);
 				if display_source.content().is_empty() {
 					report_err!(
 						&mut reports,
@@ -177,10 +178,7 @@ impl RegexRule for LinkRule {
 						&mut reports,
 						token.source(),
 						"Empty Link URL".into(),
-						span(
-							url.range(),
-							"Link url is empty".into()
-						)
+						span(url.range(), "Link url is empty".into())
 					);
 					return reports;
 				}

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::ops::Range;
 use std::rc::Rc;
 use std::str::FromStr;
 
@@ -20,7 +19,8 @@ use crate::document::element::ReferenceableElement;
 use crate::document::references::validate_refname;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
-use crate::parser::parser::ReportColors;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
@@ -31,8 +31,6 @@ use crate::parser::util::Property;
 use crate::parser::util::PropertyMap;
 use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
-use crate::parser::reports::*;
-use crate::parser::reports::macros::*;
 
 use super::paragraph::Paragraph;
 use super::reference::InternalReference;
@@ -314,13 +312,10 @@ impl MediaRule {
 							&mut reports,
 							token.source(),
 							"Invalid Media Properties".into(),
-							span(
-								props.range(),
-								e
-							)
+							span(props.range(), e)
 						);
 						None
-					},
+					}
 					Ok(properties) => Some(properties),
 				}
 			}
@@ -373,10 +368,7 @@ impl RegexRule for MediaRule {
 					&mut reports,
 					token.source(),
 					"Invalid Media Refname".into(),
-					span(
-						m.range(),
-						err
-					)
+					span(m.range(), err)
 				);
 				return reports;
 			}
@@ -392,61 +384,56 @@ impl RegexRule for MediaRule {
 					&mut reports,
 					token.source(),
 					"Invalid Media URI".into(),
-					span(
-						m.range(),
-						err
-					)
+					span(m.range(), err)
 				);
 				return reports;
 			}
 		};
 
 		// Properties
-		let properties = match self.parse_properties(&mut reports, &token, &matches.get(3))
-		{
+		let properties = match self.parse_properties(&mut reports, &token, &matches.get(3)) {
 			Some(pm) => pm,
 			None => return reports,
 		};
 
-		let media_type =
-			match Self::detect_filetype(uri.as_str()) {
-				Some(media_type) => media_type,
-				None => match properties.get("type", |prop, value| {
-					MediaType::from_str(value.as_str()).map_err(|e| (prop, e))
-				}) {
-					Ok((_prop, kind)) => kind,
-					Err(e) => match e {
-						PropertyMapError::ParseError((prop, err)) => {
-							report_err!(
-								&mut reports,
-								token.source(),
-								"Invalid Media Property".into(),
-								span(
-									token.start()+1..token.end(),
-									format!(
-										"Property `type: {}` cannot be converted: {}",
-										prop.fg(state.parser.colors().info),
-										err.fg(state.parser.colors().error)
-									)
+		let media_type = match Self::detect_filetype(uri.as_str()) {
+			Some(media_type) => media_type,
+			None => match properties.get("type", |prop, value| {
+				MediaType::from_str(value.as_str()).map_err(|e| (prop, e))
+			}) {
+				Ok((_prop, kind)) => kind,
+				Err(e) => match e {
+					PropertyMapError::ParseError((prop, err)) => {
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Media Property".into(),
+							span(
+								token.start() + 1..token.end(),
+								format!(
+									"Property `type: {}` cannot be converted: {}",
+									prop.fg(state.parser.colors().info),
+									err.fg(state.parser.colors().error)
 								)
-							);
-							return reports;
-						}
-						PropertyMapError::NotFoundError(err) => {
-							report_err!(
-								&mut reports,
-								token.source(),
-								"Invalid Media Property".into(),
-								span(
-									token.start()+1..token.end(),
-									format!("{err}. Required because mediatype could not be detected")
-								)
-							);
-							return reports;
-						}
-					},
+							)
+						);
+						return reports;
+					}
+					PropertyMapError::NotFoundError(err) => {
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Media Property".into(),
+							span(
+								token.start() + 1..token.end(),
+								format!("{err}. Required because mediatype could not be detected")
+							)
+						);
+						return reports;
+					}
 				},
-			};
+			},
+		};
 
 		let width = properties
 			.get("width", |_, value| -> Result<String, ()> {
@@ -481,9 +468,7 @@ impl RegexRule for MediaRule {
 								"Invalid Media Description".into(),
 								span(
 									content.range(),
-									format!(
-										"Could not parse description: {err}"
-									)
+									format!("Could not parse description: {err}")
 								)
 							);
 							return reports;
@@ -522,11 +507,7 @@ impl RegexRule for MediaRule {
 				&mut reports,
 				token.source(),
 				"Invalid Media".into(),
-				span(
-					token.range.clone(),
-					err
-
-				)
+				span(token.range.clone(), err)
 			);
 		}
 
