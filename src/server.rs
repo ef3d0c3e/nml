@@ -13,6 +13,7 @@ use parser::langparser::LangParser;
 use parser::parser::ParseMode;
 use parser::parser::Parser;
 use parser::parser::ParserState;
+use parser::reports::Report;
 use parser::source::SourceFile;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
@@ -25,6 +26,7 @@ struct Backend {
 	client: Client,
 	document_map: DashMap<String, String>,
 	semantic_token_map: DashMap<String, Vec<SemanticToken>>,
+	diagnostic_map: DashMap<String, Vec<Diagnostic>>,
 }
 
 #[derive(Debug)]
@@ -45,7 +47,10 @@ impl Backend {
 			params.text.clone(),
 			None,
 		));
-		let parser = LangParser::default();
+		self.diagnostic_map.clear();
+		let parser = LangParser::new(false, Box::new(
+				|_colors, reports| Report::reports_to_diagnostics(&self.diagnostic_map, reports)
+		));
 		let (_doc, state) = parser.parse(
 			ParserState::new_with_semantics(&parser, None),
 			source.clone(),
@@ -112,6 +117,15 @@ impl LanguageServer for Backend {
 							static_registration_options: StaticRegistrationOptions::default(),
 						},
 					),
+				),
+				diagnostic_provider: Some(
+					DiagnosticServerCapabilities::Options(
+						DiagnosticOptions {
+							identifier: None,
+							inter_file_dependencies: true,
+							workspace_diagnostics: true,
+							work_done_progress_options: WorkDoneProgressOptions::default(),
+					})
 				),
 				..ServerCapabilities::default()
 			},
@@ -185,6 +199,25 @@ impl LanguageServer for Backend {
 		}
 		Ok(None)
 	}
+
+	async fn diagnostic(
+		&self,
+		params: DocumentDiagnosticParams,
+	) -> tower_lsp::jsonrpc::Result<DocumentDiagnosticReportResult> {
+		Ok(
+			DocumentDiagnosticReportResult::Report(
+				DocumentDiagnosticReport::Full(
+					RelatedFullDocumentDiagnosticReport {
+						related_documents: None,
+						full_document_diagnostic_report: FullDocumentDiagnosticReport {
+							result_id: None,
+							items: self.diagnostic_map.get(params.text_document.uri.as_str()).map_or(vec![], |v| v.to_owned())
+						}
+					}
+				)
+			)
+		)
+	}
 }
 
 #[tokio::main]
@@ -196,6 +229,7 @@ async fn main() {
 		client,
 		document_map: DashMap::new(),
 		semantic_token_map: DashMap::new(),
+		diagnostic_map: DashMap::new(),
 	});
 	Server::new(stdin, stdout, socket).serve(service).await;
 }

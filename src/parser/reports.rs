@@ -2,6 +2,11 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
+use dashmap::DashMap;
+use tower_lsp::lsp_types::Diagnostic;
+
+use crate::parser::source::LineCursor;
+
 use super::parser::ReportColors;
 use super::source::Source;
 use super::source::SourcePosition;
@@ -18,6 +23,15 @@ impl From<&ReportKind> for ariadne::ReportKind<'static> {
 		match val {
 			ReportKind::Error => ariadne::ReportKind::Error,
 			ReportKind::Warning => ariadne::ReportKind::Warning,
+		}
+	}
+}
+
+impl From<&ReportKind> for tower_lsp::lsp_types::DiagnosticSeverity {
+	fn from(val: &ReportKind) -> Self {
+		match val {
+			ReportKind::Error => tower_lsp::lsp_types::DiagnosticSeverity::ERROR,
+			ReportKind::Warning => tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
 		}
 	}
 }
@@ -41,12 +55,12 @@ pub struct Report {
 impl Report {
 	fn ariadne_color(kind: &ReportKind, colors: &ReportColors) -> ariadne::Color {
 		match kind {
-			ReportKind::Error => colors.error,
-			ReportKind::Warning => colors.warning,
+			ReportKind::Error => colors.error.unwrap_or(ariadne::Color::Primary),
+			ReportKind::Warning => colors.warning.unwrap_or(ariadne::Color::Primary),
 		}
 	}
 
-	pub fn to_ariadne(
+	fn to_ariadne(
 		self,
 		colors: &ReportColors,
 	) -> (
@@ -93,6 +107,50 @@ impl Report {
 			let (report, cache) = report.to_ariadne(colors);
 			report.eprint(cache).unwrap();
 		});
+	}
+
+	fn to_diagnostics(self, diagnostic_map: &DashMap<String, Vec<Diagnostic>>)
+	{
+		for span in self.spans {
+			let (source, range) = span.token.source().original_range(span.token.range.clone());
+			
+			let mut start = LineCursor::new(source.clone());
+			start.move_to(range.start);
+			let mut end = start.clone();
+			end.move_to(range.end);
+
+			let diag = Diagnostic {
+				range: tower_lsp::lsp_types::Range { 
+					start: tower_lsp::lsp_types::Position{ line: start.line as u32, character: start.line_pos as u32 },
+					end: tower_lsp::lsp_types::Position{ line: end.line as u32, character: end.line_pos as u32 },
+				},
+				severity: Some((&self.kind).into()),
+				code: None,
+				code_description: None,
+				source: None,
+				message: format!("{}: {}", self.message, span.message),
+				related_information: None,
+				tags: None,
+				data: None,
+			};
+			if let Some(mut diags) = diagnostic_map.get_mut(source.name())
+			{
+				diags.push(diag);
+			}
+			else
+			{
+				diagnostic_map.insert(source.name().to_owned(), vec![diag]);
+			}
+		}
+	}
+
+	pub fn reports_to_diagnostics(diagnostic_map: &DashMap<String, Vec<Diagnostic>>, mut reports: Vec<Report>)
+	{
+		for report in reports.drain(..)
+		{
+			report.to_diagnostics(diagnostic_map);
+		}
+		//diagnostics
 	}
 }
 

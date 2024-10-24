@@ -341,7 +341,7 @@ impl LayoutRule {
 						token.source(),
 						"Invalid Layout Properties".into(),
 						span(
-							token.range.clone(),
+							token.start() + 1..token.end(),
 							format!("Layout is missing required property: {err}")
 						)
 					);
@@ -400,7 +400,7 @@ impl RegexRule for LayoutRule {
 						token.source(),
 						"Missing Layout Name".into(),
 						span(
-							token.range.clone(),
+							token.start() + 1..token.end(),
 							format!(
 								"Missing layout name after `{}`",
 								"#+BEGIN_LAYOUT".fg(state.parser.colors().highlight)
@@ -534,7 +534,10 @@ impl RegexRule for LayoutRule {
 						&mut reports,
 						token.source(),
 						"Invalid #+LAYOUT_NEXT".into(),
-						span(token.range.clone(), "No active layout found".into())
+						span(
+							token.start() + 1..token.end(),
+							"No active layout found".into()
+						)
 					);
 					return reports;
 				}
@@ -549,7 +552,7 @@ impl RegexRule for LayoutRule {
 					token.source(),
 					"Unexpected #+LAYOUT_NEXT".into(),
 					span(
-						token.range.clone(),
+						token.start() + 1..token.end(),
 						format!(
 							"Layout expects a maximum of {} blocks, currently at {}",
 							layout_type.expects().end.fg(state.parser.colors().info),
@@ -607,8 +610,11 @@ impl RegexRule for LayoutRule {
 					report_err!(
 						&mut reports,
 						token.source(),
-						"Invalid #+LAYOUT_NEXT".into(),
-						span(token.range.clone(), "No active layout found".into())
+						"Invalid #+LAYOUT_END".into(),
+						span(
+							token.start() + 1..token.end(),
+							"No active layout found".into()
+						)
 					);
 					return reports;
 				}
@@ -618,16 +624,24 @@ impl RegexRule for LayoutRule {
 			if layout_type.expects().start > tokens.len()
 			// Not enough blocks
 			{
+				let start = &tokens[0];
 				report_err!(
 					&mut reports,
 					token.source(),
-					"Unexpected #+LAYOUT_NEXT".into(),
+					"Unexpected #+LAYOUT_END".into(),
 					span(
-						token.range.clone(),
+						token.start() + 1..token.end(),
 						format!(
 							"Layout expects a minimum of {} blocks, currently at {}",
 							layout_type.expects().start.fg(state.parser.colors().info),
 							tokens.len().fg(state.parser.colors().info),
+						)
+					),
+					span(
+						start.source(),
+						start.start() + 1.. start.end(),
+						format!(
+							"Layout begins here",
 						)
 					)
 				);

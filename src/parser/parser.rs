@@ -24,28 +24,28 @@ use ariadne::Color;
 
 #[derive(Debug)]
 pub struct ReportColors {
-	pub error: Color,
-	pub warning: Color,
-	pub info: Color,
-	pub highlight: Color,
+	pub error: Option<Color>,
+	pub warning: Option<Color>,
+	pub info: Option<Color>,
+	pub highlight: Option<Color>,
 }
 
 impl ReportColors {
 	pub fn with_colors() -> Self {
 		Self {
-			error: Color::Red,
-			warning: Color::Yellow,
-			info: Color::BrightBlue,
-			highlight: Color::BrightMagenta,
+			error: Some(Color::Red),
+			warning: Some(Color::Yellow),
+			info: Some(Color::BrightBlue),
+			highlight: Some(Color::BrightMagenta),
 		}
 	}
 
 	pub fn without_colors() -> Self {
 		Self {
-			error: Color::Primary,
-			warning: Color::Primary,
-			info: Color::Primary,
-			highlight: Color::Primary,
+			error: None,
+			warning: None,
+			info: None,
+			highlight: None,
 		}
 	}
 }
@@ -420,60 +420,6 @@ pub trait Parser {
 		Ok(())
 	}
 
-	/// Handles the reports produced by parsing. The default is to output them
-	/// to stderr, but you are free to modify it.
-	fn handle_reports(&self, reports: Vec<Report>) {
-		Report::reports_to_stdout(self.colors(), reports);
-		//todo!(); // TODO
-		/*
-		for mut report in reports {
-			let mut sources: HashSet<Rc<dyn Source>> = HashSet::new();
-			fn recurse_source(sources: &mut HashSet<Rc<dyn Source>>, source: Rc<dyn Source>) {
-				sources.insert(source.clone());
-				if let Some(parent) = source.location() {
-					let parent_source = parent.source();
-					if sources.get(&parent_source).is_none() {
-						recurse_source(sources, parent_source);
-					}
-				}
-			}
-
-			report.labels.iter().for_each(|label| {
-				recurse_source(&mut sources, label.span.0.clone());
-			});
-
-			let cache = sources
-				.iter()
-				.map(|source| (source.clone(), source.content().clone()))
-				.collect::<Vec<(Rc<dyn Source>, String)>>();
-
-			cache.iter().for_each(|(source, _)| {
-				if let Some(location) = source.location() {
-					if let Some(_s) = source.downcast_ref::<SourceFile>() {
-						report.labels.push(
-							Label::new((location.source(), location.start() + 1..location.end()))
-								.with_message("In file included from here")
-								.with_order(-1),
-						);
-					};
-
-					if let Some(_s) = source.downcast_ref::<VirtualSource>() {
-						let start = location.start()
-							+ if location.source().content().as_bytes()[location.start()] == b'\n' {
-								1
-							} else {
-								0
-							};
-						report.labels.push(
-							Label::new((location.source(), start..location.end()))
-								.with_message("In evaluation of")
-								.with_order(-1),
-						);
-					};
-				}
-			});
-			report.eprint(ariadne::sources(cache)).unwrap()
-		}
-		*/
-	}
+	/// Handles the reports produced by parsing.
+	fn handle_reports(&self, reports: Vec<Report>);
 }

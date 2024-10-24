@@ -11,6 +11,7 @@ use super::parser::ParseMode;
 use super::parser::Parser;
 use super::parser::ParserState;
 use super::parser::ReportColors;
+use super::reports::Report;
 use super::rule::Rule;
 use super::source::Cursor;
 use super::source::Source;
@@ -19,21 +20,39 @@ use super::source::Token;
 use super::util;
 
 /// Parser for the language
-#[derive(Debug)]
-pub struct LangParser {
+pub struct LangParser<'a> {
 	rules: Vec<Box<dyn Rule>>,
 	colors: ReportColors,
+	report_handler: Box<dyn Fn(&ReportColors, Vec<Report>) + 'a>,
 
 	// Parser state
 	pub err_flag: RefCell<bool>,
 }
 
-impl LangParser {
+impl<'a> LangParser<'a> {
 	pub fn default() -> Self {
 		let mut s = Self {
 			rules: vec![],
 			colors: ReportColors::with_colors(),
 			err_flag: RefCell::new(false),
+			report_handler: Box::new(Report::reports_to_stdout),
+		};
+
+		// Register rules
+		for rule in super::rule::get_rule_registry() {
+			s.add_rule(rule).unwrap();
+		}
+
+		s
+	}
+
+	pub fn new(with_colors: bool, report_handler: Box<dyn Fn(&ReportColors, Vec<Report>) + 'a>) -> Self
+	{
+		let mut s = Self {
+			rules: vec![],
+			colors: if with_colors { ReportColors::with_colors() } else { ReportColors::without_colors() },
+			err_flag: RefCell::new(false),
+			report_handler,
 		};
 
 		// Register rules
@@ -45,7 +64,7 @@ impl LangParser {
 	}
 }
 
-impl Parser for LangParser {
+impl<'b> Parser for LangParser<'b> {
 	fn colors(&self) -> &ReportColors { &self.colors }
 
 	fn rules(&self) -> &Vec<Box<dyn Rule>> { &self.rules }
@@ -188,5 +207,11 @@ impl Parser for LangParser {
 		//	self.state_mut().on_scope_end(&self, &document, super::state::Scope::DOCUMENT));
 
 		//return doc;
+	}
+
+	/// Handles the reports produced by parsing.
+	fn handle_reports(&self, reports: Vec<Report>)
+	{
+		(self.report_handler)(self.colors(), reports);
 	}
 }
