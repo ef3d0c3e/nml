@@ -14,7 +14,6 @@ use parser::parser::ParseMode;
 use parser::parser::Parser;
 use parser::parser::ParserState;
 use parser::source::SourceFile;
-use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 use tower_lsp::LanguageServer;
@@ -65,7 +64,7 @@ impl Backend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-	async fn initialize(&self, _params: InitializeParams) -> Result<InitializeResult> {
+	async fn initialize(&self, _params: InitializeParams) -> tower_lsp::jsonrpc::Result<InitializeResult> {
 		Ok(InitializeResult {
 			capabilities: ServerCapabilities {
 				text_document_sync: Some(TextDocumentSyncCapability::Kind(
@@ -118,7 +117,7 @@ impl LanguageServer for Backend {
 			.await;
 	}
 
-	async fn shutdown(&self) -> Result<()> { Ok(()) }
+	async fn shutdown(&self) -> tower_lsp::jsonrpc::Result<()> { Ok(()) }
 
 	async fn did_open(&self, params: DidOpenTextDocumentParams) {
 		self.client
@@ -139,7 +138,7 @@ impl LanguageServer for Backend {
 		.await
 	}
 
-	async fn completion(&self, _params: CompletionParams) -> Result<Option<CompletionResponse>> {
+	async fn completion(&self, _params: CompletionParams) -> tower_lsp::jsonrpc::Result<Option<CompletionResponse>> {
 		//let uri = params.text_document_position.text_document.uri;
 		//let position = params.text_document_position.position;
 		let completions = || -> Option<Vec<CompletionItem>> {
@@ -153,7 +152,7 @@ impl LanguageServer for Backend {
 	async fn semantic_tokens_full(
 		&self,
 		params: SemanticTokensParams,
-	) -> Result<Option<SemanticTokensResult>> {
+	) -> tower_lsp::jsonrpc::Result<Option<SemanticTokensResult>> {
 		let uri = params.text_document.uri.to_string();
 		self.client
 			.log_message(MessageType::LOG, "semantic_token_full")

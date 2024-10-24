@@ -272,6 +272,8 @@ impl RegexRule for RawRule {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::parser::source::Source;
+	use std::rc::Rc;
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;

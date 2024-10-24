@@ -353,7 +353,7 @@ impl RegexRule for VariableSubstitutionRule {
 						"Empty Variable Name".into(),
 						span(
 							name.range(),
-							"Missing variable name for substitution".into(),
+							"Missing variable name for substitution".into()
 						)
 					);
 
@@ -367,7 +367,7 @@ impl RegexRule for VariableSubstitutionRule {
 						"Invalid Variable Name".into(),
 						span(
 							name.range(),
-							"Variable names contains leading spaces".into(),
+							"Variable names contains leading spaces".into()
 						),
 						help("Remove leading spaces".into())
 					);
@@ -382,7 +382,7 @@ impl RegexRule for VariableSubstitutionRule {
 						"Invalid Variable Name".into(),
 						span(
 							name.range(),
-							"Variable names contains trailing spaces".into(),
+							"Variable names contains trailing spaces".into()
 						),
 						help("Remove trailing spaces".into())
 					);

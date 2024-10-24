@@ -434,7 +434,8 @@ pub trait Parser {
 	/// Handles the reports produced by parsing. The default is to output them
 	/// to stderr, but you are free to modify it.
 	fn handle_reports(&self, reports: Vec<Report>) {
-		todo!(); // TODO
+		Report::reports_to_stdout(self.colors(), reports);
+		//todo!(); // TODO
 		/*
 		for mut report in reports {
 			let mut sources: HashSet<Rc<dyn Source>> = HashSet::new();

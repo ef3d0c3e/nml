@@ -9,13 +9,12 @@ use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
 use crate::parser::source::Token;
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use regex::Captures;
 use regex::Regex;
 use std::ops::Range;
 use std::rc::Rc;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 use super::paragraph::Paragraph;
 
@@ -57,65 +56,62 @@ impl RegexRule for ImportRule {
 		document: &'a dyn Document<'a>,
 		token: Token,
 		matches: Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
-		let mut result = vec![];
+	) -> Vec<Report> {
+		let mut reports = vec![];
 
 		// Path
 		let import_file = match matches.get(2) {
 			Some(name) => match ImportRule::validate_name(state.parser.colors(), name.as_str()) {
 				Err(msg) => {
-					result.push(
-						Report::build(ReportKind::Error, token.source(), name.start())
-							.with_message("Invalid name for import")
-							.with_label(
-								Label::new((token.source(), name.range()))
-									.with_message(format!(
-										"Import name `{}` is invalid. {msg}",
-										name.as_str().fg(state.parser.colors().highlight)
-									))
-									.with_color(state.parser.colors().error),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Import Name".into(),
+						span(
+							name.range(),
+							format!(
+								"Import name `{}` is invalid. {msg}",
+								name.as_str().fg(state.parser.colors().highlight)
 							)
-							.finish(),
+						)
 					);
 
-					return result;
+					return reports;
 				}
 				Ok(filename) => {
 					let meta = match std::fs::metadata(filename.as_str()) {
 						Err(_) => {
-							result.push(
-								Report::build(ReportKind::Error, token.source(), name.start())
-									.with_message("Invalid import path")
-									.with_label(
-										Label::new((token.source(), name.range()))
-											.with_message(format!(
-												"Unable to access file `{}`",
-												filename.fg(state.parser.colors().highlight)
-											))
-											.with_color(state.parser.colors().error),
+							report_err!(
+								&mut reports,
+								token.source(),
+								"Invalid Import Path".into(),
+								span(
+									name.range(),
+									format!(
+										"Unable to access file `{}`",
+										filename.fg(state.parser.colors().highlight)
 									)
-									.finish(),
+								)
 							);
-							return result;
+							return reports;
 						}
 						Ok(meta) => meta,
 					};
 
 					if !meta.is_file() {
-						result.push(
-							Report::build(ReportKind::Error, token.source(), name.start())
-								.with_message("Invalid import path")
-								.with_label(
-									Label::new((token.source(), name.range()))
-										.with_message(format!(
-											"Path `{}` is not a file!",
-											filename.fg(state.parser.colors().highlight)
-										))
-										.with_color(state.parser.colors().error),
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Import Path".into(),
+							span(
+								name.range(),
+								format!(
+									"Path `{}` is not a file!",
+									filename.fg(state.parser.colors().highlight)
 								)
-								.finish(),
+							)
 						);
-						return result;
+						return reports;
 					}
 
 					filename
@@ -130,21 +126,20 @@ impl RegexRule for ImportRule {
 			{
 				Ok(as_name) => as_name,
 				Err(msg) => {
-					result.push(
-						Report::build(ReportKind::Error, token.source(), as_name.start())
-							.with_message("Invalid name for import as")
-							.with_label(
-								Label::new((token.source(), as_name.range()))
-									.with_message(format!(
-										"Canot import `{import_file}` as `{}`. {msg}",
-										as_name.as_str().fg(state.parser.colors().highlight)
-									))
-									.with_color(state.parser.colors().error),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Import As".into(),
+						span(
+							as_name.range(),
+							format!(
+								"Canot import `{import_file}` as `{}`. {msg}",
+								as_name.as_str().fg(state.parser.colors().highlight)
 							)
-							.finish(),
+						)
 					);
 
-					return result;
+					return reports;
 				}
 			},
 			_ => "".to_string(),
@@ -153,17 +148,16 @@ impl RegexRule for ImportRule {
 		let import = match SourceFile::new(import_file, Some(token.clone())) {
 			Ok(import) => Rc::new(import),
 			Err(path) => {
-				result.push(
-					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Unable to read file content")
-						.with_label(
-							Label::new((token.source(), token.range))
-								.with_message(format!("Failed to read content from path `{path}`"))
-								.with_color(state.parser.colors().error),
-						)
-						.finish(),
+				report_err!(
+					&mut reports,
+					token.source(),
+					"Invalid Import File".into(),
+					span(
+						token.range.clone(),
+						format!("Failed to read content from path `{path}`")
+					)
 				);
-				return result;
+				return reports;
 			}
 		};
 
@@ -212,6 +206,6 @@ impl RegexRule for ImportRule {
 			sems.add(path, tokens.import_path);
 		}
 
-		result
+		reports
 	}
 }

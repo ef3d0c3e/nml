@@ -1,7 +1,6 @@
 use std::any::Any;
 use std::cell::Ref;
 use std::collections::HashMap;
-use std::ops::Range;
 use std::rc::Rc;
 
 use crate::compiler::compiler::Compiler;
@@ -429,6 +428,7 @@ impl Rule for ListRule {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::parser::source::Source;
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;

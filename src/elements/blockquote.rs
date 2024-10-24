@@ -1,7 +1,6 @@
 use core::fmt;
 use std::any::Any;
 use std::collections::HashMap;
-use std::ops::Range;
 use std::rc::Rc;
 
 use blockquote_style::AuthorPos::After;

@@ -341,10 +341,10 @@ impl LayoutRule {
 		token: &Token,
 		layout_type: Rc<dyn LayoutType>,
 		properties: Option<Match>,
-	) -> Option<Box<dyn Any>> {
+	) -> Result<Option<Box<dyn Any>>, ()> {
 		match properties {
 			None => match layout_type.parse_properties("") {
-				Ok(props) => props,
+				Ok(props) => Ok(props),
 				Err(err) => {
 					report_err!(
 						&mut reports,
@@ -352,28 +352,28 @@ impl LayoutRule {
 						"Invalid Layout Properties".into(),
 						span(
 							token.range.clone(),
-							format!("Layout is missing required property: {eee}")
+							format!("Layout is missing required property: {err}")
 						)
 					);
-					None
+					Err(())
 				}
 			},
 			Some(props) => {
-				let trimmed = props.as_str().trim_start().trim_end();
-				let content = escape_text('\\', "]", trimmed);
+				let content = escape_text('\\', "]", props.as_str());
 				match layout_type.parse_properties(content.as_str()) {
 					Ok(props) => Ok(props),
 					Err(err) => {
-						Err(
-							Report::build(ReportKind::Error, token.source(), props.start())
-								.with_message("Unable to parse layout properties")
-								.with_label(
-									Label::new((token.source(), props.range()))
-										.with_message(err)
-										.with_color(colors.error),
-								)
-								.finish(),
-						)
+
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Layout Properties".into(),
+							span(
+								props.range(),
+								err
+							)
+						);
+						Err(())
 					}
 				}
 			}
@@ -399,7 +399,7 @@ impl RegexRule for LayoutRule {
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
-	) -> Vec<Report<(Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let rule_state = LayoutRule::initialize_state(state);
@@ -409,18 +409,17 @@ impl RegexRule for LayoutRule {
 		{
 			match matches.get(2) {
 				None => {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), token.start())
-							.with_message("Missing Layout Name")
-							.with_label(
-								Label::new((token.source(), token.range.clone()))
-									.with_message(format!(
-										"Missing layout name after `{}`",
-										"#+BEGIN_LAYOUT".fg(state.parser.colors().highlight)
-									))
-									.with_color(state.parser.colors().error),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Missing Layout Name".into(),
+						span(
+							token.range.clone(),
+							format!(
+								"Missing layout name after `{}`",
+								"#+BEGIN_LAYOUT".fg(state.parser.colors().highlight)
 							)
-							.finish(),
+						)
 					);
 					return reports;
 				}
@@ -429,35 +428,33 @@ impl RegexRule for LayoutRule {
 					if name.as_str().is_empty() || trimmed.is_empty()
 					// Empty name
 					{
-						reports.push(
-							Report::build(ReportKind::Error, token.source(), name.start())
-								.with_message("Empty Layout Name")
-								.with_label(
-									Label::new((token.source(), token.range.clone()))
-										.with_message(format!(
-											"Empty layout name after `{}`",
-											"#+BEGIN_LAYOUT".fg(state.parser.colors().highlight)
-										))
-										.with_color(state.parser.colors().error),
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Empty Layout Name".into(),
+							span(
+								name.range(),
+								format!(
+									"Empty layout name after `{}`",
+									"#+BEGIN_LAYOUT".fg(state.parser.colors().highlight)
 								)
-								.finish(),
+							)
 						);
 						return reports;
 					} else if !name.as_str().chars().next().unwrap().is_whitespace()
 					// Missing space
 					{
-						reports.push(
-							Report::build(ReportKind::Error, token.source(), name.start())
-								.with_message("Invalid Layout Name")
-								.with_label(
-									Label::new((token.source(), name.range()))
-										.with_message(format!(
-											"Missing a space before layout name `{}`",
-											name.as_str().fg(state.parser.colors().highlight)
-										))
-										.with_color(state.parser.colors().error),
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Layout Name".into(),
+							span(
+								name.range(),
+								format!(
+									"Missing a space before layout name `{}`",
+									name.as_str().fg(state.parser.colors().highlight)
 								)
-								.finish(),
+							)
 						);
 						return reports;
 					}
@@ -465,18 +462,18 @@ impl RegexRule for LayoutRule {
 					// Get layout
 					let layout_type = match state.shared.layouts.borrow().get(trimmed) {
 						None => {
-							reports.push(
-								Report::build(ReportKind::Error, token.source(), name.start())
-									.with_message("Unknown Layout")
-									.with_label(
-										Label::new((token.source(), name.range()))
-											.with_message(format!(
-												"Cannot find layout `{}`",
-												trimmed.fg(state.parser.colors().highlight)
-											))
-											.with_color(state.parser.colors().error),
+							report_err!(
+								&mut reports,
+								token.source(),
+								"Unknown Layout".into(),
+								span(
+									name.range(),
+									format!(
+										"Cannot find layout `{}`",
+										trimmed.fg(state.parser.colors().highlight)
 									)
-									.finish(),
+								)
+
 							);
 							return reports;
 						}
@@ -485,16 +482,13 @@ impl RegexRule for LayoutRule {
 
 					// Parse properties
 					let properties = match LayoutRule::parse_properties(
-						state.parser.colors(),
+						&mut reports,
 						&token,
 						layout_type.clone(),
 						matches.get(1),
 					) {
 						Ok(props) => props,
-						Err(rep) => {
-							reports.push(rep);
-							return reports;
-						}
+						Err(()) => return reports,
 					};
 
 					state.push(
@@ -548,15 +542,14 @@ impl RegexRule for LayoutRule {
 
 			let (tokens, layout_type) = match layout_state.stack.last_mut() {
 				None => {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), token.start())
-							.with_message("Invalid #+LAYOUT_NEXT")
-							.with_label(
-								Label::new((token.source(), token.range.clone()))
-									.with_message("No active layout found".to_string())
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid #+LAYOUT_NEXT".into(),
+						span(
+							token.range.clone(),
+							"No active layout found".into()
+						)
 					);
 					return reports;
 				}
@@ -566,35 +559,31 @@ impl RegexRule for LayoutRule {
 			if layout_type.expects().end < tokens.len()
 			// Too many blocks
 			{
-				reports.push(
-					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Unexpected #+LAYOUT_NEXT")
-						.with_label(
-							Label::new((token.source(), token.range.clone()))
-								.with_message(format!(
-									"Layout expects a maximum of {} blocks, currently at {}",
-									layout_type.expects().end.fg(state.parser.colors().info),
-									tokens.len().fg(state.parser.colors().info),
-								))
-								.with_color(state.parser.colors().error),
+				report_err!(
+					&mut reports,
+					token.source(),
+					"Unexpected #+LAYOUT_NEXT".into(),
+					span(
+						token.range.clone(),
+						format!(
+							"Layout expects a maximum of {} blocks, currently at {}",
+							layout_type.expects().end.fg(state.parser.colors().info),
+							tokens.len().fg(state.parser.colors().info),
 						)
-						.finish(),
+					)
 				);
 				return reports;
 			}
 
 			// Parse properties
 			let properties = match LayoutRule::parse_properties(
-				state.parser.colors(),
+				&mut reports,
 				&token,
 				layout_type.clone(),
 				matches.get(1),
 			) {
 				Ok(props) => props,
-				Err(rep) => {
-					reports.push(rep);
-					return reports;
-				}
+				Err(rep) => return reports,
 			};
 
 			if let Some((sems, tokens)) =
@@ -630,15 +619,14 @@ impl RegexRule for LayoutRule {
 
 			let (tokens, layout_type) = match layout_state.stack.last_mut() {
 				None => {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), token.start())
-							.with_message("Invalid #+LAYOUT_END")
-							.with_label(
-								Label::new((token.source(), token.range.clone()))
-									.with_message("No active layout found".to_string())
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid #+LAYOUT_NEXT".into(),
+						span(
+							token.range.clone(),
+							"No active layout found".into()
+						)
 					);
 					return reports;
 				}
@@ -648,35 +636,31 @@ impl RegexRule for LayoutRule {
 			if layout_type.expects().start > tokens.len()
 			// Not enough blocks
 			{
-				reports.push(
-					Report::build(ReportKind::Error, token.source(), token.start())
-						.with_message("Unexpected #+LAYOUT_END")
-						.with_label(
-							Label::new((token.source(), token.range.clone()))
-								.with_message(format!(
-									"Layout expects a minimum of {} blocks, currently at {}",
-									layout_type.expects().start.fg(state.parser.colors().info),
-									tokens.len().fg(state.parser.colors().info),
-								))
-								.with_color(state.parser.colors().error),
+				report_err!(
+					&mut reports,
+					token.source(),
+					"Unexpected #+LAYOUT_NEXT".into(),
+					span(
+						token.range.clone(),
+						format!(
+							"Layout expects a minimum of {} blocks, currently at {}",
+							layout_type.expects().start.fg(state.parser.colors().info),
+							tokens.len().fg(state.parser.colors().info),
 						)
-						.finish(),
+					)
 				);
 				return reports;
 			}
 
 			// Parse properties
 			let properties = match LayoutRule::parse_properties(
-				state.parser.colors(),
+				&mut reports,
 				&token,
 				layout_type.clone(),
 				matches.get(1),
 			) {
 				Ok(props) => props,
-				Err(rep) => {
-					reports.push(rep);
-					return reports;
-				}
+				Err(rep) => return reports,
 			};
 
 			let layout_type = layout_type.clone();

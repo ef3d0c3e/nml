@@ -4,9 +4,6 @@ use std::rc::Rc;
 use std::sync::Once;
 
 use ariadne::Fmt;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use mlua::Function;
@@ -36,6 +33,8 @@ use crate::parser::util::PropertyMapError;
 use crate::parser::util::PropertyParser;
 use crate::parser::util::{self};
 use lazy_static::lazy_static;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CodeKind {
@@ -335,22 +334,21 @@ impl RegexRule for CodeRule {
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let properties = match matches.get(1) {
 			None => match self.properties.default() {
 				Ok(properties) => properties,
 				Err(e) => {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), token.start())
-							.with_message("Invalid code")
-							.with_label(
-								Label::new((token.source().clone(), token.range.clone()))
-									.with_message(format!("Code is missing properties: {e}"))
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Invalid Code Properties".into(),
+						span(
+							token.range.clone(),
+							format!("Code is missing properties: {e}")
+						)
 					);
 					return reports;
 				}
@@ -360,15 +358,14 @@ impl RegexRule for CodeRule {
 					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
 				match self.properties.parse(processed.as_str()) {
 					Err(e) => {
-						reports.push(
-							Report::build(ReportKind::Error, token.source(), props.start())
-								.with_message("Invalid Code Properties")
-								.with_label(
-									Label::new((token.source().clone(), props.range()))
-										.with_message(e)
-										.with_color(state.parser.colors().error),
-								)
-								.finish(),
+						report_err!(
+							&mut reports,
+							token.source(),
+							"Invalid Code Properties".into(),
+							span(
+								props.range(),
+								e
+							)
 						);
 						return reports;
 					}
@@ -382,15 +379,14 @@ impl RegexRule for CodeRule {
 			Some(lang) => {
 				let code_lang = lang.as_str().trim_start().trim_end().to_string();
 				if code_lang.is_empty() {
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), lang.start())
-							.with_message("Missing Code Language")
-							.with_label(
-								Label::new((token.source().clone(), lang.range()))
-									.with_message("No language specified")
-									.with_color(state.parser.colors().error),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Missing Code Language".into(),
+						span(
+							lang.range(),
+							"No language specified".into()
+						)
 					);
 
 					return reports;
@@ -399,18 +395,17 @@ impl RegexRule for CodeRule {
 					.find_syntax_by_name(code_lang.as_str())
 					.is_none()
 				{
-					reports.push(
-						Report::build(ReportKind::Error, token.source(), lang.start())
-							.with_message("Unknown Code Language")
-							.with_label(
-								Label::new((token.source().clone(), lang.range()))
-									.with_message(format!(
-										"Language `{}` cannot be found",
-										code_lang.fg(state.parser.colors().info)
-									))
-									.with_color(state.parser.colors().error),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Unknown Code Language".into(),
+						span(
+							lang.range(),
+							format!(
+								"Language `{}` cannot be found",
+								code_lang.fg(state.parser.colors().info)
 							)
-							.finish(),
+						)
 					);
 
 					return reports;
@@ -432,15 +427,14 @@ impl RegexRule for CodeRule {
 		}
 
 		if code_content.is_empty() {
-			reports.push(
-				Report::build(ReportKind::Error, token.source(), token.start())
-					.with_message("Missing code content")
-					.with_label(
-						Label::new((token.source().clone(), token.range.clone()))
-							.with_message("Code content cannot be empty")
-							.with_color(state.parser.colors().error),
-					)
-					.finish(),
+			report_err!(
+				&mut reports,
+				token.source(),
+				"Empty Code Content".into(),
+				span(
+					token.range.clone(),
+					"Code content cannot be empty".into()
+				)
 			);
 			return reports;
 		}
@@ -464,34 +458,31 @@ impl RegexRule for CodeRule {
 					Err(e) => {
 						match e {
 							PropertyMapError::ParseError((prop, err)) => {
-								reports.push(
-							Report::build(ReportKind::Error, token.source(), token.start())
-							.with_message("Invalid Code Property")
-							.with_label(
-								Label::new((token.source().clone(), token.start()+1..token.end()))
-								.with_message(format!("Property `line_offset: {}` cannot be converted: {}",
-										prop.fg(state.parser.colors().info),
-										err.fg(state.parser.colors().error)))
-								.with_color(state.parser.colors().warning))
-							.finish());
+								report_err!(
+									&mut reports,
+									token.source(),
+									"Invalid Code Property".into(),
+									span(
+										token.start()+1..token.end(),
+										format!("Property `line_offset: {}` cannot be converted: {}",
+											prop.fg(state.parser.colors().info),
+											err.fg(state.parser.colors().error))
+									)
+								);
 								return reports;
 							}
 							PropertyMapError::NotFoundError(err) => {
-								reports.push(
-									Report::build(ReportKind::Error, token.source(), token.start())
-										.with_message("Invalid Code Property")
-										.with_label(
-											Label::new((
-												token.source().clone(),
-												token.start() + 1..token.end(),
-											))
-											.with_message(format!(
-												"Property `{}` doesn't exist",
-												err.fg(state.parser.colors().info)
-											))
-											.with_color(state.parser.colors().warning),
+								report_err!(
+									&mut reports,
+									token.source(),
+									"Invalid Code Property".into(),
+									span(
+										token.start()+1..token.end(),
+										format!(
+											"Property `{}` doesn't exist",
+											err.fg(state.parser.colors().info)
 										)
-										.finish(),
+									)
 								);
 								return reports;
 							}

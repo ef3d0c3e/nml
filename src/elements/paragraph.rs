@@ -1,8 +1,5 @@
 use std::any::Any;
-use std::ops::Range;
-use std::rc::Rc;
 
-use ariadne::Report;
 use regex::Regex;
 
 use crate::compiler::compiler::Compiler;
@@ -17,6 +14,7 @@ use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
+use crate::parser::reports::*;
 
 // TODO: Full refactor
 // Problem is that document parsed from other sources i.e by variables
@@ -132,7 +130,7 @@ impl Rule for ParagraphRule {
 		document: &dyn Document,
 		cursor: Cursor,
 		_match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>>) {
+	) -> (Cursor, Vec<Report>) {
 		let end_cursor = match self.re.captures_at(cursor.source.content(), cursor.pos) {
 			None => panic!("Unknown error"),
 			Some(capture) => cursor.at(capture.get(0).unwrap().end() - 1),
@@ -152,6 +150,8 @@ impl Rule for ParagraphRule {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use std::rc::Rc;
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
@@ -159,7 +159,6 @@ mod tests {
 	use crate::parser::source::SourceFile;
 	use crate::validate_document;
 
-	use super::*;
 
 	#[test]
 	fn parse() {

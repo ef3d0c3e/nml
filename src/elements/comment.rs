@@ -8,13 +8,12 @@ use crate::parser::parser::ParserState;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
 use regex::Captures;
 use regex::Regex;
 use std::ops::Range;
 use std::rc::Rc;
+use crate::parser::reports::*;
+use crate::parser::reports::macros::*;
 
 #[derive(Debug)]
 pub struct Comment {
@@ -66,7 +65,7 @@ impl RegexRule for CommentRule {
 		document: &dyn Document,
 		token: Token,
 		matches: Captures,
-	) -> Vec<Report<'_, (Rc<dyn Source>, Range<usize>)>> {
+	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		let content = match matches.get(1) {
@@ -74,15 +73,14 @@ impl RegexRule for CommentRule {
 			Some(comment) => {
 				let trimmed = comment.as_str().trim_start().trim_end().to_string();
 				if trimmed.is_empty() {
-					reports.push(
-						Report::build(ReportKind::Warning, token.source(), comment.start())
-							.with_message("Empty comment")
-							.with_label(
-								Label::new((token.source(), comment.range()))
-									.with_message("Comment is empty")
-									.with_color(state.parser.colors().warning),
-							)
-							.finish(),
+					report_err!(
+						&mut reports,
+						token.source(),
+						"Empty Comment".into(),
+						span(
+							comment.range(),
+							"Comment is empty".into()
+						)
 					);
 				}
 

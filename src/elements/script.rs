@@ -15,7 +15,6 @@ use ariadne::Fmt;
 use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
-use std::ops::Range;
 use std::rc::Rc;
 use crate::parser::reports::*;
 use crate::parser::reports::macros::*;
@@ -140,7 +139,7 @@ impl RegexRule for ScriptRule {
 				"Invalid Kernel Code".into(),
 				span(
 					script_range,
-					"Kernel code is empty".into(),
+					"Kernel code is empty".into()
 				)
 			);
 			return reports;
