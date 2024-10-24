@@ -14,6 +14,7 @@ use crypto::sha2::Sha512;
 use graphviz_rust::cmd::Format;
 use graphviz_rust::cmd::Layout;
 use graphviz_rust::exec_dot;
+use lsp::semantic::Semantics;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -335,12 +336,32 @@ impl RegexRule for GraphRule {
 		state.push(
 			document,
 			Box::new(Graphviz {
-				location: token,
+				location: token.clone(),
 				dot: graph_content,
 				layout: graph_layout,
 				width: graph_width,
 			}),
 		);
+
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.semantics)
+		{
+			let range = token.range;
+			sems.add(
+				range.start..range.start + 7,
+				tokens.graph_sep,
+			);
+			if let Some(props) = matches.get(1).map(|m| m.range()) {
+				sems.add(props.start - 1..props.start, tokens.tex_props_sep);
+				sems.add(props.clone(), tokens.tex_props);
+				sems.add(props.end..props.end + 1, tokens.tex_props_sep);
+			}
+			sems.add(matches.get(2).unwrap().range(), tokens.tex_content);
+			sems.add(
+				range.end - 8..range.end,
+				tokens.graph_sep,
+			);
+		}
 
 		reports
 	}
@@ -451,6 +472,38 @@ Another graph
 		validate_document!(doc.content().borrow(), 0,
 			Graphviz { width == "200px", dot == "Some graph..." };
 			Graphviz { dot == "Another graph" };
+		);
+	}
+
+	#[test]
+	fn semantic() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+[graph][width=50%]
+digraph {
+}
+[/graph]
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+			ParseMode::default(),
+		);
+		validate_semantics!(state, source.clone(), 0,
+			graph_sep { delta_line == 1, delta_start == 0, length == 7 };
+			graph_props_sep { delta_line == 0, delta_start == 7, length == 1 };
+			graph_props { delta_line == 0, delta_start == 1, length == 9 };
+			graph_props_sep { delta_line == 0, delta_start == 9, length == 1 };
+			graph_content { delta_line == 0, delta_start == 1, length == 1 };
+			graph_content { delta_line == 1, delta_start == 0, length == 10 };
+			graph_content { delta_line == 1, delta_start == 0, length == 2 };
+			graph_sep { delta_line == 1, delta_start == 0, length == 8 };
 		);
 	}
 }

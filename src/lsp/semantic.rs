@@ -151,6 +151,11 @@ pub struct Tokens {
 	pub tex_props: (u32, u32),
 	pub tex_content: (u32, u32),
 
+	pub graph_sep: (u32, u32),
+	pub graph_props_sep: (u32, u32),
+	pub graph_props: (u32, u32),
+	pub graph_content: (u32, u32),
+
 	pub layout_sep: (u32, u32),
 	pub layout_token: (u32, u32),
 	pub layout_props_sep: (u32, u32),
@@ -222,6 +227,11 @@ impl Tokens {
 			tex_props_sep: token!("operator"),
 			tex_props: token!("enum"),
 			tex_content: token!("string"),
+
+			graph_sep: token!("modifier"),
+			graph_props_sep: token!("operator"),
+			graph_props: token!("enum"),
+			graph_content: token!("string"),
 
 			layout_sep: token!("number"),
 			layout_token: token!("number"),

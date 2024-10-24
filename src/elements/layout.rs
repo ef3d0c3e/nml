@@ -547,6 +547,7 @@ impl RegexRule for LayoutRule {
 			if layout_type.expects().end < tokens.len()
 			// Too many blocks
 			{
+				let start = &tokens[0];
 				report_err!(
 					&mut reports,
 					token.source(),
@@ -558,6 +559,11 @@ impl RegexRule for LayoutRule {
 							layout_type.expects().end.fg(state.parser.colors().info),
 							tokens.len().fg(state.parser.colors().info),
 						)
+					),
+					span(
+						start.source(),
+						start.start() + 1..start.end(),
+						format!("Layout starts here",)
 					)
 				);
 				return reports;
@@ -639,10 +645,8 @@ impl RegexRule for LayoutRule {
 					),
 					span(
 						start.source(),
-						start.start() + 1.. start.end(),
-						format!(
-							"Layout begins here",
-						)
+						start.start() + 1..start.end(),
+						format!("Layout starts here",)
 					)
 				);
 				return reports;
