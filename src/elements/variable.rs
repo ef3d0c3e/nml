@@ -254,7 +254,7 @@ impl RegexRule for VariableRule {
 		}
 
 		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.semantics)
+			Semantics::from_source(token.source(), &state.shared.lsp)
 		{
 			let name = matches.get(2).unwrap().range();
 			if let Some(kind) = matches.get(1).map(|m| m.range()) {
@@ -426,7 +426,7 @@ impl RegexRule for VariableSubstitutionRule {
 		variable.parse(state, token.clone(), document);
 
 		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.semantics)
+			Semantics::from_source(token.source(), &state.shared.lsp)
 		{
 			let name = matches.get(1).unwrap().range();
 			sems.add(name.start - 1..name.start, tokens.variable_sub_sep);

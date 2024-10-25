@@ -14,6 +14,7 @@ use crate::parser::source::VirtualSource;
 use crate::parser::util;
 use crate::parser::util::escape_source;
 use ariadne::Fmt;
+use lsp::hints::Hints;
 use mlua::Lua;
 use regex::Captures;
 use regex::Regex;
@@ -141,14 +142,13 @@ impl RegexRule for ScriptRule {
 				"Invalid Kernel Code".into(),
 				span(script_range, "Kernel code is empty".into())
 			);
-			return reports;
 		}
 
 		let execute = |lua: &Lua| {
 			let chunk = lua.load(source.content()).set_name(kernel_name);
 
 			if index == 0
-			// Exec
+			// Exec @<>@
 			{
 				if let Err(e) = chunk.exec() {
 					report_err!(
@@ -160,10 +160,9 @@ impl RegexRule for ScriptRule {
 							format!("Kernel execution failed:\n{}", e)
 						)
 					);
-					return reports;
 				}
 			} else
-			// Eval
+			// Eval %<>%
 			{
 				// Validate kind
 				let kind = match matches.get(2) {
@@ -177,7 +176,7 @@ impl RegexRule for ScriptRule {
 								"Invalid Kernel Code Kind".into(),
 								span(kind.range(), msg)
 							);
-							return reports;
+							return;
 						}
 					},
 				};
@@ -246,18 +245,18 @@ impl RegexRule for ScriptRule {
 					}
 				}
 			}
-
-			reports
 		};
 
-		let ctx = KernelContext {
-			location: Token::new(0..source.content().len(), source.clone()),
+		let mut ctx = KernelContext::new(
+			Token::new(0..source.content().len(), source.clone()),
 			state,
 			document,
-		};
+		);
+
+		kernel.run_with_context(&mut ctx, execute);
 
 		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.semantics)
+			Semantics::from_source(token.source(), &state.shared.lsp)
 		{
 			let range = matches
 				.get(0)
@@ -288,7 +287,21 @@ impl RegexRule for ScriptRule {
 			}
 			sems.add(range.end - 2..range.end, tokens.script_sep);
 		}
-		kernel.run_with_context(ctx, execute)
+
+		if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp)
+		{
+			let mut label = String::new();
+			ctx.redirects.iter()
+				.for_each(|redir| {
+					label += format!("{}: {} ", redir.source, redir.content).as_str();
+				});
+			if !label.is_empty()
+			{
+				label.pop();
+				hints.add(matches.get(0).unwrap().end(), label);
+			}
+		}
+		reports
 	}
 }
 

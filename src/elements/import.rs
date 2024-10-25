@@ -180,7 +180,7 @@ impl RegexRule for ImportRule {
 		}
 
 		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.semantics)
+			Semantics::from_source(token.source(), &state.shared.lsp)
 		{
 			// @import
 			let import =

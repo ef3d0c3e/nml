@@ -425,7 +425,7 @@ impl RegexRule for TexRule {
 		);
 
 		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.semantics)
+			Semantics::from_source(token.source(), &state.shared.lsp)
 		{
 			let range = token.range;
 			sems.add(

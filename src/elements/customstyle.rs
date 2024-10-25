@@ -8,6 +8,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Fmt;
+use lsp::semantic::Semantics;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -51,14 +52,14 @@ impl CustomStyle for LuaCustomStyle {
 		let kernel: Ref<'_, Kernel> =
 			Ref::map(state.shared.kernels.borrow(), |b| b.get("main").unwrap());
 		//let kernel = RefMut::map(parser_state.shared.kernels.borrow(), |ker| ker.get("main").unwrap());
-		let ctx = KernelContext {
-			location: location.clone(),
+		let mut ctx = KernelContext::new(
+			location.clone(),
 			state,
 			document,
-		};
+		);
 
 		let mut reports = vec![];
-		kernel.run_with_context(ctx, |lua| {
+		kernel.run_with_context(&mut ctx, |lua| {
 			let chunk = lua.load(self.start.as_str());
 			if let Err(err) = chunk.eval::<()>() {
 				report_err!(
@@ -85,14 +86,14 @@ impl CustomStyle for LuaCustomStyle {
 	) -> Vec<Report> {
 		let kernel: Ref<'_, Kernel> =
 			Ref::map(state.shared.kernels.borrow(), |b| b.get("main").unwrap());
-		let ctx = KernelContext {
-			location: location.clone(),
+		let mut ctx = KernelContext::new(
+			location.clone(),
 			state,
 			document,
-		};
+		);
 
 		let mut reports = vec![];
-		kernel.run_with_context(ctx, |lua| {
+		kernel.run_with_context(&mut ctx, |lua| {
 			let chunk = lua.load(self.end.as_str());
 			if let Err(err) = chunk.eval::<()>() {
 				report_err!(
@@ -335,6 +336,12 @@ impl Rule for CustomStyleRule {
 		} else {
 			style.on_start(token.clone(), state, document)
 		};
+
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.lsp)
+		{
+			sems.add(token.range.clone(), tokens.customstyle_marker);
+		}
 
 		(cursor.at(token.end()), unsafe {
 			std::mem::transmute(reports)

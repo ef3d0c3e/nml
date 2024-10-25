@@ -336,7 +336,7 @@ impl Rule for ListRule {
 				);
 
 				if let Some((sems, tokens)) =
-					Semantics::from_source(cursor.source.clone(), &state.shared.semantics)
+					Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
 				{
 					sems.add(captures.get(1).unwrap().range(), tokens.list_bullet);
 					if let Some(props) = captures.get(2).map(|m| m.range()) {

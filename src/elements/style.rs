@@ -196,7 +196,7 @@ impl RegexRule for StyleRule {
 			);
 
 			if let Some((sems, tokens)) =
-				Semantics::from_source(token.source(), &state.shared.semantics)
+				Semantics::from_source(token.source(), &state.shared.lsp)
 			{
 				sems.add(token.start()..token.end(), tokens.style_marker);
 			}

@@ -1,6 +1,5 @@
 use std::cell::Ref;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -13,6 +12,8 @@ use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
 use crate::parser::source::VirtualSource;
+
+use super::data::LSPData;
 
 pub const TOKEN_TYPE: &[SemanticTokenType] = &[
 	SemanticTokenType::NAMESPACE,
@@ -102,6 +103,8 @@ pub struct Tokens {
 
 	pub style_marker: (u32, u32),
 
+	pub customstyle_marker: (u32, u32),
+
 	pub import_import: (u32, u32),
 	pub import_as_sep: (u32, u32),
 	pub import_as: (u32, u32),
@@ -178,6 +181,8 @@ impl Tokens {
 			link_url: token!("function", "readonly", "abstract", "abstract"),
 
 			style_marker: token!("operator"),
+
+			customstyle_marker: token!("operator"),
 
 			import_import: token!("macro"),
 			import_as_sep: token!("operator"),
@@ -264,7 +269,7 @@ impl SemanticsData {
 #[derive(Debug)]
 pub struct Semantics<'a> {
 	pub(self) sems: Ref<'a, SemanticsData>,
-	// TODO
+	// The source used when resolving the parent source
 	pub(self) original_source: Rc<dyn Source>,
 	/// The resolved parent source
 	pub(self) source: Rc<dyn Source>,
@@ -273,7 +278,7 @@ pub struct Semantics<'a> {
 impl<'a> Semantics<'a> {
 	fn from_source_impl(
 		source: Rc<dyn Source>,
-		semantics: &'a Option<RefCell<SemanticsHolder>>,
+		lsp: &'a Option<RefCell<LSPData>>,
 		original_source: Rc<dyn Source>,
 	) -> Option<(Self, Ref<'a, Tokens>)> {
 		if source.name().starts_with(":LUA:") && source.downcast_ref::<VirtualSource>().is_some() {
@@ -288,12 +293,12 @@ impl<'a> Semantics<'a> {
 			.map(|parent| parent.location())
 			.unwrap_or(None)
 		{
-			return Self::from_source_impl(location.source(), semantics, original_source);
+			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if let Ok(source) = source.clone().downcast_rc::<SourceFile>() {
 			return Ref::filter_map(
-				semantics.as_ref().unwrap().borrow(),
-				|semantics: &SemanticsHolder| {
-					semantics.sems.get(&(source.clone() as Rc<dyn Source>))
+				lsp.as_ref().unwrap().borrow(),
+				|lsp: &LSPData| {
+					lsp.semantic_data.get(&(source.clone() as Rc<dyn Source>))
 				},
 			)
 			.ok()
@@ -305,8 +310,8 @@ impl<'a> Semantics<'a> {
 						original_source,
 					},
 					Ref::map(
-						semantics.as_ref().unwrap().borrow(),
-						|semantics: &SemanticsHolder| &semantics.tokens,
+						lsp.as_ref().unwrap().borrow(),
+						|lsp: &LSPData| &lsp.semantic_tokens,
 					),
 				)
 			});
@@ -316,12 +321,12 @@ impl<'a> Semantics<'a> {
 
 	pub fn from_source(
 		source: Rc<dyn Source>,
-		semantics: &'a Option<RefCell<SemanticsHolder>>,
+		lsp: &'a Option<RefCell<LSPData>>,
 	) -> Option<(Self, Ref<'a, Tokens>)> {
-		if semantics.is_none() {
+		if lsp.is_none() {
 			return None;
 		}
-		Self::from_source_impl(source.clone(), semantics, source)
+		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
 	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
@@ -365,42 +370,27 @@ impl<'a> Semantics<'a> {
 	}
 }
 
-#[derive(Debug)]
-pub struct SemanticsHolder {
-	pub tokens: Tokens,
-	pub sems: HashMap<Rc<dyn Source>, SemanticsData>,
-}
-
-impl SemanticsHolder {
-	pub fn new() -> Self {
-		Self {
-			tokens: Tokens::new(),
-			sems: HashMap::new(),
-		}
-	}
-}
-
 #[cfg(test)]
 pub mod tests {
 	#[macro_export]
 	macro_rules! validate_semantics {
 		($state:expr, $source:expr, $idx:expr,) => {};
 		($state:expr, $source:expr, $idx:expr, $token_name:ident { $($field:ident == $value:expr),* }; $($tail:tt)*) => {{
-			let token = $state.shared.semantics
+			let token = $state.shared.lsp
 				.as_ref()
 				.unwrap()
 				.borrow()
-				.sems
+				.semantic_data
 				.get(&($source as std::rc::Rc<dyn crate::parser::source::Source>))
 				.unwrap()
 				.tokens
 				.borrow()
 				[$idx];
-			let token_type = $state.shared.semantics
+			let token_type = $state.shared.lsp
 				.as_ref()
 				.unwrap()
 				.borrow()
-				.tokens
+				.semantic_tokens
 				.$token_name;
 
 			let found_token = (token.token_type, token.token_modifiers_bitset);

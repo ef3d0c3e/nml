@@ -27,6 +27,7 @@ struct Backend {
 	document_map: DashMap<String, String>,
 	semantic_token_map: DashMap<String, Vec<SemanticToken>>,
 	diagnostic_map: DashMap<String, Vec<Diagnostic>>,
+	hints_map: DashMap<String, Vec<InlayHint>>,
 }
 
 #[derive(Debug)]
@@ -47,10 +48,13 @@ impl Backend {
 			params.text.clone(),
 			None,
 		));
+
+		// Diagnostics
 		self.diagnostic_map.clear();
 		let parser = LangParser::new(false, Box::new(
 				|_colors, reports| Report::reports_to_diagnostics(&self.diagnostic_map, reports)
 		));
+		// Parse
 		let (_doc, state) = parser.parse(
 			ParserState::new_with_semantics(&parser, None),
 			source.clone(),
@@ -58,9 +62,10 @@ impl Backend {
 			ParseMode::default(),
 		);
 
-		if let Some(sems) = state.shared.semantics.as_ref() {
-			let borrow = sems.borrow();
-			for (source, sem) in &borrow.sems {
+		// Semantics
+		if let Some(lsp) = state.shared.lsp.as_ref() {
+			let borrow = lsp.borrow();
+			for (source, sem) in &borrow.semantic_data {
 				if let Some(path) = source
 					.clone()
 					.downcast_rc::<SourceFile>()
@@ -69,6 +74,22 @@ impl Backend {
 				{
 					self.semantic_token_map
 						.insert(path, sem.tokens.replace(vec![]));
+				}
+			}
+		}
+
+		// Hints
+		if let Some(lsp) = state.shared.lsp.as_ref() {
+			let borrow = lsp.borrow();
+			for (source, hints) in &borrow.inlay_hints {
+				if let Some(path) = source
+					.clone()
+					.downcast_rc::<SourceFile>()
+					.ok()
+					.map(|source| source.path().to_owned())
+				{
+					self.hints_map
+						.insert(path, hints.hints.replace(vec![]));
 				}
 			}
 		}
@@ -127,6 +148,7 @@ impl LanguageServer for Backend {
 							work_done_progress_options: WorkDoneProgressOptions::default(),
 					})
 				),
+				inlay_hint_provider: Some(OneOf::Left(true)),
 				..ServerCapabilities::default()
 			},
 			server_info: Some(ServerInfo {
@@ -181,12 +203,12 @@ impl LanguageServer for Backend {
 		&self,
 		params: SemanticTokensParams,
 	) -> tower_lsp::jsonrpc::Result<Option<SemanticTokensResult>> {
-		let uri = params.text_document.uri.to_string();
+		let uri = params.text_document.uri;
 		self.client
 			.log_message(MessageType::LOG, "semantic_token_full")
 			.await;
 
-		if let Some(semantic_tokens) = self.semantic_token_map.get(&uri) {
+		if let Some(semantic_tokens) = self.semantic_token_map.get(uri.as_str()) {
 			let data = semantic_tokens
 				.iter()
 				.filter_map(|token| Some(token.clone()))
@@ -218,6 +240,17 @@ impl LanguageServer for Backend {
 			)
 		)
 	}
+
+	async fn inlay_hint(&self, params: InlayHintParams) -> tower_lsp::jsonrpc::Result<Option<Vec<InlayHint>>>
+	{
+		if let Some(hints) = self.hints_map.get(params.text_document.uri.as_str())
+		{
+			let (_, data) = hints.pair();
+
+			return Ok(Some(data.to_owned()));
+		}
+		Ok(None)
+	}
 }
 
 #[tokio::main]
@@ -230,6 +263,7 @@ async fn main() {
 		document_map: DashMap::new(),
 		semantic_token_map: DashMap::new(),
 		diagnostic_map: DashMap::new(),
+		hints_map: DashMap::new(),
 	});
 	Server::new(stdin, stdout, socket).serve(service).await;
 }

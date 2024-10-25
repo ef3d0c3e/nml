@@ -336,7 +336,7 @@ impl RegexRule for SectionRule {
 		);
 
 		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.semantics)
+			Semantics::from_source(token.source(), &state.shared.lsp)
 		{
 			sems.add(matches.get(1).unwrap().range(), tokens.section_heading);
 			if let Some(reference) = matches.get(2) {

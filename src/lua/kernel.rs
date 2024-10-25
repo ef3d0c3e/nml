@@ -8,14 +8,32 @@ use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::source::Token;
 
+
+/// Redirected data from lua execution
+pub struct KernelRedirect
+{
+	/// Message source e.g print()
+	pub source: String,
+	/// Message content
+	pub content: String,
+}
+
 pub struct KernelContext<'a, 'b, 'c> {
 	pub location: Token,
 	pub state: &'a ParserState<'a, 'b>,
 	pub document: &'c dyn Document<'c>,
+	pub redirects: Vec<KernelRedirect>,
 }
 
+impl<'a, 'b, 'c> KernelContext<'a, 'b, 'c> {
+    pub fn new(location: Token, state: &'a ParserState<'a, 'b>, document: &'c dyn Document<'c>) -> Self {
+        Self { location, state, document, redirects: vec![] }
+    }
+}
+
+
 thread_local! {
-	pub static CTX: RefCell<Option<KernelContext<'static, 'static, 'static>>> = const { RefCell::new(None) };
+	pub static CTX: RefCell<Option<&'static mut KernelContext<'static, 'static, 'static>>> = const { RefCell::new(None) };
 }
 
 #[derive(Debug)]
@@ -42,6 +60,18 @@ impl Kernel {
 			lua.globals().set("nml", nml_table).unwrap();
 		}
 
+		lua.globals().set("print", lua.create_function(|_, msg: String| {
+			CTX.with_borrow_mut(|ctx| {
+				ctx.as_mut().map(|ctx| {
+					ctx.redirects.push(KernelRedirect {
+						source: "print".into(),
+						content: msg,
+					});
+				});
+			});
+			Ok(())
+		}).unwrap()).unwrap();
+
 		Self { lua }
 	}
 
@@ -49,10 +79,11 @@ impl Kernel {
 	///
 	/// This is the only way lua code shoule be ran, because exported
 	/// functions may require the context in order to operate
-	pub fn run_with_context<T, F>(&self, context: KernelContext, f: F) -> T
+	pub fn run_with_context<T, F>(&self, context: &mut KernelContext, f: F) -> T
 	where
 		F: FnOnce(&Lua) -> T,
 	{
+		// Redirects
 		CTX.set(Some(unsafe { std::mem::transmute(context) }));
 		let ret = f(&self.lua);
 		CTX.set(None);

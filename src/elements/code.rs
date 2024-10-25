@@ -369,16 +369,9 @@ impl RegexRule for CodeRule {
 		let code_lang = match matches.get(2) {
 			None => "Plain Text".to_string(),
 			Some(lang) => {
-				let code_lang = lang.as_str().trim_start().trim_end().to_string();
+				let mut code_lang = lang.as_str().trim_start().trim_end().to_string();
 				if code_lang.is_empty() {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Missing Code Language".into(),
-						span(lang.range(), "No language specified".into())
-					);
-
-					return reports;
+					code_lang = "Plain Text".into();
 				}
 				if Code::get_syntaxes()
 					.find_syntax_by_name(code_lang.as_str())
@@ -511,7 +504,7 @@ impl RegexRule for CodeRule {
 		}
 
 		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.semantics)
+			Semantics::from_source(token.source(), &state.shared.lsp)
 		{
 			let range = matches
 				.get(0)

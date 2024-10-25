@@ -5,6 +5,7 @@ use crate::document::document::Document;
 use crate::document::element::DocumentEnd;
 use crate::document::langdocument::LangDocument;
 use crate::elements::text::Text;
+use crate::lsp::hints::HintsData;
 use crate::lsp::semantic::SemanticsData;
 
 use super::parser::ParseMode;
@@ -81,15 +82,19 @@ impl<'b> Parser for LangParser<'b> {
 	) -> (Box<dyn Document<'doc> + 'doc>, ParserState<'p, 'a>) {
 		let doc = LangDocument::new(source.clone(), parent);
 
-		// Insert semantics into state
-		if let (Some(_), Some(semantics)) = (
+		// Insert lsp data into state
+		if let (Some(_), Some(lsp)) = (
 			source.clone().downcast_rc::<SourceFile>().ok(),
-			state.shared.semantics.as_ref(),
+			state.shared.lsp.as_ref(),
 		) {
-			let mut b = semantics.borrow_mut();
-			if !b.sems.contains_key(&source) {
-				b.sems
+			let mut b = lsp.borrow_mut();
+			if !b.semantic_data.contains_key(&source) {
+				b.semantic_data
 					.insert(source.clone(), SemanticsData::new(source.clone()));
+			}
+			if !b.inlay_hints.contains_key(&source) {
+				b.inlay_hints
+					.insert(source.clone(), HintsData::new(source.clone()));
 			}
 		}
 

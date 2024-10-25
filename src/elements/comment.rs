@@ -91,7 +91,7 @@ impl RegexRule for CommentRule {
 		);
 
 		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.semantics)
+			Semantics::from_source(token.source(), &state.shared.lsp)
 		{
 			let comment = matches.get(1).unwrap().range();
 			sems.add(comment.start - 2..comment.end, tokens.comment);

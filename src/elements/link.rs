@@ -145,7 +145,7 @@ impl RegexRule for LinkRule {
 				}
 
 				if let Some((sems, tokens)) =
-					Semantics::from_source(token.source(), &state.shared.semantics)
+					Semantics::from_source(token.source(), &state.shared.lsp)
 				{
 					sems.add(
 						display.range().start - 1..display.range().start,
@@ -215,7 +215,7 @@ impl RegexRule for LinkRule {
 		);
 
 		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.semantics)
+			Semantics::from_source(token.source(), &state.shared.lsp)
 		{
 			sems.add(
 				matches.get(1).unwrap().end()..matches.get(1).unwrap().end() + 1,
