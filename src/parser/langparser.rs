@@ -6,6 +6,7 @@ use crate::document::element::DocumentEnd;
 use crate::document::langdocument::LangDocument;
 use crate::elements::text::Text;
 use crate::lsp::hints::HintsData;
+use crate::lsp::semantic::Semantics;
 use crate::lsp::semantic::SemanticsData;
 
 use super::parser::ParseMode;
@@ -143,6 +144,9 @@ impl<'b> Parser for LangParser<'b> {
 				break;
 			}
 		}
+
+		// Process the end of the semantics queue
+		Semantics::on_document_end(&state.shared.lsp, source.clone());
 
 		// Rule States
 		self.handle_reports(state.shared.rule_state.borrow_mut().on_scope_end(

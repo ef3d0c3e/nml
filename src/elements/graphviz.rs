@@ -352,11 +352,11 @@ impl RegexRule for GraphRule {
 				tokens.graph_sep,
 			);
 			if let Some(props) = matches.get(1).map(|m| m.range()) {
-				sems.add(props.start - 1..props.start, tokens.tex_props_sep);
-				sems.add(props.clone(), tokens.tex_props);
-				sems.add(props.end..props.end + 1, tokens.tex_props_sep);
+				sems.add(props.start - 1..props.start, tokens.graph_props_sep);
+				sems.add(props.clone(), tokens.graph_props);
+				sems.add(props.end..props.end + 1, tokens.graph_props_sep);
 			}
-			sems.add(matches.get(2).unwrap().range(), tokens.tex_content);
+			sems.add(matches.get(2).unwrap().range(), tokens.graph_content);
 			sems.add(
 				range.end - 8..range.end,
 				tokens.graph_sep,

@@ -1,5 +1,6 @@
 use std::cell::Ref;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -144,6 +145,10 @@ pub struct Tokens {
 	pub list_props_sep: (u32, u32),
 	pub list_props: (u32, u32),
 
+	pub blockquote_marker: (u32, u32),
+	pub blockquote_props_sep: (u32, u32),
+	pub blockquote_props: (u32, u32),
+
 	pub raw_sep: (u32, u32),
 	pub raw_props_sep: (u32, u32),
 	pub raw_props: (u32, u32),
@@ -223,6 +228,10 @@ impl Tokens {
 			list_props_sep: token!("operator"),
 			list_props: token!("enum"),
 
+			blockquote_marker: token!("macro"),
+			blockquote_props_sep: token!("operator"),
+			blockquote_props: token!("enum"),
+
 			raw_sep: token!("operator"),
 			raw_props_sep: token!("operator"),
 			raw_props: token!("enum"),
@@ -253,6 +262,9 @@ pub struct SemanticsData {
 	/// The current cursor
 	cursor: RefCell<LineCursor>,
 
+	/// Semantic tokens that can't be added directly
+	pub semantic_queue: RefCell<VecDeque<(Range<usize>, (u32, u32))>>,
+
 	/// Semantic tokens
 	pub tokens: RefCell<Vec<SemanticToken>>,
 }
@@ -261,6 +273,7 @@ impl SemanticsData {
 	pub fn new(source: Rc<dyn Source>) -> Self {
 		Self {
 			cursor: RefCell::new(LineCursor::new(source)),
+			semantic_queue: RefCell::new(VecDeque::new()),
 			tokens: RefCell::new(vec![]),
 		}
 	}
@@ -329,8 +342,41 @@ impl<'a> Semantics<'a> {
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
-	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
-		let range = self.original_source.original_range(range).1;
+	/// Method that should be called at the end of parsing
+	///
+	/// This function will process the end of the semantic queue
+	pub fn on_document_end(lsp: &'a Option<RefCell<LSPData>>, source: Rc<dyn Source>)
+	{
+		if source.content().is_empty()
+		{
+			return;
+		}
+		let pos = source.original_position(source.content().len() - 1).1;
+		if let Some((sems, _)) = Self::from_source(source, lsp)
+		{
+			sems.process_queue(pos);
+		}
+	}
+
+	/// Processes the semantic queue up to a certain position
+	fn process_queue(&self, pos: usize)
+	{
+		let mut queue = self.sems.semantic_queue.borrow_mut();
+		while !queue.is_empty()
+		{
+			let (range, token) = queue.front().unwrap();
+			if range.start > pos
+			{
+				break;
+			}
+
+			self.add_impl(range.to_owned(), token.to_owned());
+			queue.pop_front();
+		}
+	}
+
+	fn add_impl(&self, range: Range<usize>, token: (u32, u32))
+	{
 		let mut tokens = self.sems.tokens.borrow_mut();
 		let mut cursor = self.sems.cursor.borrow_mut();
 		let mut current = cursor.clone();
@@ -366,6 +412,26 @@ impl<'a> Semantics<'a> {
 			current = cursor.clone();
 			let pos = cursor.pos;
 			cursor.move_to(pos + len);
+		}
+	}
+
+	/// Add a semantic token to be processed instantly
+	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
+		let range = self.original_source.original_range(range).1;
+		self.process_queue(range.start);
+		self.add_impl(range, token);
+	}
+
+	/// Add a semantic token to be processed in a future call to `add()`
+	pub fn add_to_queue(&self, range: Range<usize>, token: (u32, u32))
+	{
+		let range = self.original_source.original_range(range).1;
+		let mut queue = self.sems.semantic_queue.borrow_mut();
+		match queue.binary_search_by_key(&range.start, |(range, _)| range.start)
+		{
+			Ok(pos) | Err(pos) => {
+				queue.insert(pos, (range, token))
+			},
 		}
 	}
 }

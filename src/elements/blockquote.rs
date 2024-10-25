@@ -6,6 +6,7 @@ use std::rc::Rc;
 use blockquote_style::AuthorPos::After;
 use blockquote_style::AuthorPos::Before;
 use blockquote_style::BlockquoteStyle;
+use lsp::semantic::Semantics;
 use regex::Match;
 use regex::Regex;
 use runtime_format::FormatArgs;
@@ -196,8 +197,8 @@ impl BlockquoteRule {
 		);
 
 		Self {
-			start_re: Regex::new(r"(?:^|\n)>(?:\[((?:\\.|[^\\\\])*?)\])?\s*?(.*)").unwrap(),
-			continue_re: Regex::new(r"(?:^|\n)>\s*?(.*)").unwrap(),
+			start_re: Regex::new(r"(?:^|\n)>(?:\[((?:\\.|[^\\\\])*?)\])?[^\S\r\n]*(.*)").unwrap(),
+			continue_re: Regex::new(r"(?:^|\n)>[^\S\r\n]*(.*)").unwrap(),
 			properties: PropertyParser { properties: props },
 		}
 	}
@@ -282,27 +283,55 @@ impl Rule for BlockquoteRule {
 				}
 			}
 
+			if let Some((sems, tokens)) =
+				Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
+			{
+				let range = captures.get(0).unwrap().range();
+				let start = if content.as_bytes()[range.start] == b'\n' { range.start+1 } else { range.start };
+				sems.add(start..start+1, tokens.blockquote_marker);
+				if let Some(props) = captures.get(1).map(|m| m.range()) {
+					sems.add(props.start - 1..props.start, tokens.blockquote_props_sep);
+					sems.add(props.clone(), tokens.blockquote_props);
+					sems.add(props.end..props.end + 1, tokens.blockquote_props_sep);
+				}
+			}
+
 			// Content
-			let entry_start = captures.get(0).unwrap().start();
+			let entry_start = captures.get(2).unwrap().start();
 			let mut entry_content = captures.get(2).unwrap().as_str().to_string();
+			let mut offsets = vec![];
 			while let Some(captures) = self.continue_re.captures_at(content, end_cursor.pos) {
 				if captures.get(0).unwrap().start() != end_cursor.pos {
 					break;
 				}
 				// Advance cursor
 				end_cursor = end_cursor.at(captures.get(0).unwrap().end());
+				// Offset
+				let last = offsets.last().map_or(0, |(_, last)| *last);
+				offsets.push((
+						entry_content.len(),
+						last + (captures.get(1).unwrap().start() - captures.get(0).unwrap().start() - 1) as isize
+				));
 
-				let trimmed = captures.get(1).unwrap().as_str().trim_start().trim_end();
 				entry_content += "\n";
-				entry_content += trimmed;
+				entry_content += captures.get(1).unwrap().as_str();
+
+				if let Some((sems, tokens)) =
+					Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
+				{
+					let range = captures.get(0).unwrap().range();
+					let start = if content.as_bytes()[range.start] == b'\n' { range.start+1 } else { range.start };
+					sems.add_to_queue(start..start+1, tokens.blockquote_marker);
+				}
 			}
 
 			// Parse entry content
 			let token = Token::new(entry_start..end_cursor.pos, end_cursor.source.clone());
-			let entry_src = Rc::new(VirtualSource::new(
+			let entry_src = Rc::new(VirtualSource::new_offsets(
 				token.clone(),
 				"Blockquote Entry".to_string(),
 				entry_content,
+				offsets
 			));
 			// Parse content
 			let parsed_doc = state.with_state(|new_state| {
