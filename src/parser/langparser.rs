@@ -48,11 +48,17 @@ impl<'a> LangParser<'a> {
 		s
 	}
 
-	pub fn new(with_colors: bool, report_handler: Box<dyn Fn(&ReportColors, Vec<Report>) + 'a>) -> Self
-	{
+	pub fn new(
+		with_colors: bool,
+		report_handler: Box<dyn Fn(&ReportColors, Vec<Report>) + 'a>,
+	) -> Self {
 		let mut s = Self {
 			rules: vec![],
-			colors: if with_colors { ReportColors::with_colors() } else { ReportColors::without_colors() },
+			colors: if with_colors {
+				ReportColors::with_colors()
+			} else {
+				ReportColors::without_colors()
+			},
 			err_flag: RefCell::new(false),
 			report_handler,
 		};
@@ -219,8 +225,7 @@ impl<'b> Parser for LangParser<'b> {
 	}
 
 	/// Handles the reports produced by parsing.
-	fn handle_reports(&self, reports: Vec<Report>)
-	{
+	fn handle_reports(&self, reports: Vec<Report>) {
 		(self.report_handler)(self.colors(), reports);
 	}
 }

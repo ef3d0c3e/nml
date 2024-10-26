@@ -209,9 +209,7 @@ impl RegexRule for RawRule {
 			}),
 		);
 
-		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.lsp)
-		{
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			let range = matches.get(0).unwrap().range();
 			sems.add(range.start..range.start + 2, tokens.raw_sep);
 			if let Some(props) = matches.get(1).map(|m| m.range()) {

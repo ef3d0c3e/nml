@@ -51,9 +51,12 @@ impl Backend {
 
 		// Diagnostics
 		self.diagnostic_map.clear();
-		let parser = LangParser::new(false, Box::new(
-				|_colors, reports| Report::reports_to_diagnostics(&self.diagnostic_map, reports)
-		));
+		let parser = LangParser::new(
+			false,
+			Box::new(|_colors, reports| {
+				Report::reports_to_diagnostics(&self.diagnostic_map, reports)
+			}),
+		);
 		// Parse
 		let (_doc, state) = parser.parse(
 			ParserState::new_with_semantics(&parser, None),
@@ -88,8 +91,7 @@ impl Backend {
 					.ok()
 					.map(|source| source.path().to_owned())
 				{
-					self.hints_map
-						.insert(path, hints.hints.replace(vec![]));
+					self.hints_map.insert(path, hints.hints.replace(vec![]));
 				}
 			}
 		}
@@ -139,15 +141,14 @@ impl LanguageServer for Backend {
 						},
 					),
 				),
-				diagnostic_provider: Some(
-					DiagnosticServerCapabilities::Options(
-						DiagnosticOptions {
-							identifier: None,
-							inter_file_dependencies: true,
-							workspace_diagnostics: true,
-							work_done_progress_options: WorkDoneProgressOptions::default(),
-					})
-				),
+				diagnostic_provider: Some(DiagnosticServerCapabilities::Options(
+					DiagnosticOptions {
+						identifier: None,
+						inter_file_dependencies: true,
+						workspace_diagnostics: true,
+						work_done_progress_options: WorkDoneProgressOptions::default(),
+					},
+				)),
 				inlay_hint_provider: Some(OneOf::Left(true)),
 				..ServerCapabilities::default()
 			},
@@ -226,25 +227,25 @@ impl LanguageServer for Backend {
 		&self,
 		params: DocumentDiagnosticParams,
 	) -> tower_lsp::jsonrpc::Result<DocumentDiagnosticReportResult> {
-		Ok(
-			DocumentDiagnosticReportResult::Report(
-				DocumentDiagnosticReport::Full(
-					RelatedFullDocumentDiagnosticReport {
-						related_documents: None,
-						full_document_diagnostic_report: FullDocumentDiagnosticReport {
-							result_id: None,
-							items: self.diagnostic_map.get(params.text_document.uri.as_str()).map_or(vec![], |v| v.to_owned())
-						}
-					}
-				)
-			)
-		)
+		Ok(DocumentDiagnosticReportResult::Report(
+			DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
+				related_documents: None,
+				full_document_diagnostic_report: FullDocumentDiagnosticReport {
+					result_id: None,
+					items: self
+						.diagnostic_map
+						.get(params.text_document.uri.as_str())
+						.map_or(vec![], |v| v.to_owned()),
+				},
+			}),
+		))
 	}
 
-	async fn inlay_hint(&self, params: InlayHintParams) -> tower_lsp::jsonrpc::Result<Option<Vec<InlayHint>>>
-	{
-		if let Some(hints) = self.hints_map.get(params.text_document.uri.as_str())
-		{
+	async fn inlay_hint(
+		&self,
+		params: InlayHintParams,
+	) -> tower_lsp::jsonrpc::Result<Option<Vec<InlayHint>>> {
+		if let Some(hints) = self.hints_map.get(params.text_document.uri.as_str()) {
 			let (_, data) = hints.pair();
 
 			return Ok(Some(data.to_owned()));

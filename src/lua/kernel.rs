@@ -8,10 +8,8 @@ use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
 use crate::parser::source::Token;
 
-
 /// Redirected data from lua execution
-pub struct KernelRedirect
-{
+pub struct KernelRedirect {
 	/// Message source e.g print()
 	pub source: String,
 	/// Message content
@@ -26,11 +24,19 @@ pub struct KernelContext<'a, 'b, 'c> {
 }
 
 impl<'a, 'b, 'c> KernelContext<'a, 'b, 'c> {
-    pub fn new(location: Token, state: &'a ParserState<'a, 'b>, document: &'c dyn Document<'c>) -> Self {
-        Self { location, state, document, redirects: vec![] }
-    }
+	pub fn new(
+		location: Token,
+		state: &'a ParserState<'a, 'b>,
+		document: &'c dyn Document<'c>,
+	) -> Self {
+		Self {
+			location,
+			state,
+			document,
+			redirects: vec![],
+		}
+	}
 }
-
 
 thread_local! {
 	pub static CTX: RefCell<Option<&'static mut KernelContext<'static, 'static, 'static>>> = const { RefCell::new(None) };
@@ -60,17 +66,23 @@ impl Kernel {
 			lua.globals().set("nml", nml_table).unwrap();
 		}
 
-		lua.globals().set("print", lua.create_function(|_, msg: String| {
-			CTX.with_borrow_mut(|ctx| {
-				ctx.as_mut().map(|ctx| {
-					ctx.redirects.push(KernelRedirect {
-						source: "print".into(),
-						content: msg,
+		lua.globals()
+			.set(
+				"print",
+				lua.create_function(|_, msg: String| {
+					CTX.with_borrow_mut(|ctx| {
+						ctx.as_mut().map(|ctx| {
+							ctx.redirects.push(KernelRedirect {
+								source: "print".into(),
+								content: msg,
+							});
+						});
 					});
-				});
-			});
-			Ok(())
-		}).unwrap()).unwrap();
+					Ok(())
+				})
+				.unwrap(),
+			)
+			.unwrap();
 
 		Self { lua }
 	}

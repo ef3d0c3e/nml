@@ -343,24 +343,16 @@ impl RegexRule for GraphRule {
 			}),
 		);
 
-		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.lsp)
-		{
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			let range = token.range;
-			sems.add(
-				range.start..range.start + 7,
-				tokens.graph_sep,
-			);
+			sems.add(range.start..range.start + 7, tokens.graph_sep);
 			if let Some(props) = matches.get(1).map(|m| m.range()) {
 				sems.add(props.start - 1..props.start, tokens.graph_props_sep);
 				sems.add(props.clone(), tokens.graph_props);
 				sems.add(props.end..props.end + 1, tokens.graph_props_sep);
 			}
 			sems.add(matches.get(2).unwrap().range(), tokens.graph_content);
-			sems.add(
-				range.end - 8..range.end,
-				tokens.graph_sep,
-			);
+			sems.add(range.end - 8..range.end, tokens.graph_sep);
 		}
 
 		reports

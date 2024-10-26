@@ -17,16 +17,6 @@ pub trait Source: Downcast + Debug {
 }
 impl_downcast!(Source);
 
-pub trait SourcePosition {
-	/// Transforms a position to it's position in the oldest parent source
-	fn original_position(&self, pos: usize) -> (Rc<dyn Source>, usize);
-
-	/// Transforms a range to the oldest parent source
-	///
-	/// This function takes a range from a source and attempts to get the range's position in the oldest parent
-	fn original_range(&self, range: Range<usize>) -> (Rc<dyn Source>, Range<usize>);
-}
-
 impl core::fmt::Display for dyn Source {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.name())
@@ -43,6 +33,7 @@ impl std::hash::Hash for dyn Source {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) { self.name().hash(state) }
 }
 
+/// [`SourceFile`] is a type of [`Source`] that represents a real file.
 #[derive(Debug)]
 pub struct SourceFile {
 	location: Option<Token>,
@@ -82,6 +73,9 @@ impl Source for SourceFile {
 
 /// Stores the offsets in a virtual source
 ///
+/// The offsets are used to implement the [`SourcePosition`] trait, which allows diagnostics from
+/// [`VirtualSource`] to propagate back to their corresponding [`SourceFile`].
+///
 /// # Example
 ///
 /// Let's say you make a virtual source from the following: "Con\]tent" -> "Con]tent"
@@ -108,6 +102,8 @@ impl SourceOffset {
 	}
 }
 
+/// [`VirtualSource`] is a type of [`Source`] that represents a virtual file. [`VirtualSource`]s
+/// can be created from other [`VirtualSource`]s but it must always come from a [`SourceFile`].
 #[derive(Debug)]
 pub struct VirtualSource {
 	location: Token,
@@ -146,6 +142,34 @@ impl Source for VirtualSource {
 	fn location(&self) -> Option<&Token> { Some(&self.location) }
 	fn name(&self) -> &String { &self.name }
 	fn content(&self) -> &String { &self.content }
+}
+
+/// Trait for accessing position in a parent [`SourceFile`]
+///
+/// This trait is used to create precise error diagnostics and the bakcbone of the LSP.
+///
+/// # Example
+///
+/// Given the following source file:
+/// ```
+/// input.nml:
+/// [*link*](url)
+/// ```
+/// When parsed, a [`VirtualSource`] is created for parsing the link display: `*link*`.
+/// If an error or a semantic highlight is requested for that new source, this trait allows to
+/// recover the original position in the parent [`SourceFile`].
+pub trait SourcePosition {
+	/// Transforms a position to the corresponding position in the oldest parent [`SourceFile`].
+	///
+	/// This function will return the first parent [`SourceFile`] aswell as the position mapped
+	/// in that source
+	fn original_position(&self, pos: usize) -> (Rc<dyn Source>, usize);
+
+	/// Transforms a range to the corresponding range in the oldest parent [`SourceFile`].
+	///
+	/// This function will return the first parent [`SourceFile`] aswell as the range mapped
+	/// in that source
+	fn original_range(&self, range: Range<usize>) -> (Rc<dyn Source>, Range<usize>);
 }
 
 impl SourcePosition for Rc<dyn Source> {
@@ -196,7 +220,10 @@ impl SourcePosition for Rc<dyn Source> {
 	}
 }
 
-#[derive(Debug)]
+/// Cursor in a file
+///
+/// Represents a position in a specific file.
+#[derive(Debug, Clone)]
 pub struct Cursor {
 	pub pos: usize,
 	pub source: Rc<dyn Source>,
@@ -214,18 +241,13 @@ impl Cursor {
 	}
 }
 
-impl Clone for Cursor {
-	fn clone(&self) -> Self {
-		Self {
-			pos: self.pos,
-			source: self.source.clone(),
-		}
-	}
-
-	fn clone_from(&mut self, source: &Self) { *self = source.clone() }
-}
-
 /// Cursor type used for the language server
+///
+/// # Notes
+///
+/// Because the LSP uses UTF-16 encoded positions, field [`line_pos`] corresponds to the UTF-16
+/// distance between the first character (position = 0 or after '\n') and the character at the
+/// current position.
 #[derive(Debug, Clone)]
 pub struct LineCursor {
 	/// Byte position in the source
@@ -252,6 +274,7 @@ impl LineCursor {
 	/// Moves [`LineCursor`] to an absolute byte position
 	///
 	/// # Error
+	///
 	/// This function will panic if [`pos`] is not utf8 aligned
 	pub fn move_to(&mut self, pos: usize) {
 		if self.pos < pos {
@@ -283,6 +306,7 @@ impl LineCursor {
 	}
 }
 
+/// A token is a [`Range<usize>`] in a [`Source`]
 #[derive(Debug, Clone)]
 pub struct Token {
 	pub range: Range<usize>,
@@ -293,16 +317,6 @@ impl Token {
 	pub fn new(range: Range<usize>, source: Rc<dyn Source>) -> Self { Self { range, source } }
 
 	pub fn source(&self) -> Rc<dyn Source> { self.source.clone() }
-
-	/// Construct Token from a range
-	pub fn from(start: &Cursor, end: &Cursor) -> Self {
-		assert!(Rc::ptr_eq(&start.source, &end.source));
-
-		Self {
-			range: start.pos..end.pos,
-			source: start.source.clone(),
-		}
-	}
 
 	pub fn start(&self) -> usize { self.range.start }
 

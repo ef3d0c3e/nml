@@ -287,8 +287,12 @@ impl Rule for BlockquoteRule {
 				Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
 			{
 				let range = captures.get(0).unwrap().range();
-				let start = if content.as_bytes()[range.start] == b'\n' { range.start+1 } else { range.start };
-				sems.add(start..start+1, tokens.blockquote_marker);
+				let start = if content.as_bytes()[range.start] == b'\n' {
+					range.start + 1
+				} else {
+					range.start
+				};
+				sems.add(start..start + 1, tokens.blockquote_marker);
 				if let Some(props) = captures.get(1).map(|m| m.range()) {
 					sems.add(props.start - 1..props.start, tokens.blockquote_props_sep);
 					sems.add(props.clone(), tokens.blockquote_props);
@@ -309,8 +313,9 @@ impl Rule for BlockquoteRule {
 				// Offset
 				let last = offsets.last().map_or(0, |(_, last)| *last);
 				offsets.push((
-						entry_content.len(),
-						last + (captures.get(1).unwrap().start() - captures.get(0).unwrap().start() - 1) as isize
+					entry_content.len(),
+					last + (captures.get(1).unwrap().start() - captures.get(0).unwrap().start() - 1)
+						as isize,
 				));
 
 				entry_content += "\n";
@@ -320,8 +325,12 @@ impl Rule for BlockquoteRule {
 					Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
 				{
 					let range = captures.get(0).unwrap().range();
-					let start = if content.as_bytes()[range.start] == b'\n' { range.start+1 } else { range.start };
-					sems.add_to_queue(start..start+1, tokens.blockquote_marker);
+					let start = if content.as_bytes()[range.start] == b'\n' {
+						range.start + 1
+					} else {
+						range.start
+					};
+					sems.add_to_queue(start..start + 1, tokens.blockquote_marker);
 				}
 			}
 
@@ -331,7 +340,7 @@ impl Rule for BlockquoteRule {
 				token.clone(),
 				"Blockquote Entry".to_string(),
 				entry_content,
-				offsets
+				offsets,
 			));
 			// Parse content
 			let parsed_doc = state.with_state(|new_state| {

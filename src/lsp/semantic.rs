@@ -128,6 +128,11 @@ pub struct Tokens {
 	pub variable_sub_sep: (u32, u32),
 	pub variable_sub_name: (u32, u32),
 
+	pub elemstyle_operator: (u32, u32),
+	pub elemstyle_name: (u32, u32),
+	pub elemstyle_equal: (u32, u32),
+	pub elemstyle_value: (u32, u32),
+
 	pub code_sep: (u32, u32),
 	pub code_props_sep: (u32, u32),
 	pub code_props: (u32, u32),
@@ -210,6 +215,11 @@ impl Tokens {
 
 			variable_sub_sep: token!("operator"),
 			variable_sub_name: token!("macro"),
+
+			elemstyle_operator: token!("operator"),
+			elemstyle_name: token!("macro"),
+			elemstyle_equal: token!("operator"),
+			elemstyle_value: token!("number"),
 
 			code_sep: token!("operator"),
 			code_props_sep: token!("operator"),
@@ -308,12 +318,9 @@ impl<'a> Semantics<'a> {
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if let Ok(source) = source.clone().downcast_rc::<SourceFile>() {
-			return Ref::filter_map(
-				lsp.as_ref().unwrap().borrow(),
-				|lsp: &LSPData| {
-					lsp.semantic_data.get(&(source.clone() as Rc<dyn Source>))
-				},
-			)
+			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
+				lsp.semantic_data.get(&(source.clone() as Rc<dyn Source>))
+			})
 			.ok()
 			.map(|sems| {
 				(
@@ -322,10 +329,9 @@ impl<'a> Semantics<'a> {
 						source,
 						original_source,
 					},
-					Ref::map(
-						lsp.as_ref().unwrap().borrow(),
-						|lsp: &LSPData| &lsp.semantic_tokens,
-					),
+					Ref::map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
+						&lsp.semantic_tokens
+					}),
 				)
 			});
 		}
@@ -345,28 +351,22 @@ impl<'a> Semantics<'a> {
 	/// Method that should be called at the end of parsing
 	///
 	/// This function will process the end of the semantic queue
-	pub fn on_document_end(lsp: &'a Option<RefCell<LSPData>>, source: Rc<dyn Source>)
-	{
-		if source.content().is_empty()
-		{
+	pub fn on_document_end(lsp: &'a Option<RefCell<LSPData>>, source: Rc<dyn Source>) {
+		if source.content().is_empty() {
 			return;
 		}
 		let pos = source.original_position(source.content().len() - 1).1;
-		if let Some((sems, _)) = Self::from_source(source, lsp)
-		{
+		if let Some((sems, _)) = Self::from_source(source, lsp) {
 			sems.process_queue(pos);
 		}
 	}
 
 	/// Processes the semantic queue up to a certain position
-	fn process_queue(&self, pos: usize)
-	{
+	fn process_queue(&self, pos: usize) {
 		let mut queue = self.sems.semantic_queue.borrow_mut();
-		while !queue.is_empty()
-		{
+		while !queue.is_empty() {
 			let (range, token) = queue.front().unwrap();
-			if range.start > pos
-			{
+			if range.start > pos {
 				break;
 			}
 
@@ -375,8 +375,7 @@ impl<'a> Semantics<'a> {
 		}
 	}
 
-	fn add_impl(&self, range: Range<usize>, token: (u32, u32))
-	{
+	fn add_impl(&self, range: Range<usize>, token: (u32, u32)) {
 		let mut tokens = self.sems.tokens.borrow_mut();
 		let mut cursor = self.sems.cursor.borrow_mut();
 		let mut current = cursor.clone();
@@ -390,7 +389,7 @@ impl<'a> Semantics<'a> {
 			let len = usize::min(range.end - cursor.pos, end);
 			let clen = self.source.content()[cursor.pos..cursor.pos + len]
 				.chars()
-				.fold(0, |acc, c| acc + c.len_utf16());
+				.fold(0, |acc, _| acc + 1);
 
 			let delta_line = cursor.line - current.line;
 			let delta_start = if delta_line == 0 {
@@ -423,15 +422,11 @@ impl<'a> Semantics<'a> {
 	}
 
 	/// Add a semantic token to be processed in a future call to `add()`
-	pub fn add_to_queue(&self, range: Range<usize>, token: (u32, u32))
-	{
+	pub fn add_to_queue(&self, range: Range<usize>, token: (u32, u32)) {
 		let range = self.original_source.original_range(range).1;
 		let mut queue = self.sems.semantic_queue.borrow_mut();
-		match queue.binary_search_by_key(&range.start, |(range, _)| range.start)
-		{
-			Ok(pos) | Err(pos) => {
-				queue.insert(pos, (range, token))
-			},
+		match queue.binary_search_by_key(&range.start, |(range, _)| range.start) {
+			Ok(pos) | Err(pos) => queue.insert(pos, (range, token)),
 		}
 	}
 }

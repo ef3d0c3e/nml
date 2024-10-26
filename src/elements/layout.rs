@@ -580,8 +580,7 @@ impl RegexRule for LayoutRule {
 				Err(()) => return reports,
 			};
 
-			if let Some((sems, tokens)) =
-				Semantics::from_source(token.source(), &state.shared.lsp)
+			if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp)
 			{
 				let start = matches
 					.get(0)
@@ -667,8 +666,7 @@ impl RegexRule for LayoutRule {
 			let id = tokens.len();
 			layout_state.stack.pop();
 
-			if let Some((sems, tokens)) =
-				Semantics::from_source(token.source(), &state.shared.lsp)
+			if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp)
 			{
 				let start = matches
 					.get(0)

@@ -503,9 +503,7 @@ impl RegexRule for CodeRule {
 			);
 		}
 
-		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.lsp)
-		{
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			let range = matches
 				.get(0)
 				.map(|m| {

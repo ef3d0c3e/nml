@@ -326,8 +326,7 @@ impl RegexRule for ReferenceRule {
 				);
 			}
 
-			if let Some((sems, tokens)) =
-				Semantics::from_source(token.source(), &state.shared.lsp)
+			if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp)
 			{
 				let link = matches.get(1).unwrap().range();
 				sems.add(link.start - 2..link.start - 1, tokens.reference_operator);
@@ -356,8 +355,7 @@ impl RegexRule for ReferenceRule {
 				}),
 			);
 
-			if let Some((sems, tokens)) =
-				Semantics::from_source(token.source(), &state.shared.lsp)
+			if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp)
 			{
 				let link = matches.get(1).unwrap().range();
 				sems.add(link.start - 2..link.start - 1, tokens.reference_operator);

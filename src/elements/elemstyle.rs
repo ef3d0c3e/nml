@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Fmt;
+use lsp::semantic::Semantics;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -62,10 +63,13 @@ impl Rule for ElemStyleRule {
 
 	fn next_match(
 		&self,
-		_mode: &ParseMode,
+		mode: &ParseMode,
 		_state: &ParserState,
 		cursor: &Cursor,
 	) -> Option<(usize, Box<dyn Any>)> {
+		if mode.paragraph_only {
+			return None;
+		}
 		self.start_re
 			.find_at(cursor.source.content(), cursor.pos)
 			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
@@ -139,8 +143,6 @@ impl Rule for ElemStyleRule {
 				return (cursor, reports);
 			}
 			Some(json) => {
-				cursor = cursor.at(cursor.pos + json.len());
-
 				// Attempt to deserialize
 				match style.from_json(json) {
 					Err(err) => {
@@ -157,9 +159,28 @@ impl Rule for ElemStyleRule {
 								)
 							)
 						);
+
+						cursor = cursor.at(cursor.pos + json.len());
 						return (cursor, reports);
 					}
-					Ok(style) => style,
+					Ok(style) => {
+						if let Some((sems, tokens)) =
+							Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
+						{
+							let style = matches.get(1).unwrap();
+							sems.add(style.start() - 2..style.start(), tokens.elemstyle_operator);
+							sems.add(style.range(), tokens.elemstyle_name);
+							sems.add(style.end()..style.end() + 1, tokens.elemstyle_equal);
+							sems.add(
+								matches.get(0).unwrap().end() - 1
+									..matches.get(0).unwrap().end() + json.len(),
+								tokens.elemstyle_value,
+							);
+						}
+
+						cursor = cursor.at(cursor.pos + json.len());
+						style
+					}
 				}
 			}
 		};
@@ -215,5 +236,46 @@ impl Rule for ElemStyleRule {
 		));
 
 		bindings
+	}
+}
+
+#[cfg(test)]
+pub mod tests {
+	use parser::langparser::LangParser;
+	use parser::parser::Parser;
+	use parser::source::SourceFile;
+
+	use super::*;
+
+	#[test]
+	fn semantics() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+@@style.section = {
+	"link_pos": "Before",
+	"link": ["", "⛓️", "       "]
+}
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+			ParseMode::default(),
+		);
+
+		validate_semantics!(state, source.clone(), 0,
+		elemstyle_operator { delta_line == 1, delta_start == 0, length == 2 };
+		elemstyle_name { delta_line == 0, delta_start == 2, length == 14 };
+		elemstyle_equal { delta_line == 0, delta_start == 14, length == 1 };
+		elemstyle_value { delta_line == 0, delta_start == 2, length == 2 };
+		elemstyle_value { delta_line == 1, delta_start == 0, length == 23 };
+		elemstyle_value { delta_line == 1, delta_start == 0, length == 31 };
+		elemstyle_value { delta_line == 1, delta_start == 0, length == 2 };
+		);
 	}
 }

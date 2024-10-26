@@ -109,20 +109,25 @@ impl Report {
 		});
 	}
 
-	fn to_diagnostics(self, diagnostic_map: &DashMap<String, Vec<Diagnostic>>)
-	{
+	fn to_diagnostics(self, diagnostic_map: &DashMap<String, Vec<Diagnostic>>) {
 		for span in self.spans {
 			let (source, range) = span.token.source().original_range(span.token.range.clone());
-			
+
 			let mut start = LineCursor::new(source.clone());
 			start.move_to(range.start);
 			let mut end = start.clone();
 			end.move_to(range.end);
 
 			let diag = Diagnostic {
-				range: tower_lsp::lsp_types::Range { 
-					start: tower_lsp::lsp_types::Position{ line: start.line as u32, character: start.line_pos as u32 },
-					end: tower_lsp::lsp_types::Position{ line: end.line as u32, character: end.line_pos as u32 },
+				range: tower_lsp::lsp_types::Range {
+					start: tower_lsp::lsp_types::Position {
+						line: start.line as u32,
+						character: start.line_pos as u32,
+					},
+					end: tower_lsp::lsp_types::Position {
+						line: end.line as u32,
+						character: end.line_pos as u32,
+					},
 				},
 				severity: Some((&self.kind).into()),
 				code: None,
@@ -133,21 +138,19 @@ impl Report {
 				tags: None,
 				data: None,
 			};
-			if let Some(mut diags) = diagnostic_map.get_mut(source.name())
-			{
+			if let Some(mut diags) = diagnostic_map.get_mut(source.name()) {
 				diags.push(diag);
-			}
-			else
-			{
+			} else {
 				diagnostic_map.insert(source.name().to_owned(), vec![diag]);
 			}
 		}
 	}
 
-	pub fn reports_to_diagnostics(diagnostic_map: &DashMap<String, Vec<Diagnostic>>, mut reports: Vec<Report>)
-	{
-		for report in reports.drain(..)
-		{
+	pub fn reports_to_diagnostics(
+		diagnostic_map: &DashMap<String, Vec<Diagnostic>>,
+		mut reports: Vec<Report>,
+	) {
+		for report in reports.drain(..) {
 			report.to_diagnostics(diagnostic_map);
 		}
 		//diagnostics

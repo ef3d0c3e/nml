@@ -335,9 +335,7 @@ impl RegexRule for SectionRule {
 			}),
 		);
 
-		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.lsp)
-		{
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			sems.add(matches.get(1).unwrap().range(), tokens.section_heading);
 			if let Some(reference) = matches.get(2) {
 				sems.add(
@@ -592,7 +590,7 @@ nml.section.push("6", 6, "", "refname")
 		section_name { delta_line == 0, delta_start == 1 };
 
 		section_heading { delta_line == 1, delta_start == 0, length == 2 };
-		section_reference { delta_line == 0, delta_start == 2, length == 4 };
+		section_reference { delta_line == 0, delta_start == 2, length == 3 };
 		section_kind { delta_line == 0, delta_start == 4, length == 1 };
 		section_name { delta_line == 0, delta_start == 1 };
 

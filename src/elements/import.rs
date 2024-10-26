@@ -179,9 +179,7 @@ impl RegexRule for ImportRule {
 			);
 		}
 
-		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.lsp)
-		{
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			// @import
 			let import =
 				if token.source().content().as_bytes()[matches.get(0).unwrap().start()] == b'\n' {

@@ -1,15 +1,19 @@
-use std::{cell::{Ref, RefCell}, rc::Rc};
+use std::cell::Ref;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use tower_lsp::lsp_types::InlayHint;
 
-use crate::parser::source::{LineCursor, Source, SourceFile, VirtualSource};
+use crate::parser::source::LineCursor;
+use crate::parser::source::Source;
+use crate::parser::source::SourceFile;
+use crate::parser::source::VirtualSource;
 
 use super::data::LSPData;
 
 /// Per file hints
 #[derive(Debug)]
-pub struct HintsData
-{
+pub struct HintsData {
 	/// The current cursor
 	cursor: RefCell<LineCursor>,
 
@@ -55,41 +59,35 @@ impl<'a> Hints<'a> {
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if let Ok(source) = source.clone().downcast_rc::<SourceFile>() {
-			return Ref::filter_map(
-				lsp.as_ref().unwrap().borrow(),
-				|lsp: &LSPData| {
-					lsp.inlay_hints.get(&(source.clone() as Rc<dyn Source>))
-				},
-			)
+			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
+				lsp.inlay_hints.get(&(source.clone() as Rc<dyn Source>))
+			})
 			.ok()
-			.map(|hints| {
-				Self {
-					hints,
-					source,
-					original_source,
-				}
+			.map(|hints| Self {
+				hints,
+				source,
+				original_source,
 			});
 		}
 		None
 	}
 
-	pub fn from_source(
-		source: Rc<dyn Source>,
-		lsp: &'a Option<RefCell<LSPData>>,
-	) -> Option<Self> {
+	pub fn from_source(source: Rc<dyn Source>, lsp: &'a Option<RefCell<LSPData>>) -> Option<Self> {
 		if lsp.is_none() {
 			return None;
 		}
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
-	pub fn add(&self, position: usize, label: String)
-	{
+	pub fn add(&self, position: usize, label: String) {
 		let mut cursor = self.hints.cursor.borrow_mut();
 		cursor.move_to(position);
 
 		self.hints.hints.borrow_mut().push(InlayHint {
-			position: tower_lsp::lsp_types::Position { line: cursor.line as u32, character: cursor.line_pos as u32 },
+			position: tower_lsp::lsp_types::Position {
+				line: cursor.line as u32,
+				character: cursor.line_pos as u32,
+			},
 			label: tower_lsp::lsp_types::InlayHintLabel::String(label),
 			kind: Some(tower_lsp::lsp_types::InlayHintKind::PARAMETER),
 			text_edits: None,

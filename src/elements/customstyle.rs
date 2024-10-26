@@ -52,11 +52,7 @@ impl CustomStyle for LuaCustomStyle {
 		let kernel: Ref<'_, Kernel> =
 			Ref::map(state.shared.kernels.borrow(), |b| b.get("main").unwrap());
 		//let kernel = RefMut::map(parser_state.shared.kernels.borrow(), |ker| ker.get("main").unwrap());
-		let mut ctx = KernelContext::new(
-			location.clone(),
-			state,
-			document,
-		);
+		let mut ctx = KernelContext::new(location.clone(), state, document);
 
 		let mut reports = vec![];
 		kernel.run_with_context(&mut ctx, |lua| {
@@ -86,11 +82,7 @@ impl CustomStyle for LuaCustomStyle {
 	) -> Vec<Report> {
 		let kernel: Ref<'_, Kernel> =
 			Ref::map(state.shared.kernels.borrow(), |b| b.get("main").unwrap());
-		let mut ctx = KernelContext::new(
-			location.clone(),
-			state,
-			document,
-		);
+		let mut ctx = KernelContext::new(location.clone(), state, document);
 
 		let mut reports = vec![];
 		kernel.run_with_context(&mut ctx, |lua| {
@@ -337,9 +329,7 @@ impl Rule for CustomStyleRule {
 			style.on_start(token.clone(), state, document)
 		};
 
-		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.lsp)
-		{
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			sems.add(token.range.clone(), tokens.customstyle_marker);
 		}
 

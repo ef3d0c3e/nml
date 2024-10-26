@@ -255,9 +255,7 @@ impl RegexRule for ScriptRule {
 
 		kernel.run_with_context(&mut ctx, execute);
 
-		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.lsp)
-		{
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			let range = matches
 				.get(0)
 				.map(|m| {
@@ -288,15 +286,12 @@ impl RegexRule for ScriptRule {
 			sems.add(range.end - 2..range.end, tokens.script_sep);
 		}
 
-		if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp)
-		{
+		if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp) {
 			let mut label = String::new();
-			ctx.redirects.iter()
-				.for_each(|redir| {
-					label += format!("{}: {} ", redir.source, redir.content).as_str();
-				});
-			if !label.is_empty()
-			{
+			ctx.redirects.iter().for_each(|redir| {
+				label += format!("{}: {} ", redir.source, redir.content).as_str();
+			});
+			if !label.is_empty() {
 				label.pop();
 				hints.add(matches.get(0).unwrap().end(), label);
 			}

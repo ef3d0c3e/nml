@@ -214,9 +214,7 @@ impl RegexRule for LinkRule {
 			}),
 		);
 
-		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.lsp)
-		{
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			sems.add(
 				matches.get(1).unwrap().end()..matches.get(1).unwrap().end() + 1,
 				tokens.link_display_sep,
