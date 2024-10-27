@@ -212,14 +212,23 @@ impl RegexRule for ScriptRule {
 										)),
 									);
 								}
+
+								if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp) {
+									hints.add(matches.get(0).unwrap().end(), result);
+								}
 							} else if kind == 2
 							// Eval and Parse
 							{
+								if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp) {
+									hints.add(matches.get(0).unwrap().end(), result.clone());
+								}
+
 								let parse_source = Rc::new(VirtualSource::new(
 									Token::new(0..source.content().len(), source.clone()),
 									format!(":LUA:parse({})", source.name()),
 									result,
 								)) as Rc<dyn Source>;
+
 
 								state.with_state(|new_state| {
 									new_state.parser.parse_into(

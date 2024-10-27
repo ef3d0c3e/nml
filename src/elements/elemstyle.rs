@@ -269,13 +269,13 @@ pub mod tests {
 		);
 
 		validate_semantics!(state, source.clone(), 0,
-		elemstyle_operator { delta_line == 1, delta_start == 0, length == 2 };
-		elemstyle_name { delta_line == 0, delta_start == 2, length == 14 };
-		elemstyle_equal { delta_line == 0, delta_start == 14, length == 1 };
-		elemstyle_value { delta_line == 0, delta_start == 2, length == 2 };
-		elemstyle_value { delta_line == 1, delta_start == 0, length == 23 };
-		elemstyle_value { delta_line == 1, delta_start == 0, length == 31 };
-		elemstyle_value { delta_line == 1, delta_start == 0, length == 2 };
+			elemstyle_operator { delta_line == 1, delta_start == 0, length == 2 };
+			elemstyle_name { delta_line == 0, delta_start == 2, length == 14 };
+			elemstyle_equal { delta_line == 0, delta_start == 14, length == 1 };
+			elemstyle_value { delta_line == 0, delta_start == 2, length == 2 };
+			elemstyle_value { delta_line == 1, delta_start == 0, length == 23 };
+			elemstyle_value { delta_line == 1, delta_start == 0, length == 31 };
+			elemstyle_value { delta_line == 1, delta_start == 0, length == 2 };
 		);
 	}
 }
