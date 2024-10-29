@@ -6,25 +6,25 @@
 
 Internal references allow you to create references to elements defined within the current document.
 
-Reference the the current section: ``§{internal_reference}`` → §{internal_references}
+Reference the the current section: ``&{internal_reference}`` → &{internal_references}
 
 ## Media references
 ![flower](assets/flower.webm)[caption = Flower]
 
-When you reference a medium from the current document, the reference can be hovered to show the referenced medium: §{flower}.
+When you reference a medium from the current document, the reference can be hovered to show the referenced medium: &{flower}.
 
 # External references
 
 You can reference elements from other documents by adding the document's name before the reference name (separated by a ``#``).
 The document name refers to the output file (as defined by the variable `compiler.output`) excluding the extension.
 
- * ``§{doc#ref}``: Finds reference named `ref` in document named `doc`.
- * ``§{#ref}``: Finds reference named `ref` in all documents.
+ * ``&{doc#ref}``: Finds reference named `ref` in document named `doc`.
+ * ``&{#ref}``: Finds reference named `ref` in all documents.
  Note that this will fail if there are multiple documents defining reference `ref`.
 
 For instance:
- * ``§{LaTeX#tex_env}[caption=LaTeX environment]`` → §{LaTeX#tex_env}[caption=LaTeX environment]
- * ``§{#tex_env}[caption=LaTeX environment]`` → §{#tex_env}[caption=LaTeX environment]
+ * ``&{LaTeX#tex_env}[caption=LaTeX environment]`` → &{LaTeX#tex_env}[caption=LaTeX environment]
+ * ``&{#tex_env}[caption=LaTeX environment]`` → &{#tex_env}[caption=LaTeX environment]
 
 # Properties
 
