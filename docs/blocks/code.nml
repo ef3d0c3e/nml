@@ -1,0 +1,59 @@
+@import ../template.nml
+@nav.previous = Code
+%<make_doc({"Blocks"}, "Blockquotes", "Blockquotes")>%
+
+# Blockquotes
+
+
+>[author=Lennart Poettering, cite=SystemD github issue 5998, url=https://github.com/systemd/systemd/pull/5998]
+>>IMO, you shouldn't see the assignment of a CVE as a negative thing. The bug exists whether or not a CVE is assigned. The assignment of a CVE allows for people to consider what this issue means for them.
+>
+>Well, that makes no sense. You don't assign CVEs to every single random bugfix we do, do you? So why this one? I understand your currency is CVEs, but this just makes CVEs useless. And hardly anymore useful than a git history...
+>
+>I mean, I am fine with security bureaucracy if it actually helps anyone, but you just create noise where there shouldn't be any. And that way you just piss off the upstreams whose cooperation you actually should be interested in. Your at least made sure that my own interest in helping your efforts goes to zero...
+
+# Nesting blockquotes
+
+> Quotes can be nested
+>> Here's a subquote
+>>>[author=With author, cite=With cite]
+>>> Here's another subquote
+>> Back to the subquote
+>
+>> Another subquote
+> This issue is getting a bit too heated, locking right now
+
+```Markdown, Given by the following
+> Nest quotes can be nested
+>> Here's a subquote
+>>>[author=With author, cite=With cite]
+>>> Here's another subquote
+>> Back to the subquote
+>
+>> Another subquote
+> This issue is getting a bit too heated, locking right now
+```
+
+# Properties
+Properties must be specified on the first `>` of the quote, inside brackets.
+ * ``author`` The quote author
+ * ``cite`` The quote source name
+ * ``url`` The quote source url (used for accessibility)
+
+# Blockquotes styling
+
+The blockquotes styling controls how the author, cite and url are rendered. This is controlled by style key ``style.blockquote``.
+ * ``author_pos`` Position of the author statement, available options:
+ *- `None` Hides the author
+ *- `Before` Displays the author before the quote
+ *- `After` Displays the author after the quote (default)
+ * ``format`` An array with 3 format strings to control how the author is displayed:
+ *-[offset=0] Format for author+cite
+ *- Format for author onl
+ *- Format for cite only
+```JSON, Default Style
+{
+	"author_pos": "After",
+	"format": ["{author}, {cite}", "{author}", "{cite}"],
+}
+```
