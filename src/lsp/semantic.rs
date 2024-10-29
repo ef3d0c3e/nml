@@ -174,6 +174,14 @@ pub struct Tokens {
 	pub layout_props_sep: (u32, u32),
 	pub layout_props: (u32, u32),
 	pub layout_type: (u32, u32),
+
+	pub media_sep: (u32, u32),
+	pub media_refname_sep: (u32, u32),
+	pub media_refname: (u32, u32),
+	pub media_uri_sep: (u32, u32),
+	pub media_uri: (u32, u32),
+	pub media_props_sep: (u32, u32),
+	pub media_props: (u32, u32),
 }
 
 impl Tokens {
@@ -262,6 +270,14 @@ impl Tokens {
 			layout_props_sep: token!("operator"),
 			layout_props: token!("enum"),
 			layout_type: token!("function"),
+
+			media_sep: token!("macro"),
+			media_refname_sep: token!("macro"),
+			media_refname: token!("enum"),
+			media_uri_sep: token!("macro"),
+			media_uri: token!("function"),
+			media_props_sep: token!("operator"),
+			media_props: token!("enum"),
 		}
 	}
 }

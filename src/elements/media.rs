@@ -3,6 +3,8 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use ariadne::Fmt;
+use lsp::semantic::Semantics;
+use parser::util::escape_source;
 use regex::Captures;
 use regex::Match;
 use regex::Regex;
@@ -449,13 +451,30 @@ impl RegexRule for MediaRule {
 			.ok()
 			.map(|(_, value)| value);
 
+		if let Some((sems, tokens)) =
+			Semantics::from_source(token.source(), &state.shared.lsp)
+		{
+			sems.add(matches.get(0).unwrap().start()..matches.get(0).unwrap().start()+1, tokens.media_sep);
+			// Refname
+			sems.add(matches.get(0).unwrap().start()+1..matches.get(0).unwrap().start()+2, tokens.media_refname_sep);
+			sems.add(matches.get(1).unwrap().range(), tokens.media_refname);
+			sems.add(matches.get(1).unwrap().end()..matches.get(1).unwrap().end()+1, tokens.media_refname_sep);
+			// Uri
+			sems.add(matches.get(2).unwrap().start()-1..matches.get(2).unwrap().start(), tokens.media_uri_sep);
+			sems.add(matches.get(2).unwrap().range(), tokens.media_uri);
+			sems.add(matches.get(2).unwrap().end()..matches.get(2).unwrap().end()+1, tokens.media_uri_sep);
+			// Props
+			if let Some(props) = matches.get(3)
+			{
+				sems.add(props.start()-1..props.start(), tokens.media_props_sep);
+				sems.add(props.range(), tokens.media_props);
+				sems.add(props.end()..props.end()+1, tokens.media_props_sep);
+			}
+		}
+
 		let description = match matches.get(4) {
 			Some(content) => {
-				let source = Rc::new(VirtualSource::new(
-					Token::new(content.range(), token.source()),
-					format!("Media[{refname}] description"),
-					content.as_str().trim_start().trim_end().to_string(),
-				));
+				let source = escape_source(token.source(), content.range(), format!("Media[{refname}] description"), '\\', "\n");
 				if source.content().is_empty() {
 					None
 				} else {
