@@ -48,6 +48,10 @@ em {
 	background-color: #191f26;
 }
 
+a {
+	color: #55c3df;
+}
+
 a.inline-code {
 	padding-left: .1em;
 	padding-right: .1em;
@@ -63,7 +67,7 @@ a.inline-code {
 	left: 0;
 	top: 0;
 	bottom: 0;
-	width: max(calc((100vw - 99ch) / 2 - 15vw), 24ch);
+	width: max(calc((100vw - 99ch) / 2 - 12vw), 24ch);
 	height: 100vh;
 	position: fixed;
 	margin-right: 1em;
@@ -72,10 +76,9 @@ a.inline-code {
 	box-sizing: border-box;
 	overscroll-behavior-y: contain;
 
-	background-color: #161a26;
-	color: #aaa;
+	background-color: #242526;
+	color: #d0d0d0;
 
-	font-size: 0.9em;
 	font-weight: bold;
 }
 
@@ -88,23 +91,47 @@ a.inline-code {
 	}
 }
 
-.navbar a {
-	color: #ffb454;
+.navbar li {
+	display: block;
+	position: relative;
+	padding-left: .25em;
+	margin-left: 5%;
+	width: 90%;
+	margin-top: 0.066em;
+	margin-bottom: 0.066em;
+}
+
+li.navbar-entry:hover, summary.navbar-category:hover
+{
+	background-color: #2f3031;
+	border-radius: 5px;
+}
+
+li.navbar-entry-current
+{
+	background-color: #2f3031;
+	border-radius: 5px;
+}
+
+
+li.navbar-entry a {
+	color: #d0d0d0;
 
 	text-decoration: none;
 	font-weight: normal;
 }
 
-.navbar li {
-	display: block;
-	position: relative;
-	padding-left: 1em;
-	margin-left: 0em;
+li.navbar-entry-current a {
+	color: #55ffb4;
+
+	text-decoration: none;
+	font-weight: normal;
 }
 
 .navbar ul {
 	margin-left: 0em;
 	padding-left: 0;
+	line-height: 1.66em;
 }
 
 .navbar summary{
@@ -125,15 +152,15 @@ a.inline-code {
 	outline: 1px dotted #000;
 }
 
-.navbar summary:before {
+.navbar summary:after {
 	content: "+";
-	color: #ffb454;
+	color: #55ffb4;
 	float: left;
 	text-align: center;
 	width: 1em;
 }
 
-.navbar details[open] > summary:before {
+.navbar details[open] > summary:after {
 	content: "–";
 }
 

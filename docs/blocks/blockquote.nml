@@ -24,7 +24,7 @@
 > This issue is getting a bit too heated, locking right now
 
 ```Markdown, Given by the following
-> Nest quotes can be nested
+> Quotes can be nested
 >> Here's a subquote
 >>>[author=With author, cite=With cite]
 >>> Here's another subquote

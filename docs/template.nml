@@ -27,8 +27,8 @@ end
 >@
 
 @@style.section = {
-	"link_pos": "Before",
-	"link": ["", "🔗 ", " "]
+	"link_pos": "After",
+	"link": [" ", "🔗 ", " "]
 }
 
 #+TABLE_OF_CONTENT Table of Content

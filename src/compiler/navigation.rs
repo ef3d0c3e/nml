@@ -40,6 +40,7 @@ impl NavEntries {
 
 				fn process(
 					target: Target,
+					doc_path: &String,
 					categories: &Vec<&str>,
 					did_match: bool,
 					result: &mut String,
@@ -48,9 +49,15 @@ impl NavEntries {
 				) {
 					// Orphans = Links
 					for entry in &entry.entries {
+						let style = if doc_path == &entry.path {
+							" class=\"navbar-entry-current\""
+						} else {
+							" class=\"navbar-entry\""
+						}
+						.to_string();
 						result.push_str(
 							format!(
-								r#"<li><a href="{}">{}</a></li>"#,
+								r#"<li {style}><a href="{}">{}</a></li>"#,
 								Compiler::sanitize(target, entry.path.as_str()),
 								Compiler::sanitize(target, entry.title.as_str())
 							)
@@ -68,19 +75,37 @@ impl NavEntries {
 						result.push_str("<li>");
 						result.push_str(
 							format!(
-								"<details{}><summary>{}</summary>",
+								"<details{}><summary class=\"navbar-category\">{}</summary>",
 								["", " open"][is_match as usize],
 								Compiler::sanitize(target, name)
 							)
 							.as_str(),
 						);
 						result.push_str("<ul>");
-						process(target, categories, is_match, result, ent, depth + 1);
+						process(
+							target,
+							doc_path,
+							categories,
+							is_match,
+							result,
+							ent,
+							depth + 1,
+						);
 						result.push_str("</ul></details></li>");
 					}
 				}
 
-				process(target, &categories, true, &mut result, self, 0);
+				process(
+					target,
+					doc_borrow
+						.get_variable("compiler.output")
+						.unwrap_or(&String::new()),
+					&categories,
+					true,
+					&mut result,
+					self,
+					0,
+				);
 
 				result += r#"</ul></div>"#;
 			}
