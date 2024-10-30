@@ -3,7 +3,6 @@
 
 # Defining a custom style
 ```Lua
-%<[main]
 function undercustom_start(color)
 	nml.raw.push("inline", "<span style=\"border-bottom: 1px dashed " .. color .. "\">")
 end
@@ -12,8 +11,8 @@ function undercustom_end()
 	nml.raw.push("inline", "</span>")
 end
 
-nml.custom_style.define_toggled("Undercustom Red", "~", "undercustom_start(\"red\")", "undercustom_end()")
-nml.custom_style.define_paired("Undercustom Green", "[|", "|]", "undercustom_start(\"Green\")", "undercustom_end()")
+nml.custom_style.define_toggled("Undercustom Red", "~", function() undercustom_start("red") end, undercustom_end)
+nml.custom_style.define_paired("Undercustom Green", "[|", "|]", function() undercustom_start("green") end, undercustom_end)
 >%
 ```
 
@@ -26,8 +25,8 @@ function undercustom_end()
 	nml.raw.push("inline", "</span>")
 end
 
-nml.custom_style.define_toggled("Undercustom Red", "~", "undercustom_start(\"red\")", "undercustom_end()")
-nml.custom_style.define_paired("Undercustom Green", "[|", "|]", "undercustom_start(\"Green\")", "undercustom_end()")
+nml.custom_style.define_toggled("Undercustom Red", "~", function() undercustom_start("red") end, undercustom_end)
+nml.custom_style.define_paired("Undercustom Green", "[|", "|]", function() undercustom_start("green") end, undercustom_end)
 >%
 Results in the following:
  * ``Plain Text,~Dashed underline~`` → ~Dashed underline~

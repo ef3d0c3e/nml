@@ -34,8 +34,8 @@ use super::paragraph::Paragraph;
 struct LuaCustomStyle {
 	pub(self) name: String,
 	pub(self) tokens: CustomStyleToken,
-	pub(self) start: String,
-	pub(self) end: String,
+	pub(self) start: mlua::Function<'static>,
+	pub(self) end: mlua::Function<'static>,
 }
 
 impl CustomStyle for LuaCustomStyle {
@@ -56,8 +56,8 @@ impl CustomStyle for LuaCustomStyle {
 
 		let mut reports = vec![];
 		kernel.run_with_context(&mut ctx, |lua| {
-			let chunk = lua.load(self.start.as_str());
-			if let Err(err) = chunk.eval::<()>() {
+			if let Err(err) = self.start.call::<_, ()>(())
+			{
 				report_err!(
 					&mut reports,
 					location.source(),
@@ -86,8 +86,8 @@ impl CustomStyle for LuaCustomStyle {
 
 		let mut reports = vec![];
 		kernel.run_with_context(&mut ctx, |lua| {
-			let chunk = lua.load(self.end.as_str());
-			if let Err(err) = chunk.eval::<()>() {
+			if let Err(err) = self.end.call::<_, ()>(())
+			{
 				report_err!(
 					&mut reports,
 					location.source(),
@@ -344,14 +344,14 @@ impl Rule for CustomStyleRule {
 		bindings.push((
 			"define_toggled".into(),
 			lua.create_function(
-				|_, (name, token, on_start, on_end): (String, String, String, String)| {
+				|_, (name, token, on_start, on_end): (String, String, mlua::Function, mlua::Function)| {
 					let mut result = Ok(());
 
 					let style = LuaCustomStyle {
 						tokens: CustomStyleToken::Toggle(token),
 						name: name.clone(),
-						start: on_start,
-						end: on_end,
+						start: unsafe { std::mem::transmute(on_start.clone()) },
+						end: unsafe { std::mem::transmute(on_start.clone()) },
 					};
 
 					CTX.with_borrow(|ctx| {
@@ -393,8 +393,8 @@ impl Rule for CustomStyleRule {
 					String,
 					String,
 					String,
-					String,
-					String,
+					mlua::Function,
+					mlua::Function,
 				)| {
 					let mut result = Ok(());
 
@@ -413,8 +413,8 @@ impl Rule for CustomStyleRule {
 					let style = LuaCustomStyle {
 						tokens: CustomStyleToken::Pair(token_start, token_end),
 						name: name.clone(),
-						start: on_start,
-						end: on_end,
+						start: unsafe { std::mem::transmute(on_start.clone()) },
+						end: unsafe { std::mem::transmute(on_start.clone()) },
 					};
 
 					CTX.with_borrow(|ctx| {
