@@ -1,6 +1,6 @@
 @import ../template.nml
 @nav.previous = Code
-%<make_doc({"Blocks"}, "Blockquotes", "Blockquotes")>%
+%<make_doc({"Code"}, "Code", "Code")>%
 
 # Blockquotes
 

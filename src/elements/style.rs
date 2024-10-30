@@ -151,7 +151,7 @@ static STATE_NAME: &str = "elements.style";
 impl RegexRule for StyleRule {
 	fn name(&self) -> &'static str { "Style" }
 
-	fn previous(&self) -> Option<&'static str> { Some("Layout") }
+	fn previous(&self) -> Option<&'static str> { Some("Toc") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

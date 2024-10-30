@@ -224,6 +224,7 @@ mod tests {
 				"Graphviz",
 				"Media",
 				"Layout",
+				"Toc",
 				"Style",
 				"Custom Style",
 				"Section",

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::str::FromStr;
 
 use ariadne::Fmt;
@@ -24,9 +23,7 @@ use crate::parser::parser::ParserState;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
 use crate::parser::source::Token;
-use crate::parser::source::VirtualSource;
 use crate::parser::util;
 use crate::parser::util::parse_paragraph;
 use crate::parser::util::Property;
@@ -451,30 +448,48 @@ impl RegexRule for MediaRule {
 			.ok()
 			.map(|(_, value)| value);
 
-		if let Some((sems, tokens)) =
-			Semantics::from_source(token.source(), &state.shared.lsp)
-		{
-			sems.add(matches.get(0).unwrap().start()..matches.get(0).unwrap().start()+1, tokens.media_sep);
+		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
+			sems.add(
+				matches.get(0).unwrap().start()..matches.get(0).unwrap().start() + 1,
+				tokens.media_sep,
+			);
 			// Refname
-			sems.add(matches.get(0).unwrap().start()+1..matches.get(0).unwrap().start()+2, tokens.media_refname_sep);
+			sems.add(
+				matches.get(0).unwrap().start() + 1..matches.get(0).unwrap().start() + 2,
+				tokens.media_refname_sep,
+			);
 			sems.add(matches.get(1).unwrap().range(), tokens.media_refname);
-			sems.add(matches.get(1).unwrap().end()..matches.get(1).unwrap().end()+1, tokens.media_refname_sep);
+			sems.add(
+				matches.get(1).unwrap().end()..matches.get(1).unwrap().end() + 1,
+				tokens.media_refname_sep,
+			);
 			// Uri
-			sems.add(matches.get(2).unwrap().start()-1..matches.get(2).unwrap().start(), tokens.media_uri_sep);
+			sems.add(
+				matches.get(2).unwrap().start() - 1..matches.get(2).unwrap().start(),
+				tokens.media_uri_sep,
+			);
 			sems.add(matches.get(2).unwrap().range(), tokens.media_uri);
-			sems.add(matches.get(2).unwrap().end()..matches.get(2).unwrap().end()+1, tokens.media_uri_sep);
+			sems.add(
+				matches.get(2).unwrap().end()..matches.get(2).unwrap().end() + 1,
+				tokens.media_uri_sep,
+			);
 			// Props
-			if let Some(props) = matches.get(3)
-			{
-				sems.add(props.start()-1..props.start(), tokens.media_props_sep);
+			if let Some(props) = matches.get(3) {
+				sems.add(props.start() - 1..props.start(), tokens.media_props_sep);
 				sems.add(props.range(), tokens.media_props);
-				sems.add(props.end()..props.end()+1, tokens.media_props_sep);
+				sems.add(props.end()..props.end() + 1, tokens.media_props_sep);
 			}
 		}
 
 		let description = match matches.get(4) {
 			Some(content) => {
-				let source = escape_source(token.source(), content.range(), format!("Media[{refname}] description"), '\\', "\n");
+				let source = escape_source(
+					token.source(),
+					content.range(),
+					format!("Media[{refname}] description"),
+					'\\',
+					"\n",
+				);
 				if source.content().is_empty() {
 					None
 				} else {
@@ -536,6 +551,8 @@ impl RegexRule for MediaRule {
 
 #[cfg(test)]
 mod tests {
+	use std::rc::Rc;
+
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;

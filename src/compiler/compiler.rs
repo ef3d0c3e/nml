@@ -9,8 +9,6 @@ use crate::document::document::CrossReference;
 use crate::document::document::Document;
 use crate::document::document::ElemReference;
 use crate::document::variable::Variable;
-use crate::elements::section::section_kind;
-use crate::elements::section::Section;
 
 use super::postprocess::PostProcess;
 
@@ -209,7 +207,6 @@ impl<'a> Compiler<'a> {
 				}
 				result += r#"</head><body><div class="layout">"#;
 
-				// TODO: TOC
 				// TODO: Author, Date, Title, Div
 			}
 			Target::LATEX => {}
@@ -228,93 +225,6 @@ impl<'a> Compiler<'a> {
 		result
 	}
 
-	pub fn toc(&self, document: &dyn Document) -> String {
-		let toc_title = if let Some(title) = document.get_variable("toc.title") {
-			title
-		} else {
-			return String::new();
-		};
-
-		let mut result = String::new();
-		let mut sections: Vec<(&Section, usize)> = vec![];
-		// Find last section with given depth
-		fn last_matching(depth: usize, sections: &Vec<(&Section, usize)>) -> Option<usize> {
-			for (idx, (section, _number)) in sections.iter().rev().enumerate() {
-				if section.depth < depth {
-					return None;
-				} else if section.depth == depth {
-					return Some(sections.len() - idx - 1);
-				}
-			}
-
-			None
-		}
-		let content_borrow = document.content().borrow();
-		for elem in content_borrow.iter() {
-			if let Some(section) = elem.downcast_ref::<Section>() {
-				if section.kind & section_kind::NO_TOC != 0 {
-					continue;
-				}
-				let last = last_matching(section.depth, &sections);
-				if let Some(last) = last {
-					if sections[last].0.kind & section_kind::NO_NUMBER != 0 {
-						sections.push((section, sections[last].1));
-					} else {
-						sections.push((section, sections[last].1 + 1))
-					}
-				} else {
-					sections.push((section, 1));
-				}
-			}
-		}
-
-		match self.target() {
-			Target::HTML => {
-				let match_depth = |current: usize, target: usize| -> String {
-					let mut result = String::new();
-					for _ in current..target {
-						result += "<ol>";
-					}
-					for _ in target..current {
-						result += "</ol>";
-					}
-					result
-				};
-				result += "<div class=\"toc\">";
-				result += format!(
-					"<span>{}</span>",
-					Compiler::sanitize(self.target(), toc_title.to_string())
-				)
-				.as_str();
-				let mut current_depth = 0;
-				for (section, number) in sections {
-					result += match_depth(current_depth, section.depth).as_str();
-					if section.kind & section_kind::NO_NUMBER != 0 {
-						result += format!(
-							"<li><a href=\"#{}\">{}</a></li>",
-							Compiler::refname(self.target(), section.title.as_str()),
-							Compiler::sanitize(self.target(), section.title.as_str())
-						)
-						.as_str();
-					} else {
-						result += format!(
-							"<li value=\"{number}\"><a href=\"#{}\">{}</a></li>",
-							Compiler::refname(self.target(), section.title.as_str()),
-							Compiler::sanitize(self.target(), section.title.as_str())
-						)
-						.as_str();
-					}
-
-					current_depth = section.depth;
-				}
-				match_depth(current_depth, 0);
-				result += "</div>";
-			}
-			_ => todo!(""),
-		}
-		result
-	}
-
 	pub fn compile(&self, document: &dyn Document) -> (CompiledDocument, PostProcess) {
 		let borrow = document.content().borrow();
 
@@ -323,9 +233,6 @@ impl<'a> Compiler<'a> {
 
 		// Body
 		let mut body = r#"<div class="content">"#.to_string();
-
-		// Table of content
-		body += self.toc(document).as_str();
 
 		for i in 0..borrow.len() {
 			let elem = &borrow[i];
