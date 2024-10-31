@@ -216,6 +216,81 @@ mod default_layouts {
 			}
 		}
 	}
+
+	#[derive(Debug)]
+	pub struct Spoiler(PropertyParser);
+
+	impl Default for Spoiler {
+		fn default() -> Self {
+			let mut properties = HashMap::new();
+			properties.insert(
+				"title".to_string(),
+				Property::new(
+					true,
+					"Spoiler title".to_string(),
+					Some("".to_string())
+				),
+			);
+
+			Self(PropertyParser { properties })
+		}
+	}
+
+	impl LayoutType for Spoiler {
+		fn name(&self) -> &'static str { "Spoiler" }
+
+		fn expects(&self) -> Range<usize> { 1..1 }
+
+		fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String> {
+			let props = if properties.is_empty() {
+				self.0.default()
+			} else {
+				self.0.parse(properties)
+			}
+			.map_err(|err| {
+				format!(
+					"Failed to parse properties for layout {}: {err}",
+					self.name()
+				)
+			})?;
+
+			let title = props
+				.get("title", |_, value| -> Result<String, ()> {
+					Ok(value.clone())
+				})
+				.map_err(|err| format!("Failed to parse style: {err:#?}"))
+				.map(|(_, value)| value)?;
+
+			Ok(Some(Box::new(title)))
+		}
+
+		fn compile(
+			&self,
+			token: LayoutToken,
+			_id: usize,
+			properties: &Option<Box<dyn Any>>,
+			compiler: &Compiler,
+			_document: &dyn Document,
+		) -> Result<String, String> {
+			match compiler.target() {
+				Target::HTML => {
+					let title = properties
+						.as_ref()
+						.unwrap()
+						.downcast_ref::<String>()
+						.unwrap();
+					match token {
+						LayoutToken::Begin => Ok(format!(
+							r#"<details class="spoiler"><summary>{}</summary>"#, Compiler::sanitize(compiler.target(), title)
+						)),
+						LayoutToken::End => Ok(r#"</details>"#.to_string()),
+						_ => panic!()
+					}
+				}
+				_ => todo!(""),
+			}
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -254,7 +329,10 @@ impl RuleState for LayoutState {
 		let mut reports = vec![];
 
 		let doc_borrow = document.content().borrow();
-		let at = doc_borrow.last().unwrap().location();
+		let at = doc_borrow.last().map_or(
+			Token::new(document.source().content().len()..document.source().content().len(), document.source()),
+			|last| last.location().to_owned()
+			);
 
 		for (tokens, layout_type) in &self.stack {
 			let start = tokens.first().unwrap();
@@ -909,6 +987,7 @@ impl RegexRule for LayoutRule {
 	fn register_layouts(&self, holder: &mut LayoutHolder) {
 		holder.insert(Rc::new(default_layouts::Centered::default()));
 		holder.insert(Rc::new(default_layouts::Split::default()));
+		holder.insert(Rc::new(default_layouts::Spoiler::default()));
 	}
 }
 
@@ -941,6 +1020,9 @@ mod tests {
 	#+LAYOUT_NEXT[style=E]
 		E
 	#+LAYOUT_END
+#+LAYOUT_END
+#+LAYOUT_BEGIN[title=F] Spoiler
+	F
 #+LAYOUT_END
 "#
 			.to_string(),
@@ -978,6 +1060,12 @@ mod tests {
 			};
 			Layout { token == LayoutToken::End, id == 2 };
 			Layout { token == LayoutToken::End, id == 2 };
+
+			Layout { token == LayoutToken::Begin, id == 0 };
+			Paragraph {
+				Text { content == "F" };
+			};
+			Layout { token == LayoutToken::End, id == 1 };
 		);
 	}
 
@@ -999,6 +1087,10 @@ mod tests {
 		E
 %<nml.layout.push("End", "Split", "")>%
 %<nml.layout.push("End", "Split", "")>%
+
+%<nml.layout.push("Begin", "Spoiler", "title=Test Spoiler")>%
+	F
+%<nml.layout.push("End", "Spoiler", "")>%
 "#
 			.to_string(),
 			None,
@@ -1035,6 +1127,12 @@ mod tests {
 			};
 			Layout { token == LayoutToken::End, id == 2 };
 			Layout { token == LayoutToken::End, id == 2 };
+			Paragraph;
+			Layout { token == LayoutToken::Begin, id == 0 };
+			Paragraph {
+				Text { content == "F" };
+			};
+			Layout { token == LayoutToken::End, id == 1 };
 		);
 	}
 

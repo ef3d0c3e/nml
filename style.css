@@ -35,6 +35,27 @@ div.split-container > div.split {
 	margin: 0.5em;
 }
 
+details.spoiler {
+	border: 1px solid #235;
+	border-radius: 4px;
+	padding: 0.5em 0.5em 0;
+}
+
+details.spoiler summary {
+	margin: -0.5em -0.5em 0;
+	padding: 0.5em;
+}
+
+details[open].spoiler {
+	border: 1px solid #235;
+	border-radius: 4px;
+}
+
+details[open].spoiler summary {
+	border-bottom: 1px solid #235;
+	padding: .5em;
+}
+
 /* Styles */
 em {
 	padding-left: .1em;

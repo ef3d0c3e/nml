@@ -60,3 +60,17 @@ If you wish to modify the relative width of the splits: add `style=flex: 0.5` in
 
 ####+* Properties
  * ``style`` Added css style to the div (defaults to none)
+
+## Spoiler
+
+The spoiler layout creates a collapsed element which can be opened.
+
+#+LAYOUT_BEGIN[title=Spoiler demo] Spoiler
+This content is *hidden*.
+#+LAYOUT_END
+
+####+* Style
+The ``Spoiler`` layout uses the `.spoiler` class, combined with `<details>/<summary>` to create the desired layout.
+
+####+* Properties
+ * ``title`` The spoiler title

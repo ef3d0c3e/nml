@@ -105,20 +105,28 @@ impl<'b> Parser for LangParser<'b> {
 			.downcast_rc::<SourceFile>()
 			.ok()
 			.map(|source| {
-				let start = if source.path().starts_with("file:///") {
-					7
-				} else {
-					0
-				};
-				let mut path = PathBuf::from(&source.path()[start..]);
-				match path.canonicalize() {
-					Ok(cano) => path = cano,
-					Err(err) => eprintln!("Failed to canonicalize path `{}`: {err}", source.path()),
+				if source.path().is_empty() // Test mode
+				{
+					None
 				}
-				path.pop();
-				path
-			});
-		if let Some(path) = path {
+				else
+				{
+					let start = if source.path().starts_with("file:///") {
+						7
+					} else {
+						0
+					};
+					let mut path = PathBuf::from(&source.path()[start..]);
+					match path.canonicalize() {
+						Ok(cano) => path = cano,
+						Err(err) => eprintln!("Failed to canonicalize path `{}`: {err}", source.path()),
+					}
+					path.pop();
+					Some(path)
+				}
+			})
+			.unwrap();
+		if let Some(path) = &path {
 			if let Err(err) = std::env::set_current_dir(&path) {
 				eprintln!(
 					"Failed to set working directory to `{}`: {err}",
@@ -209,11 +217,14 @@ impl<'b> Parser for LangParser<'b> {
 			);
 		}
 
-		if let Err(err) = std::env::set_current_dir(&current_dir) {
-			println!(
-				"Failed to set working directory to `{}`: {err} {source:#?}",
-				current_dir.to_str().unwrap_or("")
-			);
+		if path.is_some()
+		{
+			if let Err(err) = std::env::set_current_dir(&current_dir) {
+				println!(
+					"Failed to set working directory to `{}`: {err} {source:#?}",
+					current_dir.to_str().unwrap_or("")
+				);
+			}
 		}
 
 		(Box::new(doc), state)

@@ -351,7 +351,7 @@ impl Rule for CustomStyleRule {
 						tokens: CustomStyleToken::Toggle(token),
 						name: name.clone(),
 						start: unsafe { std::mem::transmute(on_start.clone()) },
-						end: unsafe { std::mem::transmute(on_start.clone()) },
+						end: unsafe { std::mem::transmute(on_end.clone()) },
 					};
 
 					CTX.with_borrow(|ctx| {
@@ -414,7 +414,7 @@ impl Rule for CustomStyleRule {
 						tokens: CustomStyleToken::Pair(token_start, token_end),
 						name: name.clone(),
 						start: unsafe { std::mem::transmute(on_start.clone()) },
-						end: unsafe { std::mem::transmute(on_start.clone()) },
+						end: unsafe { std::mem::transmute(on_end.clone()) },
 					};
 
 					CTX.with_borrow(|ctx| {
@@ -476,8 +476,8 @@ end
 function red_style_end()
 	nml.raw.push("inline", "</a>")
 end
-nml.custom_style.define_toggled("My Style", "|", "my_style_start()", "my_style_end()")
-nml.custom_style.define_toggled("My Style2", "°", "red_style_start()", "red_style_end()")
+nml.custom_style.define_toggled("My Style", "|", my_style_start, my_style_end)
+nml.custom_style.define_toggled("My Style2", "°", red_style_start, red_style_end)
 >%
 pre |styled| post °Hello°.
 "#
@@ -525,8 +525,8 @@ end
 function red_style_end()
 	nml.raw.push("inline", "</a>")
 end
-nml.custom_style.define_paired("My Style", "[", "]", "my_style_start()", "my_style_end()")
-nml.custom_style.define_paired("My Style2", "(", ")", "red_style_start()", "red_style_end()")
+nml.custom_style.define_paired("My Style", "[", "]", my_style_start, my_style_end)
+nml.custom_style.define_paired("My Style2", "(", ")", red_style_start, red_style_end)
 >%
 pre [styled] post (Hello).
 "#
