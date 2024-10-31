@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::document::document::Document;
@@ -18,6 +19,7 @@ use super::rule::Rule;
 use super::source::Cursor;
 use super::source::Source;
 use super::source::SourceFile;
+use super::source::SourcePosition;
 use super::source::Token;
 use super::util;
 
@@ -88,6 +90,42 @@ impl<'b> Parser for LangParser<'b> {
 		mode: ParseMode,
 	) -> (Box<dyn Document<'doc> + 'doc>, ParserState<'p, 'a>) {
 		let doc = LangDocument::new(source.clone(), parent);
+
+		let current_dir = match std::env::current_dir() {
+			Ok(dir) => dir,
+			Err(err) => {
+				eprintln!("Unable to get the current working directory: {err}");
+				return (Box::new(doc), state);
+			}
+		};
+
+		let path = source
+			.original_position(0)
+			.0
+			.downcast_rc::<SourceFile>()
+			.ok()
+			.map(|source| {
+				let start = if source.path().starts_with("file:///") {
+					7
+				} else {
+					0
+				};
+				let mut path = PathBuf::from(&source.path()[start..]);
+				match path.canonicalize() {
+					Ok(cano) => path = cano,
+					Err(err) => eprintln!("Failed to canonicalize path `{}`: {err}", source.path()),
+				}
+				path.pop();
+				path
+			});
+		if let Some(path) = path {
+			if let Err(err) = std::env::set_current_dir(&path) {
+				eprintln!(
+					"Failed to set working directory to `{}`: {err}",
+					path.to_str().unwrap_or("")
+				);
+			}
+		}
 
 		// Insert lsp data into state
 		if let (Some(_), Some(lsp)) = (
@@ -168,6 +206,13 @@ impl<'b> Parser for LangParser<'b> {
 					doc.source().content().len()..doc.source().content().len(),
 					doc.source(),
 				))),
+			);
+		}
+
+		if let Err(err) = std::env::set_current_dir(&current_dir) {
+			println!(
+				"Failed to set working directory to `{}`: {err} {source:#?}",
+				current_dir.to_str().unwrap_or("")
 			);
 		}
 

@@ -75,9 +75,6 @@ pub fn process(
 ) -> Result<Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>, String> {
 	let mut compiled = vec![];
 
-	let current_dir = std::env::current_dir()
-		.map_err(|err| format!("Unable to get the current working directory: {err}"))?;
-
 	let con = db_path
 		.as_ref()
 		.map_or(Connection::open_in_memory(), Connection::open)
@@ -98,8 +95,6 @@ pub fn process(
 		let file_parent_path = file
 			.parent()
 			.ok_or(format!("Failed to get parent path for `{file:#?}`"))?;
-		std::env::set_current_dir(file_parent_path)
-			.map_err(|err| format!("Failed to move to path `{file_parent_path:#?}`: {err}"))?;
 
 		let parse_and_compile = || -> Result<(CompiledDocument, Option<PostProcess>), String> {
 			// Parse
@@ -154,9 +149,6 @@ pub fn process(
 			)
 		})?;
 	}
-
-	std::env::set_current_dir(current_dir)
-		.map_err(|err| format!("Failed to set current directory: {err}"))?;
 
 	Ok(compiled)
 }
