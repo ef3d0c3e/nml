@@ -213,13 +213,17 @@ impl RegexRule for ScriptRule {
 									);
 								}
 
-								if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp) {
+								if let Some(hints) =
+									Hints::from_source(token.source(), &state.shared.lsp)
+								{
 									hints.add(matches.get(0).unwrap().end(), result);
 								}
 							} else if kind == 2
 							// Eval and Parse
 							{
-								if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp) {
+								if let Some(hints) =
+									Hints::from_source(token.source(), &state.shared.lsp)
+								{
 									hints.add(matches.get(0).unwrap().end(), result.clone());
 								}
 
@@ -228,7 +232,6 @@ impl RegexRule for ScriptRule {
 									format!(":LUA:parse({})", source.name()),
 									result,
 								)) as Rc<dyn Source>;
-
 
 								state.with_state(|new_state| {
 									new_state.parser.parse_into(
@@ -295,6 +298,7 @@ impl RegexRule for ScriptRule {
 			sems.add(range.end - 2..range.end, tokens.script_sep);
 		}
 
+		// Process redirects as hints
 		if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp) {
 			let mut label = String::new();
 			ctx.redirects.iter().for_each(|redir| {
@@ -305,6 +309,8 @@ impl RegexRule for ScriptRule {
 				hints.add(matches.get(0).unwrap().end(), label);
 			}
 		}
+
+		// TODO: Process reports
 		reports
 	}
 }

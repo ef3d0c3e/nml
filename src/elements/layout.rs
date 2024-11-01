@@ -15,11 +15,13 @@ use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
-use crate::parser::util::escape_text;
 use ariadne::Fmt;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
+use parser::source::Source;
+use parser::source::VirtualSource;
+use parser::util::escape_source;
 use regex::Captures;
 use regex::Match;
 use regex::Regex;
@@ -54,8 +56,8 @@ impl FromStr for LayoutToken {
 
 mod default_layouts {
 	use crate::parser::layout::LayoutType;
-	use crate::parser::util::Property;
-	use crate::parser::util::PropertyParser;
+	use crate::parser::property::Property;
+	use crate::parser::property::PropertyParser;
 
 	use super::*;
 
@@ -68,7 +70,6 @@ mod default_layouts {
 			properties.insert(
 				"style".to_string(),
 				Property::new(
-					true,
 					"Additional style for the split".to_string(),
 					Some("".to_string()),
 				),
@@ -83,46 +84,38 @@ mod default_layouts {
 
 		fn expects(&self) -> Range<usize> { 1..1 }
 
-		fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String> {
-			let props = if properties.is_empty() {
-				self.0.default()
-			} else {
-				self.0.parse(properties)
-			}
-			.map_err(|err| {
-				format!(
-					"Failed to parse properties for layout {}: {err}",
-					self.name()
-				)
-			})?;
+		fn parse_properties(
+			&self,
+			reports: &mut Vec<Report>,
+			state: &ParserState,
+			token: Token,
+		) -> Option<Box<dyn Any>> {
+			let properties = match self.0.parse("Centered Layout", reports, state, token) {
+				Some(props) => props,
+				None => return None,
+			};
 
-			let style = props
-				.get("style", |_, value| -> Result<String, ()> {
-					Ok(value.clone())
-				})
-				.map_err(|err| format!("Failed to parse style: {err:#?}"))
-				.map(|(_, value)| value)?;
+			let style = match properties.get(reports, "style", |_, value| {
+				Result::<_, String>::Ok(value.value.clone())
+			}) {
+				Some(style) => style,
+				_ => return None,
+			};
 
-			Ok(Some(Box::new(style)))
+			Some(Box::new(style))
 		}
 
 		fn compile(
 			&self,
 			token: LayoutToken,
 			_id: usize,
-			properties: &Option<Box<dyn Any>>,
+			properties: &Box<dyn Any>,
 			compiler: &Compiler,
 			_document: &dyn Document,
 		) -> Result<String, String> {
 			match compiler.target() {
 				Target::HTML => {
-					let style = match properties
-						.as_ref()
-						.unwrap()
-						.downcast_ref::<String>()
-						.unwrap()
-						.as_str()
-					{
+					let style = match properties.downcast_ref::<String>().unwrap().as_str() {
 						"" => "".to_string(),
 						str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
 					};
@@ -146,7 +139,6 @@ mod default_layouts {
 			properties.insert(
 				"style".to_string(),
 				Property::new(
-					true,
 					"Additional style for the split".to_string(),
 					Some("".to_string()),
 				),
@@ -161,46 +153,38 @@ mod default_layouts {
 
 		fn expects(&self) -> Range<usize> { 2..usize::MAX }
 
-		fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String> {
-			let props = if properties.is_empty() {
-				self.0.default()
-			} else {
-				self.0.parse(properties)
-			}
-			.map_err(|err| {
-				format!(
-					"Failed to parse properties for layout {}: {err}",
-					self.name()
-				)
-			})?;
+		fn parse_properties(
+			&self,
+			reports: &mut Vec<Report>,
+			state: &ParserState,
+			token: Token,
+		) -> Option<Box<dyn Any>> {
+			let properties = match self.0.parse("Split Layout", reports, state, token) {
+				Some(props) => props,
+				None => return None,
+			};
 
-			let style = props
-				.get("style", |_, value| -> Result<String, ()> {
-					Ok(value.clone())
-				})
-				.map_err(|err| format!("Failed to parse style: {err:#?}"))
-				.map(|(_, value)| value)?;
+			let style = match properties.get(reports, "style", |_, value| {
+				Result::<_, String>::Ok(value.value.clone())
+			}) {
+				Some(style) => style,
+				_ => return None,
+			};
 
-			Ok(Some(Box::new(style)))
+			Some(Box::new(style))
 		}
 
 		fn compile(
 			&self,
 			token: LayoutToken,
 			_id: usize,
-			properties: &Option<Box<dyn Any>>,
+			properties: &Box<dyn Any>,
 			compiler: &Compiler,
 			_document: &dyn Document,
 		) -> Result<String, String> {
 			match compiler.target() {
 				Target::HTML => {
-					let style = match properties
-						.as_ref()
-						.unwrap()
-						.downcast_ref::<String>()
-						.unwrap()
-						.as_str()
-					{
+					let style = match properties.downcast_ref::<String>().unwrap().as_str() {
 						"" => "".to_string(),
 						str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
 					};
@@ -225,11 +209,7 @@ mod default_layouts {
 			let mut properties = HashMap::new();
 			properties.insert(
 				"title".to_string(),
-				Property::new(
-					true,
-					"Spoiler title".to_string(),
-					Some("".to_string())
-				),
+				Property::new("Spoiler title".to_string(), Some("".to_string())),
 			);
 
 			Self(PropertyParser { properties })
@@ -241,50 +221,45 @@ mod default_layouts {
 
 		fn expects(&self) -> Range<usize> { 1..1 }
 
-		fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String> {
-			let props = if properties.is_empty() {
-				self.0.default()
-			} else {
-				self.0.parse(properties)
-			}
-			.map_err(|err| {
-				format!(
-					"Failed to parse properties for layout {}: {err}",
-					self.name()
-				)
-			})?;
+		fn parse_properties(
+			&self,
+			reports: &mut Vec<Report>,
+			state: &ParserState,
+			token: Token,
+		) -> Option<Box<dyn Any>> {
+			let properties = match self.0.parse("Spoiler Layout", reports, state, token) {
+				Some(props) => props,
+				None => return None,
+			};
 
-			let title = props
-				.get("title", |_, value| -> Result<String, ()> {
-					Ok(value.clone())
-				})
-				.map_err(|err| format!("Failed to parse style: {err:#?}"))
-				.map(|(_, value)| value)?;
+			let title = match properties.get(reports, "title", |_, value| {
+				Result::<_, String>::Ok(value.value.clone())
+			}) {
+				Some(title) => title,
+				_ => return None,
+			};
 
-			Ok(Some(Box::new(title)))
+			Some(Box::new(title))
 		}
 
 		fn compile(
 			&self,
 			token: LayoutToken,
 			_id: usize,
-			properties: &Option<Box<dyn Any>>,
+			properties: &Box<dyn Any>,
 			compiler: &Compiler,
 			_document: &dyn Document,
 		) -> Result<String, String> {
 			match compiler.target() {
 				Target::HTML => {
-					let title = properties
-						.as_ref()
-						.unwrap()
-						.downcast_ref::<String>()
-						.unwrap();
+					let title = properties.downcast_ref::<String>().unwrap();
 					match token {
 						LayoutToken::Begin => Ok(format!(
-							r#"<details class="spoiler"><summary>{}</summary>"#, Compiler::sanitize(compiler.target(), title)
+							r#"<details class="spoiler"><summary>{}</summary>"#,
+							Compiler::sanitize(compiler.target(), title)
 						)),
 						LayoutToken::End => Ok(r#"</details>"#.to_string()),
-						_ => panic!()
+						_ => panic!(),
 					}
 				}
 				_ => todo!(""),
@@ -299,7 +274,7 @@ struct Layout {
 	pub(self) layout: Rc<dyn LayoutType>,
 	pub(self) id: usize,
 	pub(self) token: LayoutToken,
-	pub(self) properties: Option<Box<dyn Any>>,
+	pub(self) properties: Box<dyn Any>,
 }
 
 impl Element for Layout {
@@ -330,9 +305,12 @@ impl RuleState for LayoutState {
 
 		let doc_borrow = document.content().borrow();
 		let at = doc_borrow.last().map_or(
-			Token::new(document.source().content().len()..document.source().content().len(), document.source()),
-			|last| last.location().to_owned()
-			);
+			Token::new(
+				document.source().content().len()..document.source().content().len(),
+				document.source(),
+			),
+			|last| last.location().to_owned(),
+		);
 
 		for (tokens, layout_type) in &self.stack {
 			let start = tokens.first().unwrap();
@@ -406,42 +384,23 @@ impl LayoutRule {
 
 	pub fn parse_properties<'a>(
 		mut reports: &mut Vec<Report>,
+		state: &ParserState,
 		token: &Token,
 		layout_type: Rc<dyn LayoutType>,
-		properties: Option<Match>,
-	) -> Result<Option<Box<dyn Any>>, ()> {
-		match properties {
-			None => match layout_type.parse_properties("") {
-				Ok(props) => Ok(props),
-				Err(err) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Layout Properties".into(),
-						span(
-							token.start() + 1..token.end(),
-							format!("Layout is missing required property: {err}")
-						)
-					);
-					Err(())
-				}
-			},
-			Some(props) => {
-				let content = escape_text('\\', "]", props.as_str());
-				match layout_type.parse_properties(content.as_str()) {
-					Ok(props) => Ok(props),
-					Err(err) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Layout Properties".into(),
-							span(props.range(), err)
-						);
-						Err(())
-					}
-				}
-			}
-		}
+		m: Option<Match>,
+	) -> Option<Box<dyn Any>> {
+		let prop_source = escape_source(
+			token.source(),
+			m.map_or(0..0, |m| m.range()),
+			format!("Layout {} Properties", layout_type.name()),
+			'\\',
+			"]",
+		);
+		layout_type.parse_properties(
+			reports,
+			state,
+			Token::new(0..prop_source.content().len(), prop_source),
+		)
 	}
 }
 
@@ -546,12 +505,13 @@ impl RegexRule for LayoutRule {
 					// Parse properties
 					let properties = match LayoutRule::parse_properties(
 						&mut reports,
+						state,
 						&token,
 						layout_type.clone(),
 						matches.get(1),
 					) {
-						Ok(props) => props,
-						Err(()) => return reports,
+						Some(props) => props,
+						None => return reports,
 					};
 
 					state.push(
@@ -590,7 +550,6 @@ impl RegexRule for LayoutRule {
 						);
 						if let Some(props) = matches.get(1).map(|m| m.range()) {
 							sems.add(props.start - 1..props.start, tokens.layout_props_sep);
-							sems.add(props.clone(), tokens.layout_props);
 							sems.add(props.end..props.end + 1, tokens.layout_props_sep);
 						}
 						sems.add(matches.get(2).unwrap().range(), tokens.layout_type);
@@ -650,12 +609,13 @@ impl RegexRule for LayoutRule {
 			// Parse properties
 			let properties = match LayoutRule::parse_properties(
 				&mut reports,
+				state,
 				&token,
 				layout_type.clone(),
 				matches.get(1),
 			) {
-				Ok(props) => props,
-				Err(()) => return reports,
+				Some(props) => props,
+				None => return reports,
 			};
 
 			if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp)
@@ -671,7 +631,6 @@ impl RegexRule for LayoutRule {
 				);
 				if let Some(props) = matches.get(1).map(|m| m.range()) {
 					sems.add(props.start - 1..props.start, tokens.layout_props_sep);
-					sems.add(props.clone(), tokens.layout_props);
 					sems.add(props.end..props.end + 1, tokens.layout_props_sep);
 				}
 			}
@@ -732,12 +691,13 @@ impl RegexRule for LayoutRule {
 			// Parse properties
 			let properties = match LayoutRule::parse_properties(
 				&mut reports,
+				state,
 				&token,
 				layout_type.clone(),
 				matches.get(1),
 			) {
-				Ok(props) => props,
-				Err(()) => return reports,
+				Some(props) => props,
+				None => return reports,
 			};
 
 			let layout_type = layout_type.clone();
@@ -757,7 +717,6 @@ impl RegexRule for LayoutRule {
 				);
 				if let Some(props) = matches.get(1).map(|m| m.range()) {
 					sems.add(props.start - 1..props.start, tokens.layout_props_sep);
-					sems.add(props.clone(), tokens.layout_props);
 					sems.add(props.end..props.end + 1, tokens.layout_props_sep);
 				}
 			}
@@ -803,8 +762,8 @@ impl RegexRule for LayoutRule {
 						Ok(token) => token,
 					};
 
-					CTX.with_borrow(|ctx| {
-						ctx.as_ref().map(|ctx| {
+					CTX.with_borrow_mut(|ctx| {
+						ctx.as_mut().map(|ctx| {
 							// Make sure the rule state has been initialized
 							let rule_state = LayoutRule::initialize_state(ctx.state);
 
@@ -827,17 +786,18 @@ impl RegexRule for LayoutRule {
 							};
 
 							// Parse properties
-							let layout_properties = match layout_type.parse_properties(properties.as_str()) {
-								Err(err) => {
+							let prop_source = Rc::new(VirtualSource::new(ctx.location.clone(), ":LUA:Layout Properties".into(), properties)) as Rc<dyn Source>;
+							let layout_properties = match layout_type.parse_properties(&mut ctx.reports, ctx.state, prop_source.into()) {
+								None => {
 									result = Err(BadArgument {
 										to: Some("push".to_string()),
 										pos: 3,
 										name: Some("properties".to_string()),
-										cause: Arc::new(mlua::Error::external(err)),
+										cause: Arc::new(mlua::Error::external("Failed to parse properties")),
 									});
 									return;
 								},
-								Ok(properties) => properties,
+								Some(properties) => properties,
 							};
 
 							let id = match layout_token {
@@ -1162,8 +1122,10 @@ mod tests {
 			layout_sep { delta_line == 1, delta_start == 1, length == 2 };
 			layout_token { delta_line == 0, delta_start == 2, length == 11 };
 			layout_props_sep { delta_line == 0, delta_start == 11, length == 1 };
-			layout_props { delta_line == 0, delta_start == 1, length == 8 };
-			layout_props_sep { delta_line == 0, delta_start == 8, length == 1 };
+			prop_name { delta_line == 0, delta_start == 1, length == 5 };
+			prop_equal { delta_line == 0, delta_start == 5, length == 1 };
+			prop_value { delta_line == 0, delta_start == 1, length == 2 };
+			layout_props_sep { delta_line == 0, delta_start == 2, length == 1 };
 			layout_sep { delta_line == 1, delta_start == 0, length == 2 };
 			layout_token { delta_line == 0, delta_start == 2, length == 10 };
 		);

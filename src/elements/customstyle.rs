@@ -55,9 +55,8 @@ impl CustomStyle for LuaCustomStyle {
 		let mut ctx = KernelContext::new(location.clone(), state, document);
 
 		let mut reports = vec![];
-		kernel.run_with_context(&mut ctx, |lua| {
-			if let Err(err) = self.start.call::<_, ()>(())
-			{
+		kernel.run_with_context(&mut ctx, |_lua| {
+			if let Err(err) = self.start.call::<_, ()>(()) {
 				report_err!(
 					&mut reports,
 					location.source(),
@@ -71,6 +70,7 @@ impl CustomStyle for LuaCustomStyle {
 			}
 		});
 
+		reports.extend(ctx.reports);
 		reports
 	}
 
@@ -85,9 +85,8 @@ impl CustomStyle for LuaCustomStyle {
 		let mut ctx = KernelContext::new(location.clone(), state, document);
 
 		let mut reports = vec![];
-		kernel.run_with_context(&mut ctx, |lua| {
-			if let Err(err) = self.end.call::<_, ()>(())
-			{
+		kernel.run_with_context(&mut ctx, |_lua| {
+			if let Err(err) = self.end.call::<_, ()>(()) {
 				report_err!(
 					&mut reports,
 					location.source(),
@@ -101,6 +100,7 @@ impl CustomStyle for LuaCustomStyle {
 			}
 		});
 
+		reports.extend(ctx.reports);
 		reports
 	}
 }
@@ -344,7 +344,13 @@ impl Rule for CustomStyleRule {
 		bindings.push((
 			"define_toggled".into(),
 			lua.create_function(
-				|_, (name, token, on_start, on_end): (String, String, mlua::Function, mlua::Function)| {
+				|_,
+				 (name, token, on_start, on_end): (
+					String,
+					String,
+					mlua::Function,
+					mlua::Function,
+				)| {
 					let mut result = Ok(());
 
 					let style = LuaCustomStyle {

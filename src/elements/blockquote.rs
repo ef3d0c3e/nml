@@ -7,7 +7,7 @@ use blockquote_style::AuthorPos::After;
 use blockquote_style::AuthorPos::Before;
 use blockquote_style::BlockquoteStyle;
 use lsp::semantic::Semantics;
-use regex::Match;
+use parser::util::escape_source;
 use regex::Regex;
 use runtime_format::FormatArgs;
 use runtime_format::FormatKey;
@@ -24,6 +24,8 @@ use crate::elements::paragraph::Paragraph;
 use crate::elements::text::Text;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::property::Property;
+use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::Rule;
@@ -31,9 +33,6 @@ use crate::parser::source::Cursor;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::style::StyleHolder;
-use crate::parser::util::escape_text;
-use crate::parser::util::Property;
-use crate::parser::util::PropertyParser;
 
 #[derive(Debug)]
 pub struct Blockquote {
@@ -185,15 +184,15 @@ impl BlockquoteRule {
 		let mut props = HashMap::new();
 		props.insert(
 			"author".to_string(),
-			Property::new(false, "Quote author".to_string(), None),
+			Property::new("Quote author".to_string(), None),
 		);
 		props.insert(
 			"cite".to_string(),
-			Property::new(false, "Quote source".to_string(), None),
+			Property::new("Quote source".to_string(), None),
 		);
 		props.insert(
 			"url".to_string(),
-			Property::new(false, "Quote source url".to_string(), None),
+			Property::new("Quote source url".to_string(), None),
 		);
 
 		Self {
@@ -201,29 +200,6 @@ impl BlockquoteRule {
 			continue_re: Regex::new(r"(?:^|\n)>[^\S\r\n]*(.*)").unwrap(),
 			properties: PropertyParser { properties: props },
 		}
-	}
-
-	fn parse_properties(
-		&self,
-		m: Match,
-	) -> Result<(Option<String>, Option<String>, Option<String>), String> {
-		let processed = escape_text('\\', "]", m.as_str());
-		let pm = self.properties.parse(processed.as_str())?;
-
-		let author = pm
-			.get("author", |_, s| -> Result<String, ()> { Ok(s.to_string()) })
-			.map(|(_, s)| s)
-			.ok();
-		let cite = pm
-			.get("cite", |_, s| -> Result<String, ()> { Ok(s.to_string()) })
-			.map(|(_, s)| s)
-			.ok();
-		let url = pm
-			.get("url", |_, s| -> Result<String, ()> { Ok(s.to_string()) })
-			.map(|(_, s)| s)
-			.ok();
-
-		Ok((author, cite, url))
 	}
 }
 
@@ -265,23 +241,35 @@ impl Rule for BlockquoteRule {
 			end_cursor = end_cursor.at(captures.get(0).unwrap().end());
 
 			// Properties
-			let mut author = None;
-			let mut cite = None;
-			let mut url = None;
-			if let Some(properties) = captures.get(1) {
-				match self.parse_properties(properties) {
-					Err(err) => {
-						report_err!(
-							&mut reports,
-							cursor.source.clone(),
-							"Invalid Blockquote Properties".into(),
-							span(properties.range(), err)
-						);
-						return (end_cursor, reports);
-					}
-					Ok(props) => (author, cite, url) = props,
-				}
-			}
+			let prop_source = escape_source(
+				end_cursor.source.clone(),
+				captures.get(1).map_or(0..0, |m| m.range()),
+				"Blockquote Properties".into(),
+				'\\',
+				"]",
+			);
+			let properties =
+				match self
+					.properties
+					.parse("Blockquote", &mut reports, state, prop_source.into())
+				{
+					Some(props) => props,
+					None => return (end_cursor, reports),
+				};
+			let (author, cite, url) = match (
+				properties.get_opt(&mut reports, "author", |_, value| {
+					Result::<_, String>::Ok(value.value.clone())
+				}),
+				properties.get_opt(&mut reports, "cite", |_, value| {
+					Result::<_, String>::Ok(value.value.clone())
+				}),
+				properties.get_opt(&mut reports, "url", |_, value| {
+					Result::<_, String>::Ok(value.value.clone())
+				}),
+			) {
+				(Some(author), Some(cite), Some(url)) => (author, cite, url),
+				_ => return (end_cursor, reports),
+			};
 
 			if let Some((sems, tokens)) =
 				Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
@@ -295,7 +283,6 @@ impl Rule for BlockquoteRule {
 				sems.add(start..start + 1, tokens.blockquote_marker);
 				if let Some(props) = captures.get(1).map(|m| m.range()) {
 					sems.add(props.start - 1..props.start, tokens.blockquote_props_sep);
-					sems.add(props.clone(), tokens.blockquote_props);
 					sems.add(props.end..props.end + 1, tokens.blockquote_props_sep);
 				}
 			}

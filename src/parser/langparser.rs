@@ -105,12 +105,11 @@ impl<'b> Parser for LangParser<'b> {
 			.downcast_rc::<SourceFile>()
 			.ok()
 			.map(|source| {
-				if source.path().is_empty() // Test mode
+				if source.path().is_empty()
+				// Test mode
 				{
 					None
-				}
-				else
-				{
+				} else {
 					let start = if source.path().starts_with("file:///") {
 						7
 					} else {
@@ -119,7 +118,9 @@ impl<'b> Parser for LangParser<'b> {
 					let mut path = PathBuf::from(&source.path()[start..]);
 					match path.canonicalize() {
 						Ok(cano) => path = cano,
-						Err(err) => eprintln!("Failed to canonicalize path `{}`: {err}", source.path()),
+						Err(err) => {
+							eprintln!("Failed to canonicalize path `{}`: {err}", source.path())
+						}
 					}
 					path.pop();
 					Some(path)
@@ -217,8 +218,7 @@ impl<'b> Parser for LangParser<'b> {
 			);
 		}
 
-		if path.is_some()
-		{
+		if path.is_some() {
 			if let Err(err) = std::env::set_current_dir(&current_dir) {
 				println!(
 					"Failed to set working directory to `{}`: {err} {source:#?}",

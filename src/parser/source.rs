@@ -322,3 +322,12 @@ impl Token {
 
 	pub fn end(&self) -> usize { self.range.end }
 }
+
+impl From<Rc<dyn Source>> for Token {
+	fn from(source: Rc<dyn Source>) -> Self {
+		Self {
+			range: 0..source.content().len(),
+			source,
+		}
+	}
+}

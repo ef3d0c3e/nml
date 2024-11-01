@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use parser::util::escape_source;
 use reference_style::ExternalReferenceStyle;
 use regex::Captures;
-use regex::Match;
 use regex::Regex;
 use runtime_format::FormatArgs;
 use runtime_format::FormatKey;
@@ -19,15 +19,13 @@ use crate::document::references::validate_refname;
 use crate::lsp::semantic::Semantics;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::property::Property;
+use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
 use crate::parser::style::StyleHolder;
-use crate::parser::util;
-use crate::parser::util::Property;
-use crate::parser::util::PropertyMap;
-use crate::parser::util::PropertyParser;
 
 #[derive(Debug)]
 pub struct InternalReference {
@@ -168,56 +166,11 @@ impl ReferenceRule {
 		let mut props = HashMap::new();
 		props.insert(
 			"caption".to_string(),
-			Property::new(
-				false,
-				"Override the display of the reference".to_string(),
-				None,
-			),
+			Property::new("Override the display of the reference".to_string(), None),
 		);
 		Self {
 			re: [Regex::new(r"&\{(.*?)\}(?:\[((?:\\.|[^\\\\])*?)\])?").unwrap()],
 			properties: PropertyParser { properties: props },
-		}
-	}
-
-	fn parse_properties(
-		&self,
-		mut reports: &mut Vec<Report>,
-		token: &Token,
-		m: &Option<Match>,
-	) -> Option<PropertyMap> {
-		match m {
-			None => match self.properties.default() {
-				Ok(properties) => Some(properties),
-				Err(e) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Reference Properties".into(),
-						span(
-							token.range.clone(),
-							format!("Reference is missing required property: {e}")
-						)
-					);
-					None
-				}
-			},
-			Some(props) => {
-				let processed =
-					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
-				match self.properties.parse(processed.as_str()) {
-					Err(e) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Reference Properties".into(),
-							span(props.range(), e)
-						);
-						None
-					}
-					Ok(properties) => Some(properties),
-				}
-			}
 		}
 	}
 }
@@ -280,17 +233,29 @@ impl RegexRule for ReferenceRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(&mut reports, &token, &matches.get(2)) {
-			Some(pm) => pm,
+		let prop_source = escape_source(
+			token.source(),
+			matches.get(2).map_or(0..0, |m| m.range()),
+			"Reference Properties".into(),
+			'\\',
+			"]",
+		);
+		let properties = match self.properties.parse(
+			"Reference",
+			&mut reports,
+			state,
+			Token::new(0..prop_source.content().len(), prop_source),
+		) {
+			Some(props) => props,
 			None => return reports,
 		};
 
-		let caption = properties
-			.get("caption", |_, value| -> Result<String, ()> {
-				Ok(value.clone())
-			})
-			.ok()
-			.map(|(_, s)| s);
+		let caption = match properties.get_opt(&mut reports, "caption", |_, value| {
+			Result::<_, String>::Ok(value.value.clone())
+		}) {
+			Some(caption) => caption,
+			None => return reports,
+		};
 
 		if let Some(refdoc) = refdoc {
 			// Get style
@@ -370,7 +335,6 @@ impl RegexRule for ReferenceRule {
 			matches.get(2).map(|m| m.range()),
 		) {
 			sems.add(props.start - 1..props.start, tokens.reference_props_sep);
-			sems.add(props.clone(), tokens.reference_props);
 			sems.add(props.end..props.end + 1, tokens.reference_props_sep);
 		}
 

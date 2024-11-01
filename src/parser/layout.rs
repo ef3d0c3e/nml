@@ -7,13 +7,22 @@ use crate::compiler::compiler::Compiler;
 use crate::document::document::Document;
 use crate::elements::layout::LayoutToken;
 
+use super::parser::ParserState;
+use super::reports::Report;
+use super::source::Token;
+
 /// Represents the type of a layout
 pub trait LayoutType: core::fmt::Debug {
 	/// Name of the layout
 	fn name(&self) -> &'static str;
 
 	/// Parses layout properties
-	fn parse_properties(&self, properties: &str) -> Result<Option<Box<dyn Any>>, String>;
+	fn parse_properties(
+		&self,
+		reports: &mut Vec<Report>,
+		state: &ParserState,
+		token: Token,
+	) -> Option<Box<dyn Any>>;
 
 	/// Expected number of blocks
 	fn expects(&self) -> Range<usize>;
@@ -23,7 +32,7 @@ pub trait LayoutType: core::fmt::Debug {
 		&self,
 		token: LayoutToken,
 		id: usize,
-		properties: &Option<Box<dyn Any>>,
+		properties: &Box<dyn Any>,
 		compiler: &Compiler,
 		document: &dyn Document,
 	) -> Result<String, String>;

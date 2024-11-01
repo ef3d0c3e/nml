@@ -6,6 +6,7 @@ use mlua::Lua;
 use crate::document::document::Document;
 use crate::parser::parser::Parser;
 use crate::parser::parser::ParserState;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 /// Redirected data from lua execution
@@ -21,6 +22,7 @@ pub struct KernelContext<'a, 'b, 'c> {
 	pub state: &'a ParserState<'a, 'b>,
 	pub document: &'c dyn Document<'c>,
 	pub redirects: Vec<KernelRedirect>,
+	pub reports: Vec<Report>,
 }
 
 impl<'a, 'b, 'c> KernelContext<'a, 'b, 'c> {
@@ -34,6 +36,7 @@ impl<'a, 'b, 'c> KernelContext<'a, 'b, 'c> {
 			state,
 			document,
 			redirects: vec![],
+			reports: vec![],
 		}
 	}
 }

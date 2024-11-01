@@ -5,9 +5,8 @@ use std::sync::Once;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
-use crate::parser::util::Property;
-use crate::parser::util::PropertyMapError;
-use crate::parser::util::PropertyParser;
+use crate::parser::property::Property;
+use crate::parser::property::PropertyParser;
 use ariadne::Fmt;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
@@ -18,6 +17,7 @@ use lsp::semantic::Semantics;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
+use parser::util::escape_source;
 use regex::Captures;
 use regex::Regex;
 
@@ -166,14 +166,13 @@ impl GraphRule {
 		props.insert(
 			"layout".to_string(),
 			Property::new(
-				true,
 				"Graphviz layout engine see <https://graphviz.org/docs/layouts/>".to_string(),
 				Some("dot".to_string()),
 			),
 		);
 		props.insert(
 			"width".to_string(),
-			Property::new(true, "SVG width".to_string(), Some("100%".to_string())),
+			Property::new("SVG width".to_string(), Some("100%".to_string())),
 		);
 		Self {
 			re: [Regex::new(
@@ -239,98 +238,31 @@ impl RegexRule for GraphRule {
 		};
 
 		// Properties
-		let properties = match matches.get(1) {
-			None => match self.properties.default() {
-				Ok(properties) => properties,
-				Err(e) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Graph Properties".into(),
-						span(
-							token.range.clone(),
-							format!("Graph is missing property: {e}")
-						)
-					);
-					return reports;
-				}
-			},
-			Some(props) => {
-				let processed =
-					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
-				match self.properties.parse(processed.as_str()) {
-					Err(e) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Graph Properties".into(),
-							span(props.range(), e)
-						);
-						return reports;
-					}
-					Ok(properties) => properties,
-				}
-			}
-		};
-
-		// Property "layout"
-		let graph_layout = match properties.get("layout", |prop, value| {
-			layout_from_str(value.as_str()).map_err(|e| (prop, e))
-		}) {
-			Ok((_prop, kind)) => kind,
-			Err(e) => match e {
-				PropertyMapError::ParseError((prop, err)) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Graph Property".into(),
-						span(
-							token.range.clone(),
-							format!(
-								"Property `{}` cannot be converted: {}",
-								prop.fg(state.parser.colors().info),
-								err.fg(state.parser.colors().error)
-							)
-						)
-					);
-					return reports;
-				}
-				PropertyMapError::NotFoundError(err) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Graph Property".into(),
-						span(token.start() + 1..token.end(), err)
-					);
-					return reports;
-				}
-			},
-		};
-
-		// FIXME: You can escape html, make sure we escape single "
-		// Property "width"
-		let graph_width = match properties.get("width", |_, value| -> Result<String, ()> {
-			Ok(value.clone())
-		}) {
-			Ok((_, kind)) => kind,
-			Err(e) => match e {
-				PropertyMapError::NotFoundError(err) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Graph Property".into(),
-						span(
-							token.start() + 1..token.end(),
-							format!(
-								"Property `{}` is missing",
-								err.fg(state.parser.colors().info)
-							)
-						)
-					);
-					return reports;
-				}
-				_ => panic!("Unknown error"),
-			},
+		let prop_source = escape_source(
+			token.source(),
+			matches.get(1).map_or(0..0, |m| m.range()),
+			"Graphviz Properties".into(),
+			'\\',
+			"]",
+		);
+		let properties =
+			match self
+				.properties
+				.parse("Graphviz", &mut reports, state, prop_source.into())
+			{
+				Some(props) => props,
+				None => return reports,
+			};
+		let (graph_layout, graph_width) = match (
+			properties.get(&mut reports, "layout", |_, value| {
+				layout_from_str(value.value.as_str())
+			}),
+			properties.get(&mut reports, "width", |_, value| {
+				Result::<_, String>::Ok(value.value.clone())
+			}),
+		) {
+			(Some(graph_layout), Some(graph_width)) => (graph_layout, graph_width),
+			_ => return reports,
 		};
 
 		state.push(
@@ -348,7 +280,6 @@ impl RegexRule for GraphRule {
 			sems.add(range.start..range.start + 7, tokens.graph_sep);
 			if let Some(props) = matches.get(1).map(|m| m.range()) {
 				sems.add(props.start - 1..props.start, tokens.graph_props_sep);
-				sems.add(props.clone(), tokens.graph_props);
 				sems.add(props.end..props.end + 1, tokens.graph_props_sep);
 			}
 			sems.add(matches.get(2).unwrap().range(), tokens.graph_content);
@@ -490,8 +421,10 @@ digraph {
 		validate_semantics!(state, source.clone(), 0,
 			graph_sep { delta_line == 1, delta_start == 0, length == 7 };
 			graph_props_sep { delta_line == 0, delta_start == 7, length == 1 };
-			graph_props { delta_line == 0, delta_start == 1, length == 9 };
-			graph_props_sep { delta_line == 0, delta_start == 9, length == 1 };
+			prop_name { delta_line == 0, delta_start == 1, length == 5 };
+			prop_equal { delta_line == 0, delta_start == 5, length == 1 };
+			prop_value { delta_line == 0, delta_start == 1, length == 3 };
+			graph_props_sep { delta_line == 0, delta_start == 3, length == 1 };
 			graph_content { delta_line == 0, delta_start == 1, length == 1 };
 			graph_content { delta_line == 1, delta_start == 0, length == 10 };
 			graph_content { delta_line == 1, delta_start == 0, length == 2 };

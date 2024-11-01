@@ -6,6 +6,7 @@ use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use mlua::Function;
 use mlua::Lua;
+use parser::util::escape_source;
 use regex::Captures;
 use regex::Regex;
 use syntect::easy::HighlightLines;
@@ -23,13 +24,12 @@ use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::property::Property;
+use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
-use crate::parser::util::Property;
-use crate::parser::util::PropertyMapError;
-use crate::parser::util::PropertyParser;
 use crate::parser::util::{self};
 use lazy_static::lazy_static;
 
@@ -291,11 +291,7 @@ impl CodeRule {
 		let mut props = HashMap::new();
 		props.insert(
 			"line_offset".to_string(),
-			Property::new(
-				true,
-				"Line number offset".to_string(),
-				Some("1".to_string()),
-			),
+			Property::new("Line number offset".to_string(), Some("1".to_string())),
 		);
 		Self {
 			re: [
@@ -332,39 +328,22 @@ impl RegexRule for CodeRule {
 	) -> Vec<Report> {
 		let mut reports = vec![];
 
-		let properties = match matches.get(1) {
-			None => match self.properties.default() {
-				Ok(properties) => properties,
-				Err(e) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Code Properties".into(),
-						span(
-							token.range.clone(),
-							format!("Code is missing properties: {e}")
-						)
-					);
-					return reports;
-				}
-			},
-			Some(props) => {
-				let processed =
-					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
-				match self.properties.parse(processed.as_str()) {
-					Err(e) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Code Properties".into(),
-							span(props.range(), e)
-						);
-						return reports;
-					}
-					Ok(properties) => properties,
-				}
-			}
-		};
+		// Properties
+		let prop_source = escape_source(
+			token.source(),
+			matches.get(1).map_or(0..0, |m| m.range()),
+			"Code Properties".into(),
+			'\\',
+			"]",
+		);
+		let properties =
+			match self
+				.properties
+				.parse("Code", &mut reports, state, prop_source.into())
+			{
+				Some(props) => props,
+				None => return reports,
+			};
 
 		let code_lang = match matches.get(2) {
 			None => "Plain Text".to_string(),
@@ -429,43 +408,11 @@ impl RegexRule for CodeRule {
 				let code_name = name.as_str().trim_end().trim_start().to_string();
 				(!code_name.is_empty()).then_some(code_name)
 			});
-			let line_offset = match properties.get("line_offset", |prop, value| {
-				value.parse::<usize>().map_err(|e| (prop, e))
+			let line_offset = match properties.get(&mut reports, "line_offset", |_, value| {
+				value.value.parse::<usize>()
 			}) {
-				Ok((_prop, offset)) => offset,
-				Err(e) => match e {
-					PropertyMapError::ParseError((prop, err)) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Code Property".into(),
-							span(
-								token.start() + 1..token.end(),
-								format!(
-									"Property `line_offset: {}` cannot be converted: {}",
-									prop.fg(state.parser.colors().info),
-									err.fg(state.parser.colors().error)
-								)
-							)
-						);
-						return reports;
-					}
-					PropertyMapError::NotFoundError(err) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Code Property".into(),
-							span(
-								token.start() + 1..token.end(),
-								format!(
-									"Property `{}` doesn't exist",
-									err.fg(state.parser.colors().info)
-								)
-							)
-						);
-						return reports;
-					}
-				},
+				Some(line_offset) => line_offset,
+				_ => return reports,
 			};
 
 			state.push(
@@ -520,7 +467,6 @@ impl RegexRule for CodeRule {
 			);
 			if let Some(props) = matches.get(1).map(|m| m.range()) {
 				sems.add(props.start - 1..props.start, tokens.code_props_sep);
-				sems.add(props.clone(), tokens.code_props);
 				sems.add(props.end..props.end + 1, tokens.code_props_sep);
 			}
 			if let Some(lang) = matches.get(2).map(|m| m.range()) {
@@ -794,8 +740,10 @@ test code
 		validate_semantics!(state, source.clone(), 0,
 			code_sep { delta_line == 1, delta_start == 0, length == 3 };
 			code_props_sep { delta_line == 0, delta_start == 3, length == 1 };
-			code_props { delta_line == 0, delta_start == 1, length == 14 };
-			code_props_sep { delta_line == 0, delta_start == 14, length == 1 };
+			prop_name { delta_line == 0, delta_start == 1, length == 11 };
+			prop_equal { delta_line == 0, delta_start == 11, length == 1 };
+			prop_value { delta_line == 0, delta_start == 1, length == 2 };
+			code_props_sep { delta_line == 0, delta_start == 2, length == 1 };
 			code_lang { delta_line == 0, delta_start == 1, length == 2 };
 			code_title { delta_line == 0, delta_start == 3, length == 6 };
 			code_content { delta_line == 1, delta_start == 0, length == 10 };

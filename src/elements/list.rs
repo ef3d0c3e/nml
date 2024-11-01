@@ -13,6 +13,8 @@ use crate::document::element::Element;
 use crate::lsp::semantic::Semantics;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::property::Property;
+use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::Report;
 use crate::parser::reports::*;
@@ -21,11 +23,7 @@ use crate::parser::source::Cursor;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::util;
-use crate::parser::util::escape_text;
-use crate::parser::util::Property;
-use crate::parser::util::PropertyMapError;
-use crate::parser::util::PropertyParser;
-use regex::Match;
+use parser::util::escape_source;
 use regex::Regex;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -137,11 +135,11 @@ impl ListRule {
 		let mut props = HashMap::new();
 		props.insert(
 			"offset".to_string(),
-			Property::new(false, "Entry numbering offset".to_string(), None),
+			Property::new("Entry numbering offset".to_string(), None),
 		);
 		props.insert(
 			"bullet".to_string(),
-			Property::new(false, "Entry bullet".to_string(), None),
+			Property::new("Entry bullet".to_string(), None),
 		);
 
 		Self {
@@ -191,28 +189,6 @@ impl ListRule {
 				}),
 			);
 		}
-	}
-
-	fn parse_properties(&self, m: Match) -> Result<(Option<usize>, Option<String>), String> {
-		let processed = escape_text('\\', "]", m.as_str());
-		let pm = self.properties.parse(processed.as_str())?;
-
-		let offset = match pm.get("offset", |_, s| s.parse::<usize>()) {
-			Ok((_, val)) => Some(val),
-			Err(err) => match err {
-				PropertyMapError::ParseError(err) => {
-					return Err(format!("Failed to parse `offset`: {err}"))
-				}
-				PropertyMapError::NotFoundError(_) => None,
-			},
-		};
-
-		let bullet = pm
-			.get("bullet", |_, s| -> Result<String, ()> { Ok(s.to_string()) })
-			.map(|(_, s)| s)
-			.ok();
-
-		Ok((offset, bullet))
 	}
 
 	fn parse_depth(depth: &str, document: &dyn Document, offset: usize) -> Vec<(bool, usize)> {
@@ -305,28 +281,46 @@ impl Rule for ListRule {
 				end_cursor = end_cursor.at(captures.get(0).unwrap().end());
 
 				// Properties
-				let mut offset = None;
-				let mut bullet = None;
-				if let Some(properties) = captures.get(2) {
-					match self.parse_properties(properties) {
-						Err(err) => {
-							report_err!(
-								&mut reports,
-								cursor.source.clone(),
-								"Invalid List Entry Properties".into(),
-								span(properties.range(), err)
-							);
-							return (cursor.at(captures.get(0).unwrap().end()), reports);
+				let prop_source = escape_source(
+					end_cursor.source.clone(),
+					captures.get(2).map_or(0..0, |m| m.range()),
+					"List Properties".into(),
+					'\\',
+					"]",
+				);
+				let properties = match self.properties.parse(
+					"List",
+					&mut reports,
+					state,
+					Token::new(0..prop_source.content().len(), prop_source),
+				) {
+					Some(props) => props,
+					None => return (end_cursor, reports),
+				};
+
+				let (offset, bullet) = match (
+					properties.get_opt(&mut reports, "offset", |_, value| {
+						value.value.parse::<usize>()
+					}),
+					properties.get_opt(&mut reports, "bullet", |_, value| {
+						Result::<_, String>::Ok(value.value.clone())
+					}),
+				) {
+					(Some(offset), Some(bullet)) => {
+						// Get bullet from previous entry if it exists
+						if bullet.is_none() {
+							(
+								offset,
+								document
+									.last_element::<ListEntry>()
+									.and_then(|prev| prev.bullet.clone()),
+							)
+						} else {
+							(offset, bullet)
 						}
-						Ok(props) => (offset, bullet) = props,
 					}
-				}
-				// Get bullet from previous entry if it exists
-				if bullet.is_none() {
-					bullet = document
-						.last_element::<ListEntry>()
-						.and_then(|prev| prev.bullet.clone())
-				}
+					_ => return (end_cursor, reports),
+				};
 
 				// Depth
 				let depth = ListRule::parse_depth(
@@ -341,7 +335,6 @@ impl Rule for ListRule {
 					sems.add(captures.get(1).unwrap().range(), tokens.list_bullet);
 					if let Some(props) = captures.get(2).map(|m| m.range()) {
 						sems.add(props.start - 1..props.start, tokens.list_props_sep);
-						sems.add(props.clone(), tokens.list_props);
 						sems.add(props.end..props.end + 1, tokens.list_props_sep);
 					}
 				}
@@ -528,8 +521,10 @@ mod tests {
 		validate_semantics!(state, source.clone(), 0,
 			list_bullet { delta_line == 1, delta_start == 1, length == 1 };
 			list_props_sep { delta_line == 0, delta_start == 1, length == 1 };
-			list_props { delta_line == 0, delta_start == 1, length == 8 };
-			list_props_sep { delta_line == 0, delta_start == 8, length == 1 };
+			prop_name { delta_line == 0, delta_start == 1, length == 6 };
+			prop_equal { delta_line == 0, delta_start == 6, length == 1 };
+			prop_value { delta_line == 0, delta_start == 1, length == 1 };
+			list_props_sep { delta_line == 0, delta_start == 1, length == 1 };
 			style_marker { delta_line == 0, delta_start == 8, length == 2 };
 			style_marker { delta_line == 0, delta_start == 6, length == 2 };
 			list_bullet { delta_line == 2, delta_start == 1, length == 2 };

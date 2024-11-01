@@ -2,6 +2,7 @@ pub mod customstyle;
 pub mod langparser;
 pub mod layout;
 pub mod parser;
+pub mod property;
 pub mod reports;
 pub mod rule;
 pub mod source;

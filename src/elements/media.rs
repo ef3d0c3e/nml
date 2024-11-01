@@ -5,7 +5,6 @@ use ariadne::Fmt;
 use lsp::semantic::Semantics;
 use parser::util::escape_source;
 use regex::Captures;
-use regex::Match;
 use regex::Regex;
 use regex::RegexBuilder;
 
@@ -20,16 +19,14 @@ use crate::document::element::ReferenceableElement;
 use crate::document::references::validate_refname;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::property::Property;
+use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
 use crate::parser::util;
 use crate::parser::util::parse_paragraph;
-use crate::parser::util::Property;
-use crate::parser::util::PropertyMap;
-use crate::parser::util::PropertyMapError;
-use crate::parser::util::PropertyParser;
 
 use super::paragraph::Paragraph;
 use super::reference::InternalReference;
@@ -245,19 +242,15 @@ impl MediaRule {
 		let mut props = HashMap::new();
 		props.insert(
 			"type".to_string(),
-			Property::new(
-				false,
-				"Override for the media type detection".to_string(),
-				None,
-			),
+			Property::new("Override for the media type detection".to_string(), None),
 		);
 		props.insert(
 			"width".to_string(),
-			Property::new(false, "Override for the media width".to_string(), None),
+			Property::new("Override for the media width".to_string(), None),
 		);
 		props.insert(
 			"caption".to_string(),
-			Property::new(false, "Medium caption".to_string(), None),
+			Property::new("Medium caption".to_string(), None),
 		);
 		Self {
 			re: [RegexBuilder::new(
@@ -278,47 +271,6 @@ impl MediaRule {
 		}
 
 		Ok(trimmed)
-	}
-
-	fn parse_properties(
-		&self,
-		mut reports: &mut Vec<Report>,
-		token: &Token,
-		m: &Option<Match>,
-	) -> Option<PropertyMap> {
-		match m {
-			None => match self.properties.default() {
-				Ok(properties) => Some(properties),
-				Err(e) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Media Properties".into(),
-						span(
-							token.range.clone(),
-							format!("Media is missing required property: {e}")
-						)
-					);
-					None
-				}
-			},
-			Some(props) => {
-				let processed =
-					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
-				match self.properties.parse(processed.as_str()) {
-					Err(e) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Media Properties".into(),
-							span(props.range(), e)
-						);
-						None
-					}
-					Ok(properties) => Some(properties),
-				}
-			}
-		}
 	}
 
 	fn detect_filetype(filename: &str) -> Option<MediaType> {
@@ -390,63 +342,60 @@ impl RegexRule for MediaRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(&mut reports, &token, &matches.get(3)) {
-			Some(pm) => pm,
+		let prop_source = escape_source(
+			token.source(),
+			matches.get(3).map_or(0..0, |m| m.range()),
+			"Media Properties".into(),
+			'\\',
+			"]",
+		);
+		let properties = match self.properties.parse(
+			"Media",
+			&mut reports,
+			state,
+			Token::new(0..prop_source.content().len(), prop_source),
+		) {
+			Some(props) => props,
 			None => return reports,
 		};
 
-		let media_type = match Self::detect_filetype(uri.as_str()) {
-			Some(media_type) => media_type,
-			None => match properties.get("type", |prop, value| {
-				MediaType::from_str(value.as_str()).map_err(|e| (prop, e))
-			}) {
-				Ok((_prop, kind)) => kind,
-				Err(e) => match e {
-					PropertyMapError::ParseError((prop, err)) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Media Property".into(),
-							span(
-								token.start() + 1..token.end(),
-								format!(
-									"Property `type: {}` cannot be converted: {}",
-									prop.fg(state.parser.colors().info),
-									err.fg(state.parser.colors().error)
+		let (media_type, caption, width) = match (
+			properties.get_opt(&mut reports, "type", |_, value| {
+				MediaType::from_str(value.value.as_str())
+			}),
+			properties.get_opt(&mut reports, "caption", |_, value| {
+				Result::<_, String>::Ok(value.value.clone())
+			}),
+			properties.get_opt(&mut reports, "width", |_, value| {
+				Result::<_, String>::Ok(value.value.clone())
+			}),
+		) {
+			(Some(media_type), Some(caption), Some(width)) => {
+				if media_type.is_none() {
+					match Self::detect_filetype(uri.as_str()) {
+						None => {
+							report_err!(
+								&mut reports,
+								token.source(),
+								"Invalid Media Property".into(),
+								span(
+									token.start() + 1..token.end(),
+									format!(
+										"Failed to detect media type for `{}`",
+										uri.fg(state.parser.colors().info)
+									)
 								)
-							)
-						);
-						return reports;
+							);
+							return reports;
+						}
+						Some(media_type) => (media_type, caption, width),
 					}
-					PropertyMapError::NotFoundError(err) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Media Property".into(),
-							span(
-								token.start() + 1..token.end(),
-								format!("{err}. Required because mediatype could not be detected")
-							)
-						);
-						return reports;
-					}
-				},
-			},
+				} else {
+					(media_type.unwrap(), caption, width)
+				}
+			}
+			_ => return reports,
 		};
-
-		let width = properties
-			.get("width", |_, value| -> Result<String, ()> {
-				Ok(value.clone())
-			})
-			.ok()
-			.map(|(_, s)| s);
-
-		let caption = properties
-			.get("caption", |_, value| -> Result<String, ()> {
-				Ok(value.clone())
-			})
-			.ok()
-			.map(|(_, value)| value);
 
 		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			sems.add(
@@ -476,7 +425,6 @@ impl RegexRule for MediaRule {
 			// Props
 			if let Some(props) = matches.get(3) {
 				sems.add(props.start() - 1..props.start(), tokens.media_props_sep);
-				sems.add(props.range(), tokens.media_props);
 				sems.add(props.end()..props.end() + 1, tokens.media_props_sep);
 			}
 		}

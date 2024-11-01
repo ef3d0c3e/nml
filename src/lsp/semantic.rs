@@ -96,6 +96,11 @@ pub struct Tokens {
 	pub section_kind: (u32, u32),
 	pub section_name: (u32, u32),
 
+	pub prop_equal: (u32, u32),
+	pub prop_comma: (u32, u32),
+	pub prop_name: (u32, u32),
+	pub prop_value: (u32, u32),
+
 	pub comment: (u32, u32),
 
 	pub link_display_sep: (u32, u32),
@@ -117,7 +122,6 @@ pub struct Tokens {
 	pub reference_doc: (u32, u32),
 	pub reference_link: (u32, u32),
 	pub reference_props_sep: (u32, u32),
-	pub reference_props: (u32, u32),
 
 	pub variable_operator: (u32, u32),
 	pub variable_kind: (u32, u32),
@@ -135,7 +139,6 @@ pub struct Tokens {
 
 	pub code_sep: (u32, u32),
 	pub code_props_sep: (u32, u32),
-	pub code_props: (u32, u32),
 	pub code_lang: (u32, u32),
 	pub code_title: (u32, u32),
 	pub code_content: (u32, u32),
@@ -148,31 +151,25 @@ pub struct Tokens {
 
 	pub list_bullet: (u32, u32),
 	pub list_props_sep: (u32, u32),
-	pub list_props: (u32, u32),
 
 	pub blockquote_marker: (u32, u32),
 	pub blockquote_props_sep: (u32, u32),
-	pub blockquote_props: (u32, u32),
 
 	pub raw_sep: (u32, u32),
 	pub raw_props_sep: (u32, u32),
-	pub raw_props: (u32, u32),
 	pub raw_content: (u32, u32),
 
 	pub tex_sep: (u32, u32),
 	pub tex_props_sep: (u32, u32),
-	pub tex_props: (u32, u32),
 	pub tex_content: (u32, u32),
 
 	pub graph_sep: (u32, u32),
 	pub graph_props_sep: (u32, u32),
-	pub graph_props: (u32, u32),
 	pub graph_content: (u32, u32),
 
 	pub layout_sep: (u32, u32),
 	pub layout_token: (u32, u32),
 	pub layout_props_sep: (u32, u32),
-	pub layout_props: (u32, u32),
 	pub layout_type: (u32, u32),
 
 	pub toc_sep: (u32, u32),
@@ -185,7 +182,6 @@ pub struct Tokens {
 	pub media_uri_sep: (u32, u32),
 	pub media_uri: (u32, u32),
 	pub media_props_sep: (u32, u32),
-	pub media_props: (u32, u32),
 }
 
 impl Tokens {
@@ -195,6 +191,11 @@ impl Tokens {
 			section_reference: token!("enum", "async"),
 			section_kind: token!("enum"),
 			section_name: token!("string"),
+
+			prop_equal: token!("operator"),
+			prop_comma: token!("operator"),
+			prop_name: token!("class"),
+			prop_value: token!("enum"),
 
 			comment: token!("comment"),
 
@@ -217,7 +218,6 @@ impl Tokens {
 			reference_doc: token!("function"),
 			reference_link: token!("macro"),
 			reference_props_sep: token!("operator"),
-			reference_props: token!("enum"),
 
 			variable_operator: token!("operator"),
 			variable_kind: token!("operator"),
@@ -235,7 +235,6 @@ impl Tokens {
 
 			code_sep: token!("operator"),
 			code_props_sep: token!("operator"),
-			code_props: token!("enum"),
 			code_lang: token!("function"),
 			code_title: token!("number"),
 			code_content: token!("string"),
@@ -248,31 +247,25 @@ impl Tokens {
 
 			list_bullet: token!("macro"),
 			list_props_sep: token!("operator"),
-			list_props: token!("enum"),
 
 			blockquote_marker: token!("macro"),
 			blockquote_props_sep: token!("operator"),
-			blockquote_props: token!("enum"),
 
 			raw_sep: token!("operator"),
 			raw_props_sep: token!("operator"),
-			raw_props: token!("enum"),
 			raw_content: token!("string"),
 
 			tex_sep: token!("modifier"),
 			tex_props_sep: token!("operator"),
-			tex_props: token!("enum"),
 			tex_content: token!("string"),
 
 			graph_sep: token!("modifier"),
 			graph_props_sep: token!("operator"),
-			graph_props: token!("enum"),
 			graph_content: token!("string"),
 
 			layout_sep: token!("number"),
 			layout_token: token!("number"),
 			layout_props_sep: token!("operator"),
-			layout_props: token!("enum"),
 			layout_type: token!("function"),
 
 			toc_sep: token!("number"),
@@ -285,7 +278,6 @@ impl Tokens {
 			media_uri_sep: token!("macro"),
 			media_uri: token!("function"),
 			media_props_sep: token!("operator"),
-			media_props: token!("enum"),
 		}
 	}
 }

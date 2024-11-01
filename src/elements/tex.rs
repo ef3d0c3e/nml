@@ -12,8 +12,8 @@ use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use mlua::Function;
 use mlua::Lua;
+use parser::util::escape_source;
 use regex::Captures;
-use regex::Match;
 use regex::Regex;
 
 use crate::cache::cache::Cached;
@@ -27,15 +27,13 @@ use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::property::Property;
+use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
 use crate::parser::util;
-use crate::parser::util::Property;
-use crate::parser::util::PropertyMap;
-use crate::parser::util::PropertyMapError;
-use crate::parser::util::PropertyParser;
 
 #[derive(Debug, PartialEq, Eq)]
 enum TexKind {
@@ -235,19 +233,15 @@ impl TexRule {
 		let mut props = HashMap::new();
 		props.insert(
 			"env".to_string(),
-			Property::new(
-				true,
-				"Tex environment".to_string(),
-				Some("main".to_string()),
-			),
+			Property::new("Tex environment".to_string(), Some("main".to_string())),
 		);
 		props.insert(
 			"kind".to_string(),
-			Property::new(false, "Element display kind".to_string(), None),
+			Property::new("Element display kind".to_string(), None),
 		);
 		props.insert(
 			"caption".to_string(),
-			Property::new(false, "Latex caption".to_string(), None),
+			Property::new("Latex caption".to_string(), None),
 		);
 		Self {
 			re: [
@@ -256,47 +250,6 @@ impl TexRule {
 				Regex::new(r"\$(?:\[((?:\\.|[^\\\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\$)?").unwrap(),
 			],
 			properties: PropertyParser { properties: props },
-		}
-	}
-
-	fn parse_properties(
-		&self,
-		mut reports: &mut Vec<Report>,
-		token: &Token,
-		m: &Option<Match>,
-	) -> Option<PropertyMap> {
-		match m {
-			None => match self.properties.default() {
-				Ok(properties) => Some(properties),
-				Err(e) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Tex Properties".into(),
-						span(
-							token.range.clone(),
-							format!("Tex is missing required property: {e}")
-						)
-					);
-					None
-				}
-			},
-			Some(props) => {
-				let processed =
-					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
-				match self.properties.parse(processed.as_str()) {
-					Err(e) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Tex Properties".into(),
-							span(props.range(), e)
-						);
-						None
-					}
-					Ok(properties) => Some(properties),
-				}
-			}
 		}
 	}
 }
@@ -358,59 +311,44 @@ impl RegexRule for TexRule {
 		};
 
 		// Properties
-		let properties = match self.parse_properties(&mut reports, &token, &matches.get(1)) {
-			Some(pm) => pm,
+		let prop_source = escape_source(
+			token.source(),
+			matches.get(1).map_or(0..0, |m| m.range()),
+			"Tex Properties".into(),
+			'\\',
+			"]",
+		);
+		let properties = match self.properties.parse(
+			"Raw Code",
+			&mut reports,
+			state,
+			Token::new(0..prop_source.content().len(), prop_source),
+		) {
+			Some(props) => props,
 			None => return reports,
 		};
 
-		// Tex kind
-		let tex_kind = match properties.get("kind", |prop, value| {
-			TexKind::from_str(value.as_str()).map_err(|e| (prop, e))
-		}) {
-			Ok((_prop, kind)) => kind,
-			Err(e) => match e {
-				PropertyMapError::ParseError((prop, err)) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Tex Property".into(),
-						span(
-							token.range.clone(),
-							format!(
-								"Property `kind: {}` cannot be converted: {}",
-								prop.fg(state.parser.colors().info),
-								err.fg(state.parser.colors().error)
-							)
-						)
-					);
-					return reports;
-				}
-				PropertyMapError::NotFoundError(_) => {
-					if index == 1 {
-						TexKind::Inline
-					} else {
-						TexKind::Block
-					}
-				}
-			},
+		let (tex_kind, caption, tex_env) = match (
+			properties.get_or(
+				&mut reports,
+				"kind",
+				if index == 1 {
+					TexKind::Inline
+				} else {
+					TexKind::Block
+				},
+				|_, value| TexKind::from_str(value.value.as_str()),
+			),
+			properties.get_opt(&mut reports, "caption", |_, value| {
+				Result::<_, String>::Ok(value.value.clone())
+			}),
+			properties.get(&mut reports, "env", |_, value| {
+				Result::<_, String>::Ok(value.value.clone())
+			}),
+		) {
+			(Some(tex_kind), Some(caption), Some(tex_env)) => (tex_kind, caption, tex_env),
+			_ => return reports,
 		};
-
-		// Caption
-		let caption = properties
-			.get("caption", |_, value| -> Result<String, ()> {
-				Ok(value.clone())
-			})
-			.ok()
-			.map(|(_, value)| value);
-
-		// Environ
-		let tex_env = properties
-			.get("env", |_, value| -> Result<String, ()> {
-				Ok(value.clone())
-			})
-			.ok()
-			.map(|(_, value)| value)
-			.unwrap();
 
 		state.push(
 			document,
@@ -418,7 +356,7 @@ impl RegexRule for TexRule {
 				mathmode: index == 1,
 				location: token.clone(),
 				kind: tex_kind,
-				env: tex_env.to_string(),
+				env: tex_env,
 				tex: tex_content,
 				caption,
 			}),
@@ -432,7 +370,6 @@ impl RegexRule for TexRule {
 			);
 			if let Some(props) = matches.get(1).map(|m| m.range()) {
 				sems.add(props.start - 1..props.start, tokens.tex_props_sep);
-				sems.add(props.clone(), tokens.tex_props);
 				sems.add(props.end..props.end + 1, tokens.tex_props_sep);
 			}
 			sems.add(matches.get(2).unwrap().range(), tokens.tex_content);
@@ -570,7 +507,7 @@ $[kind=block,env=another] e^{i\pi}=-1$
 		);
 
 		validate_document!(doc.content().borrow(), 0,
-			Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
+			Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\\\".to_string()) };
 			Tex { mathmode == false, tex == "Non Math \\LaTeX", env == "another" };
 			Tex { mathmode == true, tex == "e^{i\\pi}=-1", env == "another" };
 			Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
@@ -604,7 +541,7 @@ $[env=another] e^{i\pi}=-1$
 
 		validate_document!(doc.content().borrow(), 0,
 			Paragraph {
-				Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
+				Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\\\".to_string()) };
 				Tex { mathmode == false, tex == "Non Math \\LaTeX", env == "another", caption == Some("Enclosed ].".to_string()) };
 				Tex { mathmode == true, tex == "e^{i\\pi}=-1", env == "another" };
 				Tex { mathmode == true, tex == "1+1=2", env == "main", caption == Some("Some, text\\".to_string()) };
@@ -634,8 +571,10 @@ $[kind=inline]\LaTeX$
 		validate_semantics!(state, source.clone(), 0,
 			tex_sep { delta_line == 1, delta_start == 0, length == 1 };
 			tex_props_sep { delta_line == 0, delta_start == 1, length == 1 };
-			tex_props { delta_line == 0, delta_start == 1, length == 11 };
-			tex_props_sep { delta_line == 0, delta_start == 11, length == 1 };
+			prop_name { delta_line == 0, delta_start == 1, length == 4 };
+			prop_equal { delta_line == 0, delta_start == 4, length == 1 };
+			prop_value { delta_line == 0, delta_start == 1, length == 6 };
+			tex_props_sep { delta_line == 0, delta_start == 6, length == 1 };
 			tex_content { delta_line == 0, delta_start == 1, length == 6 };
 			tex_sep { delta_line == 0, delta_start == 6, length == 1 };
 		);

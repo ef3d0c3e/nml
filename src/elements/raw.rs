@@ -6,18 +6,18 @@ use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
+use crate::parser::property::Property;
+use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
-use crate::parser::util::Property;
-use crate::parser::util::PropertyMapError;
-use crate::parser::util::PropertyParser;
 use crate::parser::util::{self};
 use ariadne::Fmt;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
+use parser::util::escape_source;
 use regex::Captures;
 use regex::Regex;
 use std::collections::HashMap;
@@ -59,7 +59,6 @@ impl RawRule {
 		props.insert(
 			"kind".to_string(),
 			Property::new(
-				true,
 				"Element display kind".to_string(),
 				Some("inline".to_string()),
 			),
@@ -127,77 +126,28 @@ impl RegexRule for RawRule {
 			}
 		};
 
-		let properties = match matches.get(1) {
-			None => match self.properties.default() {
-				Ok(properties) => properties,
-				Err(e) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Raw Code".into(),
-						span(
-							token.range.clone(),
-							format!("Raw code is missing properties: {e}")
-						)
-					);
-					return reports;
-				}
-			},
-			Some(props) => {
-				let processed =
-					util::escape_text('\\', "]", props.as_str().trim_start().trim_end());
-				match self.properties.parse(processed.as_str()) {
-					Err(e) => {
-						report_err!(
-							&mut reports,
-							token.source(),
-							"Invalid Raw Code Properties".into(),
-							span(props.range(), e)
-						);
-						return reports;
-					}
-					Ok(properties) => properties,
-				}
-			}
+		let prop_source = escape_source(
+			token.source(),
+			matches.get(1).map_or(0..0, |m| m.range()),
+			"Raw Properties".into(),
+			'\\',
+			"]",
+		);
+		let properties = match self.properties.parse(
+			"Raw Code",
+			&mut reports,
+			state,
+			Token::new(0..prop_source.content().len(), prop_source),
+		) {
+			Some(props) => props,
+			None => return reports,
 		};
 
-		let raw_kind: ElemKind = match properties.get("kind", |prop, value| {
-			ElemKind::from_str(value.as_str()).map_err(|e| (prop, e))
+		let raw_kind = match properties.get(&mut reports, "kind", |_, value| {
+			ElemKind::from_str(value.value.as_str())
 		}) {
-			Ok((_prop, kind)) => kind,
-			Err(e) => match e {
-				PropertyMapError::ParseError((prop, err)) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Raw Code Properties".into(),
-						span(
-							token.range.clone(),
-							format!(
-								"Property `kind: {}` cannot be converted: {}",
-								prop.fg(state.parser.colors().info),
-								err.fg(state.parser.colors().error)
-							)
-						)
-					);
-					return reports;
-				}
-				PropertyMapError::NotFoundError(err) => {
-					report_err!(
-						&mut reports,
-						token.source(),
-						"Invalid Raw Code Properties".into(),
-						span(
-							token.range.clone(),
-							format!(
-								"Property `{}` is missing",
-								err.fg(state.parser.colors().info)
-							)
-						)
-					);
-					return reports;
-				}
-			},
+			None => return reports,
+			Some(raw_kind) => raw_kind,
 		};
 
 		state.push(
@@ -214,7 +164,6 @@ impl RegexRule for RawRule {
 			sems.add(range.start..range.start + 2, tokens.raw_sep);
 			if let Some(props) = matches.get(1).map(|m| m.range()) {
 				sems.add(props.start - 1..props.start, tokens.raw_props_sep);
-				sems.add(props.clone(), tokens.raw_props);
 				sems.add(props.end..props.end + 1, tokens.raw_props_sep);
 			}
 			sems.add(matches.get(2).unwrap().range(), tokens.raw_content);
@@ -356,8 +305,10 @@ Break%<nml.raw.push("block", "Raw")>%NewParagraph%<nml.raw.push("inline", "<b>")
 		validate_semantics!(state, source.clone(), 0,
 			raw_sep { delta_line == 1, delta_start == 0, length == 2 };
 			raw_props_sep { delta_line == 0, delta_start == 2, length == 1 };
-			raw_props { delta_line == 0, delta_start == 1, length == 10 };
-			raw_props_sep { delta_line == 0, delta_start == 10, length == 1 };
+			prop_name { delta_line == 0, delta_start == 1, length == 4 };
+			prop_equal { delta_line == 0, delta_start == 4, length == 1 };
+			prop_value { delta_line == 0, delta_start == 1, length == 5 };
+			raw_props_sep { delta_line == 0, delta_start == 5, length == 1 };
 			raw_content { delta_line == 0, delta_start == 1, length == 4 };
 			raw_sep { delta_line == 0, delta_start == 4, length == 2 };
 			raw_sep { delta_line == 1, delta_start == 0, length == 2 };
