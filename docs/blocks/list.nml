@@ -1,5 +1,4 @@
 @import ../template.nml
-@nav.previous = Code
 %<make_doc({"Blocks"}, "Lists", "Lists")>%
 
 # Lists

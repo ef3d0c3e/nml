@@ -82,37 +82,51 @@ a.inline-code {
 }
 
 /* Navbar */
-.navbar {
+.navbar-wrap
+{
+	display: flex;
+}
+#navbar {
 	display: none;
 
 	left: 0;
 	top: 0;
 	bottom: 0;
-	width: max(calc((100vw - 99ch) / 2 - 12vw), 24ch);
+	width: max(min(calc((100vw - 99ch) / 2), 32ch), 28ch);
 	height: 100vh;
-	position: fixed;
 	margin-right: 1em;
+	padding-top: 2.5em;
+	position: fixed;
+	overflow-x: scroll;
 
-	overflow-y: auto;
-	box-sizing: border-box;
-	overscroll-behavior-y: contain;
+	transition: 0.5s;
 
 	background-color: #242526;
 	color: #d0d0d0;
-
-	font-weight: bold;
+	box-shadow: 1px 0px 4px 0px rgba(0,0,0,0.75);
 }
 
-@media (min-width: 130ch) {
-	.navbar {
-		display: block;
-	}
-	.container {
-		flex-direction: row;
-	}
+:checked + #navbar {
+	display: block;
+	transition: margin-left .5s;
+}
+.navbar-checkbox-label {
+	border-radius: 3px;
+	position: fixed;
+
+	top: 0.2em;
+	left: 0.2em;
+	line-height: 1em;
+	padding: 0.1em;
+
+  	background: #2f343f;
+	font-size: 1.8em;
+	color: #7c8c8c;
+
+	box-shadow: 0px 0px 3px 1px #242526 inset;
 }
 
-.navbar li {
+#navbar li {
 	display: block;
 	position: relative;
 	padding-left: .25em;
@@ -149,31 +163,31 @@ li.navbar-entry-current a {
 	font-weight: normal;
 }
 
-.navbar ul {
+#navbar ul {
 	margin-left: 0em;
 	padding-left: 0;
 	line-height: 1.66em;
 }
 
-.navbar summary{
+#navbar summary{
 	display: block;
 	cursor: pointer;
 }
 
-.navbar summary::marker,
-.navbar summary::-webkit-details-marker{
+#navbar summary::marker,
+#navbar summary::-webkit-details-marker{
 	display: none;
 }
 
-.navbar summary:focus{
+#navbar summary:focus{
 	outline: none;
 }
 
-.navbar summary:focus-visible{
+#navbar summary:focus-visible{
 	outline: 1px dotted #000;
 }
 
-.navbar summary:after {
+#navbar summary:after {
 	content: "+";
 	color: #55ffb4;
 	float: left;
@@ -181,7 +195,7 @@ li.navbar-entry-current a {
 	width: 1em;
 }
 
-.navbar details[open] > summary:after {
+#navbar details[open] > summary {
 	content: "–";
 }
 

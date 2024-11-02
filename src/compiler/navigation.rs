@@ -36,7 +36,7 @@ impl NavEntries {
 		let mut result = String::new();
 		match target {
 			Target::HTML => {
-				result += r#"<div class="navbar"><ul>"#;
+				result += r#"<input id="navbar-checkbox" class="toggle" type="checkbox" style="display:none" checked><div id="navbar"><ul>"#;
 
 				fn process(
 					target: Target,
@@ -107,7 +107,7 @@ impl NavEntries {
 					0,
 				);
 
-				result += r#"</ul></div>"#;
+				result += r#"</ul></div><label for="navbar-checkbox" class="navbar-checkbox-label">&#9776;</label>"#;
 			}
 			_ => todo!(""),
 		}

@@ -379,7 +379,7 @@ impl RegexRule for CodeRule {
 		let mut code_content = if index == 0 {
 			util::escape_text('\\', "```", matches.get(4).unwrap().as_str(), false)
 		} else {
-			util::escape_text('\\', "``", matches.get(3).unwrap().as_str(), false)
+			util::escape_text('\\', "``", matches.get(3).unwrap().as_str(), !matches.get(3).unwrap().as_str().contains('\n'))
 		};
 		if code_content.bytes().last() == Some(b'\n')
 		// Remove newline
@@ -657,7 +657,7 @@ fn fact(n: usize) -> usize
 		assert_eq!(found[2].block, CodeKind::MiniBlock);
 		assert_eq!(found[2].language, "Rust");
 		assert_eq!(found[2].name, None);
-		assert_eq!(found[2].code, "fn fact(n: usize) -> usize\n{\n\tmatch n\n\t{\n\t\t0 | 1 => 1,\n\t\t_ => n * fact(n-1)\n\t}\n}");
+		assert_eq!(found[2].code, "\nfn fact(n: usize) -> usize\n{\n\tmatch n\n\t{\n\t\t0 | 1 => 1,\n\t\t_ => n * fact(n-1)\n\t}\n}");
 		assert_eq!(found[2].line_offset, 1);
 
 		assert_eq!(found[3].block, CodeKind::MiniBlock);

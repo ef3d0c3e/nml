@@ -303,31 +303,32 @@ mod tests {
 			escape_text(
 				'\\',
 				"%",
-				"escaped: \\%, also escaped: \\\\\\%, untouched: \\a"
+				"escaped: \\%, also escaped: \\\\\\%, untouched: \\a",
+				true
 			),
 			"escaped: %, also escaped: \\%, untouched: \\a"
 		);
 		assert_eq!(
-			escape_text('"', "><)))°>", "Escaped fish: \"><)))°>"),
+			escape_text('"', "><)))°>", "Escaped fish: \"><)))°>", false),
 			"Escaped fish: ><)))°>".to_string()
 		);
 		assert_eq!(
-			escape_text('\\', "]", "Escaped \\]"),
+			escape_text('\\', "]", "Escaped \\]", true),
 			"Escaped ]".to_string()
 		);
 		assert_eq!(
-			escape_text('\\', "]", "Unescaped \\\\]"),
+			escape_text('\\', "]", "Unescaped \\\\]", false),
 			"Unescaped \\\\]".to_string()
 		);
 		assert_eq!(
-			escape_text('\\', "]", "Escaped \\\\\\]"),
+			escape_text('\\', "]", "Escaped \\\\\\]", true),
 			"Escaped \\]".to_string()
 		);
 		assert_eq!(
-			escape_text('\\', "]", "Unescaped \\\\\\\\]"),
+			escape_text('\\', "]", "Unescaped \\\\\\\\]", false),
 			"Unescaped \\\\\\\\]".to_string()
 		);
-		assert_eq!(escape_text('\\', ")", "A\\)B\\"), "A)B".to_string(),);
-		assert_eq!(escape_text('\\', ")", "A\\)B\\\\"), "A)B\\".to_string(),);
+		assert_eq!(escape_text('\\', ")", "A\\)B\\", true), "A)B".to_string(),);
+		assert_eq!(escape_text('\\', ")", "A\\)B\\\\", false), "A)B\\".to_string(),);
 	}
 }
