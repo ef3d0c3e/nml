@@ -1,0 +1,57 @@
+@import ../template.nml
+@nav.previous = Code
+%<make_doc({"Blocks"}, "Lists", "Lists")>%
+
+# Lists
+
+ * Here is a simple list
+ ** With nested entries
+ *- Numbered even!
+
+Lists start after a newline with one or more space or tab, followed by `\*` for unnumbered lists or `-` for numbered lists.
+
+**Example**
+#+LAYOUT_BEGIN Split
+*The following...*
+```Markdown
+ * A
+ * B
+
+ - A
+ - B
+```
+#+LAYOUT_NEXT
+*...gives the following*
+ * A
+ * B
+
+ - A
+ - B
+#+LAYOUT_END
+
+# Nested lists
+
+Lists can contain other lists as nested elements.
+
+**Example**
+#+LAYOUT_BEGIN Split
+*The following...*
+```Markdown
+ - First
+ --[offset=11] Nested
+ -- Numbered list!
+ - Back to the first list
+```
+#+LAYOUT_NEXT
+*...gives the following*
+ - First
+ --[offset=11] Nested
+ -- Numbered list!
+ - Back to the first list
+#+LAYOUT_END
+
+# Properties
+
+Lists currently support these properties:
+ * ``offset`` (number) The start offset for a numbered list, defaults to 1
+ * ``bullet`` (currently unused)

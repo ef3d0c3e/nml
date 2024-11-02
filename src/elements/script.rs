@@ -310,7 +310,7 @@ impl RegexRule for ScriptRule {
 			}
 		}
 
-		// TODO: Process reports
+		reports.extend(ctx.reports);
 		reports
 	}
 }

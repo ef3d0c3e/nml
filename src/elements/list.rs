@@ -199,7 +199,7 @@ impl ListRule {
 
 		let mut continue_match = true;
 		depth.chars().enumerate().for_each(|(idx, c)| {
-			let number = if offset == usize::MAX {
+			let number = if offset == usize::MAX || idx + 1 != depth.len() {
 				prev_entry
 					.as_ref()
 					.and_then(|v| {
