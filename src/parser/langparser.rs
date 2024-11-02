@@ -201,14 +201,14 @@ impl<'b> Parser for LangParser<'b> {
 		// Process the end of the semantics queue
 		Semantics::on_document_end(&state.shared.lsp, source.clone());
 
-		// Rule States
-		self.handle_reports(state.shared.rule_state.borrow_mut().on_scope_end(
-			&state,
-			&doc,
-			super::state::Scope::DOCUMENT,
-		));
-
 		if parent.is_none() {
+			// Rule States
+			self.handle_reports(state.shared.rule_state.borrow_mut().on_scope_end(
+				&state,
+				&doc,
+				super::state::Scope::DOCUMENT,
+			));
+
 			state.push(
 				&doc,
 				Box::new(DocumentEnd(Token::new(

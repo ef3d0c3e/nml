@@ -296,6 +296,7 @@ impl RegexRule for TexRule {
 					'\\',
 					["|$", "$"][index],
 					content.as_str().trim_start().trim_end(),
+					true,
 				);
 
 				if processed.is_empty() {

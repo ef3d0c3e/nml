@@ -377,9 +377,9 @@ impl RegexRule for CodeRule {
 		};
 
 		let mut code_content = if index == 0 {
-			util::escape_text('\\', "```", matches.get(4).unwrap().as_str())
+			util::escape_text('\\', "```", matches.get(4).unwrap().as_str(), false)
 		} else {
-			util::escape_text('\\', "``", matches.get(3).unwrap().as_str())
+			util::escape_text('\\', "``", matches.get(3).unwrap().as_str(), false)
 		};
 		if code_content.bytes().last() == Some(b'\n')
 		// Remove newline

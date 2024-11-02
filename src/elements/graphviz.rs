@@ -222,7 +222,7 @@ impl RegexRule for GraphRule {
 				return reports;
 			}
 			Some(content) => {
-				let processed = util::escape_text('\\', "[/graph]", content.as_str());
+				let processed = util::escape_text('\\', "[/graph]", content.as_str(), true);
 
 				if processed.is_empty() {
 					report_err!(

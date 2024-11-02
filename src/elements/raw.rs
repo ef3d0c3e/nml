@@ -112,7 +112,7 @@ impl RegexRule for RawRule {
 			}
 			Some(content) => {
 				let processed =
-					util::escape_text('\\', "?}", content.as_str().trim_start().trim_end());
+					util::escape_text('\\', "?}", content.as_str().trim_start().trim_end(), true);
 
 				if processed.is_empty() {
 					report_warn!(

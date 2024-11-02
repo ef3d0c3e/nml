@@ -159,18 +159,21 @@ pub fn escape_source(
 ///
 /// If you need to create a source, do not use this function, use [`escape_source`] instead
 /// as it will populate an offsets to get accurate diagnostics and semantics.
-pub fn escape_text<S: AsRef<str>>(escape: char, token: &'static str, content: S) -> String {
+pub fn escape_text<S: AsRef<str>>(
+	escape: char,
+	token: &'static str,
+	content: S,
+	trim: bool,
+) -> String {
 	let mut processed = String::new();
 	let mut escaped = 0;
 	let mut token_it = token.chars().peekable();
-	for c in content
-		.as_ref()
-		.chars()
-		.as_str()
-		.trim_start()
-		.trim_end()
-		.chars()
-	{
+	let data = if trim {
+		content.as_ref().chars().as_str().trim_start().trim_end()
+	} else {
+		content.as_ref().chars().as_str()
+	};
+	for c in data.chars() {
 		if c == escape {
 			escaped += 1;
 		} else if escaped % 2 == 1 && token_it.peek().map_or(false, |p| *p == c) {

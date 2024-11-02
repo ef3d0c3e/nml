@@ -329,7 +329,7 @@ impl RegexRule for MediaRule {
 			matches.get(2).unwrap(),
 			MediaRule::validate_uri(matches.get(2).unwrap().as_str()),
 		) {
-			(_, Ok(uri)) => util::escape_text('\\', ")", uri),
+			(_, Ok(uri)) => util::escape_text('\\', ")", uri, true),
 			(m, Err(err)) => {
 				report_err!(
 					&mut reports,
