@@ -16,6 +16,7 @@ use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
 use ariadne::Fmt;
+use lsp::hints::Hints;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -581,6 +582,10 @@ impl RegexRule for LayoutRule {
 				Some(last) => last,
 			};
 
+			if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp) {
+				hints.add(token.end(), layout_type.name().to_string());
+			}
+
 			if layout_type.expects().end < tokens.len()
 			// Too many blocks
 			{
@@ -662,6 +667,10 @@ impl RegexRule for LayoutRule {
 				}
 				Some(last) => last,
 			};
+
+			if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp) {
+				hints.add(token.end(), layout_type.name().to_string());
+			}
 
 			if layout_type.expects().start > tokens.len()
 			// Not enough blocks
@@ -1129,5 +1138,49 @@ mod tests {
 			layout_sep { delta_line == 1, delta_start == 0, length == 2 };
 			layout_token { delta_line == 0, delta_start == 2, length == 10 };
 		);
+	}
+
+	#[test]
+	fn hints() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+#+LAYOUT_BEGIN Split
+	A
+#+LAYOUT_NEXT
+	B
+#+LAYOUT_END
+		"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new_with_semantics(&parser, None),
+			source.clone(),
+			None,
+			ParseMode::default(),
+		);
+		if let Some(lsp) = &state.shared.lsp {
+			let borrow = lsp.borrow();
+
+			if let Some(hints) = borrow.inlay_hints.get(&(source as Rc<dyn Source>)) {
+				let borrow = hints.hints.borrow();
+				assert_eq!(
+					borrow[0].position,
+					tower_lsp::lsp_types::Position {
+						line: 3,
+						character: 13
+					}
+				);
+				assert_eq!(
+					borrow[1].position,
+					tower_lsp::lsp_types::Position {
+						line: 5,
+						character: 12
+					}
+				);
+			}
+		}
 	}
 }
