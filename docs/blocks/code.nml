@@ -1,8 +1,95 @@
 @import ../template.nml
 %<make_doc({"Blocks"}, "Code", "Code")>%
 
-# Code
+# Full blocks of code
 
-```C,
-TEST
+NML supports different kind of code blocks. The *full block* modes creates a (optionally titled), numbered code block.
+You can also specify the language of the block to get proper highlighting via the [syntect](https://docs.rs/syntect/latest/syntect/) crate.
+
+**Example:**
+#+LAYOUT_BEGIN Split
+*The following...*
+``Markdown
+`\``C, Factorial in C
+int factorial(int n)
+{
+	if (n <= 1)
+		return 1;
+	return n * factorial(n - 1);
+}
+`\``
+``
+#+LAYOUT_NEXT
+*...gives the following*
+```C, Factorial in C
+int factorial(int n)
+{
+	if (n <= 1)
+		return 1;
+	return n * factorial(n - 1);
+}
 ```
+#+LAYOUT_END
+
+##+* Properties
+ * ``line_offset``: (number) The number of the first line (defaults: 0)
+
+# Mini blocks
+
+Mini blocks are code blocks that can span on a single line (thus blending within a paragraph).
+
+**Example:**
+ * ``Plain Text,\``Rust, str.chars().iter().fold(0, |acc, _| acc + 1)\`` `` → ``Rust, str.chars().iter().fold(0, |acc, _| acc + 1)``
+ * ``Plain Text, \``C++, auto car{ std::make_unique<Car>(...) };\`` `` → ``C++, auto car{ std::make_unique<Car>(...) };``
+
+Mini blocks can span multiple lines, in which case they become similar to full code blocks with the following differences:
+ - **No title:**  Mini blocks cannot have a title at all
+ - **No line numbers:** Line numbers won't be shown
+
+**Example:**
+#+LAYOUT_BEGIN Split
+*The following...*
+``Markdown
+\``Rust
+fn real_position(
+	source: Rc<dyn Source>,
+	position: usize
+) -> (Rc<dyn Source>, usize)
+{
+	if let Some(parent) = source.parent
+	{
+		return real_position(parent.clone(), source.apply_offsets(position));
+	}
+	return (source.clone(), source.apply_offsets(position));
+}
+\``
+``
+#+LAYOUT_NEXT
+*...gives the following*
+``Rust
+fn real_position(
+	source: Rc<dyn Source>,
+	position: usize
+) -> (Rc<dyn Source>, usize)
+{
+	if let Some(parent) = source.parent
+	{
+		return real_position(parent.clone(), source.apply_offsets(position));
+	}
+	return (source.clone(), source.apply_offsets(position));
+}
+``
+#+LAYOUT_END
+
+# Code theme
+
+Code theme can be controlled by the variable ``code.theme``. The default value is ``base16-ocean.dark``.
+According to [syntect](https://docs.rs/syntect/latest/syntect/highlighting/struct.ThemeSet.html#method.load_defaults)'s
+documentation, the following themes are enabled:
+ * ``base16-ocean.dark``
+ * ``base16-eighties.dark``
+ * ``base16-mocha.dark``
+ * ``base16-ocean.light``
+ * ``InspiredGitHub``
+ * ``Solarized (dark)``
+ * ``Solarized (light)``
