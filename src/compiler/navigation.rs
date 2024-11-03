@@ -119,36 +119,25 @@ impl NavEntries {
 		left_title: &str,
 		right_title: &str,
 	) -> std::cmp::Ordering {
-		let left_previous = entrymap.get(left_title).unwrap();
-		let right_previous = entrymap.get(right_title).unwrap();
+		let lp = entrymap.get(left_title).unwrap();
+		let rp = entrymap.get(right_title).unwrap();
 
-		match (left_previous, right_previous) {
-			(Some(lp), Some(rp)) => {
-				if lp.as_str() == right_title {
-					std::cmp::Ordering::Greater
-				} else if rp.as_str() == left_title {
-					std::cmp::Ordering::Less
-				} else if rp.as_str() == lp.as_str() {
-					left_title.cmp(right_title)
-				} else {
-					Self::sort_entry(entrymap, lp.as_str(), rp.as_str())
-				}
+		if lp.clone().map(|s| s.as_str() == right_title) == Some(true) {
+			std::cmp::Ordering::Greater
+		} else if rp.clone().map(|s| s.as_str() == left_title) == Some(true) {
+			std::cmp::Ordering::Less
+		} else if lp.is_some() && rp.is_none() {
+			std::cmp::Ordering::Greater
+		} else if rp.is_some() && lp.is_none() {
+			std::cmp::Ordering::Less
+		} else if let (Some(pl), Some(pr)) = (lp, rp) {
+			if pl == pr {
+				left_title.cmp(right_title)
+			} else {
+				Self::sort_entry(entrymap, pl, pr)
 			}
-			(Some(lp), None) => {
-				if right_title == lp.as_str() {
-					std::cmp::Ordering::Greater
-				} else {
-					left_title.cmp(right_title)
-				}
-			}
-			(None, Some(rp)) => {
-				if left_title == rp.as_str() {
-					std::cmp::Ordering::Less
-				} else {
-					left_title.cmp(right_title)
-				}
-			}
-			(None, None) => left_title.cmp(right_title),
+		} else {
+			left_title.cmp(right_title)
 		}
 	}
 }
