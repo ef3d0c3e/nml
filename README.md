@@ -1,6 +1,6 @@
 # NML -- Not a markup language!
 
-Currently a work in progress, expect features and fixes to arrive soon!
+Documentation is available [here](https://ef3d0c3e.github.io/nml/readme/Getting%20Started.html)
 
 # Requirements
 
