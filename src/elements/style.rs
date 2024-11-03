@@ -1,7 +1,6 @@
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::document::document::Document;
-use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lsp::semantic::Semantics;
@@ -21,8 +20,6 @@ use regex::Regex;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-
-use super::paragraph::Paragraph;
 
 #[derive(Debug)]
 pub struct Style {
@@ -96,9 +93,17 @@ impl RuleState for StyleState {
 				} // Style not enabled
 				let token = token.as_ref().unwrap();
 
-				let paragraph = document.last_element::<Paragraph>().unwrap();
-				let paragraph_end = paragraph
-					.content
+				let container =
+					std::cell::Ref::filter_map(document.content().borrow(), |content| {
+						content.last().and_then(|last| last.as_container())
+					})
+					.ok();
+				if container.is_none() {
+					return;
+				}
+				let paragraph_end = container
+					.unwrap()
+					.contained()
 					.last()
 					.map(|last| {
 						(
@@ -277,6 +282,8 @@ impl RegexRule for StyleRule {
 
 #[cfg(test)]
 mod tests {
+	use elements::paragraph::Paragraph;
+
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;

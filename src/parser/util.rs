@@ -329,6 +329,9 @@ mod tests {
 			"Unescaped \\\\\\\\]".to_string()
 		);
 		assert_eq!(escape_text('\\', ")", "A\\)B\\", true), "A)B".to_string(),);
-		assert_eq!(escape_text('\\', ")", "A\\)B\\\\", false), "A)B\\".to_string(),);
+		assert_eq!(
+			escape_text('\\', ")", "A\\)B\\\\", false),
+			"A)B\\".to_string(),
+		);
 	}
 }

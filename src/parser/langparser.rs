@@ -216,6 +216,12 @@ impl<'b> Parser for LangParser<'b> {
 					doc.source(),
 				))),
 			);
+		} else {
+			self.handle_reports(state.shared.rule_state.borrow_mut().on_scope_end(
+				&state,
+				&doc,
+				super::state::Scope::PARAGRAPH,
+			));
 		}
 
 		if path.is_some() {

@@ -116,9 +116,16 @@ impl RuleState for CustomStyleState {
 		let mut reports = vec![];
 
 		self.toggled.iter().for_each(|(style, token)| {
-			let paragraph = document.last_element::<Paragraph>().unwrap();
-			let paragraph_end = paragraph
-				.content
+			let container = std::cell::Ref::filter_map(document.content().borrow(), |content| {
+				content.last().and_then(|last| last.as_container())
+			})
+			.ok();
+			if container.is_none() {
+				return;
+			}
+			let paragraph_end = container
+				.unwrap()
+				.contained()
 				.last()
 				.map(|last| {
 					(
