@@ -1,0 +1,44 @@
+@import template.nml
+@nav.previous = Sections
+%<make_doc({}, "Variables", "Variables")>%
+
+# Variable definition
+
+In NML you can defines variables and call them later.
+
+Currently, two types of variables are supported:
+ * **Text variables**: Just simple text
+ * **Path variables**: Path aware variables, that will display an error if the path doesn't exist or is not accessible
+
+To define a variable use the following syntax:
+``Markdown
+@var = value
+:: Text variable
+@'my_file = ./pic.png
+:: Path variable
+``
+
+Variable names cannot contain `\%` or `=`. However variables values can span across multiple lines:
+``Markdown
+@var = A\
+B
+:: var == "AB"
+@var = A\\
+B
+:: var == "A\nB"
+``
+
+Using a single `\\`'s will ignore the following newline, using two `\\\\`'s will keep the newline.
+
+# Variable substitution
+
+Once variables have been defined, you can call them to be expanded to their content:
+
+``Markdown
+@var = Hello, World!
+:: Definition
+%var%
+:: Substitution
+``
+
+Expanded variables will be processed by the parser to display their content, as if you had written the variable's value directly.

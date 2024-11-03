@@ -1,7 +1,7 @@
 @import ../template.nml
 %<make_doc({"Styles"}, "User-Defined", "User-Defined Styles")>%
 
-# Defining a custom style
+#{custom_style} Defining a custom style
 ```Lua
 function undercustom_start(color)
 	nml.raw.push("inline", "<span style=\"border-bottom: 1px dashed " .. color .. "\">")

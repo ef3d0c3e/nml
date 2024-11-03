@@ -1,5 +1,5 @@
 @import template.nml
-@nav.previous = Sections
+@nav.previous = Variables
 %<make_doc({}, "References", "References")>%
 
 #{internal_references} Internal references

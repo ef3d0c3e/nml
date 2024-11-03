@@ -101,7 +101,7 @@ To set the environment you wish to use for a particular %LaTeX% element, set the
  *- `block` (default for non math mode) display %LaTeX% on it's own line.
  * ``caption`` Caption for accessibility, defaults to `none`.
 
-# LaTeX cache
+#{tex_cache} LaTeX cache
 
 %LaTeX% elements that have been successfully rendered to **svg** are stored in the cache database, to avoid processing them a second time.
 Note that this cache is shared between documents, so you don't need to reprocess them if they share the same environment.

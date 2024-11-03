@@ -1,0 +1,17 @@
+@import template.nml
+@nav.previous = References
+%<make_doc({}, "Imports", "Imports")>%
+
+# Imports
+
+NML lets you import documents into the current document via the following syntax:
+
+``Plain Text, @import <PATH.nml>``
+Note that this will import everything from the other document, such as content but also variables and references.
+
+# Scoped imports
+
+If you wish to import a document, while not overwriting current variables and references, use the following:
+
+``Plain Text, @import[as=util] lib.nml``
+With this syntax, any variable or reference imported will be prefixed with ``util.``

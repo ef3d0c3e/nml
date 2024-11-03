@@ -1,4 +1,0 @@
-@import template.nml
-%<make_doc({}, "Index", "Index")>%
-
-# Welcome to the NML documentation!

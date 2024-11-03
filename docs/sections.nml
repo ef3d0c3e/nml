@@ -41,6 +41,11 @@ You can then create a clickable reference to this section: ``§{refname}`` or ``
 §{refname}[caption=Click me!] or §{first}[caption=First section]
 ``
 
+# Table of Content
+
+Section can be automatically exported to a table of content, such as shown at the top of this document.
+To create a table of content, simply add ``#+TABLE_OF_CONTENT`` somewhere in your document and it will be displayed there.
+
 # Section styling
 
 The styling for the section link is controlled by the style key ``style.section``

@@ -85,7 +85,7 @@ fn real_position(
 
 Code theme can be controlled by the variable ``code.theme``. The default value is ``base16-ocean.dark``.
 According to [syntect](https://docs.rs/syntect/latest/syntect/highlighting/struct.ThemeSet.html#method.load_defaults)'s
-documentation, the following themes are enabled:
+documentation, the following themes are available:
  * ``base16-ocean.dark``
  * ``base16-eighties.dark``
  * ``base16-mocha.dark``

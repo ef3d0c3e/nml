@@ -1,0 +1,40 @@
+@import template.nml
+@nav.previous = References
+%<make_doc({}, "Raw", "Raw")>%
+
+Raws are elements to be rendered as-is by the compiler.
+
+# Inline raws
+
+Inline raws are meant to be used inside a paragraph and thus, don't break the paragraph.
+Here's the syntax for inline raws: ``Plain Text, {?[kind=inline] CONTENT ?}``.
+Here, ``CONTENT`` will added directly to the resulting document.
+
+**Example**
+#+LAYOUT_BEGIN Split
+``Plain Text, {? <a style="color:red"> ?} Some text {? </a> ?}``
+#+LAYOUT_NEXT
+{? <a style="color:red"> ?} Some text {? </a> ?}
+#+LAYOUT_END
+
+Raws are better paired with Lua, see &{#custom_style}[caption=Defining a custom style] for how to use them.
+
+# Block raws
+
+You can have raw elements take a full block to define additional capabilities.
+The syntax is similar to inline raws, except that ``kind=block`` is used instead.
+
+**Example**
+#+LAYOUT_BEGIN Centered
+#+LAYOUT_BEGIN Split
+``Plain Text, {?[kind=block] <img src="assets/duck.jpg" style="max-height:100%;max-width:100%;"> ?}``
+#+LAYOUT_NEXT
+{?[kind=block] <img src="assets/duck.jpg" style="max-height:100%;max-width:100%;"> ?}
+#+LAYOUT_END
+#+LAYOUT_END
+
+
+# Properties
+ * ``kind`` The element kind of the resulting raw, defaults to `inline`, allowed values:
+ *- ``inline``: Make the raw element inline
+ *- ``block``: Make the raw element a full block

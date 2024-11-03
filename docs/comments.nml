@@ -1,0 +1,16 @@
+@import template.nml
+@nav.previous = Imports
+%<make_doc({}, "Comments", "Comments")>%
+
+# Comments
+
+NML supports line comment with the following syntax: ``Plain Text, :: Comment``
+
+Comments will eat any preceding white space.
+
+**Example**
+#+LAYOUT_BEGIN Split
+``Markdown, **Bold Text** :: This is a comment``
+#+LAYOUT_NEXT
+**Bold Text** :: This is a comment
+#+LAYOUT_END
