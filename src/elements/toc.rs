@@ -66,9 +66,8 @@ impl Element for Toc {
 			}
 		}
 
-		if sections.is_empty()
-		{
-			return Ok("".into())
+		if sections.is_empty() {
+			return Ok("".into());
 		}
 
 		match compiler.target() {

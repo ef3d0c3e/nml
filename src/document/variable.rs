@@ -52,7 +52,7 @@ impl Variable for BaseVariable {
 	fn parse<'a>(&self, state: &ParserState, _location: Token, document: &'a dyn Document<'a>) {
 		let source = Rc::new(VirtualSource::new(
 			self.location().clone(),
-			self.name().to_string(),
+			format!(":VAR:{}", self.name()),
 			self.to_string(),
 		));
 

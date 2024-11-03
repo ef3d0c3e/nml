@@ -45,7 +45,9 @@ impl<'a> Hints<'a> {
 		lsp: &'a Option<RefCell<LSPData>>,
 		original_source: Rc<dyn Source>,
 	) -> Option<Self> {
-		if source.name().starts_with(":LUA:") && source.downcast_ref::<VirtualSource>().is_some() {
+		if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
+			&& source.downcast_ref::<VirtualSource>().is_some()
+		{
 			return None;
 		}
 
