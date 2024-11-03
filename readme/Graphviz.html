@@ -1,0 +1,333 @@
+<!DOCTYPE HTML><html><head><meta charset="UTF-8"><title>NML | Graphviz</title><link rel="stylesheet" href="../style.css"></head><body><div class="layout"><input id="navbar-checkbox" class="toggle" type="checkbox" style="display:none" checked><div id="navbar"><ul><li  class="navbar-entry"><a href="Getting Started.html">Getting Started</a></li><li  class="navbar-entry"><a href="Sections.html">Sections</a></li><li  class="navbar-entry"><a href="Variables.html">Variables</a></li><li  class="navbar-entry"><a href="References.html">References</a></li><li  class="navbar-entry"><a href="Imports.html">Imports</a></li><li  class="navbar-entry"><a href="Raw.html">Raw</a></li><li  class="navbar-entry"><a href="Comments.html">Comments</a></li><li><details open><summary class="navbar-category">External Tools</summary><ul><li  class="navbar-entry-current"><a href="Graphviz.html">Graphviz</a></li><li  class="navbar-entry"><a href="LaTeX.html">LaTeX</a></li></ul></details></li><li><details><summary class="navbar-category">Blocks</summary><ul><li  class="navbar-entry"><a href="Blockquotes.html">Blockquotes</a></li><li  class="navbar-entry"><a href="Code.html">Code</a></li><li  class="navbar-entry"><a href="Lists.html">Lists</a></li></ul></details></li><li><details><summary class="navbar-category">Lua</summary><ul><li  class="navbar-entry"><a href="Lua Basics.html">Lua</a></li></ul></details></li><li><details><summary class="navbar-category">Styles</summary><ul><li  class="navbar-entry"><a href="Basic Styles.html">Basic</a></li><li  class="navbar-entry"><a href="Basic Layouts.html">Layouts</a></li><li  class="navbar-entry"><a href="User-Defined Styles.html">User-Defined</a></li></ul></details></li></ul></div><label for="navbar-checkbox" class="navbar-checkbox-label">&#9776;</label><div class="content"><div class="toc"><span>Table of Content</span><ol><li value="1"><a href="#Graphs_from_graphviz">Graphs from graphviz</a></li><li value="2"><a href="#Synopsis">Synopsis</a></li><li value="3"><a href="#Properties">Properties</a></li><li value="4"><a href="#Examples">Examples</a></li><li value="5"><a href="#Graphiz_cache">Graphiz cache</a></li><li value="6"><a href="#Bindigs">Bindigs</a></li></div><h1 id="Graphs_from_graphviz">1. Graphs from graphviz <a class="section-link" href="#Graphs_from_graphviz">🔗 </a> </h1><div class="centered"><svg width="50%"
+ viewBox="0.00 0.00 360.23 625.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 621)">
+<title>%3</title>
+<g id="clust1" class="cluster">
+<title>cluster_0</title>
+<polygon fill="transparent" stroke="white" stroke-dasharray="1,5" points="125.23,-305 125.23,-467 220.23,-467 220.23,-305 125.23,-305"/>
+<text text-anchor="middle" x="172.73" y="-451.8" font-family="Times,serif" font-size="14.00" fill="darkgray">Processing</text>
+</g>
+<g id="clust2" class="cluster">
+<title>cluster_1</title>
+<polygon fill="transparent" stroke="white" stroke-dasharray="1,5" points="66.23,-65 66.23,-213 284.23,-213 284.23,-65 66.23,-65"/>
+<text text-anchor="middle" x="131.23" y="-197.8" font-family="Times,serif" font-size="14.00" fill="darkgray">Post&#45;Processing</text>
+</g>
+<!-- filelist -->
+<g id="node1" class="node">
+<title>filelist</title>
+<polygon fill="none" stroke="orange" points="283.73,-617 208.73,-617 208.73,-581 283.73,-581 283.73,-617"/>
+<text text-anchor="middle" x="246.23" y="-595.3" font-family="Times,serif" font-size="14.00" fill="darkgray">File List</text>
+</g>
+<!-- iscached -->
+<g id="node3" class="node">
+<title>iscached</title>
+<polygon fill="none" stroke="red" points="246.23,-544 175.68,-526 246.23,-508 316.78,-526 246.23,-544"/>
+<text text-anchor="middle" x="246.23" y="-522.3" font-family="Times,serif" font-size="14.00" fill="darkgray">Cached?</text>
+</g>
+<!-- filelist&#45;&gt;iscached -->
+<g id="edge1" class="edge">
+<title>filelist&#45;&gt;iscached</title>
+<path fill="none" stroke="gray" d="M246.23,-580.81C246.23,-572.79 246.23,-563.05 246.23,-554.07"/>
+<polygon fill="gray" stroke="gray" points="249.73,-554.03 246.23,-544.03 242.73,-554.03 249.73,-554.03"/>
+</g>
+<!-- doclist -->
+<g id="node2" class="node">
+<title>doclist</title>
+<polygon fill="none" stroke="orange" points="235.73,-276 114.73,-276 114.73,-240 235.73,-240 235.73,-276"/>
+<text text-anchor="middle" x="175.23" y="-254.3" font-family="Times,serif" font-size="14.00" fill="darkgray">Document List</text>
+</g>
+<!-- buildnav -->
+<g id="node7" class="node">
+<title>buildnav</title>
+<polygon fill="none" stroke="white" points="227.73,-109 90.73,-109 90.73,-73 227.73,-73 227.73,-109"/>
+<text text-anchor="middle" x="159.23" y="-87.3" font-family="Times,serif" font-size="14.00" fill="darkgray">Build Navigation</text>
+</g>
+<!-- doclist&#45;&gt;buildnav -->
+<g id="edge8" class="edge">
+<title>doclist&#45;&gt;buildnav</title>
+<path fill="none" stroke="lightblue" stroke-dasharray="5,2" d="M114.51,-248.3C73.93,-241.09 25.76,-229.38 13.23,-213 -4.86,-189.34 -3.79,-170.44 13.23,-146 28.84,-123.58 54.89,-110.45 80.7,-102.76"/>
+<polygon fill="lightblue" stroke="lightblue" points="81.83,-106.08 90.55,-100.07 79.98,-99.33 81.83,-106.08"/>
+<text text-anchor="middle" x="39.73" y="-160.3" font-family="Times,serif" font-size="14.00" fill="darkgray">Cached</text>
+</g>
+<!-- xref -->
+<g id="node8" class="node">
+<title>xref</title>
+<polygon fill="none" stroke="white" points="275.73,-182 74.73,-182 74.73,-146 275.73,-146 275.73,-182"/>
+<text text-anchor="middle" x="175.23" y="-160.3" font-family="Times,serif" font-size="14.00" fill="darkgray">Resolve Cross&#45;References</text>
+</g>
+<!-- doclist&#45;&gt;xref -->
+<g id="edge7" class="edge">
+<title>doclist&#45;&gt;xref</title>
+<path fill="none" stroke="gray" d="M175.23,-239.7C175.23,-226.46 175.23,-207.95 175.23,-192.66"/>
+<polygon fill="gray" stroke="gray" points="178.73,-192.23 175.23,-182.23 171.73,-192.23 178.73,-192.23"/>
+</g>
+<!-- iscached&#45;&gt;doclist -->
+<g id="edge3" class="edge">
+<title>iscached&#45;&gt;doclist</title>
+<path fill="none" stroke="lightblue" stroke-dasharray="5,2" d="M248.35,-508.48C252.46,-470.35 258.37,-374.19 224.23,-305 220.22,-296.88 214.14,-289.45 207.61,-283.05"/>
+<polygon fill="lightblue" stroke="lightblue" points="209.6,-280.13 199.84,-276.02 204.91,-285.32 209.6,-280.13"/>
+<text text-anchor="middle" x="258.73" y="-370.8" font-family="Times,serif" font-size="14.00" fill="darkgray">Yes</text>
+</g>
+<!-- parse -->
+<g id="node4" class="node">
+<title>parse</title>
+<polygon fill="none" stroke="white" points="208.23,-436 152.23,-436 152.23,-400 208.23,-400 208.23,-436"/>
+<text text-anchor="middle" x="180.23" y="-414.3" font-family="Times,serif" font-size="14.00" fill="darkgray">Parse</text>
+</g>
+<!-- iscached&#45;&gt;parse -->
+<g id="edge4" class="edge">
+<title>iscached&#45;&gt;parse</title>
+<path fill="none" stroke="lightblue" stroke-dasharray="5,2" d="M230.61,-511.78C224.03,-505.64 216.65,-497.95 211.23,-490 201.96,-476.41 194.47,-459.6 189.18,-445.75"/>
+<polygon fill="lightblue" stroke="lightblue" points="192.44,-444.46 185.72,-436.27 185.86,-446.86 192.44,-444.46"/>
+<text text-anchor="middle" x="221.73" y="-478.8" font-family="Times,serif" font-size="14.00" fill="darkgray">No</text>
+</g>
+<!-- cache -->
+<g id="node6" class="node">
+<title>cache</title>
+<polygon fill="none" stroke="orange" points="352.23,-109 292.23,-109 292.23,-73 352.23,-73 352.23,-109"/>
+<text text-anchor="middle" x="322.23" y="-87.3" font-family="Times,serif" font-size="14.00" fill="darkgray">Cache</text>
+</g>
+<!-- iscached&#45;&gt;cache -->
+<g id="edge2" class="edge">
+<title>iscached&#45;&gt;cache</title>
+<path fill="none" stroke="lightblue" stroke-dasharray="5,2" d="M269.15,-504.42C288.55,-484.64 313.23,-452.83 313.23,-419 313.23,-419 313.23,-419 313.23,-163 313.23,-148.39 315.13,-132.23 317.18,-119.02"/>
+<polygon fill="lightblue" stroke="lightblue" points="266.47,-502.15 261.77,-511.64 271.37,-507.15 266.47,-502.15"/>
+<polygon fill="lightblue" stroke="lightblue" points="320.64,-119.58 318.83,-109.14 313.73,-118.43 320.64,-119.58"/>
+</g>
+<!-- compile -->
+<g id="node5" class="node">
+<title>compile</title>
+<polygon fill="none" stroke="white" points="212.73,-349 137.73,-349 137.73,-313 212.73,-313 212.73,-349"/>
+<text text-anchor="middle" x="175.23" y="-327.3" font-family="Times,serif" font-size="14.00" fill="darkgray">Compile</text>
+</g>
+<!-- parse&#45;&gt;compile -->
+<g id="edge5" class="edge">
+<title>parse&#45;&gt;compile</title>
+<path fill="none" stroke="gray" d="M179.22,-399.8C178.53,-388.16 177.62,-372.55 176.83,-359.24"/>
+<polygon fill="gray" stroke="gray" points="180.32,-358.95 176.24,-349.18 173.33,-359.36 180.32,-358.95"/>
+</g>
+<!-- compile&#45;&gt;doclist -->
+<g id="edge6" class="edge">
+<title>compile&#45;&gt;doclist</title>
+<path fill="none" stroke="gray" d="M175.23,-312.81C175.23,-304.79 175.23,-295.05 175.23,-286.07"/>
+<polygon fill="gray" stroke="gray" points="178.73,-286.03 175.23,-276.03 171.73,-286.03 178.73,-286.03"/>
+</g>
+<!-- output -->
+<g id="node9" class="node">
+<title>output</title>
+<polygon fill="none" stroke="orange" points="192.73,-36 125.73,-36 125.73,0 192.73,0 192.73,-36"/>
+<text text-anchor="middle" x="159.23" y="-14.3" font-family="Times,serif" font-size="14.00" fill="darkgray">Output</text>
+</g>
+<!-- buildnav&#45;&gt;output -->
+<g id="edge11" class="edge">
+<title>buildnav&#45;&gt;output</title>
+<path fill="none" stroke="gray" d="M159.23,-72.81C159.23,-64.79 159.23,-55.05 159.23,-46.07"/>
+<polygon fill="gray" stroke="gray" points="162.73,-46.03 159.23,-36.03 155.73,-46.03 162.73,-46.03"/>
+</g>
+<!-- xref&#45;&gt;cache -->
+<g id="edge10" class="edge">
+<title>xref&#45;&gt;cache</title>
+<path fill="none" stroke="lightblue" stroke-dasharray="5,2" d="M211.44,-145.9C231.31,-136.47 256.6,-124.39 282.88,-111.6"/>
+<polygon fill="lightblue" stroke="lightblue" points="284.76,-114.58 292.21,-107.05 281.69,-108.29 284.76,-114.58"/>
+</g>
+<!-- xref&#45;&gt;buildnav -->
+<g id="edge9" class="edge">
+<title>xref&#45;&gt;buildnav</title>
+<path fill="none" stroke="gray" d="M171.36,-145.81C169.55,-137.79 167.35,-128.05 165.33,-119.07"/>
+<polygon fill="gray" stroke="gray" points="168.68,-118.01 163.07,-109.03 161.85,-119.55 168.68,-118.01"/>
+</g>
+</g>
+</svg>
+</div><p>The Graphviz functionnality requires the <em>dot</em> executable. More information on <a href="file:///home/baraquiel/Programming/nml_rs/out/Graphviz.html">Graphviz's website</a>.</p><h1 id="Synopsis">2. Synopsis <a class="section-link" href="#Synopsis">🔗 </a> </h1><p>Graphs blocks are delimited by <a class="inline-code"><code><span style="color:#c0c5ce;">[graph]...[/graph]</span></code></a></p><h1 id="Properties">3. Properties <a class="section-link" href="#Properties">🔗 </a> </h1><ul><li><a class="inline-code"><code><span style="color:#c0c5ce;">layout</span></code></a> The layout engine, defaults to <em>dot</em> see <a href="https://graphviz.org/docs/layouts/">Graphviz's documentation</a>. Allowed values:</li><ol><li value="1"><a href="https://graphviz.org/docs/layouts/dot/"><em>dot</em></a></li><li value="2"><a href="https://graphviz.org/docs/layouts/neato/"><em>neato</em></a></li><li value="3"><a href="https://graphviz.org/docs/layouts/fdp/"><em>fdp</em></a></li><li value="4"><a href="https://graphviz.org/docs/layouts/sfdp/"><em>sfdp</em></a></li><li value="5"><a href="https://graphviz.org/docs/layouts/circo/"><em>circo</em></a></li><li value="6"><a href="https://graphviz.org/docs/layouts/twopi/"><em>twopi</em></a></li><li value="7"><a href="https://graphviz.org/docs/layouts/osage/"><em>osage</em></a></li><li value="8"><a href="https://graphviz.org/docs/layouts/patchwork/"><em>patchwork</em></a></li></ol><li><a class="inline-code"><code><span style="color:#c0c5ce;">width</span></code></a> The resulting svg's width property, defaults to <em>100%</em></li></ul><h1 id="Examples">4. Examples <a class="section-link" href="#Examples">🔗 </a> </h1><div class="split-container"><div class="split" style=flex:0.33><svg width="100%"
+ viewBox="0.00 0.00 364.86 897.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 893)">
+<title>UML_Class_diagram</title>
+<text text-anchor="middle" x="178.43" y="-873.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">UML Class diagram demo</text>
+<!-- Client -->
+<g id="node1" class="node">
+<title>Client</title>
+<polygon fill="#f2f2f2" stroke="black" points="158.36,-829.5 158.36,-865.5 212.36,-865.5 212.36,-829.5 158.36,-829.5"/>
+<text text-anchor="middle" x="185.36" y="-843.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">Client</text>
+</g>
+<!-- Interface1 -->
+<g id="node2" class="node">
+<title>Interface1</title>
+<polygon fill="#f2f2f2" stroke="black" points="83.36,-678.5 83.36,-777.5 195.36,-777.5 195.36,-678.5 83.36,-678.5"/>
+<text text-anchor="start" x="91.36" y="-763.3" font-family="Helvetica,Arial,sans-serif" font-weight="bold" font-size="14.00" fill="darkgray">«interface» I/O</text>
+<polyline fill="none" stroke="black" points="83.36,-754.5 195.36,-754.5 "/>
+<text text-anchor="start" x="107.86" y="-739.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ property</text>
+<text text-anchor="start" x="107.86" y="-724.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+<polyline fill="none" stroke="black" points="83.36,-716.5 195.36,-716.5 "/>
+<text text-anchor="start" x="110.36" y="-701.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ method</text>
+<text text-anchor="start" x="110.36" y="-686.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+</g>
+<!-- Client&#45;&gt;Interface1 -->
+<g id="edge1" class="edge">
+<title>Client&#45;&gt;Interface1</title>
+<path fill="none" stroke="#e5e5e5" stroke-dasharray="5,2" d="M158.08,-829.83C151.82,-824.62 145.96,-818.29 142.36,-811 138.85,-803.9 136.73,-796.03 135.55,-788.04"/>
+<polygon fill="#e5e5e5" stroke="#e5e5e5" points="134.53,-777.92 140.01,-787.42 135.03,-782.9 135.53,-787.87 135.53,-787.87 135.53,-787.87 135.03,-782.9 131.05,-788.32 134.53,-777.92 134.53,-777.92"/>
+<text text-anchor="middle" x="179.36" y="-799.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">dependency</text>
+</g>
+<!-- Interface2 -->
+<g id="node3" class="node">
+<title>Interface2</title>
+<ellipse fill="#f2f2f2" stroke="black" cx="231.36" cy="-728" rx="18" ry="18"/>
+<text text-anchor="middle" x="239.86" y="-764.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">Simple</text>
+<text text-anchor="middle" x="239.86" y="-749.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">interface</text>
+</g>
+<!-- Client&#45;&gt;Interface2 -->
+<g id="edge2" class="edge">
+<title>Client&#45;&gt;Interface2</title>
+<path fill="none" stroke="#e5e5e5" stroke-dasharray="5,2" d="M203.52,-829.44C208.38,-823.99 213.16,-817.63 216.36,-811 224.61,-793.89 228.34,-772.77 230.02,-756.25"/>
+<polygon fill="#e5e5e5" stroke="#e5e5e5" points="230.85,-746.15 234.52,-756.48 230.44,-751.13 230.03,-756.11 230.03,-756.11 230.03,-756.11 230.44,-751.13 225.55,-755.74 230.85,-746.15 230.85,-746.15"/>
+</g>
+<!-- Class1 -->
+<g id="node4" class="node">
+<title>Class1</title>
+<polygon fill="#f2f2f2" stroke="black" points="144.86,-541.5 144.86,-640.5 223.86,-640.5 223.86,-541.5 144.86,-541.5"/>
+<text text-anchor="start" x="155.86" y="-626.3" font-family="Helvetica,Arial,sans-serif" font-weight="bold" font-size="14.00" fill="darkgray">I/O class</text>
+<polyline fill="none" stroke="black" points="144.86,-617.5 223.86,-617.5 "/>
+<text text-anchor="start" x="152.86" y="-602.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ property</text>
+<text text-anchor="start" x="152.86" y="-587.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+<polyline fill="none" stroke="black" points="144.86,-579.5 223.86,-579.5 "/>
+<text text-anchor="start" x="155.36" y="-564.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ method</text>
+<text text-anchor="start" x="155.36" y="-549.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+</g>
+<!-- Interface1&#45;&gt;Class1 -->
+<g id="edge3" class="edge">
+<title>Interface1&#45;&gt;Class1</title>
+<path fill="none" stroke="#e5e5e5" d="M158.8,-668.65C161.92,-659.32 165.11,-649.74 168.13,-640.67"/>
+<polygon fill="none" stroke="#e5e5e5" points="155.44,-667.67 155.6,-678.26 162.08,-669.88 155.44,-667.67"/>
+<text text-anchor="middle" x="128.38" y="-663.21" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">inheritance</text>
+</g>
+<!-- Interface2&#45;&gt;Class1 -->
+<g id="edge4" class="edge">
+<title>Interface2&#45;&gt;Class1</title>
+<path fill="none" stroke="#e5e5e5" d="M225.69,-710.72C219.66,-693.39 209.82,-665.16 201.26,-640.57"/>
+</g>
+<!-- System_1 -->
+<g id="node5" class="node">
+<title>System_1</title>
+<polygon fill="#f2f2f2" stroke="transparent" points="235.36,-490 133.36,-490 133.36,-320 235.36,-320 235.36,-490"/>
+<polygon fill="none" stroke="black" points="133.36,-465 133.36,-490 235.36,-490 235.36,-465 133.36,-465"/>
+<text text-anchor="start" x="155.86" y="-474.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray"> </text>
+<text text-anchor="start" x="159.86" y="-474.8" font-family="Helvetica,Arial,sans-serif" font-weight="bold" font-size="14.00" fill="darkgray">System</text>
+<text text-anchor="start" x="208.86" y="-474.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray"> </text>
+<polygon fill="none" stroke="black" points="133.36,-360 133.36,-465 235.36,-465 235.36,-360 133.36,-360"/>
+<text text-anchor="start" x="140.36" y="-446.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ property</text>
+<text text-anchor="start" x="140.36" y="-427.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">&#45; Subsystem 1</text>
+<text text-anchor="start" x="140.36" y="-408.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">&#45; Subsystem 2</text>
+<text text-anchor="start" x="140.36" y="-389.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">&#45; Subsystem 3</text>
+<text text-anchor="start" x="140.36" y="-370.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+<polygon fill="none" stroke="black" points="133.36,-320 133.36,-360 235.36,-360 235.36,-320 133.36,-320"/>
+<text text-anchor="start" x="138.36" y="-343.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ method</text>
+<text text-anchor="start" x="138.36" y="-328.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+</g>
+<!-- Class1&#45;&gt;System_1 -->
+<g id="edge5" class="edge">
+<title>Class1&#45;&gt;System_1</title>
+<path fill="none" stroke="#e5e5e5" stroke-dasharray="5,2" d="M184.36,-531.01C184.36,-518.03 184.36,-504.04 184.36,-490.28"/>
+<polygon fill="none" stroke="#e5e5e5" points="180.86,-531.17 184.36,-541.17 187.86,-531.17 180.86,-531.17"/>
+<text text-anchor="middle" x="231.36" y="-511.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">implementation</text>
+</g>
+<!-- Subsystem_1 -->
+<g id="node6" class="node">
+<title>Subsystem_1</title>
+<polygon fill="#f2f2f2" stroke="transparent" points="114.86,-283 11.86,-283 11.86,-151 114.86,-151 114.86,-283"/>
+<polygon fill="none" stroke="black" points="12.36,-258 12.36,-283 115.36,-283 115.36,-258 12.36,-258"/>
+<text text-anchor="start" x="17.36" y="-267.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray"> </text>
+<text text-anchor="start" x="21.36" y="-267.8" font-family="Helvetica,Arial,sans-serif" font-weight="bold" font-size="14.00" fill="darkgray">Subsystem 1</text>
+<text text-anchor="start" x="106.36" y="-267.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray"> </text>
+<polygon fill="none" stroke="black" points="12.36,-191 12.36,-258 115.36,-258 115.36,-191 12.36,-191"/>
+<text text-anchor="start" x="19.36" y="-239.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ property</text>
+<text text-anchor="start" x="19.36" y="-220.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">&#45; resource</text>
+<text text-anchor="start" x="19.36" y="-201.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+<polygon fill="none" stroke="black" points="12.36,-151 12.36,-191 115.36,-191 115.36,-151 12.36,-151"/>
+<text text-anchor="start" x="17.36" y="-174.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ method</text>
+<text text-anchor="start" x="17.36" y="-159.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+</g>
+<!-- System_1&#45;&gt;Subsystem_1 -->
+<g id="edge6" class="edge">
+<title>System_1:ss1&#45;&gt;Subsystem_1</title>
+<path fill="none" stroke="#e5e5e5" stroke-dasharray="5,2" d="M125.31,-430.89C71.94,-420.68 60.87,-341.86 60.2,-283.08"/>
+<polygon fill="#e5e5e5" stroke="#e5e5e5" points="125.41,-430.9 131.75,-427.47 137.36,-432 131.01,-435.43 125.41,-430.9"/>
+<text text-anchor="middle" x="36.5" y="-379.02" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">composition</text>
+</g>
+<!-- Subsystem_2 -->
+<g id="node7" class="node">
+<title>Subsystem_2</title>
+<polygon fill="#f2f2f2" stroke="transparent" points="235.86,-283 132.86,-283 132.86,-151 235.86,-151 235.86,-283"/>
+<polygon fill="none" stroke="black" points="133.36,-258 133.36,-283 236.36,-283 236.36,-258 133.36,-258"/>
+<text text-anchor="start" x="138.36" y="-267.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray"> </text>
+<text text-anchor="start" x="142.36" y="-267.8" font-family="Helvetica,Arial,sans-serif" font-weight="bold" font-size="14.00" fill="darkgray">Subsystem 2</text>
+<text text-anchor="start" x="227.36" y="-267.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray"> </text>
+<polygon fill="none" stroke="black" points="133.36,-191 133.36,-258 236.36,-258 236.36,-191 133.36,-191"/>
+<text text-anchor="start" x="140.36" y="-239.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ property</text>
+<text text-anchor="start" x="140.36" y="-220.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">&#45; resource</text>
+<text text-anchor="start" x="140.36" y="-201.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+<polygon fill="none" stroke="black" points="133.36,-151 133.36,-191 236.36,-191 236.36,-151 133.36,-151"/>
+<text text-anchor="start" x="138.36" y="-174.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ method</text>
+<text text-anchor="start" x="138.36" y="-159.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+</g>
+<!-- System_1&#45;&gt;Subsystem_2 -->
+<g id="edge7" class="edge">
+<title>System_1:ss2&#45;&gt;Subsystem_2</title>
+<path fill="none" stroke="#e5e5e5" stroke-dasharray="5,2" d="M243.61,-411.44C280.79,-400.56 253.36,-335.02 224.69,-283.2"/>
+<polygon fill="#e5e5e5" stroke="#e5e5e5" points="243.26,-411.48 237.81,-416.21 231.36,-413 236.8,-408.27 243.26,-411.48"/>
+</g>
+<!-- Subsystem_3 -->
+<g id="node8" class="node">
+<title>Subsystem_3</title>
+<polygon fill="#f2f2f2" stroke="transparent" points="356.86,-283 253.86,-283 253.86,-151 356.86,-151 356.86,-283"/>
+<polygon fill="none" stroke="black" points="254.36,-258 254.36,-283 357.36,-283 357.36,-258 254.36,-258"/>
+<text text-anchor="start" x="259.36" y="-267.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray"> </text>
+<text text-anchor="start" x="263.36" y="-267.8" font-family="Helvetica,Arial,sans-serif" font-weight="bold" font-size="14.00" fill="darkgray">Subsystem 3</text>
+<text text-anchor="start" x="348.36" y="-267.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray"> </text>
+<polygon fill="none" stroke="black" points="254.36,-191 254.36,-258 357.36,-258 357.36,-191 254.36,-191"/>
+<text text-anchor="start" x="261.36" y="-239.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ property</text>
+<text text-anchor="start" x="261.36" y="-220.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">&#45; resource</text>
+<text text-anchor="start" x="261.36" y="-201.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+<polygon fill="none" stroke="black" points="254.36,-151 254.36,-191 357.36,-191 357.36,-151 254.36,-151"/>
+<text text-anchor="start" x="259.36" y="-174.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ method</text>
+<text text-anchor="start" x="259.36" y="-159.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+</g>
+<!-- System_1&#45;&gt;Subsystem_3 -->
+<g id="edge8" class="edge">
+<title>System_1:ss3&#45;&gt;Subsystem_3</title>
+<path fill="none" stroke="#e5e5e5" stroke-dasharray="5,2" d="M243.4,-391.71C283.66,-382.75 298.21,-328.64 303.25,-283.16"/>
+<polygon fill="#e5e5e5" stroke="#e5e5e5" points="243.29,-391.73 237.75,-396.34 231.36,-393 236.9,-388.39 243.29,-391.73"/>
+</g>
+<!-- Shared resource -->
+<g id="node9" class="node">
+<title>Shared resource</title>
+<polygon fill="#f2f2f2" stroke="black" points="123.36,-0.5 123.36,-99.5 247.36,-99.5 247.36,-0.5 123.36,-0.5"/>
+<text text-anchor="start" x="131.36" y="-85.3" font-family="Helvetica,Arial,sans-serif" font-weight="bold" font-size="14.00" fill="darkgray">Shared resource</text>
+<polyline fill="none" stroke="black" points="123.36,-76.5 247.36,-76.5 "/>
+<text text-anchor="start" x="153.86" y="-61.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ property</text>
+<text text-anchor="start" x="153.86" y="-46.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+<polyline fill="none" stroke="black" points="123.36,-38.5 247.36,-38.5 "/>
+<text text-anchor="start" x="156.36" y="-23.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">+ method</text>
+<text text-anchor="start" x="156.36" y="-8.3" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">...</text>
+</g>
+<!-- Subsystem_1&#45;&gt;Shared resource -->
+<g id="edge9" class="edge">
+<title>Subsystem_1:r1&#45;&gt;Shared resource</title>
+<path fill="none" stroke="#e5e5e5" stroke-dasharray="5,2" d="M119.37,-215.9C123.84,-198.85 118.96,-162.76 123.36,-151 129.97,-133.3 139.9,-115.34 149.89,-99.61"/>
+<polygon fill="none" stroke="#e5e5e5" points="119.29,-215.99 118.32,-223.14 111.36,-225 112.32,-217.85 119.29,-215.99"/>
+<text text-anchor="middle" x="175.36" y="-121.8" font-family="Helvetica,Arial,sans-serif" font-size="14.00" fill="darkgray">aggregation</text>
+</g>
+<!-- Subsystem_2&#45;&gt;Shared resource -->
+<g id="edge10" class="edge">
+<title>Subsystem_2:r1&#45;&gt;Shared resource</title>
+<path fill="none" stroke="#e5e5e5" stroke-dasharray="5,2" d="M239.69,-215.43C242.44,-198.27 234.06,-162.97 231.36,-151 227.42,-133.57 220.22,-115.54 212.67,-99.66"/>
+<polygon fill="none" stroke="#e5e5e5" points="239.65,-215.47 239.18,-222.67 232.36,-225 232.83,-217.8 239.65,-215.47"/>
+</g>
+<!-- Subsystem_3&#45;&gt;Shared resource -->
+<g id="edge11" class="edge">
+<title>Subsystem_3:r1&#45;&gt;Shared resource</title>
+<path fill="none" stroke="#e5e5e5" stroke-dasharray="5,2" d="M249.93,-216.26C244.49,-199.5 247.94,-163.39 245.36,-151 242.27,-136.23 243.9,-131.6 237.36,-118 234.35,-111.77 230.7,-105.56 226.74,-99.59"/>
+<polygon fill="none" stroke="#e5e5e5" points="250.02,-216.36 257.07,-217.9 258.36,-225 251.31,-223.46 250.02,-216.36"/>
+</g>
+</g>
+</svg>
+</div><div class="split" style=flex:0.66><p>Generated by the following code:</p><div class="code-block"><div class="code-block-content"><table cellspacing="0"><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">[graph]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">digraph UML_Class_diagram {</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	bgcolor=transparent;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	graph[fontcolor=darkgray];</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	node[fontcolor=darkgray];</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	edge[fontcolor=darkgray, color=gray90];</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	graph [</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		label=&quot;UML Class diagram demo&quot;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		labelloc=&quot;t&quot;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		fontname=&quot;Helvetica,Arial,sans-serif&quot;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	node [</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		fontname=&quot;Helvetica,Arial,sans-serif&quot;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		shape=record</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		style=filled</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		fillcolor=gray95</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	edge [fontname=&quot;Helvetica,Arial,sans-serif&quot;]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	edge [arrowhead=vee style=dashed]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Client -&gt; Interface1 [label=dependency]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Client -&gt; Interface2</span></pre></td></tr><tr><td class="code-block-line"><pre><br></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	edge [dir=back arrowtail=empty style=&quot;&quot;]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Interface1 -&gt; Class1 [xlabel=inheritance]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Interface2 -&gt; Class1 [dir=none]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Interface2 [label=&quot;&quot; xlabel=&quot;Simple\ninterface&quot; shape=circle]</span></pre></td></tr><tr><td class="code-block-line"><pre><br></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Interface1[label = &lt;{&lt;b&gt;«interface» I/O&lt;/b&gt; | + property&lt;br align=&quot;left&quot;/&gt;...&lt;br align=&quot;left&quot;/&gt;|+ method&lt;br align=&quot;left&quot;/&gt;...&lt;br align=&quot;left&quot;/&gt;}&gt;]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Class1[label = &lt;{&lt;b&gt;I/O class&lt;/b&gt; | + property&lt;br align=&quot;left&quot;/&gt;...&lt;br align=&quot;left&quot;/&gt;|+ method&lt;br align=&quot;left&quot;/&gt;...&lt;br align=&quot;left&quot;/&gt;}&gt;]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	edge [dir=back arrowtail=empty style=dashed]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Class1 -&gt; System_1 [label=implementation]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	System_1 [</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		shape=plain</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		label=&lt;&lt;table border=&quot;0&quot; cellborder=&quot;1&quot; cellspacing=&quot;0&quot; cellpadding=&quot;4&quot;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td&gt; &lt;b&gt;System&lt;/b&gt; &lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;table border=&quot;0&quot; cellborder=&quot;0&quot; cellspacing=&quot;0&quot; &gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot; &gt;+ property&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td port=&quot;ss1&quot; align=&quot;left&quot; &gt;- Subsystem 1&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td port=&quot;ss2&quot; align=&quot;left&quot; &gt;- Subsystem 2&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td port=&quot;ss3&quot; align=&quot;left&quot; &gt;- Subsystem 3&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;...&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;/table&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;+ method&lt;br/&gt;...&lt;br align=&quot;left&quot;/&gt;&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		&lt;/table&gt;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	]</span></pre></td></tr><tr><td class="code-block-line"><pre><br></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	edge [dir=back arrowtail=diamond]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	System_1:ss1 -&gt; Subsystem_1 [xlabel=&quot;composition&quot;]</span></pre></td></tr><tr><td class="code-block-line"><pre><br></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Subsystem_1 [</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		shape=plain</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		label=&lt;&lt;table border=&quot;0&quot; cellborder=&quot;1&quot; cellspacing=&quot;0&quot; cellpadding=&quot;4&quot;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td&gt; &lt;b&gt;Subsystem 1&lt;/b&gt; &lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;table border=&quot;0&quot; cellborder=&quot;0&quot; cellspacing=&quot;0&quot; &gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;+ property&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot; port=&quot;r1&quot;&gt;- resource&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;...&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;/table&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				+ method&lt;br/&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				...&lt;br align=&quot;left&quot;/&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		&lt;/table&gt;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Subsystem_2 [</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		shape=plain</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		label=&lt;&lt;table border=&quot;0&quot; cellborder=&quot;1&quot; cellspacing=&quot;0&quot; cellpadding=&quot;4&quot;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td&gt; &lt;b&gt;Subsystem 2&lt;/b&gt; &lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;table align=&quot;left&quot; border=&quot;0&quot; cellborder=&quot;0&quot; cellspacing=&quot;0&quot; &gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;+ property&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot; port=&quot;r1&quot;&gt;- resource&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;...&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;/table&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				+ method&lt;br/&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				...&lt;br align=&quot;left&quot;/&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		&lt;/table&gt;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Subsystem_3 [</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		shape=plain</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		label=&lt;&lt;table border=&quot;0&quot; cellborder=&quot;1&quot; cellspacing=&quot;0&quot; cellpadding=&quot;4&quot;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td&gt; &lt;b&gt;Subsystem 3&lt;/b&gt; &lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;table border=&quot;0&quot; cellborder=&quot;0&quot; cellspacing=&quot;0&quot; &gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;+ property&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot; port=&quot;r1&quot;&gt;- resource&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">					&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;...&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;/table&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;tr&gt; &lt;td align=&quot;left&quot;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				+ method&lt;br/&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				...&lt;br align=&quot;left&quot;/&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;/td&gt; &lt;/tr&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		&lt;/table&gt;&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	System_1:ss2 -&gt; Subsystem_2;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	System_1:ss3 -&gt; Subsystem_3;</span></pre></td></tr><tr><td class="code-block-line"><pre><br></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	edge [xdir=back arrowtail=odiamond]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Subsystem_1:r1 -&gt; &quot;Shared resource&quot; [label=aggregation]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Subsystem_2:r1 -&gt; &quot;Shared resource&quot;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	Subsystem_3:r1 -&gt; &quot;Shared resource&quot;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	&quot;Shared resource&quot; [</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">		label = &lt;{</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			&lt;b&gt;Shared resource&lt;/b&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			|</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				+ property&lt;br align=&quot;left&quot;/&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				...&lt;br align=&quot;left&quot;/&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			|</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				+ method&lt;br align=&quot;left&quot;/&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">				...&lt;br align=&quot;left&quot;/&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">			}&gt;</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">	]</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">}</span></pre></td></tr><tr><td class="code-block-line"><pre><span style="color:#c0c5ce;">[/graph]</span></pre></td></tr></table></div></div></div></div><h1 id="Graphiz_cache">5. Graphiz cache <a class="section-link" href="#Graphiz_cache">🔗 </a> </h1><p>Graphviz graphs that have been rendered to <b>svg</b> are stored in the cache database, under table <a class="inline-code"><code><span style="color:#c0c5ce;">cached_dot</span></code></a>. Unless you modify the graph or it's properties, it won't be rendered again, instead it will be sourced from the database.</p><h1 id="Bindigs">6. Bindigs <a class="section-link" href="#Bindigs">🔗 </a> </h1><ul><li><a class="inline-code"><code><span style="color:#c0c5ce;">nml.graphviz.push(layout, width, dot)</span></code></a></li><ul><li><a class="inline-code"><code><span style="color:#c0c5ce;">layout</span></code></a> <i>(string)</i> the layout engine</li><li><a class="inline-code"><code><span style="color:#c0c5ce;">width</span></code></a> <i>(string)</i> the width property (empty string for default)</li><li><a class="inline-code"><code><span style="color:#c0c5ce;">dot</span></code></a> <i>(string)</i> the graphviz code</li></ul></ul><p></p></div></div></body></html>

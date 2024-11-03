@@ -20,8 +20,7 @@ you need to install the `dot` program from [Graphviz](https://graphviz.org/).
 
 ## Lua kernels
 
-To execute Lua kernels you need to install `liblua` version 5.4.
-Support for a statically linked Lua may be added in the future.
+NML statically compiles liblua5.4 to use the lua features.
 
 # Compiling
 
@@ -38,11 +37,11 @@ cargo build --release --bin nml
  - [x] References
  - [x] Navigation
  - [x] Cross-Document references
+ - [x] LSP
  - [ ] Complete Lua api
  - [ ] Documentation
  - [ ] Table
  - [ ] LaTeX output
- - [ ] LSP
 
 # License
 
