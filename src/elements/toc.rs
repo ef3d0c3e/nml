@@ -66,6 +66,11 @@ impl Element for Toc {
 			}
 		}
 
+		if sections.is_empty()
+		{
+			return Ok("".into())
+		}
+
 		match compiler.target() {
 			Target::HTML => {
 				let match_depth = |current: usize, target: usize| -> String {
@@ -92,7 +97,7 @@ impl Element for Toc {
 					result += match_depth(current_depth, section.depth).as_str();
 					if section.kind & section_kind::NO_NUMBER != 0 {
 						result += format!(
-							"<li><a href=\"#{}\">{}</a></li>",
+							"<li style=\"list-style-type:none\"><a href=\"#{}\">{}</a></li>",
 							Compiler::refname(compiler.target(), section.title.as_str()),
 							Compiler::sanitize(compiler.target(), section.title.as_str())
 						)
