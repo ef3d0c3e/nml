@@ -86,8 +86,12 @@ fn from_source_impl(
 			};
 
 			// Add definition
-			let target_path = std::fs::canonicalize(orignal_target.0.name().as_str()).unwrap();
-			let uri = Url::from_file_path(target_path).unwrap();
+			let uri = if orignal_target.0.name().starts_with("file://") {
+				Url::try_from(orignal_target.0.name().as_str()).unwrap()
+			} else {
+				let target_path = std::fs::canonicalize(orignal_target.0.name().as_str()).unwrap();
+				Url::from_file_path(target_path).unwrap()
+			};
 			db.push((
 				Location {
 					uri,

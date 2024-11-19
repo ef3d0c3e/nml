@@ -10,6 +10,7 @@ use crate::parser::rule::RegexRule;
 use crate::parser::source::SourceFile;
 use crate::parser::source::Token;
 use ariadne::Fmt;
+use lsp::definition;
 use regex::Captures;
 use regex::Regex;
 use std::rc::Rc;
@@ -160,10 +161,12 @@ impl RegexRule for ImportRule {
 		};
 
 		state.with_state(|new_state| {
-			let (import_doc, _) =
-				new_state
-					.parser
-					.parse(new_state, import, Some(document), ParseMode::default());
+			let (import_doc, _) = new_state.parser.parse(
+				new_state,
+				import.clone(),
+				Some(document),
+				ParseMode::default(),
+			);
 			document.merge(import_doc.content(), import_doc.scope(), Some(&import_as));
 		});
 
@@ -201,6 +204,9 @@ impl RegexRule for ImportRule {
 			let path = matches.get(2).unwrap().range();
 			sems.add(path, tokens.import_path);
 		}
+
+		// Definition point to start of imported document
+		definition::from_source(token, &Token::new(0..0, import), &state.shared.lsp);
 
 		reports
 	}
