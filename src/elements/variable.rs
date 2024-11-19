@@ -12,6 +12,8 @@ use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
 use ariadne::Fmt;
+use lsp::definition;
+use lsp::hints::Hints;
 use mlua::Function;
 use mlua::Lua;
 use regex::Regex;
@@ -429,6 +431,16 @@ impl RegexRule for VariableSubstitutionRule {
 			sems.add(name.clone(), tokens.variable_sub_name);
 			sems.add(name.end..name.end + 1, tokens.variable_sub_sep);
 		}
+
+		if let Some(hints) = Hints::from_source(token.source(), &state.shared.lsp) {
+			let label = variable.to_string();
+			if !label.is_empty() {
+				hints.add(matches.get(0).unwrap().end(), label);
+			}
+		}
+
+		// Add definition
+		definition::from_source(token, variable.location(), &state.shared.lsp);
 
 		reports
 	}

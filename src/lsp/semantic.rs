@@ -435,10 +435,6 @@ impl<'a> Semantics<'a> {
 	/// Add a semantic token to be processed instantly
 	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
 		let range = self.original_source.original_range(range).1;
-		eprintln!(
-			"Added {token:#?} range={range:#?} source={:#?}",
-			self.original_source
-		);
 		self.process_queue(range.start);
 		self.add_impl(range, token);
 	}

@@ -307,7 +307,7 @@ impl RegexRule for ScriptRule {
 			});
 			if !label.is_empty() {
 				label.pop();
-				hints.add(matches.get(0).unwrap().end() - 1, label);
+				hints.add(matches.get(0).unwrap().end(), label);
 			}
 		}
 

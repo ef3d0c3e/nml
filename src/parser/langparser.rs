@@ -6,6 +6,7 @@ use crate::document::document::Document;
 use crate::document::element::DocumentEnd;
 use crate::document::langdocument::LangDocument;
 use crate::elements::text::Text;
+use crate::lsp::definition::DefinitionData;
 use crate::lsp::hints::HintsData;
 use crate::lsp::semantic::Semantics;
 use crate::lsp::semantic::SemanticsData;
@@ -141,15 +142,7 @@ impl<'b> Parser for LangParser<'b> {
 			source.clone().downcast_rc::<SourceFile>().ok(),
 			state.shared.lsp.as_ref(),
 		) {
-			let mut b = lsp.borrow_mut();
-			if !b.semantic_data.contains_key(&source) {
-				b.semantic_data
-					.insert(source.clone(), SemanticsData::new(source.clone()));
-			}
-			if !b.inlay_hints.contains_key(&source) {
-				b.inlay_hints
-					.insert(source.clone(), HintsData::new(source.clone()));
-			}
+			lsp.borrow_mut().new_source(source.clone());
 		}
 
 		let content = source.content();

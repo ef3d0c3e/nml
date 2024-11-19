@@ -25,6 +25,7 @@ use tower_lsp::Server;
 struct Backend {
 	client: Client,
 	document_map: DashMap<String, String>,
+	definition_map: DashMap<String, Vec<(Location, Range)>>,
 	semantic_token_map: DashMap<String, Vec<SemanticToken>>,
 	diagnostic_map: DashMap<String, Vec<Diagnostic>>,
 	hints_map: DashMap<String, Vec<InlayHint>>,
@@ -95,6 +96,22 @@ impl Backend {
 				}
 			}
 		}
+
+		// Definitions
+		if let Some(lsp) = state.shared.lsp.as_ref() {
+			let borrow = lsp.borrow();
+			for (source, definitions) in &borrow.definitions {
+				if let Some(path) = source
+					.clone()
+					.downcast_rc::<SourceFile>()
+					.ok()
+					.map(|source| source.path().to_owned())
+				{
+					self.definition_map
+						.insert(path, definitions.definitions.replace(vec![]));
+				}
+			}
+		}
 	}
 }
 
@@ -109,6 +126,7 @@ impl LanguageServer for Backend {
 				text_document_sync: Some(TextDocumentSyncCapability::Kind(
 					TextDocumentSyncKind::FULL,
 				)),
+				definition_provider: Some(OneOf::Left(true)),
 				completion_provider: Some(CompletionOptions {
 					resolve_provider: Some(false),
 					trigger_characters: Some(vec!["%".to_string()]),
@@ -184,6 +202,42 @@ impl LanguageServer for Backend {
 			text: std::mem::take(&mut params.content_changes[0].text),
 		})
 		.await
+	}
+
+	async fn goto_definition(
+		&self,
+		params: GotoDefinitionParams,
+	) -> tower_lsp::jsonrpc::Result<Option<GotoDefinitionResponse>> {
+		let uri = &params.text_document_position_params.text_document.uri;
+		let pos = &params.text_document_position_params.position;
+
+		if let Some(definitions) = self.definition_map.get(uri.as_str()) {
+			let index = definitions.binary_search_by(|(_, range)| {
+				if range.start.line > pos.line {
+					std::cmp::Ordering::Greater
+				} else if range.end.line <= pos.line {
+					if range.start.line == pos.line && range.start.character <= pos.character {
+						std::cmp::Ordering::Equal
+					} else if range.end.line == pos.line && range.end.character >= pos.character {
+						std::cmp::Ordering::Equal
+					} else if range.start.line < pos.line && range.end.line > pos.line {
+						std::cmp::Ordering::Equal
+					} else {
+						std::cmp::Ordering::Less
+					}
+				} else {
+					std::cmp::Ordering::Less
+				}
+			});
+			if let Ok(index) = index {
+				let loc = self.definition_map.get(uri.as_str()).as_ref().unwrap()[index]
+					.0
+					.clone();
+				return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
+			}
+		}
+
+		Err(tower_lsp::jsonrpc::Error::method_not_found())
 	}
 
 	async fn completion(
@@ -262,6 +316,7 @@ async fn main() {
 	let (service, socket) = LspService::new(|client| Backend {
 		client,
 		document_map: DashMap::new(),
+		definition_map: DashMap::new(),
 		semantic_token_map: DashMap::new(),
 		diagnostic_map: DashMap::new(),
 		hints_map: DashMap::new(),
