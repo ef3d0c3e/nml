@@ -58,14 +58,20 @@ impl VariableRule {
 		location: Token,
 		kind: usize,
 		name: String,
+		value_token: Token,
 		value: String,
 	) -> Result<Rc<dyn Variable>, String> {
 		match self.kinds[kind].0.as_str() {
-			"" => Ok(Rc::new(BaseVariable::new(location, name, value))),
+			"" => Ok(Rc::new(BaseVariable::new(
+				location,
+				name,
+				value_token,
+				value,
+			))),
 			"'" => {
 				match std::fs::canonicalize(value.as_str()) // TODO: not canonicalize
                 {
-                    Ok(path) => Ok(Rc::new(PathVariable::new(location, name, path))),
+                    Ok(path) => Ok(Rc::new(PathVariable::new(location, name, value_token, path))),
                     Err(e) => Err(format!("Unable to canonicalize path `{}`: {}",
                             value.fg(colors.highlight),
                             e))
@@ -204,9 +210,9 @@ impl RegexRule for VariableRule {
 			_ => panic!("Unknown variable name"),
 		};
 
-		let var_value = match matches.get(3) {
+		let (val_token, var_value) = match matches.get(3) {
 			Some(value) => match VariableRule::validate_value(value.as_str()) {
-				Ok(var_value) => var_value,
+				Ok(var_value) => (Token::new(value.range(), token.source()), var_value),
 				Err(msg) => {
 					report_err!(
 						&mut reports,
@@ -232,6 +238,7 @@ impl RegexRule for VariableRule {
 			token.clone(),
 			var_kind,
 			var_name.to_string(),
+			val_token,
 			var_value,
 		) {
 			Ok(variable) => document.add_variable(variable),
@@ -279,7 +286,12 @@ impl RegexRule for VariableRule {
 			lua.create_function(|_, (name, value): (String, String)| {
 				CTX.with_borrow(|ctx| {
 					ctx.as_ref().map(|ctx| {
-						let var = Rc::new(BaseVariable::new(ctx.location.clone(), name, value));
+						let var = Rc::new(BaseVariable::new(
+							ctx.location.clone(),
+							name,
+							ctx.location.clone(),
+							value,
+						));
 						ctx.document.add_variable(var);
 					})
 				});
@@ -440,7 +452,7 @@ impl RegexRule for VariableSubstitutionRule {
 		}
 
 		// Add definition
-		definition::from_source(token, variable.location(), &state.shared.lsp);
+		definition::from_source(token, variable.value_token(), &state.shared.lsp);
 
 		reports
 	}

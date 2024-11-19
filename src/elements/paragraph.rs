@@ -15,13 +15,6 @@ use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Token;
 
-// TODO: Full refactor
-// Problem is that document parsed from other sources i.e by variables
-// are not merged correctly into existing paragraph
-// A solution would be to use the "(\n){2,}" regex to split paragraph, which would reduce the work needed for process_text
-// Another fix would be to keep parsing (recursively) into the same document (like previous version)
-// The issue is that this would break the current `Token` implementation
-// Which would need to be reworked
 #[derive(Debug)]
 pub struct Paragraph {
 	pub location: Token,

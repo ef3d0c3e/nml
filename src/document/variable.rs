@@ -16,6 +16,8 @@ pub trait Variable {
 	/// Converts variable to a string
 	fn to_string(&self) -> String;
 
+	fn value_token(&self) -> &Token;
+
 	fn parse<'a>(&self, state: &ParserState, location: Token, document: &'a dyn Document<'a>);
 }
 
@@ -29,14 +31,16 @@ impl core::fmt::Debug for dyn Variable {
 pub struct BaseVariable {
 	location: Token,
 	name: String,
+	value_token: Token,
 	value: String,
 }
 
 impl BaseVariable {
-	pub fn new(location: Token, name: String, value: String) -> Self {
+	pub fn new(location: Token, name: String, value_token: Token, value: String) -> Self {
 		Self {
 			location,
 			name,
+			value_token,
 			value,
 		}
 	}
@@ -48,6 +52,8 @@ impl Variable for BaseVariable {
 	fn name(&self) -> &str { self.name.as_str() }
 
 	fn to_string(&self) -> String { self.value.clone() }
+
+	fn value_token(&self) -> &Token { &self.value_token }
 
 	fn parse<'a>(&self, state: &ParserState, _location: Token, document: &'a dyn Document<'a>) {
 		let source = Rc::new(VirtualSource::new(
@@ -68,14 +74,16 @@ impl Variable for BaseVariable {
 pub struct PathVariable {
 	location: Token,
 	name: String,
+	value_token: Token,
 	path: PathBuf,
 }
 
 impl PathVariable {
-	pub fn new(location: Token, name: String, path: PathBuf) -> Self {
+	pub fn new(location: Token, name: String, value_token: Token, path: PathBuf) -> Self {
 		Self {
 			location,
 			name,
+			value_token,
 			path,
 		}
 	}
@@ -87,6 +95,8 @@ impl Variable for PathVariable {
 	fn name(&self) -> &str { self.name.as_str() }
 
 	fn to_string(&self) -> String { self.path.to_str().unwrap().to_string() }
+
+	fn value_token(&self) -> &Token { &self.value_token }
 
 	fn parse(&self, state: &ParserState, location: Token, document: &dyn Document) {
 		let source = Rc::new(VirtualSource::new(
