@@ -7,6 +7,7 @@ use tower_lsp::lsp_types::InlayHint;
 use crate::parser::source::LineCursor;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
+use crate::parser::source::SourcePosition;
 use crate::parser::source::VirtualSource;
 
 use super::data::LSPData;
@@ -82,6 +83,7 @@ impl<'a> Hints<'a> {
 	}
 
 	pub fn add(&self, position: usize, label: String) {
+		let position = self.original_source.original_position(position).1;
 		let mut cursor = self.hints.cursor.borrow_mut();
 		cursor.move_to(position);
 

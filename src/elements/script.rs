@@ -271,7 +271,7 @@ impl RegexRule for ScriptRule {
 			let range = matches
 				.get(0)
 				.map(|m| {
-					if token.source().content().as_bytes()[m.start()] == b'\n' {
+					if index == 0 && token.source().content().as_bytes()[m.start()] == b'\n' {
 						m.start() + 1..m.end()
 					} else {
 						m.range()
@@ -295,6 +295,7 @@ impl RegexRule for ScriptRule {
 				}
 				sems.add(matches.get(3).unwrap().range(), tokens.script_content);
 			}
+			eprintln!("range={:#?}", range);
 			sems.add(range.end - 2..range.end, tokens.script_sep);
 		}
 
@@ -306,7 +307,7 @@ impl RegexRule for ScriptRule {
 			});
 			if !label.is_empty() {
 				label.pop();
-				hints.add(matches.get(0).unwrap().end(), label);
+				hints.add(matches.get(0).unwrap().end() - 1, label);
 			}
 		}
 
