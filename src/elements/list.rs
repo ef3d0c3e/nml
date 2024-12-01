@@ -340,6 +340,20 @@ impl Rule for ListRule {
 					}
 				}
 
+				if let Some(hints) =
+					Hints::from_source(cursor.source.clone(), &state.shared.lsp)
+				{
+					let mut label = String::new();
+					for (_, id) in &depth
+					{
+						if !label.is_empty() {
+							label.push('.');
+						}
+						label.push_str(id.to_string().as_str());
+					}
+					hints.add(captures.get(1).unwrap().end(), label);
+				}
+
 				// Content
 				let entry_start = captures.get(3).unwrap().start();
 				let mut entry_content = captures.get(3).unwrap().as_str().to_string();
@@ -394,20 +408,6 @@ impl Rule for ListRule {
 					ListRule::push_markers(&token, state, document, &previous_depth, &depth);
 				} else {
 					ListRule::push_markers(&token, state, document, &vec![], &depth);
-				}
-
-				if let Some(hints) =
-					Hints::from_source(token.source(), &state.shared.lsp)
-				{
-					let mut label = String::new();
-					for (_, id) in &depth
-					{
-						if !label.is_empty() {
-							label.push('.');
-						}
-						label.push_str(id.to_string().as_str());
-					}
-					hints.add(captures.get(1).unwrap().end(), label);
 				}
 
 				state.push(
