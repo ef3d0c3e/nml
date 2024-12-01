@@ -300,7 +300,7 @@ pub struct CompiledDocument {
 	pub variables: HashMap<String, String>,
 
 	/// All the referenceable elements in the document
-	/// with values mapped by [`ReferenceableElement::refid()`]
+	/// with values mapped by [`crate::document::element::ReferenceableElement::refid()`]
 	pub references: HashMap<String, String>,
 
 	/// Compiled document's header

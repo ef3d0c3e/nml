@@ -5,18 +5,20 @@ use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
 /// Styling for an element
+///
+/// Some elements have support for styling.
 pub trait ElementStyle: Downcast + core::fmt::Debug {
 	/// The style key
 	fn key(&self) -> &'static str;
 
-	/// Attempts to create a new style from a [`json`] string
+	/// Attempts to create a new style from a `json` string
 	///
 	/// # Errors
 	///
 	/// Will fail if deserialization fails
 	fn from_json(&self, json: &str) -> Result<Rc<dyn ElementStyle>, String>;
 
-	/// Attempts to deserialize lua table into a new style
+	/// Attempts to deserialize a `lua table` into a new style
 	fn from_lua(
 		&self,
 		lua: &mlua::Lua,
@@ -25,6 +27,7 @@ pub trait ElementStyle: Downcast + core::fmt::Debug {
 }
 impl_downcast!(ElementStyle);
 
+/// A structure that holds registered [`ElementStyle`]
 #[derive(Default)]
 pub struct StyleHolder {
 	styles: HashMap<String, Rc<dyn ElementStyle>>,
@@ -35,13 +38,17 @@ impl StyleHolder {
 	pub fn is_registered(&self, style_key: &str) -> bool { self.styles.contains_key(style_key) }
 
 	/// Gets the current active style for an element
-	/// NOTE: Will panic if a style is not defined for a given element
-	/// If you need to process user input, use [`is_registered`]
+	/// If you need to process user input, use [`Self::is_registered`]
+	///
+	/// # Notes
+	///
+	/// Will panic if a style is not defined for a given element.
+	/// Elements should have their styles (when they support it) registered when the parser starts.
 	pub fn current(&self, style_key: &str) -> Rc<dyn ElementStyle> {
 		self.styles.get(style_key).cloned().unwrap()
 	}
 
-	/// Sets the [`style`]
+	/// Sets the style
 	pub fn set_current(&mut self, style: Rc<dyn ElementStyle>) {
 		self.styles.insert(style.key().to_string(), style);
 	}

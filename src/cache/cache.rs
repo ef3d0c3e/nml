@@ -33,9 +33,9 @@ pub trait Cached {
 	/// # Error
 	///
 	/// Will return an error if the database connection(s) fail,
-	/// or if not cached, an error from the generator [`f`]
+	/// or if not cached, an error from the generator `f`
 	///
-	/// Note that on error, [`f`] may still have been called
+	/// Note that on error, `f` may still have been called
 	fn cached<E, F>(
 		&self,
 		con: &Connection,

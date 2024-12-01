@@ -90,12 +90,15 @@ pub fn process_text(document: &dyn Document, content: &str) -> String {
 	processed
 }
 
-/// Transforms source into a new [`VirtualSource`]. Transforms range from source by
-/// detecting escaped tokens.
+/// Transforms source into a new [`VirtualSource`] using a `range`.
+///
+/// This function will extract the sub-source using the specified `range`, then escape `token` using the specified `escape` character.
+/// It will also keep a list of removed/added characters and build an offset list that will be passed to the newly created source, via [`VirtualSource::new_offsets`].
+///
 ///
 /// # Notes
 ///
-/// If you only need to escape content that won't be parsed, use [`process_escaped`] instead.
+/// If you only need to escape content that won't be parsed, use [`escape_text`] instead.
 pub fn escape_source(
 	source: Rc<dyn Source>,
 	range: Range<usize>,
@@ -147,11 +150,11 @@ pub fn escape_source(
 }
 
 /// Processed a string and escapes a single token out of it
-/// Escaped characters other than the [`token`] will be not be treated as escaped
+/// Escaped characters other than the [`Token`] will be not be treated as escaped
 ///
 /// # Example
 /// ```
-/// assert_eq!(process_escaped('\\', "%", "escaped: \\%, also escaped: \\\\\\%, untouched: \\a"),
+/// assert_eq!(scape_text('\\', "%", "escaped: \\%, also escaped: \\\\\\%, untouched: \\a"),
 /// "escaped: %, also escaped: \\%, untouched: \\a");
 /// ```
 ///

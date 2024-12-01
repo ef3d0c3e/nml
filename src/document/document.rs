@@ -177,11 +177,11 @@ pub trait Document<'a>: core::fmt::Debug {
 		}
 	}
 
-	/// Merges [`other`] into [`self`]
+	/// Merges another [`Document`]'s scope into [`self`]
 	///
 	/// # Parameters
 	///
-	/// If [`merge_as`] is None, references and variables from the other document are not merged into self
+	/// If `merge_as` is None, references and variables from the other document are not merged into self
 	fn merge(
 		&self,
 		content: &RefCell<Vec<Box<dyn Element>>>,

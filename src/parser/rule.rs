@@ -70,7 +70,7 @@ pub trait Rule: Downcast {
 	/// The name of the rule that should come before this one
 	fn previous(&self) -> Option<&'static str>;
 
-	/// Finds the next match starting from [`cursor`]
+	/// Finds the next match starting from `cursor`
 	fn next_match(
 		&self,
 		mode: &ParseMode,
@@ -137,7 +137,7 @@ impl<T: RegexRule + 'static> Rule for T {
 
 	fn previous(&self) -> Option<&'static str> { RegexRule::previous(self) }
 
-	/// Finds the next match starting from [`cursor`]
+	/// Finds the next match starting from [`Cursor`]
 	fn next_match(
 		&self,
 		mode: &ParseMode,

@@ -180,7 +180,7 @@ impl<'a, 'b> ParserState<'a, 'b> {
 	///  2. (Optional) The winning match with it's match data
 	/// If the winning match is None, it means that the document has no more
 	/// rule to match. I.e The rest of the content should be added as a
-	/// [`Text`] element.
+	/// [`crate::elements::text::Text`] element.
 	/// The match data should be passed to the [`Rule::on_match`] method.
 	///
 	/// # Strategy
@@ -298,13 +298,13 @@ impl<'a, 'b> ParserState<'a, 'b> {
 	}
 
 	/// Resets the position and the match_data for a given rule. This is used
-	/// in order to have 'dynamic' rules that may not match at first, but their
-	/// matching rule is modified through the parsing process.
+	/// in order to have 'dynamic' rules that may not match at first, but may match
+	/// in the future when modified.
 	///
 	/// This function also recursively calls itself on it's `parent`, in order
 	/// to fully reset the match.
 	///
-	/// See [`CustomStyleRule`] for an example of how this is used.
+	/// See [`crate::elements::customstyle::CustomStyleRule`] for an example of how this is used.
 	///
 	/// # Error
 	///

@@ -10,8 +10,13 @@ use unicode_segmentation::UnicodeSegmentation;
 /// Trait for source content
 pub trait Source: Downcast + Debug {
 	/// Gets the source's location
+	///
+	/// This usually means the parent source.
+	/// If the source is a [`SourceFile`], this generally means the [`SourceFile`] that included it.
 	fn location(&self) -> Option<&Token>;
 	/// Gets the source's name
+	///
+	/// For [`SourceFile`] this means the path of the source. Note that some [`VirtualSource`] are prefixed with a special identifier such as `:LUA:`.
 	fn name(&self) -> &String;
 	/// Gets the source's content
 	fn content(&self) -> &String;
@@ -37,13 +42,19 @@ impl std::hash::Hash for dyn Source {
 /// [`SourceFile`] is a type of [`Source`] that represents a real file.
 #[derive(Debug)]
 pub struct SourceFile {
+	/// The token that created this [`SourceFile`], empty if file comes from the executable's
+	/// options.
 	location: Option<Token>,
+	/// Path to the file, used for the [`Self::name()`] method
 	path: String,
+	/// Content of the file
 	content: String,
 }
 
 impl SourceFile {
 	// TODO: Create a SourceFileRegistry holding already loaded files to avoid reloading them
+	/// Creates a [`SourceFile`] from a `path`. This will read the content of the file at that
+	/// `path`. In case the file is not accessible or reading fails, an error is returned.
 	pub fn new(path: String, location: Option<Token>) -> Result<Self, String> {
 		match fs::read_to_string(&path) {
 			Err(_) => Err(format!("Unable to read file content: `{}`", path)),
@@ -55,6 +66,7 @@ impl SourceFile {
 		}
 	}
 
+	/// Creates a [`SourceFile`] from a `String`
 	pub fn with_content(path: String, content: String, location: Option<Token>) -> Self {
 		Self {
 			location,
@@ -63,6 +75,7 @@ impl SourceFile {
 		}
 	}
 
+	/// Gets the path of this [`SourceFile`]
 	pub fn path(&self) -> &String { &self.path }
 }
 
@@ -79,8 +92,8 @@ impl Source for SourceFile {
 ///
 /// # Example
 ///
-/// Let's say you make a virtual source from the following: "Con\]tent" -> "Con]tent"
-/// Then at position 3, an offset of 1 will be created to account for the removed '\'
+/// Let's say you make a virtual source from the following: "Con\\]tent" -> "Con]tent"
+/// Then at position 3, an offset of 1 will be created to account for the removed '\\'
 #[derive(Debug)]
 struct SourceOffset {
 	/// Stores the total offsets
@@ -105,16 +118,25 @@ impl SourceOffset {
 
 /// [`VirtualSource`] is a type of [`Source`] that represents a virtual file. [`VirtualSource`]s
 /// can be created from other [`VirtualSource`]s but it must always come from a [`SourceFile`].
+///
+///	# Offsets
+///
+/// [`VirtualSource`] will keep a list of offsets that were applied from the their parent source (available via [`Self::location`]).
+/// For instance, if you consider the [`VirtualSource`] created by removing the '\\' from the following string: "He\\llo", then an offset is stored to account for the missing '\\'. This is required in order to keep diagnostics accurate.
 #[derive(Debug)]
 pub struct VirtualSource {
+	/// Token that createrd this [`VirtualSource`]
 	location: Token,
+	/// Name of the [`VirtualSource`]
 	name: String,
+	/// Content of the [`VirtualSource`]
 	content: String,
-	/// Offset relative to the [`location`]'s source
+	/// Offsets relative to the [`Self::location`]'s source
 	offsets: Option<SourceOffset>,
 }
 
 impl VirtualSource {
+	/// Creates a new [`VirtualSource`] from a `location`, `name` and `content`.
 	pub fn new(location: Token, name: String, content: String) -> Self {
 		Self {
 			location,
@@ -124,6 +146,11 @@ impl VirtualSource {
 		}
 	}
 
+	/// Creates a new [`VirtualSource`] from a `location`, `name`, `content` and `offsets`.
+	///
+	/// # Notes
+	///
+	/// This should be called by [`crate::parser::util::escape_source`]
 	pub fn new_offsets(
 		location: Token,
 		name: String,
@@ -233,7 +260,7 @@ pub struct Cursor {
 impl Cursor {
 	pub fn new(pos: usize, source: Rc<dyn Source>) -> Self { Self { pos, source } }
 
-	/// Creates [`cursor`] at [`new_pos`] in the same [`file`]
+	/// Creates [`Cursor`] at `new_pos` in the same [`Source`]
 	pub fn at(&self, new_pos: usize) -> Self {
 		Self {
 			pos: new_pos,
@@ -246,7 +273,7 @@ impl Cursor {
 ///
 /// # Notes
 ///
-/// Because the LSP uses UTF-16 encoded positions, field [`line_pos`] corresponds to the UTF-16
+/// Because the LSP uses UTF-16 encoded positions, field [`Self::line_pos`] corresponds to the UTF-16
 /// distance between the first character (position = 0 or after '\n') and the character at the
 /// current position.
 #[derive(Debug, Clone)]
@@ -273,10 +300,11 @@ impl LineCursor {
 	}
 
 	/// Moves [`LineCursor`] to an absolute byte position
+	/// This function may only advance the position, as is required for the LSP semantics.
 	///
 	/// # Error
 	///
-	/// This function will panic if [`pos`] is not utf8 aligned
+	/// This function will panic if [`Self::pos`] is not UTF-88 aligned, or if trying to go to a previous position.
 	pub fn move_to(&mut self, pos: usize) {
 		if self.pos < pos {
 			let start = self.pos;
