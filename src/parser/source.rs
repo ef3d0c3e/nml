@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Trait for source content
 pub trait Source: Downcast + Debug {
@@ -314,13 +315,68 @@ pub struct Token {
 }
 
 impl Token {
+	/// Creates a new token from a range and a source
 	pub fn new(range: Range<usize>, source: Rc<dyn Source>) -> Self { Self { range, source } }
 
+	/// Retrieve the source of the token
 	pub fn source(&self) -> Rc<dyn Source> { self.source.clone() }
 
+	/// Get the start byte position of the token
 	pub fn start(&self) -> usize { self.range.start }
 
+	/// Get the end byte position of the token
 	pub fn end(&self) -> usize { self.range.end }
+
+	/// Get a byte position from a grapheme offset
+	///
+	/// When in need of diagnostics over a range, use this method instead of adding bytes to `start()`
+	/// In case the offsets is out of range, the value of `start()` is returned instead.
+	///
+	/// # Example
+	///
+	/// Say you have the following range:
+	/// `🚽‍👨TEXT` (🚽‍👨 = 3 + TEXT = 4 codepoints)
+	/// Calling [`start_offset(1)`] over this range would give you the byte position of character `T`
+	pub fn start_offset(&self, offset: usize) -> usize {
+		if offset == 0 {
+			return self.start();
+		}
+
+		let mut graphemes = self.source.content()[self.range.start..self.range.end]
+			.grapheme_indices(true)
+			.skip(offset - 1);
+
+		return graphemes
+			.next()
+			.map(|(pos, _)| pos)
+			.unwrap_or(self.range.end);
+	}
+
+	/// Get a byte position from a grapheme offset
+	///
+	/// When in need of diagnostics over a range, use this method instead of subtracting bytes from `end()`
+	/// In case the offsets is out of range, the value of `end()` is returned instead.
+	///
+	/// # Example
+	///
+	/// Say you have the following range:
+	/// `TEXT🎅‍🦽` (TEXT = 4 + 🎅‍🦽 = 3 codepoints)
+	/// Calling [`end_offset(1)`] over this range would give you the byte position of character `🎅‍🦽`
+	pub fn end_offset(&self, offset: usize) -> usize {
+		if offset == 0 {
+			return self.end();
+		}
+
+		let mut graphemes = self.source.content()[0..self.range.end]
+			.grapheme_indices(true)
+			.rev()
+			.skip(offset - 1);
+
+		return graphemes
+			.next()
+			.map(|(pos, _)| pos)
+			.unwrap_or(self.range.end);
+	}
 }
 
 impl From<Rc<dyn Source>> for Token {
