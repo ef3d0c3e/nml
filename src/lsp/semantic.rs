@@ -407,7 +407,7 @@ impl<'a> Semantics<'a> {
 			let len = usize::min(range.end - cursor.pos, end);
 			let clen = self.source.content()[cursor.pos..cursor.pos + len]
 				.chars()
-				.fold(0, |acc, _| acc + 1);
+				.fold(0, |acc, c| acc + c.len_utf16());
 
 			let delta_line = cursor.line - current.line;
 			let delta_start = if delta_line == 0 {

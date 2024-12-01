@@ -130,7 +130,7 @@ impl RuleState for CustomStyleState {
 				.map(|last| {
 					(
 						last.location().source(),
-						last.location().end() - 1..last.location().end(),
+						last.location().end_offset(1)..last.location().end(),
 					)
 				})
 				.unwrap();
