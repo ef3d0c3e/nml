@@ -3,3 +3,4 @@ pub mod definition;
 pub mod hints;
 pub mod semantic;
 pub mod conceal;
+pub mod styles;

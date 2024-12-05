@@ -1,71 +1,61 @@
-use std::cell::Ref;
-use std::cell::RefCell;
-use std::ops::Range;
-use std::rc::Rc;
+use std::{cell::{Ref, RefCell}, ops::Range, rc::Rc};
 
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::Position;
 
-use crate::parser::source::LineCursor;
-use crate::parser::source::Source;
-use crate::parser::source::SourceFile;
-use crate::parser::source::SourcePosition;
-use crate::parser::source::VirtualSource;
+use crate::parser::source::{LineCursor, Source, SourceFile, SourcePosition, VirtualSource};
 
 use super::data::LSPData;
 
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ConcealParams {
+pub struct StyleParams {
 	pub text_document: tower_lsp::lsp_types::TextDocumentIdentifier,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ConcealInfo {
+pub struct StyleInfo {
 	pub range: tower_lsp::lsp_types::Range,
-	pub conceal_text: ConcealTarget,
+	pub style: Style,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ConcealTarget {
-	Text(String),
-	Highlight {
-		text: String,
-		highlight_group: String,
-	},
+pub enum Style {
+	Color(u32),
+	Style(String),
+	Full {
+		color: u32,
+		style: String,
+	}
 }
 
-/// Per file conceals
+/// Per file styles
 #[derive(Debug)]
-pub struct ConcealsData {
-	/// The current cursor
-	cursor: RefCell<LineCursor>,
-
-	/// The conceals
-	pub conceals: RefCell<Vec<ConcealInfo>>,
+pub struct StylesData {
+	/// The styles
+	pub styles: RefCell<Vec<StyleInfo>>,
 }
 
-impl ConcealsData {
+impl StylesData {
 	pub fn new(source: Rc<dyn Source>) -> Self {
 		Self {
-			cursor: RefCell::new(LineCursor::new(source)),
-			conceals: RefCell::new(vec![]),
+			styles: RefCell::new(vec![]),
 		}
 	}
 }
 
 /// Temporary data returned by [`Self::from_source_impl`]
 #[derive(Debug)]
-pub struct Conceals<'a> {
-	pub(self) conceals: Ref<'a, ConcealsData>,
+pub struct Styles<'a> {
+	pub(self) styles: Ref<'a, StylesData>,
 	// The source used when resolving the parent source
 	pub(self) original_source: Rc<dyn Source>,
 	/// The resolved parent source
 	pub(self) source: Rc<dyn Source>,
 }
 
-impl<'a> Conceals<'a> {
+impl<'a> Styles<'a> {
 	fn from_source_impl(
 		source: Rc<dyn Source>,
 		lsp: &'a Option<RefCell<LSPData>>,
@@ -88,11 +78,11 @@ impl<'a> Conceals<'a> {
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if let Ok(source) = source.clone().downcast_rc::<SourceFile>() {
 			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
-				lsp.conceals.get(&(source.clone() as Rc<dyn Source>))
+				lsp.styles.get(&(source.clone() as Rc<dyn Source>))
 			})
 			.ok()
-			.map(|conceals| Self {
-				conceals,
+			.map(|styles| Self {
+				styles,
 				source,
 				original_source,
 			});
@@ -107,9 +97,9 @@ impl<'a> Conceals<'a> {
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
-	pub fn add(&self, range: Range<usize>, text: ConcealTarget) {
+	pub fn add(&self, range: Range<usize>, style: Style) {
 		let range = self.original_source.original_range(range).1;
-		let mut cursor = self.conceals.cursor.borrow_mut();
+		let mut cursor = LineCursor::new(self.original_source.clone());
 		cursor.move_to(range.start);
 
 		let line = cursor.line;
@@ -119,7 +109,7 @@ impl<'a> Conceals<'a> {
 		assert_eq!(line, cursor.line);
 		let end_char = cursor.line_pos;
 
-		self.conceals.conceals.borrow_mut().push(ConcealInfo {
+		self.styles.styles.borrow_mut().push(StyleInfo {
 			range: tower_lsp::lsp_types::Range {
 				start: Position {
 					line: line as u32,
@@ -130,7 +120,7 @@ impl<'a> Conceals<'a> {
 					character: end_char as u32,
 				},
 			},
-			conceal_text: text,
+			style,
 		})
 	}
 }

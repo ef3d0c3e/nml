@@ -8,6 +8,7 @@ use super::definition::DefinitionData;
 use super::hints::HintsData;
 use super::semantic::SemanticsData;
 use super::semantic::Tokens;
+use super::styles::StylesData;
 
 #[derive(Debug)]
 pub struct LSPData {
@@ -16,6 +17,7 @@ pub struct LSPData {
 	pub inlay_hints: HashMap<Rc<dyn Source>, HintsData>,
 	pub definitions: HashMap<Rc<dyn Source>, DefinitionData>,
 	pub conceals: HashMap<Rc<dyn Source>, ConcealsData>,
+	pub styles: HashMap<Rc<dyn Source>, StylesData>,
 }
 
 impl LSPData {
@@ -26,6 +28,7 @@ impl LSPData {
 			inlay_hints: HashMap::new(),
 			definitions: HashMap::new(),
 			conceals: HashMap::new(),
+			styles: HashMap::new(),
 		}
 	}
 
@@ -46,6 +49,10 @@ impl LSPData {
 		if !self.conceals.contains_key(&source) {
 			self.conceals
 				.insert(source.clone(), ConcealsData::new(source.clone()));
+		}
+		if !self.styles.contains_key(&source) {
+			self.styles
+				.insert(source.clone(), StylesData::new(source.clone()));
 		}
 	}
 }

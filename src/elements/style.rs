@@ -14,6 +14,7 @@ use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
 use ariadne::Fmt;
+use lsp::styles::Styles;
 use mlua::Function;
 use regex::Captures;
 use regex::Regex;
@@ -188,6 +189,8 @@ impl RegexRule for StyleRule {
 		};
 
 		if let Some(style_state) = style_state.borrow_mut().downcast_mut::<StyleState>() {
+			let start = style_state.toggled[index].clone();
+
 			style_state.toggled[index] = style_state.toggled[index]
 				.clone()
 				.map_or(Some(token.clone()), |_| None);
@@ -200,6 +203,22 @@ impl RegexRule for StyleRule {
 				)),
 			);
 
+			if let Some(start) = start
+			{
+				if let Some(styles) =
+					Styles::from_source(token.source(), &state.shared.lsp)
+				{
+					match index
+					{
+						0 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("bold".into())),
+						1 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("italic".into())),
+						2 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("underlined".into())),
+						_ => {},
+					}
+				}
+			}
+
+			// Style
 			if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp)
 			{
 				sems.add(token.start()..token.end(), tokens.style_marker);

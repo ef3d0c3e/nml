@@ -9,10 +9,10 @@ mod parser;
 use std::rc::Rc;
 
 use dashmap::DashMap;
-use downcast_rs::Downcast;
 use lsp::conceal::ConcealInfo;
 use lsp::conceal::ConcealParams;
-use lsp::conceal::ConcealTarget;
+use lsp::styles::StyleInfo;
+use lsp::styles::StyleParams;
 use parser::langparser::LangParser;
 use parser::parser::ParseMode;
 use parser::parser::Parser;
@@ -35,6 +35,7 @@ struct Backend {
 	diagnostic_map: DashMap<String, Vec<Diagnostic>>,
 	hints_map: DashMap<String, Vec<InlayHint>>,
 	conceals_map: DashMap<String, Vec<ConcealInfo>>,
+	styles_map: DashMap<String, Vec<StyleInfo>>,
 }
 
 #[derive(Debug)]
@@ -72,9 +73,10 @@ impl Backend {
 			ParseMode::default(),
 		);
 
-		// Semantics
 		if let Some(lsp) = state.shared.lsp.as_ref() {
 			let borrow = lsp.borrow();
+
+			// Semantics
 			for (source, sem) in &borrow.semantic_data {
 				if let Some(path) = source
 					.clone()
@@ -86,11 +88,8 @@ impl Backend {
 						.insert(path, sem.tokens.replace(vec![]));
 				}
 			}
-		}
 
-		// Hints
-		if let Some(lsp) = state.shared.lsp.as_ref() {
-			let borrow = lsp.borrow();
+			// Inlay hints
 			for (source, hints) in &borrow.inlay_hints {
 				if let Some(path) = source
 					.clone()
@@ -101,11 +100,8 @@ impl Backend {
 					self.hints_map.insert(path, hints.hints.replace(vec![]));
 				}
 			}
-		}
 
-		// Definitions
-		if let Some(lsp) = state.shared.lsp.as_ref() {
-			let borrow = lsp.borrow();
+			// Definitions
 			for (source, definitions) in &borrow.definitions {
 				if let Some(path) = source
 					.clone()
@@ -117,11 +113,8 @@ impl Backend {
 						.insert(path, definitions.definitions.replace(vec![]));
 				}
 			}
-		}
 
-		// Conceals
-		if let Some(lsp) = state.shared.lsp.as_ref() {
-			let borrow = lsp.borrow();
+			// Conceals
 			for (source, conceals) in &borrow.conceals {
 				if let Some(path) = source
 					.clone()
@@ -133,6 +126,19 @@ impl Backend {
 						.insert(path, conceals.conceals.replace(vec![]));
 				}
 			}
+
+			// Styles
+			for (source, styles) in &borrow.styles {
+				if let Some(path) = source
+					.clone()
+					.downcast_rc::<SourceFile>()
+					.ok()
+					.map(|source| source.path().to_owned())
+				{
+					self.styles_map
+						.insert(path, styles.styles.replace(vec![]));
+				}
+			}
 		}
 	}
 
@@ -140,11 +146,21 @@ impl Backend {
 		&self,
 		params: ConcealParams,
 	) -> jsonrpc::Result<Vec<ConcealInfo>> {
-		eprintln!("HERE {:#?}", self.conceals_map);
 		if let Some(conceals) = self.conceals_map.get(params.text_document.uri.as_str()) {
 			let (_, data) = conceals.pair();
 
-		eprintln!("HERE2");
+			return Ok(data.to_vec());
+		}
+		Ok(vec![])
+	}
+
+	async fn handle_style_request(
+		&self,
+		params: StyleParams,
+	) -> jsonrpc::Result<Vec<StyleInfo>> {
+		if let Some(styles) = self.styles_map.get(params.text_document.uri.as_str()) {
+			let (_, data) = styles.pair();
+
 			return Ok(data.to_vec());
 		}
 		Ok(vec![])
@@ -357,8 +373,10 @@ async fn main() {
 		diagnostic_map: DashMap::new(),
 		hints_map: DashMap::new(),
 		conceals_map: DashMap::new(),
+		styles_map: DashMap::new(),
 	})
 	.custom_method("textDocument/conceal", Backend::handle_conceal_request)
+	.custom_method("textDocument/style", Backend::handle_style_request)
 	.finish();
 
 	Server::new(stdin, stdout, socket).serve(service).await;
