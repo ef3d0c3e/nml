@@ -212,10 +212,11 @@ impl RegexRule for StyleRule {
 				{
 					match index
 					{
-						0 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("bold".into())),
-						1 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("italic".into())),
-						2 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("underlined".into())),
-						_ => {},
+						0 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Group("Bold".into())),
+						1 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Group("Italic".into())),
+						2 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Group("Underline".into())),
+						3 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Group("Code".into())),
+						_ => {}
 					}
 				}
 			}
@@ -229,10 +230,7 @@ impl RegexRule for StyleRule {
 			// Conceals
 			if let Some(conceals) = Conceals::from_source(token.source(), &state.shared.lsp)
 			{
-				if index != 3 // Disable for code
-				{
-					conceals.add(token.range.clone(), ConcealTarget::Text("".into()));
-				}
+				conceals.add(token.range.clone(), ConcealTarget::Text("".into()));
 			}
 		} else {
 			panic!("Invalid state at `{STATE_NAME}`");

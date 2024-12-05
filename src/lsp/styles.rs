@@ -15,19 +15,17 @@ pub struct StyleParams {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct StyleInfo {
 	pub range: tower_lsp::lsp_types::Range,
 	pub style: Style,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub enum Style {
-	Color(u32),
-	Style(String),
-	Full {
-		color: u32,
-		style: String,
-	}
+	/// Use a predefined highlight group from the editor
+	Group(String),
 }
 
 /// Per file styles
