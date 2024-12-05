@@ -8,6 +8,7 @@ use serde::Serialize;
 use tower_lsp::lsp_types::Position;
 
 use crate::parser::source::LineCursor;
+use crate::parser::source::OffsetEncoding;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
@@ -49,7 +50,7 @@ pub struct ConcealsData {
 impl ConcealsData {
 	pub fn new(source: Rc<dyn Source>) -> Self {
 		Self {
-			cursor: RefCell::new(LineCursor::new(source)),
+			cursor: RefCell::new(LineCursor::new(source, OffsetEncoding::Utf8)),
 			conceals: RefCell::new(vec![]),
 		}
 	}

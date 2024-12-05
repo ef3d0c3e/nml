@@ -3,7 +3,7 @@ use std::{cell::{Ref, RefCell}, ops::Range, rc::Rc};
 use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::Position;
 
-use crate::parser::source::{LineCursor, Source, SourceFile, SourcePosition, VirtualSource};
+use crate::parser::source::{LineCursor, OffsetEncoding, Source, SourceFile, SourcePosition, VirtualSource};
 
 use super::data::LSPData;
 
@@ -99,7 +99,7 @@ impl<'a> Styles<'a> {
 
 	pub fn add(&self, range: Range<usize>, style: Style) {
 		let range = self.original_source.original_range(range).1;
-		let mut cursor = LineCursor::new(self.source.clone());
+		let mut cursor = LineCursor::new(self.source.clone(), OffsetEncoding::Utf8);
 
 		cursor.move_to(range.start);
 		let start_line = cursor.line;

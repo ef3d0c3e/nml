@@ -7,6 +7,7 @@ use tower_lsp::lsp_types::Range;
 use tower_lsp::lsp_types::Url;
 
 use crate::parser::source::LineCursor;
+use crate::parser::source::OffsetEncoding;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
@@ -59,7 +60,7 @@ fn from_source_impl(
 			let token = original.source().original_range(original.range).1;
 
 			// Resolve target
-			let mut target_cursor = LineCursor::new(target.source());
+			let mut target_cursor = LineCursor::new(target.source(), OffsetEncoding::Utf16);
 			let orignal_target = target.source().original_range(target.range.clone());
 			target_cursor.move_to(orignal_target.1.start);
 			let target_start = Position {
@@ -73,7 +74,7 @@ fn from_source_impl(
 			};
 
 			// Resolve source
-			let mut source_cursor = LineCursor::new(sourcefile);
+			let mut source_cursor = LineCursor::new(sourcefile, OffsetEncoding::Utf16);
 			source_cursor.move_to(token.start);
 			let source_start = Position {
 				line: source_cursor.line as u32,

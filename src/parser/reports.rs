@@ -8,6 +8,7 @@ use tower_lsp::lsp_types::Diagnostic;
 use crate::parser::source::LineCursor;
 
 use super::parser::ReportColors;
+use super::source::OffsetEncoding;
 use super::source::Source;
 use super::source::SourcePosition;
 use super::source::Token;
@@ -113,7 +114,7 @@ impl Report {
 		for span in self.spans {
 			let (source, range) = span.token.source().original_range(span.token.range.clone());
 
-			let mut start = LineCursor::new(source.clone());
+			let mut start = LineCursor::new(source.clone(), OffsetEncoding::Utf16);
 			start.move_to(range.start);
 			let mut end = start.clone();
 			end.move_to(range.end);

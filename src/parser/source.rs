@@ -269,6 +269,13 @@ impl Cursor {
 	}
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OffsetEncoding
+{
+	Utf8,
+	Utf16,
+}
+
 /// Cursor type used for the language server
 ///
 /// # Notes
@@ -286,16 +293,19 @@ pub struct LineCursor {
 	pub line_pos: usize,
 	/// Source
 	pub source: Rc<dyn Source>,
+	/// Offset encoding
+	pub encoding: OffsetEncoding,
 }
 
 impl LineCursor {
 	/// Creates a [`LineCursor`] at the begining of the source
-	pub fn new(source: Rc<dyn Source>) -> LineCursor {
+	pub fn new(source: Rc<dyn Source>, offset_encoding: OffsetEncoding) -> LineCursor {
 		Self {
 			pos: 0,
 			line: 0,
 			line_pos: 0,
 			source,
+			encoding: offset_encoding,
 		}
 	}
 
@@ -318,7 +328,11 @@ impl LineCursor {
 					self.line += 1;
 					self.line_pos = 0;
 				}
-				self.line_pos += c.len_utf16();
+				self.line_pos += match self.encoding
+				{
+					OffsetEncoding::Utf8 => c.len_utf8(),
+					OffsetEncoding::Utf16 => c.len_utf16(),
+				};
 				self.pos += c.len_utf8();
 				prev = Some(c);
 			}

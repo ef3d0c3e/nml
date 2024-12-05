@@ -14,6 +14,8 @@ use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
 use ariadne::Fmt;
+use lsp::conceal::ConcealTarget;
+use lsp::conceal::Conceals;
 use lsp::styles::Styles;
 use mlua::Function;
 use regex::Captures;
@@ -212,7 +214,7 @@ impl RegexRule for StyleRule {
 					{
 						0 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("bold".into())),
 						1 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("italic".into())),
-						2 => styles.add(start.start()..token.end()-1, crate::lsp::styles::Style::Style("underlined".into())),
+						2 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("underlined".into())),
 						_ => {},
 					}
 				}
@@ -221,7 +223,16 @@ impl RegexRule for StyleRule {
 			// Style
 			if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp)
 			{
-				sems.add(token.start()..token.end(), tokens.style_marker);
+				sems.add(token.range.clone(), tokens.style_marker);
+			}
+
+			// Conceals
+			if let Some(conceals) = Conceals::from_source(token.source(), &state.shared.lsp)
+			{
+				if (index != 3) // Disable for code
+				{
+					conceals.add(token.range.clone(), ConcealTarget::Text("".into()));
+				}
 			}
 		} else {
 			panic!("Invalid state at `{STATE_NAME}`");

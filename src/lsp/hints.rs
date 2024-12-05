@@ -5,6 +5,7 @@ use std::rc::Rc;
 use tower_lsp::lsp_types::InlayHint;
 
 use crate::parser::source::LineCursor;
+use crate::parser::source::OffsetEncoding;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
@@ -25,7 +26,7 @@ pub struct HintsData {
 impl HintsData {
 	pub fn new(source: Rc<dyn Source>) -> Self {
 		Self {
-			cursor: RefCell::new(LineCursor::new(source)),
+			cursor: RefCell::new(LineCursor::new(source, OffsetEncoding::Utf16)),
 			hints: RefCell::new(vec![]),
 		}
 	}
