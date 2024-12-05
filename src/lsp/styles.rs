@@ -38,7 +38,7 @@ pub struct StylesData {
 }
 
 impl StylesData {
-	pub fn new(source: Rc<dyn Source>) -> Self {
+	pub fn new(_source: Rc<dyn Source>) -> Self {
 		Self {
 			styles: RefCell::new(vec![]),
 		}
@@ -99,24 +99,24 @@ impl<'a> Styles<'a> {
 
 	pub fn add(&self, range: Range<usize>, style: Style) {
 		let range = self.original_source.original_range(range).1;
-		let mut cursor = LineCursor::new(self.original_source.clone());
-		cursor.move_to(range.start);
+		let mut cursor = LineCursor::new(self.source.clone());
 
-		let line = cursor.line;
+		cursor.move_to(range.start);
+		let start_line = cursor.line;
 		let start_char = cursor.line_pos;
 
 		cursor.move_to(range.end);
-		assert_eq!(line, cursor.line);
+		let end_line = cursor.line;
 		let end_char = cursor.line_pos;
 
 		self.styles.styles.borrow_mut().push(StyleInfo {
 			range: tower_lsp::lsp_types::Range {
 				start: Position {
-					line: line as u32,
+					line: start_line as u32,
 					character: start_char as u32,
 				},
 				end: Position {
-					line: line as u32,
+					line: end_line as u32,
 					character: end_char as u32,
 				},
 			},

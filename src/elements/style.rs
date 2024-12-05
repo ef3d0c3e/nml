@@ -212,7 +212,7 @@ impl RegexRule for StyleRule {
 					{
 						0 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("bold".into())),
 						1 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("italic".into())),
-						2 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Style("underlined".into())),
+						2 => styles.add(start.start()..token.end()-1, crate::lsp::styles::Style::Style("underlined".into())),
 						_ => {},
 					}
 				}

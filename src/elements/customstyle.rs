@@ -14,7 +14,6 @@ use mlua::Function;
 use mlua::Lua;
 
 use crate::document::document::Document;
-use crate::document::document::DocumentAccessors;
 use crate::lua::kernel::KernelContext;
 use crate::lua::kernel::CTX;
 use crate::parser::customstyle::CustomStyle;

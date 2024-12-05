@@ -110,8 +110,8 @@ impl<'a> Conceals<'a> {
 	pub fn add(&self, range: Range<usize>, text: ConcealTarget) {
 		let range = self.original_source.original_range(range).1;
 		let mut cursor = self.conceals.cursor.borrow_mut();
-		cursor.move_to(range.start);
 
+		cursor.move_to(range.start);
 		let line = cursor.line;
 		let start_char = cursor.line_pos;
 

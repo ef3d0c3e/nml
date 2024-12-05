@@ -6,10 +6,7 @@ use crate::document::document::Document;
 use crate::document::element::DocumentEnd;
 use crate::document::langdocument::LangDocument;
 use crate::elements::text::Text;
-use crate::lsp::definition::DefinitionData;
-use crate::lsp::hints::HintsData;
 use crate::lsp::semantic::Semantics;
-use crate::lsp::semantic::SemanticsData;
 
 use super::parser::ParseMode;
 use super::parser::Parser;
