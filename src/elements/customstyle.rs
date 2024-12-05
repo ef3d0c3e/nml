@@ -27,8 +27,6 @@ use crate::parser::source::Token;
 use crate::parser::state::RuleState;
 use crate::parser::state::Scope;
 
-use super::paragraph::Paragraph;
-
 #[derive(Debug)]
 struct LuaCustomStyle {
 	pub(self) name: String,

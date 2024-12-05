@@ -27,6 +27,7 @@ use lsp::conceal::Conceals;
 use lsp::hints::Hints;
 use parser::util::escape_source;
 use regex::Regex;
+use serde_json::json;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MarkerKind {
@@ -346,16 +347,15 @@ impl Rule for ListRule {
 					Conceals::from_source(cursor.source.clone(), &state.shared.lsp)
 				{
 					let mut i = captures.get(1).unwrap().start();
-					for (numbered, _) in &depth {
+					for (depth, (numbered, _)) in depth.iter().enumerate() {
 						conceals.add(
 							i..i + 1,
-							lsp::conceal::ConcealTarget::Highlight {
-								text: if *numbered {
-									"⦾".into()
-								} else {
-									"⦿".into()
-								},
-								highlight_group: "Function".into(),
+							lsp::conceal::ConcealTarget::Token {
+								token: "bullet".into(),
+								params: json!({
+									"depth": depth,
+									"numbered": *numbered,
+								})
 							},
 						);
 						i += 1;

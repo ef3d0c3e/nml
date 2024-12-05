@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use tower_lsp::lsp_types::Position;
 
 use crate::parser::source::LineCursor;
@@ -23,17 +24,23 @@ pub struct ConcealParams {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ConcealInfo {
 	pub range: tower_lsp::lsp_types::Range,
 	pub conceal_text: ConcealTarget,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub enum ConcealTarget {
+	/// Text to conceal with
 	Text(String),
-	Highlight {
-		text: String,
-		highlight_group: String,
+	/// Conceal using custom token
+	Token {
+		/// Name of the conceal token
+		token: String,
+		/// Parameters of the conceal token
+		params: Value,
 	},
 }
 

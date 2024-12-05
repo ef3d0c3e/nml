@@ -156,7 +156,6 @@ impl RegexRule for TocRule {
 		token: Token,
 		matches: Captures,
 	) -> Vec<Report> {
-		let mut reports = vec![];
 
 		let name = matches.get(1).unwrap().as_str().trim_start().trim_end();
 
@@ -181,7 +180,7 @@ impl RegexRule for TocRule {
 			sems.add(matches.get(1).unwrap().range(), tokens.toc_title);
 		}
 
-		reports
+		vec![]
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua mlua::Lua) -> Vec<(String, mlua::Function<'lua>)> {
