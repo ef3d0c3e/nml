@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use crate::parser::source::Source;
 
+use super::conceal::ConcealsData;
 use super::definition::DefinitionData;
 use super::hints::HintsData;
 use super::semantic::SemanticsData;
@@ -14,6 +15,7 @@ pub struct LSPData {
 	pub semantic_data: HashMap<Rc<dyn Source>, SemanticsData>,
 	pub inlay_hints: HashMap<Rc<dyn Source>, HintsData>,
 	pub definitions: HashMap<Rc<dyn Source>, DefinitionData>,
+	pub conceals: HashMap<Rc<dyn Source>, ConcealsData>,
 }
 
 impl LSPData {
@@ -23,6 +25,7 @@ impl LSPData {
 			semantic_data: HashMap::new(),
 			inlay_hints: HashMap::new(),
 			definitions: HashMap::new(),
+			conceals: HashMap::new(),
 		}
 	}
 
@@ -39,6 +42,10 @@ impl LSPData {
 		if !self.definitions.contains_key(&source) {
 			self.definitions
 				.insert(source.clone(), DefinitionData::new());
+		}
+		if !self.conceals.contains_key(&source) {
+			self.conceals
+				.insert(source.clone(), ConcealsData::new(source.clone()));
 		}
 	}
 }

@@ -23,6 +23,7 @@ use crate::parser::source::Cursor;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::util;
+use lsp::conceal::Conceals;
 use lsp::hints::Hints;
 use parser::util::escape_source;
 use regex::Regex;
@@ -330,6 +331,7 @@ impl Rule for ListRule {
 					offset.unwrap_or(usize::MAX),
 				);
 
+				// Semantic
 				if let Some((sems, tokens)) =
 					Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
 				{
@@ -340,12 +342,30 @@ impl Rule for ListRule {
 					}
 				}
 
-				if let Some(hints) =
-					Hints::from_source(cursor.source.clone(), &state.shared.lsp)
+				if let Some(conceals) =
+					Conceals::from_source(cursor.source.clone(), &state.shared.lsp)
 				{
+					let mut i = captures.get(1).unwrap().start();
+					for (numbered, _) in &depth {
+						conceals.add(
+							i..i + 1,
+							lsp::conceal::ConcealTarget::Highlight {
+								text: if *numbered {
+									"⦾".into()
+								} else {
+									"⦿".into()
+								},
+								highlight_group: "Function".into(),
+							},
+						);
+						i += 1;
+					}
+				}
+
+				// Hints
+				if let Some(hints) = Hints::from_source(cursor.source.clone(), &state.shared.lsp) {
 					let mut label = String::new();
-					for (_, id) in &depth
-					{
+					for (_, id) in &depth {
 						if !label.is_empty() {
 							label.push('.');
 						}

@@ -305,6 +305,7 @@ impl SemanticsData {
 	}
 }
 
+/// Temporary data returned by [`Self::from_source_impl`]
 #[derive(Debug)]
 pub struct Semantics<'a> {
 	pub(self) sems: Ref<'a, SemanticsData>,

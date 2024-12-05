@@ -9,12 +9,17 @@ mod parser;
 use std::rc::Rc;
 
 use dashmap::DashMap;
+use downcast_rs::Downcast;
+use lsp::conceal::ConcealInfo;
+use lsp::conceal::ConcealParams;
+use lsp::conceal::ConcealTarget;
 use parser::langparser::LangParser;
 use parser::parser::ParseMode;
 use parser::parser::Parser;
 use parser::parser::ParserState;
 use parser::reports::Report;
 use parser::source::SourceFile;
+use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 use tower_lsp::LanguageServer;
@@ -29,6 +34,7 @@ struct Backend {
 	semantic_token_map: DashMap<String, Vec<SemanticToken>>,
 	diagnostic_map: DashMap<String, Vec<Diagnostic>>,
 	hints_map: DashMap<String, Vec<InlayHint>>,
+	conceals_map: DashMap<String, Vec<ConcealInfo>>,
 }
 
 #[derive(Debug)]
@@ -112,6 +118,36 @@ impl Backend {
 				}
 			}
 		}
+
+		// Conceals
+		if let Some(lsp) = state.shared.lsp.as_ref() {
+			let borrow = lsp.borrow();
+			for (source, conceals) in &borrow.conceals {
+				if let Some(path) = source
+					.clone()
+					.downcast_rc::<SourceFile>()
+					.ok()
+					.map(|source| source.path().to_owned())
+				{
+					self.conceals_map
+						.insert(path, conceals.conceals.replace(vec![]));
+				}
+			}
+		}
+	}
+
+	async fn handle_conceal_request(
+		&self,
+		params: ConcealParams,
+	) -> jsonrpc::Result<Vec<ConcealInfo>> {
+		eprintln!("HERE {:#?}", self.conceals_map);
+		if let Some(conceals) = self.conceals_map.get(params.text_document.uri.as_str()) {
+			let (_, data) = conceals.pair();
+
+		eprintln!("HERE2");
+			return Ok(data.to_vec());
+		}
+		Ok(vec![])
 	}
 }
 
@@ -313,13 +349,17 @@ async fn main() {
 	let stdin = tokio::io::stdin();
 	let stdout = tokio::io::stdout();
 
-	let (service, socket) = LspService::new(|client| Backend {
+	let (service, socket) = LspService::build(|client| Backend {
 		client,
 		document_map: DashMap::new(),
 		definition_map: DashMap::new(),
 		semantic_token_map: DashMap::new(),
 		diagnostic_map: DashMap::new(),
 		hints_map: DashMap::new(),
-	});
+		conceals_map: DashMap::new(),
+	})
+	.custom_method("textDocument/conceal", Backend::handle_conceal_request)
+	.finish();
+
 	Server::new(stdin, stdout, socket).serve(service).await;
 }

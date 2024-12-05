@@ -1,8 +1,13 @@
 use std::cell::Ref;
 use std::cell::RefCell;
+use std::ops::Range;
 use std::rc::Rc;
 
-use tower_lsp::lsp_types::InlayHint;
+use serde::Deserialize;
+use serde::Serialize;
+use tower_lsp::jsonrpc::Request;
+use tower_lsp::jsonrpc::{self};
+use tower_lsp::lsp_types::Position;
 
 use crate::parser::source::LineCursor;
 use crate::parser::source::Source;
@@ -12,36 +17,57 @@ use crate::parser::source::VirtualSource;
 
 use super::data::LSPData;
 
-/// Per file hints
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConcealParams {
+	pub text_document: tower_lsp::lsp_types::TextDocumentIdentifier,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ConcealInfo {
+	pub range: tower_lsp::lsp_types::Range,
+	pub conceal_text: ConcealTarget,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum ConcealTarget {
+	Text(String),
+	Highlight {
+		text: String,
+		highlight_group: String,
+	},
+}
+
+/// Per file conceals
 #[derive(Debug)]
-pub struct HintsData {
+pub struct ConcealsData {
 	/// The current cursor
 	cursor: RefCell<LineCursor>,
 
-	/// The hints
-	pub hints: RefCell<Vec<InlayHint>>,
+	/// The conceals
+	pub conceals: RefCell<Vec<ConcealInfo>>,
 }
 
-impl HintsData {
+impl ConcealsData {
 	pub fn new(source: Rc<dyn Source>) -> Self {
 		Self {
 			cursor: RefCell::new(LineCursor::new(source)),
-			hints: RefCell::new(vec![]),
+			conceals: RefCell::new(vec![]),
 		}
 	}
 }
 
 /// Temporary data returned by [`Self::from_source_impl`]
 #[derive(Debug)]
-pub struct Hints<'a> {
-	pub(self) hints: Ref<'a, HintsData>,
+pub struct Conceals<'a> {
+	pub(self) conceals: Ref<'a, ConcealsData>,
 	// The source used when resolving the parent source
 	pub(self) original_source: Rc<dyn Source>,
 	/// The resolved parent source
 	pub(self) source: Rc<dyn Source>,
 }
 
-impl<'a> Hints<'a> {
+impl<'a> Conceals<'a> {
 	fn from_source_impl(
 		source: Rc<dyn Source>,
 		lsp: &'a Option<RefCell<LSPData>>,
@@ -64,11 +90,11 @@ impl<'a> Hints<'a> {
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if let Ok(source) = source.clone().downcast_rc::<SourceFile>() {
 			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
-				lsp.inlay_hints.get(&(source.clone() as Rc<dyn Source>))
+				lsp.conceals.get(&(source.clone() as Rc<dyn Source>))
 			})
 			.ok()
-			.map(|hints| Self {
-				hints,
+			.map(|conceals| Self {
+				conceals,
 				source,
 				original_source,
 			});
@@ -83,23 +109,30 @@ impl<'a> Hints<'a> {
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
-	pub fn add(&self, position: usize, label: String) {
-		let position = self.original_source.original_position(position).1;
-		let mut cursor = self.hints.cursor.borrow_mut();
-		cursor.move_to(position);
+	pub fn add(&self, range: Range<usize>, text: ConcealTarget) {
+		let range = self.original_source.original_range(range).1;
+		let mut cursor = self.conceals.cursor.borrow_mut();
+		cursor.move_to(range.start);
 
-		self.hints.hints.borrow_mut().push(InlayHint {
-			position: tower_lsp::lsp_types::Position {
-				line: cursor.line as u32,
-				character: cursor.line_pos as u32,
+		let line = cursor.line;
+		let start_char = cursor.line_pos;
+
+		cursor.move_to(range.end);
+		assert_eq!(line, cursor.line);
+		let end_char = cursor.line_pos;
+
+		self.conceals.conceals.borrow_mut().push(ConcealInfo {
+			range: tower_lsp::lsp_types::Range {
+				start: Position {
+					line: line as u32,
+					character: start_char as u32,
+				},
+				end: Position {
+					line: line as u32,
+					character: end_char as u32,
+				},
 			},
-			label: tower_lsp::lsp_types::InlayHintLabel::String(label),
-			kind: Some(tower_lsp::lsp_types::InlayHintKind::PARAMETER),
-			text_edits: None,
-			tooltip: None,
-			padding_left: None,
-			padding_right: None,
-			data: None,
+			conceal_text: text,
 		})
 	}
 }
