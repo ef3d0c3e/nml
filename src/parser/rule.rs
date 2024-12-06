@@ -1,11 +1,9 @@
-use super::layout::LayoutHolder;
 use super::parser::ParseMode;
 use super::parser::ParserState;
 use super::parser::SharedState;
 use super::reports::Report;
 use super::source::Cursor;
 use super::source::Token;
-use super::style::StyleHolder;
 use crate::document::document::Document;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;

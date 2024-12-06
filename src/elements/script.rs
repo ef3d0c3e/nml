@@ -295,7 +295,6 @@ impl RegexRule for ScriptRule {
 				}
 				sems.add(matches.get(3).unwrap().range(), tokens.script_content);
 			}
-			eprintln!("range={:#?}", range);
 			sems.add(range.end - 2..range.end, tokens.script_sep);
 		}
 

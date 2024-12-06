@@ -300,7 +300,7 @@ impl Rule for BlockquoteRule {
 				// Offset
 				let last = offsets.last().map_or(0, |(_, last)| *last);
 				offsets.push((
-					entry_content.len(),
+					entry_content.len() + 1,
 					last + (captures.get(1).unwrap().start() - captures.get(0).unwrap().start() - 1)
 						as isize,
 				));

@@ -7,6 +7,7 @@ use elements::text::Text;
 use lsp::conceal::Conceals;
 use lsp::semantic::Semantics;
 use parser::parser::SharedState;
+use parser::source::SourcePosition;
 use parser::source::VirtualSource;
 use regex::Regex;
 use serde_json::json;
@@ -140,6 +141,84 @@ mod default_blocks {
 			match compiler.target() {
 				HTML => {
 					let mut result = r#"<div class="block-todo">"#.to_string();
+					for elem in &block.content {
+						result += elem
+							.compile(compiler, document, cursor + result.len())?
+							.as_str();
+					}
+					result += "</div>";
+					Ok(result)
+				}
+				_ => todo!(""),
+			}
+		}
+	}
+
+	#[derive(Debug, Default)]
+	pub struct Tip;
+
+	impl BlockType for Tip {
+		fn name(&self) -> &'static str { "Tip" }
+
+		fn parse_properties(
+			&self,
+			_reports: &mut Vec<Report>,
+			_state: &ParserState,
+			_token: Token,
+		) -> Option<Box<dyn Any>> {
+			Some(Box::new(()))
+		}
+
+		fn compile(
+			&self,
+			block: &Block,
+			_properties: &Box<dyn Any>,
+			compiler: &Compiler,
+			document: &dyn Document,
+			cursor: usize,
+		) -> Result<String, String> {
+			match compiler.target() {
+				HTML => {
+					let mut result = r#"<div class="block-tip">"#.to_string();
+					for elem in &block.content {
+						result += elem
+							.compile(compiler, document, cursor + result.len())?
+							.as_str();
+					}
+					result += "</div>";
+					Ok(result)
+				}
+				_ => todo!(""),
+			}
+		}
+	}
+
+	#[derive(Debug, Default)]
+	pub struct Caution;
+
+	impl BlockType for Caution {
+		fn name(&self) -> &'static str { "Caution" }
+
+		fn parse_properties(
+			&self,
+			_reports: &mut Vec<Report>,
+			_state: &ParserState,
+			_token: Token,
+		) -> Option<Box<dyn Any>> {
+			Some(Box::new(()))
+		}
+
+		fn compile(
+			&self,
+			block: &Block,
+			_properties: &Box<dyn Any>,
+			compiler: &Compiler,
+			document: &dyn Document,
+			cursor: usize,
+		) -> Result<String, String> {
+			match compiler.target() {
+				HTML => {
+					let mut result = r#"<div class="block-caution">"#.to_string();
 					for elem in &block.content {
 						result += elem
 							.compile(compiler, document, cursor + result.len())?
@@ -312,6 +391,16 @@ impl Rule for BlockRule {
 					}),
 				},
 			);
+			let name_range = captures.get(1).unwrap().range();
+			conceals.add(
+				name_range.start - 2..name_range.end+1,
+				lsp::conceal::ConcealTarget::Token {
+					token: "block_name".into(),
+					params: json!({
+						"name": block_type.name().to_string(),
+					}),
+				},
+			)
 		}
 
 		// Content
@@ -327,7 +416,7 @@ impl Rule for BlockRule {
 			// Offset
 			let last = offsets.last().map_or(0, |(_, last)| *last);
 			offsets.push((
-				entry_content.len(),
+				entry_content.len() + 1,
 				last + (captures.get(1).unwrap().start() - captures.get(0).unwrap().start() - 1)
 					as isize,
 			));
@@ -352,8 +441,8 @@ impl Rule for BlockRule {
 			if let Some(conceals) = Conceals::from_source(cursor.source.clone(), &state.shared.lsp)
 			{
 				let range = captures.get(0).unwrap().range();
-				let start = if content.as_bytes()[range.start] == b'\n' {
-					range.start + 1
+			let start = if content.as_bytes()[range.start] == b'\n' {
+				range.start + 1
 				} else {
 					range.start
 				};
@@ -435,5 +524,7 @@ impl Rule for BlockRule {
 		holder.insert(Rc::new(default_blocks::Warning::default()));
 		holder.insert(Rc::new(default_blocks::Note::default()));
 		holder.insert(Rc::new(default_blocks::Todo::default()));
+		holder.insert(Rc::new(default_blocks::Tip::default()));
+		holder.insert(Rc::new(default_blocks::Caution::default()));
 	}
 }
