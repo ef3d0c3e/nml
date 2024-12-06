@@ -7,6 +7,7 @@ use blockquote_style::AuthorPos::After;
 use blockquote_style::AuthorPos::Before;
 use blockquote_style::BlockquoteStyle;
 use lsp::semantic::Semantics;
+use parser::parser::SharedState;
 use parser::util::escape_source;
 use regex::Regex;
 use runtime_format::FormatArgs;
@@ -32,7 +33,6 @@ use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
-use crate::parser::style::StyleHolder;
 
 #[derive(Debug)]
 pub struct Blockquote {
@@ -206,7 +206,7 @@ impl BlockquoteRule {
 impl Rule for BlockquoteRule {
 	fn name(&self) -> &'static str { "Blockquote" }
 
-	fn previous(&self) -> Option<&'static str> { Some("List") }
+	fn previous(&self) -> Option<&'static str> { Some("Block") }
 
 	fn next_match(
 		&self,
@@ -394,7 +394,8 @@ impl Rule for BlockquoteRule {
 		(end_cursor, reports)
 	}
 
-	fn register_styles(&self, holder: &mut StyleHolder) {
+	fn register_shared_state(&self, state: &SharedState) {
+	    let mut holder = state.styles.borrow_mut();
 		holder.set_current(Rc::new(BlockquoteStyle::default()));
 	}
 }

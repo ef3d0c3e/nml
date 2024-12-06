@@ -153,6 +153,10 @@ pub struct Tokens {
 	pub list_bullet: (u32, u32),
 	pub list_props_sep: (u32, u32),
 
+	pub block_marker: (u32, u32),
+	pub block_name: (u32, u32),
+	pub block_props_sep: (u32, u32),
+
 	pub blockquote_marker: (u32, u32),
 	pub blockquote_props_sep: (u32, u32),
 
@@ -248,6 +252,10 @@ impl Tokens {
 
 			list_bullet: token!("macro"),
 			list_props_sep: token!("operator"),
+
+			block_marker: token!("macro"),
+			block_name: token!("function"),
+			block_props_sep: token!("operator"),
 
 			blockquote_marker: token!("macro"),
 			blockquote_props_sep: token!("operator"),

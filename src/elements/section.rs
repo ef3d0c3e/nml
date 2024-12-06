@@ -12,11 +12,11 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
-use crate::parser::style::StyleHolder;
 use ariadne::Fmt;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
+use parser::parser::SharedState;
 use regex::Regex;
 use section_style::SectionLinkPos;
 use section_style::SectionStyle;
@@ -417,7 +417,8 @@ impl RegexRule for SectionRule {
 		bindings
 	}
 
-	fn register_styles(&self, holder: &mut StyleHolder) {
+	fn register_shared_state(&self, state: &SharedState) {
+	    let mut holder = state.styles.borrow_mut();
 		holder.set_current(Rc::new(SectionStyle::default()));
 	}
 }

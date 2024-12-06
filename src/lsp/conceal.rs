@@ -47,9 +47,6 @@ pub enum ConcealTarget {
 /// Per file conceals
 #[derive(Debug)]
 pub struct ConcealsData {
-	/// The current cursor
-	cursor: RefCell<LineCursor>,
-
 	/// The conceals
 	pub conceals: RefCell<Vec<ConcealInfo>>,
 }
@@ -57,7 +54,6 @@ pub struct ConcealsData {
 impl ConcealsData {
 	pub fn new(source: Rc<dyn Source>) -> Self {
 		Self {
-			cursor: RefCell::new(LineCursor::new(source, OffsetEncoding::Utf8)),
 			conceals: RefCell::new(vec![]),
 		}
 	}
@@ -117,7 +113,7 @@ impl<'a> Conceals<'a> {
 
 	pub fn add(&self, range: Range<usize>, text: ConcealTarget) {
 		let range = self.original_source.original_range(range).1;
-		let mut cursor = self.conceals.cursor.borrow_mut();
+		let mut cursor = LineCursor::new(self.source.clone(), OffsetEncoding::Utf8);
 
 		cursor.move_to(range.start);
 		let line = cursor.line;

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use parser::parser::SharedState;
 use parser::util::escape_source;
 use reference_style::ExternalReferenceStyle;
 use regex::Captures;
@@ -25,7 +26,6 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
-use crate::parser::style::StyleHolder;
 
 #[derive(Debug)]
 pub struct InternalReference {
@@ -341,7 +341,8 @@ impl RegexRule for ReferenceRule {
 		reports
 	}
 
-	fn register_styles(&self, holder: &mut StyleHolder) {
+	fn register_shared_state(&self, state: &SharedState) {
+	    let mut holder = state.styles.borrow_mut();
 		holder.set_current(Rc::new(ExternalReferenceStyle::default()));
 	}
 }

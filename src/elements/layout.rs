@@ -5,7 +5,6 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::lsp::semantic::Semantics;
 use crate::lua::kernel::CTX;
-use crate::parser::layout::LayoutHolder;
 use crate::parser::layout::LayoutType;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
@@ -20,6 +19,7 @@ use lsp::hints::Hints;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
+use parser::parser::SharedState;
 use parser::source::Source;
 use parser::source::VirtualSource;
 use parser::util::escape_source;
@@ -953,7 +953,8 @@ impl RegexRule for LayoutRule {
 		bindings
 	}
 
-	fn register_layouts(&self, holder: &mut LayoutHolder) {
+	fn register_shared_state(&self, state: &SharedState) {
+	    let mut holder = state.layouts.borrow_mut();
 		holder.insert(Rc::new(default_layouts::Centered::default()));
 		holder.insert(Rc::new(default_layouts::Split::default()));
 		holder.insert(Rc::new(default_layouts::Spoiler::default()));

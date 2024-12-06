@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
 
+use super::block::BlockHolder;
 use super::customstyle::CustomStyleHolder;
 use super::layout::LayoutHolder;
 use super::reports::Report;
@@ -63,6 +64,9 @@ pub struct SharedState {
 	/// The layouts
 	pub layouts: RefCell<LayoutHolder>,
 
+	/// The blocks
+	pub blocks: RefCell<BlockHolder>,
+
 	/// The custom styles
 	pub custom_styles: RefCell<CustomStyleHolder>,
 
@@ -78,6 +82,7 @@ impl SharedState {
 			kernels: RefCell::new(KernelHolder::default()),
 			styles: RefCell::new(StyleHolder::default()),
 			layouts: RefCell::new(LayoutHolder::default()),
+			blocks: RefCell::new(BlockHolder::default()),
 			custom_styles: RefCell::new(CustomStyleHolder::default()),
 			lsp: enable_semantics.then_some(RefCell::new(LSPData::new())),
 		};
@@ -89,8 +94,7 @@ impl SharedState {
 
 		// Default styles & layouts
 		parser.rules().iter().for_each(|rule| {
-			rule.register_styles(&mut s.styles.borrow_mut());
-			rule.register_layouts(&mut s.layouts.borrow_mut());
+			rule.register_shared_state(&s);
 		});
 
 		s

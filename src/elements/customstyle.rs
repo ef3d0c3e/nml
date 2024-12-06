@@ -458,7 +458,9 @@ impl Rule for CustomStyleRule {
 
 #[cfg(test)]
 mod tests {
-	use crate::elements::raw::Raw;
+	use elements::paragraph::Paragraph;
+
+use crate::elements::raw::Raw;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::ParseMode;

@@ -1,6 +1,7 @@
 use super::layout::LayoutHolder;
 use super::parser::ParseMode;
 use super::parser::ParserState;
+use super::parser::SharedState;
 use super::reports::Report;
 use super::source::Cursor;
 use super::source::Token;
@@ -90,11 +91,8 @@ pub trait Rule: Downcast {
 	/// Registers lua bindings
 	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 
-	/// Registers default styles
-	fn register_styles(&self, _holder: &mut StyleHolder) {}
-
-	/// Registers default layouts
-	fn register_layouts(&self, _holder: &mut LayoutHolder) {}
+	/// Registers shared state
+	fn register_shared_state(&self, _state: &SharedState) {}
 }
 impl_downcast!(Rule);
 
@@ -128,8 +126,7 @@ pub trait RegexRule {
 	) -> Vec<Report>;
 
 	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
-	fn register_styles(&self, _holder: &mut StyleHolder) {}
-	fn register_layouts(&self, _holder: &mut LayoutHolder) {}
+	fn register_shared_state(&self, _state: &SharedState) {}
 }
 
 impl<T: RegexRule + 'static> Rule for T {
@@ -191,9 +188,7 @@ impl<T: RegexRule + 'static> Rule for T {
 		self.register_bindings(lua)
 	}
 
-	fn register_styles(&self, holder: &mut StyleHolder) { self.register_styles(holder); }
-
-	fn register_layouts(&self, holder: &mut LayoutHolder) { self.register_layouts(holder); }
+	fn register_shared_state(&self, state: &SharedState) { self.register_shared_state(state); }
 }
 
 #[cfg(test)]
