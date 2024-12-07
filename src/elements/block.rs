@@ -207,9 +207,7 @@ mod default_blocks {
 
 					let mut in_paragraph = false;
 					for elem in &block.content {
-						if elem
-							.downcast_ref::<Block>()
-							.map_or(false, |block| block.block_type.name() == "Quote")
+						if elem.kind() == ElemKind::Block
 						{
 							if in_paragraph {
 								result += "</p>";
