@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use crate::parser::source::Source;
 
+use super::code::CodeRangeData;
 use super::conceal::ConcealsData;
 use super::definition::DefinitionData;
 use super::hints::HintsData;
@@ -18,6 +19,7 @@ pub struct LSPData {
 	pub definitions: HashMap<Rc<dyn Source>, DefinitionData>,
 	pub conceals: HashMap<Rc<dyn Source>, ConcealsData>,
 	pub styles: HashMap<Rc<dyn Source>, StylesData>,
+	pub coderanges: HashMap<Rc<dyn Source>, CodeRangeData>,
 }
 
 impl LSPData {
@@ -29,6 +31,7 @@ impl LSPData {
 			definitions: HashMap::new(),
 			conceals: HashMap::new(),
 			styles: HashMap::new(),
+			coderanges: HashMap::new(),
 		}
 	}
 
@@ -47,12 +50,13 @@ impl LSPData {
 				.insert(source.clone(), DefinitionData::new());
 		}
 		if !self.conceals.contains_key(&source) {
-			self.conceals
-				.insert(source.clone(), ConcealsData::new(source.clone()));
+			self.conceals.insert(source.clone(), ConcealsData::new());
 		}
 		if !self.styles.contains_key(&source) {
-			self.styles
-				.insert(source.clone(), StylesData::new(source.clone()));
+			self.styles.insert(source.clone(), StylesData::new());
+		}
+		if !self.coderanges.contains_key(&source) {
+			self.coderanges.insert(source.clone(), CodeRangeData::new());
 		}
 	}
 }

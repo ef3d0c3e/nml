@@ -18,50 +18,44 @@ use super::data::LSPData;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StyleParams {
+pub struct CodeRangeParams {
 	pub text_document: tower_lsp::lsp_types::TextDocumentIdentifier,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct StyleInfo {
+pub struct CodeRangeInfo {
 	pub range: tower_lsp::lsp_types::Range,
-	pub style: Style,
+	pub language: String,
+	pub name: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub enum Style {
-	/// Use a predefined highlight group from the editor
-	Group(String),
-}
-
-/// Per file styles
+/// Per file code ranges
 #[derive(Debug)]
-pub struct StylesData {
-	/// The styles
-	pub styles: RefCell<Vec<StyleInfo>>,
+pub struct CodeRangeData {
+	/// The ranges
+	pub coderanges: RefCell<Vec<CodeRangeInfo>>,
 }
 
-impl StylesData {
+impl CodeRangeData {
 	pub fn new() -> Self {
 		Self {
-			styles: RefCell::new(vec![]),
+			coderanges: RefCell::new(vec![]),
 		}
 	}
 }
 
 /// Temporary data returned by [`Self::from_source_impl`]
 #[derive(Debug)]
-pub struct Styles<'a> {
-	pub(self) styles: Ref<'a, StylesData>,
+pub struct CodeRange<'a> {
+	pub(self) coderanges: Ref<'a, CodeRangeData>,
 	// The source used when resolving the parent source
 	pub(self) original_source: Rc<dyn Source>,
 	/// The resolved parent source
 	pub(self) source: Rc<dyn Source>,
 }
 
-impl<'a> Styles<'a> {
+impl<'a> CodeRange<'a> {
 	fn from_source_impl(
 		source: Rc<dyn Source>,
 		lsp: &'a Option<RefCell<LSPData>>,
@@ -84,11 +78,11 @@ impl<'a> Styles<'a> {
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if let Ok(source) = source.clone().downcast_rc::<SourceFile>() {
 			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
-				lsp.styles.get(&(source.clone() as Rc<dyn Source>))
+				lsp.coderanges.get(&(source.clone() as Rc<dyn Source>))
 			})
 			.ok()
-			.map(|styles| Self {
-				styles,
+			.map(|coderanges| Self {
+				coderanges,
 				source,
 				original_source,
 			});
@@ -103,8 +97,8 @@ impl<'a> Styles<'a> {
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
-	pub fn add(&self, range: Range<usize>, style: Style) {
-		let range = self.original_source.original_range(range).1;
+	pub fn add(&self, range: Range<usize>, language: String, name: Option<String>) {
+		let range = self.original_source.original_range(range.clone()).1;
 		let mut cursor = LineCursor::new(self.source.clone(), OffsetEncoding::Utf8);
 
 		cursor.move_to(range.start);
@@ -115,7 +109,7 @@ impl<'a> Styles<'a> {
 		let end_line = cursor.line;
 		let end_char = cursor.line_pos;
 
-		self.styles.styles.borrow_mut().push(StyleInfo {
+		self.coderanges.coderanges.borrow_mut().push(CodeRangeInfo {
 			range: tower_lsp::lsp_types::Range {
 				start: Position {
 					line: start_line as u32,
@@ -126,7 +120,8 @@ impl<'a> Styles<'a> {
 					character: end_char as u32,
 				},
 			},
-			style,
+			language,
+			name,
 		})
 	}
 }

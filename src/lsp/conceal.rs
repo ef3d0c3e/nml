@@ -52,7 +52,7 @@ pub struct ConcealsData {
 }
 
 impl ConcealsData {
-	pub fn new(source: Rc<dyn Source>) -> Self {
+	pub fn new() -> Self {
 		Self {
 			conceals: RefCell::new(vec![]),
 		}

@@ -142,7 +142,6 @@ pub struct Tokens {
 	pub code_props_sep: (u32, u32),
 	pub code_lang: (u32, u32),
 	pub code_title: (u32, u32),
-	pub code_content: (u32, u32),
 
 	pub script_sep: (u32, u32),
 	pub script_kernel_sep: (u32, u32),
@@ -242,7 +241,6 @@ impl Tokens {
 			code_props_sep: token!("operator"),
 			code_lang: token!("function"),
 			code_title: token!("number"),
-			code_content: token!("string"),
 
 			script_sep: token!("operator"),
 			script_kernel_sep: token!("operator"),

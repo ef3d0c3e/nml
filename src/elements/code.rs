@@ -4,6 +4,7 @@ use std::sync::Once;
 use ariadne::Fmt;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
+use lsp::code::CodeRange;
 use mlua::Function;
 use mlua::Lua;
 use parser::util::escape_source;
@@ -425,7 +426,7 @@ impl RegexRule for CodeRule {
 				Box::new(Code::new(
 					token.clone(),
 					CodeKind::FullBlock,
-					code_lang,
+					code_lang.clone(),
 					code_name,
 					code_content,
 					theme,
@@ -446,7 +447,7 @@ impl RegexRule for CodeRule {
 				Box::new(Code::new(
 					token.clone(),
 					block,
-					code_lang,
+					code_lang.clone(),
 					None,
 					code_content,
 					theme,
@@ -455,6 +456,7 @@ impl RegexRule for CodeRule {
 			);
 		}
 
+		// Semantic
 		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			let range = matches
 				.get(0)
@@ -477,18 +479,19 @@ impl RegexRule for CodeRule {
 			if let Some(lang) = matches.get(2).map(|m| m.range()) {
 				sems.add(lang.clone(), tokens.code_lang);
 			}
-			if index == 0 {
-				if let Some(title) = matches.get(3).map(|m| m.range()) {
-					sems.add(title.clone(), tokens.code_title);
-				}
-				sems.add(matches.get(4).unwrap().range(), tokens.code_content);
-			} else {
-				sems.add(matches.get(3).unwrap().range(), tokens.code_content);
-			}
 			sems.add(
 				range.end - if index == 0 { 3 } else { 2 }..range.end,
 				tokens.code_sep,
 			);
+		}
+
+		// Code range
+		if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
+			if index == 0 {
+				coderanges.add(matches.get(4).unwrap().range(), code_lang, None);
+			} else {
+				coderanges.add(matches.get(3).unwrap().range(), code_lang, None);
+			}
 		}
 
 		reports

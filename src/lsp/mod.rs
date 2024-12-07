@@ -1,3 +1,4 @@
+pub mod code;
 pub mod conceal;
 pub mod data;
 pub mod definition;

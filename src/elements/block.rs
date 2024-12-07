@@ -207,8 +207,7 @@ mod default_blocks {
 
 					let mut in_paragraph = false;
 					for elem in &block.content {
-						if elem.kind() == ElemKind::Block
-						{
+						if elem.kind() == ElemKind::Block {
 							if in_paragraph {
 								result += "</p>";
 								in_paragraph = false;

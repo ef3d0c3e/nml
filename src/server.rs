@@ -9,6 +9,7 @@ mod parser;
 use std::rc::Rc;
 
 use dashmap::DashMap;
+use lsp::code::CodeRangeInfo;
 use lsp::conceal::ConcealInfo;
 use lsp::conceal::ConcealParams;
 use lsp::styles::StyleInfo;
@@ -36,6 +37,7 @@ struct Backend {
 	hints_map: DashMap<String, Vec<InlayHint>>,
 	conceals_map: DashMap<String, Vec<ConcealInfo>>,
 	styles_map: DashMap<String, Vec<StyleInfo>>,
+	coderanges_map: DashMap<String, Vec<CodeRangeInfo>>,
 }
 
 #[derive(Debug)]
@@ -138,6 +140,19 @@ impl Backend {
 					self.styles_map.insert(path, styles.styles.replace(vec![]));
 				}
 			}
+
+			// Code Ranges
+			for (source, coderanges) in &borrow.coderanges {
+				if let Some(path) = source
+					.clone()
+					.downcast_rc::<SourceFile>()
+					.ok()
+					.map(|source| source.path().to_owned())
+				{
+					self.coderanges_map
+						.insert(path, coderanges.coderanges.replace(vec![]));
+				}
+			}
 		}
 	}
 
@@ -155,6 +170,18 @@ impl Backend {
 
 	async fn handle_style_request(&self, params: StyleParams) -> jsonrpc::Result<Vec<StyleInfo>> {
 		if let Some(styles) = self.styles_map.get(params.text_document.uri.as_str()) {
+			let (_, data) = styles.pair();
+
+			return Ok(data.to_vec());
+		}
+		Ok(vec![])
+	}
+
+	async fn handle_coderange_request(
+		&self,
+		params: StyleParams,
+	) -> jsonrpc::Result<Vec<CodeRangeInfo>> {
+		if let Some(styles) = self.coderanges_map.get(params.text_document.uri.as_str()) {
 			let (_, data) = styles.pair();
 
 			return Ok(data.to_vec());
@@ -370,9 +397,11 @@ async fn main() {
 		hints_map: DashMap::new(),
 		conceals_map: DashMap::new(),
 		styles_map: DashMap::new(),
+		coderanges_map: DashMap::new(),
 	})
 	.custom_method("textDocument/conceal", Backend::handle_conceal_request)
 	.custom_method("textDocument/style", Backend::handle_style_request)
+	.custom_method("textDocument/codeRange", Backend::handle_coderange_request)
 	.finish();
 
 	Server::new(stdin, stdout, socket).serve(service).await;
