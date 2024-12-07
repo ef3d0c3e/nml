@@ -205,17 +205,25 @@ impl RegexRule for StyleRule {
 				)),
 			);
 
-			if let Some(start) = start
-			{
-				if let Some(styles) =
-					Styles::from_source(token.source(), &state.shared.lsp)
-				{
-					match index
-					{
-						0 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Group("Bold".into())),
-						1 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Group("Italic".into())),
-						2 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Group("Underline".into())),
-						3 => styles.add(start.start()..token.end(), crate::lsp::styles::Style::Group("Code".into())),
+			if let Some(start) = start {
+				if let Some(styles) = Styles::from_source(token.source(), &state.shared.lsp) {
+					match index {
+						0 => styles.add(
+							start.start()..token.end(),
+							crate::lsp::styles::Style::Group("Bold".into()),
+						),
+						1 => styles.add(
+							start.start()..token.end(),
+							crate::lsp::styles::Style::Group("Italic".into()),
+						),
+						2 => styles.add(
+							start.start()..token.end(),
+							crate::lsp::styles::Style::Group("Underline".into()),
+						),
+						3 => styles.add(
+							start.start()..token.end(),
+							crate::lsp::styles::Style::Group("Code".into()),
+						),
 						_ => {}
 					}
 				}
@@ -228,8 +236,7 @@ impl RegexRule for StyleRule {
 			}
 
 			// Conceals
-			if let Some(conceals) = Conceals::from_source(token.source(), &state.shared.lsp)
-			{
+			if let Some(conceals) = Conceals::from_source(token.source(), &state.shared.lsp) {
 				conceals.add(token.range.clone(), ConcealTarget::Text("".into()));
 			}
 		} else {

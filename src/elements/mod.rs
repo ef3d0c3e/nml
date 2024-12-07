@@ -1,4 +1,4 @@
-pub mod blockquote;
+pub mod block;
 pub mod code;
 pub mod comment;
 pub mod customstyle;
@@ -19,4 +19,3 @@ pub mod tex;
 pub mod text;
 pub mod toc;
 pub mod variable;
-pub mod block;

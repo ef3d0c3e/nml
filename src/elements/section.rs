@@ -418,7 +418,7 @@ impl RegexRule for SectionRule {
 	}
 
 	fn register_shared_state(&self, state: &SharedState) {
-	    let mut holder = state.styles.borrow_mut();
+		let mut holder = state.styles.borrow_mut();
 		holder.set_current(Rc::new(SectionStyle::default()));
 	}
 }

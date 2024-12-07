@@ -135,8 +135,7 @@ impl Backend {
 					.ok()
 					.map(|source| source.path().to_owned())
 				{
-					self.styles_map
-						.insert(path, styles.styles.replace(vec![]));
+					self.styles_map.insert(path, styles.styles.replace(vec![]));
 				}
 			}
 		}
@@ -154,10 +153,7 @@ impl Backend {
 		Ok(vec![])
 	}
 
-	async fn handle_style_request(
-		&self,
-		params: StyleParams,
-	) -> jsonrpc::Result<Vec<StyleInfo>> {
+	async fn handle_style_request(&self, params: StyleParams) -> jsonrpc::Result<Vec<StyleInfo>> {
 		if let Some(styles) = self.styles_map.get(params.text_document.uri.as_str()) {
 			let (_, data) = styles.pair();
 

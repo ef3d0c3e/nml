@@ -460,7 +460,7 @@ impl Rule for CustomStyleRule {
 mod tests {
 	use elements::paragraph::Paragraph;
 
-use crate::elements::raw::Raw;
+	use crate::elements::raw::Raw;
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::ParseMode;

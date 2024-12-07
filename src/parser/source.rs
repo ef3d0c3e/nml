@@ -270,8 +270,7 @@ impl Cursor {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OffsetEncoding
-{
+pub enum OffsetEncoding {
 	Utf8,
 	Utf16,
 }
@@ -328,8 +327,7 @@ impl LineCursor {
 					self.line += 1;
 					self.line_pos = 0;
 				}
-				self.line_pos += match self.encoding
-				{
+				self.line_pos += match self.encoding {
 					OffsetEncoding::Utf8 => c.len_utf8(),
 					OffsetEncoding::Utf16 => c.len_utf16(),
 				};

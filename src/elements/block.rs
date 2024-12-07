@@ -2,6 +2,7 @@ use std::any::Any;
 use std::rc::Rc;
 
 use ariadne::Fmt;
+use document::element::ContainerElement;
 use elements::list::ListEntry;
 use elements::list::ListMarker;
 use elements::paragraph::Paragraph;
@@ -31,15 +32,14 @@ use crate::parser::util::escape_source;
 /// Defines the default blocks
 mod default_blocks {
 	use core::fmt;
-use std::collections::HashMap;
+	use std::collections::HashMap;
 
 	use compiler::compiler::Target::HTML;
-	use elements::blockquote::Blockquote;
 	use parser::property::Property;
 	use parser::property::PropertyParser;
 	use runtime_format::FormatArgs;
-use runtime_format::FormatKey;
-use runtime_format::FormatKeyError;
+	use runtime_format::FormatKey;
+	use runtime_format::FormatKeyError;
 
 	use super::*;
 	use crate::compiler::compiler::Compiler;
@@ -122,14 +122,10 @@ use runtime_format::FormatKeyError;
 				.unwrap();
 
 			// Parse properties
-			let properties =
-				match self
-					.properties
-					.parse("Block Quote", reports, state, token)
-				{
-					Some(props) => props,
-					None => return None,
-				};
+			let properties = match self.properties.parse("Block Quote", reports, state, token) {
+				Some(props) => props,
+				None => return None,
+			};
 			match (
 				properties.get_opt(reports, "author", |_, value| {
 					Result::<_, String>::Ok(value.value.clone())
@@ -170,7 +166,8 @@ use runtime_format::FormatKeyError;
 						if quote.cite.is_some() || quote.author.is_some() {
 							result += r#"<p class="blockquote-author">"#;
 							let fmt_pair = QuoteFmtPair(compiler.target(), quote);
-							let format_string = match (quote.author.is_some(), quote.cite.is_some()) {
+							let format_string = match (quote.author.is_some(), quote.cite.is_some())
+							{
 								(true, true) => Compiler::sanitize_format(
 									fmt_pair.0,
 									quote.style.format[0].as_str(),
@@ -210,7 +207,10 @@ use runtime_format::FormatKeyError;
 
 					let mut in_paragraph = false;
 					for elem in &block.content {
-						if elem.downcast_ref::<Blockquote>().is_some() {
+						if elem
+							.downcast_ref::<Block>()
+							.map_or(false, |block| block.block_type.name() == "Quote")
+						{
 							if in_paragraph {
 								result += "</p>";
 								in_paragraph = false;
@@ -460,6 +460,17 @@ impl Element for Block {
 	) -> Result<String, String> {
 		self.block_type
 			.compile(self, &self.block_properties, compiler, document, cursor)
+	}
+
+	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
+}
+
+impl ContainerElement for Block {
+	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.content }
+
+	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
+		self.content.push(elem);
+		Ok(())
 	}
 }
 
@@ -740,7 +751,7 @@ impl Rule for BlockRule {
 		holder.insert(Rc::new(default_blocks::Tip::default()));
 		holder.insert(Rc::new(default_blocks::Caution::default()));
 
-	    let mut holder = state.styles.borrow_mut();
+		let mut holder = state.styles.borrow_mut();
 		holder.set_current(Rc::new(block_style::QuoteStyle::default()));
 	}
 }
@@ -780,4 +791,140 @@ mod block_style {
 	}
 
 	impl_elementstyle!(QuoteStyle, STYLE_KEY_QUOTE);
+}
+
+#[cfg(test)]
+mod tests {
+	use block_style::QuoteStyle;
+
+	use crate::elements::paragraph::Paragraph;
+	use crate::elements::style::Style;
+	use crate::elements::text::Text;
+	use crate::parser::langparser::LangParser;
+	use crate::parser::parser::Parser;
+	use crate::parser::source::SourceFile;
+	use crate::validate_document;
+
+	use super::*;
+
+	#[test]
+	pub fn parser() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+BEFORE
+>[!Quote][author=A, cite=B, url=C]
+>Some entry
+>contin**ued here
+>**
+AFTER
+>    [!Quote]
+> Another
+>
+> quote
+>>[!Quote][author=B]
+>>Nested
+>>> [!Quote]
+>>> More nested
+AFTER
+>[!Warning]
+>>[!Note][]
+>>>[!Todo]
+>>>>[!Tip][]
+>>>>>[!Caution]
+>>>>>Nested
+END
+"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (doc, _) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
+
+		validate_document!(doc.content().borrow(), 0,
+			Paragraph { Text{ content == "BEFORE" }; };
+			Block {
+				Text { content == "Some entry contin" };
+				Style;
+				Text { content == "ued here" };
+				Style;
+			};
+			Paragraph { Text{ content == "AFTER" }; };
+			Block {
+				Text { content == "Another" };
+				Text { content == " " };
+				Text { content == "quote" };
+				Block {
+					Text { content == "Nested" };
+					Block {
+						Text { content == "More nested" };
+					};
+				};
+			};
+			Paragraph { Text{ content == "AFTER" }; };
+			Block {
+				Block {
+					Block {
+						Block {
+							Block {
+								Text { content == "Nested" };
+							};
+						};
+					};
+				};
+			};
+			Paragraph { Text{ content == "END" }; };
+		);
+	}
+
+	#[test]
+	pub fn style() {
+		let source = Rc::new(SourceFile::with_content(
+			"".to_string(),
+			r#"
+@@style.block.quote = {
+	"author_pos": "Before",
+	"format": ["{cite} by {author}", "Author: {author}", "From: {cite}"]
+}
+PRE
+>[!Quote][author=A, cite=B, url=C]
+>Some entry
+>contin**ued here
+>**
+AFTER
+"#
+			.to_string(),
+			None,
+		));
+		let parser = LangParser::default();
+		let (_, state) = parser.parse(
+			ParserState::new(&parser, None),
+			source,
+			None,
+			ParseMode::default(),
+		);
+
+		let style = state
+			.shared
+			.styles
+			.borrow()
+			.current(block_style::STYLE_KEY_QUOTE)
+			.downcast_rc::<QuoteStyle>()
+			.unwrap();
+
+		assert_eq!(style.author_pos, block_style::AuthorPos::Before);
+		assert_eq!(
+			style.format,
+			[
+				"{cite} by {author}".to_string(),
+				"Author: {author}".to_string(),
+				"From: {cite}".to_string()
+			]
+		);
+	}
 }

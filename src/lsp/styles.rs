@@ -1,12 +1,20 @@
-use std::{cell::{Ref, RefCell}, ops::Range, rc::Rc};
+use std::cell::Ref;
+use std::cell::RefCell;
+use std::ops::Range;
+use std::rc::Rc;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tower_lsp::lsp_types::Position;
 
-use crate::parser::source::{LineCursor, OffsetEncoding, Source, SourceFile, SourcePosition, VirtualSource};
+use crate::parser::source::LineCursor;
+use crate::parser::source::OffsetEncoding;
+use crate::parser::source::Source;
+use crate::parser::source::SourceFile;
+use crate::parser::source::SourcePosition;
+use crate::parser::source::VirtualSource;
 
 use super::data::LSPData;
-
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

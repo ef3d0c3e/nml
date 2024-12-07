@@ -954,7 +954,7 @@ impl RegexRule for LayoutRule {
 	}
 
 	fn register_shared_state(&self, state: &SharedState) {
-	    let mut holder = state.layouts.borrow_mut();
+		let mut holder = state.layouts.borrow_mut();
 		holder.insert(Rc::new(default_layouts::Centered::default()));
 		holder.insert(Rc::new(default_layouts::Split::default()));
 		holder.insert(Rc::new(default_layouts::Spoiler::default()));

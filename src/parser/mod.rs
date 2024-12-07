@@ -1,3 +1,4 @@
+pub mod block;
 pub mod customstyle;
 pub mod langparser;
 pub mod layout;
@@ -9,4 +10,3 @@ pub mod source;
 pub mod state;
 pub mod style;
 pub mod util;
-pub mod block;

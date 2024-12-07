@@ -156,7 +156,6 @@ impl RegexRule for TocRule {
 		token: Token,
 		matches: Captures,
 	) -> Vec<Report> {
-
 		let name = matches.get(1).unwrap().as_str().trim_start().trim_end();
 
 		state.push(

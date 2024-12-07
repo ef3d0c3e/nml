@@ -355,7 +355,7 @@ impl Rule for ListRule {
 								params: json!({
 									"depth": depth,
 									"numbered": *numbered,
-								})
+								}),
 							},
 						);
 						i += 1;

@@ -54,8 +54,7 @@ fn from_source_impl(
 		return from_source_impl(location.source(), target, lsp, original);
 	} else if let Ok(sourcefile) = source.downcast_rc::<SourceFile>() {
 		let borrow = lsp.as_ref().unwrap().borrow();
-		if let Some(def_data) = borrow.definitions.get(&original.source())
-		{
+		if let Some(def_data) = borrow.definitions.get(&original.source()) {
 			let mut db = def_data.definitions.borrow_mut();
 			let token = original.source().original_range(original.range).1;
 
