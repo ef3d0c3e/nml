@@ -1,0 +1,85 @@
+@import ../template.nml
+%<make_doc({"Blocks"}, "Blocks", "Blocks")>%
+
+# Blocks
+
+#+LAYOUT_BEGIN Split
+NML supports different kind of blocks. The syntax goes like this:
+```Plain Text,
+>[!Warning]
+>Text...
+> * A list
+>> [!Quote][author=me]
+>>Something I said..
+```
+#+LAYOUT_NEXT
+Which looks something like this:
+>[!Warning]
+>Text...
+> * A list
+>> [!Quote][author=me]
+>>Something I said..
+#+LAYOUT_END
+
+The default blocks types are:
+ - `Quote` (see &{quotes}[caption=Quotes] for properties)
+ - `Warning`
+ - `Note`
+ - `Todo`
+ - `Tip`
+ - `Caution`
+
+Blocks can be comprised of any paragraph element (e.g style, links) as wall as other blocks and lists.
+
+# Nesting blocks
+
+#+LAYOUT_BEGIN Split
+>[!Tip]
+> You can nest blocks as much as you like
+>>[!Quote]
+>> Here's a quote inside the tip.
+>>>[!Note]
+>>>Some information...
+>> Back to the quote
+>
+>>[!Caution]
+>>Another block
+#+LAYOUT_NEXT
+```Markdown, Given by the following
+>[!Tip]
+> You can nest blocks as much as you like
+>>[!Quote]
+>> Here's a quote inside the tip.
+>>>[!Note]
+>>>Some information...
+>> Back to the quote
+>
+>>[!Caution]
+>>Another block
+```
+#+LAYOUT_END
+
+#{quotes} Quotes
+
+Quotes support properties and have a style under style key `style.block.quote`.
+
+**Properties**:
+ * ``author`` The quote author
+ * ``cite`` The quote source name
+ * ``url`` The quote source url (used for accessibility)
+
+**Style**:
+ * ``author_pos`` Position of the author statement, available options:
+ *- `None` Hides the author
+ *- `Before` Displays the author before the quote
+ *- `After` Displays the author after the quote (default)
+ * ``format`` An array with 3 format strings to control how the author is displayed:
+ *-[offset=0] Format for author+cite
+ *- Format for author only
+ *- Format for cite only
+```JSON, Default Style
+{
+	"author_pos": "After",
+	"format": ["{author}, {cite}", "{author}", "{cite}"],
+}
+```

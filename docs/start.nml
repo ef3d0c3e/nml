@@ -7,8 +7,7 @@ You need at least the nightly version of rustc to compile NML.
 Instruction for your operating system can be found on [Rust's website](https://forge.rust-lang.org/infra/other-installation-methods.html).
 You'll also need liblua 5.4 installed. You can then move the `nml` executable in `target/release/nml` into your `\$PATH`
 
-``cargo build --bin nml`` or for release mode: ``cargo build --release --bin nml``
-*(Note: The release build binary is much smaller than the debug build one)*
+``cargo build --bin nml`` or for release mode: ``cargo build --release --bin nml`` *(Note: The release build binary is much smaller than the debug build one)*
 
 # Building your first document
 
@@ -41,8 +40,7 @@ If you modify an ``Plain Text,@import``ed file, you will need to use the ``--for
 
 NML comes with it's own language server, ready to be used in any LSP-compatible text editor, such as NeoVim.
 
-Build it by using the following command: ``cargo build --bin nmlls`` or for release mode: ``cargo build --release --bin nmlls``
-*(Note: The release build binary is much smaller than the debug build one)*
+Build it by using the following command: ``cargo build --bin nmlls`` or for release mode: ``cargo build --release --bin nmlls`` *(Note: The release build binary is much smaller than the debug build one)*
 
 You should move the language server somewhere in your ``$PATH``.
 
