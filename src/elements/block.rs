@@ -2,12 +2,13 @@ use std::any::Any;
 use std::rc::Rc;
 
 use ariadne::Fmt;
+use elements::list::ListEntry;
+use elements::list::ListMarker;
 use elements::paragraph::Paragraph;
 use elements::text::Text;
 use lsp::conceal::Conceals;
 use lsp::semantic::Semantics;
 use parser::parser::SharedState;
-use parser::source::SourcePosition;
 use parser::source::VirtualSource;
 use regex::Regex;
 use serde_json::json;
@@ -29,13 +30,219 @@ use crate::parser::util::escape_source;
 
 /// Defines the default blocks
 mod default_blocks {
+	use core::fmt;
+use std::collections::HashMap;
+
 	use compiler::compiler::Target::HTML;
+	use elements::blockquote::Blockquote;
+	use parser::property::Property;
+	use parser::property::PropertyParser;
+	use runtime_format::FormatArgs;
+use runtime_format::FormatKey;
+use runtime_format::FormatKeyError;
 
 	use super::*;
 	use crate::compiler::compiler::Compiler;
 	use crate::document::document::Document;
 	use crate::parser::parser::ParserState;
 	use crate::parser::reports::Report;
+
+	#[derive(Debug)]
+	struct QuoteData {
+		pub(self) author: Option<String>,
+		pub(self) cite: Option<String>,
+		pub(self) url: Option<String>,
+		pub(self) style: Rc<block_style::QuoteStyle>,
+	}
+
+	#[derive(Debug)]
+	pub struct Quote {
+		properties: PropertyParser,
+	}
+
+	impl Default for Quote {
+		fn default() -> Self {
+			let mut props = HashMap::new();
+			props.insert(
+				"author".to_string(),
+				Property::new("Quote author".to_string(), None),
+			);
+			props.insert(
+				"cite".to_string(),
+				Property::new("Quote source".to_string(), None),
+			);
+			props.insert(
+				"url".to_string(),
+				Property::new("Quote source url".to_string(), None),
+			);
+			Self {
+				properties: PropertyParser { properties: props },
+			}
+		}
+	}
+
+	struct QuoteFmtPair<'a>(crate::compiler::compiler::Target, &'a QuoteData);
+
+	impl FormatKey for QuoteFmtPair<'_> {
+		fn fmt(&self, key: &str, f: &mut fmt::Formatter<'_>) -> Result<(), FormatKeyError> {
+			match key {
+				"author" => write!(
+					f,
+					"{}",
+					Compiler::sanitize(self.0, self.1.author.as_ref().unwrap_or(&"".into()))
+				)
+				.map_err(FormatKeyError::Fmt),
+				"cite" => write!(
+					f,
+					"{}",
+					Compiler::sanitize(self.0, self.1.cite.as_ref().unwrap_or(&"".into()))
+				)
+				.map_err(FormatKeyError::Fmt),
+				_ => Err(FormatKeyError::UnknownKey),
+			}
+		}
+	}
+
+	impl BlockType for Quote {
+		fn name(&self) -> &'static str { "Quote" }
+
+		fn parse_properties(
+			&self,
+			reports: &mut Vec<Report>,
+			state: &ParserState,
+			token: Token,
+		) -> Option<Box<dyn Any>> {
+			// Get style
+			let style = state
+				.shared
+				.styles
+				.borrow()
+				.current(block_style::STYLE_KEY_QUOTE)
+				.downcast_rc::<block_style::QuoteStyle>()
+				.unwrap();
+
+			// Parse properties
+			let properties =
+				match self
+					.properties
+					.parse("Block Quote", reports, state, token)
+				{
+					Some(props) => props,
+					None => return None,
+				};
+			match (
+				properties.get_opt(reports, "author", |_, value| {
+					Result::<_, String>::Ok(value.value.clone())
+				}),
+				properties.get_opt(reports, "cite", |_, value| {
+					Result::<_, String>::Ok(value.value.clone())
+				}),
+				properties.get_opt(reports, "url", |_, value| {
+					Result::<_, String>::Ok(value.value.clone())
+				}),
+			) {
+				(Some(author), Some(cite), Some(url)) => Some(Box::new(QuoteData {
+					author,
+					cite,
+					url,
+					style,
+				})),
+				_ => None,
+			}
+		}
+
+		fn compile(
+			&self,
+			block: &Block,
+			properties: &Box<dyn Any>,
+			compiler: &Compiler,
+			document: &dyn Document,
+			cursor: usize,
+		) -> Result<String, String> {
+			let quote = properties.downcast_ref::<QuoteData>().unwrap();
+
+			match compiler.target() {
+				HTML => {
+					let mut result = r#"<div class="blockquote-content">"#.to_string();
+					let format_author = || -> Result<String, String> {
+						let mut result = String::new();
+
+						if quote.cite.is_some() || quote.author.is_some() {
+							result += r#"<p class="blockquote-author">"#;
+							let fmt_pair = QuoteFmtPair(compiler.target(), quote);
+							let format_string = match (quote.author.is_some(), quote.cite.is_some()) {
+								(true, true) => Compiler::sanitize_format(
+									fmt_pair.0,
+									quote.style.format[0].as_str(),
+								),
+								(true, false) => Compiler::sanitize_format(
+									fmt_pair.0,
+									quote.style.format[1].as_str(),
+								),
+								(false, false) => Compiler::sanitize_format(
+									fmt_pair.0,
+									quote.style.format[2].as_str(),
+								),
+								_ => panic!(""),
+							};
+							let args = FormatArgs::new(format_string.as_str(), &fmt_pair);
+							args.status().map_err(|err| {
+								format!(
+									"Failed to format Blockquote style `{format_string}`: {err}"
+								)
+							})?;
+							result += args.to_string().as_str();
+							result += "</p>";
+						}
+						Ok(result)
+					};
+
+					if let Some(url) = &quote.url {
+						result +=
+							format!(r#"<blockquote cite="{}">"#, Compiler::sanitize(HTML, url))
+								.as_str();
+					} else {
+						result += "<blockquote>";
+					}
+					if quote.style.author_pos == block_style::AuthorPos::Before {
+						result += format_author()?.as_str();
+					}
+
+					let mut in_paragraph = false;
+					for elem in &block.content {
+						if elem.downcast_ref::<Blockquote>().is_some() {
+							if in_paragraph {
+								result += "</p>";
+								in_paragraph = false;
+							}
+							result += elem
+								.compile(compiler, document, cursor + result.len())?
+								.as_str();
+						} else {
+							if !in_paragraph {
+								result += "<p>";
+								in_paragraph = true;
+							}
+							result += elem
+								.compile(compiler, document, cursor + result.len())?
+								.as_str();
+						}
+					}
+					if in_paragraph {
+						result += "</p>";
+					}
+					result += "</blockquote>";
+					if quote.style.author_pos == block_style::AuthorPos::After {
+						result += format_author().map_err(|err| err.to_string())?.as_str();
+					}
+
+					result += "</div>";
+					Ok(result)
+				}
+				_ => todo!(""),
+			}
+		}
+	}
 
 	#[derive(Debug, Default)]
 	pub struct Warning;
@@ -265,9 +472,11 @@ pub struct BlockRule {
 impl BlockRule {
 	pub fn new() -> Self {
 		Self {
-			start_re: Regex::new(r"(?:^|\n)>[^\S\r\n]*(?:\[!((?:\\.|[^\\\\])*?)\])[^\S\r\n]*")
-				.unwrap(),
-			continue_re: Regex::new(r"(?:^|\n)>[^\S\r\n]*(.*)").unwrap(),
+			start_re: Regex::new(
+				r"(?:^|\n)>[^\S\r\n]*(?:\[!((?:\\.|[^\\\\])*?)\])(?:\[((?:\\.|[^\\\\])*?)\])?[^\S\r\n]*",
+			)
+			.unwrap(),
+			continue_re: Regex::new(r"(?:^|\n)>(.*)").unwrap(),
 		}
 	}
 }
@@ -393,7 +602,7 @@ impl Rule for BlockRule {
 			);
 			let name_range = captures.get(1).unwrap().range();
 			conceals.add(
-				name_range.start - 2..name_range.end+1,
+				name_range.start - 2..name_range.end + 1,
 				lsp::conceal::ConcealTarget::Token {
 					token: "block_name".into(),
 					params: json!({
@@ -441,8 +650,8 @@ impl Rule for BlockRule {
 			if let Some(conceals) = Conceals::from_source(cursor.source.clone(), &state.shared.lsp)
 			{
 				let range = captures.get(0).unwrap().range();
-			let start = if content.as_bytes()[range.start] == b'\n' {
-				range.start + 1
+				let start = if content.as_bytes()[range.start] == b'\n' {
+					range.start + 1
 				} else {
 					range.start
 				};
@@ -490,7 +699,10 @@ impl Rule for BlockRule {
 					}
 				}
 				parsed_content.extend(std::mem::take(&mut paragraph.content));
-			} else if elem.downcast_ref::<Block>().is_some() {
+			} else if elem.downcast_ref::<Block>().is_some()
+				|| elem.downcast_ref::<ListEntry>().is_some()
+				|| elem.downcast_ref::<ListMarker>().is_some()
+			{
 				parsed_content.push(elem);
 			} else {
 				report_err!(
@@ -521,10 +733,51 @@ impl Rule for BlockRule {
 
 	fn register_shared_state(&self, state: &SharedState) {
 		let mut holder = state.blocks.borrow_mut();
+		holder.insert(Rc::new(default_blocks::Quote::default()));
 		holder.insert(Rc::new(default_blocks::Warning::default()));
 		holder.insert(Rc::new(default_blocks::Note::default()));
 		holder.insert(Rc::new(default_blocks::Todo::default()));
 		holder.insert(Rc::new(default_blocks::Tip::default()));
 		holder.insert(Rc::new(default_blocks::Caution::default()));
+
+	    let mut holder = state.styles.borrow_mut();
+		holder.set_current(Rc::new(block_style::QuoteStyle::default()));
 	}
+}
+
+mod block_style {
+	use serde::Deserialize;
+	use serde::Serialize;
+
+	use crate::impl_elementstyle;
+
+	pub static STYLE_KEY_QUOTE: &str = "style.block.quote";
+
+	#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+	pub enum AuthorPos {
+		Before,
+		After,
+		None,
+	}
+
+	#[derive(Debug, Serialize, Deserialize)]
+	pub struct QuoteStyle {
+		pub author_pos: AuthorPos,
+		pub format: [String; 3],
+	}
+
+	impl Default for QuoteStyle {
+		fn default() -> Self {
+			Self {
+				author_pos: AuthorPos::After,
+				format: [
+					"{author}, {cite}".into(),
+					"{author}".into(),
+					"{cite}".into(),
+				],
+			}
+		}
+	}
+
+	impl_elementstyle!(QuoteStyle, STYLE_KEY_QUOTE);
 }
