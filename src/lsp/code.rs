@@ -27,7 +27,6 @@ pub struct CodeRangeParams {
 pub struct CodeRangeInfo {
 	pub range: tower_lsp::lsp_types::Range,
 	pub language: String,
-	pub name: Option<String>,
 }
 
 /// Per file code ranges
@@ -97,7 +96,7 @@ impl<'a> CodeRange<'a> {
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
-	pub fn add(&self, range: Range<usize>, language: String, name: Option<String>) {
+	pub fn add(&self, range: Range<usize>, language: String) {
 		let range = self.original_source.original_range(range.clone()).1;
 		let mut cursor = LineCursor::new(self.source.clone(), OffsetEncoding::Utf8);
 
@@ -121,7 +120,6 @@ impl<'a> CodeRange<'a> {
 				},
 			},
 			language,
-			name,
 		})
 	}
 }

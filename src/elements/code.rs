@@ -5,11 +5,13 @@ use ariadne::Fmt;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use lsp::code::CodeRange;
+use lsp::conceal::Conceals;
 use mlua::Function;
 use mlua::Lua;
 use parser::util::escape_source;
 use regex::Captures;
 use regex::Regex;
+use serde_json::json;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
@@ -427,12 +429,59 @@ impl RegexRule for CodeRule {
 					token.clone(),
 					CodeKind::FullBlock,
 					code_lang.clone(),
-					code_name,
+					code_name.clone(),
 					code_content,
 					theme,
 					line_offset,
 				)),
 			);
+
+			// Code Ranges
+			if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
+				coderanges.add(matches.get(4).unwrap().range(), code_lang.clone());
+			}
+
+			// Conceals
+			if let Some(conceals) = Conceals::from_source(token.source(), &state.shared.lsp) {
+				let range = matches
+				.get(0)
+				.map(|m| {
+					if token.source().content().as_bytes()[m.start()] == b'\n' {
+						m.start() + 1..m.end()
+					} else {
+						m.range()
+					}
+				})
+				.unwrap();
+				let start = range.start;
+				let end = token.source().content()[start..].find('\n').map_or(token.source().content().len(), |val| start + val);
+
+				conceals.add(
+					start..end,
+					lsp::conceal::ConcealTarget::Token {
+						token: "code".into(),
+						params: json!({
+							"name": code_name.unwrap_or("".into()),
+							"language": code_lang,
+						}),
+					},
+				);
+				
+				let range = matches
+					.get(0)
+					.map(|m| {
+						if token.source().content().as_bytes()[m.start()] == b'\n' {
+							m.start() + 1..m.end()
+						} else {
+							m.range()
+						}
+					})
+				.unwrap();
+				conceals.add(
+					range.end-3..range.end,
+					lsp::conceal::ConcealTarget::Text("".into())
+				);
+			}
 		} else
 		// Maybe inline
 		{
@@ -454,6 +503,59 @@ impl RegexRule for CodeRule {
 					1,
 				)),
 			);
+
+			// Code Ranges
+			if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
+				if block == CodeKind::MiniBlock
+				{
+					coderanges.add(matches.get(3).unwrap().range(), code_lang.clone());
+				}
+			}
+
+			// Conceals
+			if let Some(conceals) = Conceals::from_source(token.source(), &state.shared.lsp) {
+				if block == CodeKind::MiniBlock
+				{
+					let range = matches
+						.get(0)
+						.map(|m| {
+							if token.source().content().as_bytes()[m.start()] == b'\n' {
+								m.start() + 1..m.end()
+							} else {
+								m.range()
+							}
+						})
+					.unwrap();
+					let start = range.start;
+					let end = token.source().content()[start..].find('\n').map_or(token.source().content().len(), |val| start + val);
+
+					conceals.add(
+						start..end,
+						lsp::conceal::ConcealTarget::Token {
+							token: "code".into(),
+							params: json!({
+								"name": "".to_string(),
+								"language": code_lang,
+							}),
+						},
+					);
+
+					let range = matches
+						.get(0)
+						.map(|m| {
+							if token.source().content().as_bytes()[m.start()] == b'\n' {
+								m.start() + 1..m.end()
+							} else {
+								m.range()
+							}
+						})
+					.unwrap();
+					conceals.add(
+						range.end-2..range.end,
+						lsp::conceal::ConcealTarget::Text("".into())
+					);
+				}
+			}
 		}
 
 		// Semantic
@@ -479,19 +581,15 @@ impl RegexRule for CodeRule {
 			if let Some(lang) = matches.get(2).map(|m| m.range()) {
 				sems.add(lang.clone(), tokens.code_lang);
 			}
+			if index == 0 {
+				if let Some(title) = matches.get(3).map(|m| m.range()) {
+					sems.add(title.clone(), tokens.code_title);
+				}
+			}
 			sems.add(
 				range.end - if index == 0 { 3 } else { 2 }..range.end,
 				tokens.code_sep,
 			);
-		}
-
-		// Code range
-		if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
-			if index == 0 {
-				coderanges.add(matches.get(4).unwrap().range(), code_lang, None);
-			} else {
-				coderanges.add(matches.get(3).unwrap().range(), code_lang, None);
-			}
 		}
 
 		reports
@@ -754,13 +852,11 @@ test code
 			code_props_sep { delta_line == 0, delta_start == 2, length == 1 };
 			code_lang { delta_line == 0, delta_start == 1, length == 2 };
 			code_title { delta_line == 0, delta_start == 3, length == 6 };
-			code_content { delta_line == 1, delta_start == 0, length == 10 };
-			code_sep { delta_line == 1, delta_start == 0, length == 3 };
+			code_sep { delta_line == 2, delta_start == 0, length == 3 };
 
 			code_sep { delta_line == 1, delta_start == 0, length == 2 };
 			code_lang { delta_line == 0, delta_start == 2, length == 1 };
-			code_content { delta_line == 0, delta_start == 2, length == 12 };
-			code_sep { delta_line == 0, delta_start == 12, length == 2 };
+			code_sep { delta_line == 0, delta_start == 14, length == 2 };
 		);
 	}
 }
