@@ -10,6 +10,7 @@ use std::sync::Once;
 use ariadne::Fmt;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
+use lsp::code::CodeRange;
 use mlua::Function;
 use mlua::Lua;
 use parser::util::escape_source;
@@ -351,6 +352,25 @@ impl RegexRule for TexRule {
 			_ => return reports,
 		};
 
+		// Code ranges
+		if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
+			if index == 0 && tex_content.contains('\n')
+			{
+				let range = matches
+					.get(2)
+					.map(|m| {
+						if token.source().content().as_bytes()[m.start()] == b'\n' {
+							m.start() + 1..m.end()
+						} else {
+							m.range()
+						}
+					})
+				.unwrap();
+
+				coderanges.add(range, "Latex".into());
+			}
+		}
+
 		state.push(
 			document,
 			Box::new(Tex {
@@ -363,6 +383,7 @@ impl RegexRule for TexRule {
 			}),
 		);
 
+		// Semantics
 		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
 			let range = token.range;
 			sems.add(
@@ -379,6 +400,7 @@ impl RegexRule for TexRule {
 				tokens.tex_sep,
 			);
 		}
+
 		reports
 	}
 

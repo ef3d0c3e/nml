@@ -53,7 +53,7 @@ impl From<&CodeKind> for ElemKind {
 }
 
 #[derive(Debug)]
-struct Code {
+pub struct Code {
 	location: Token,
 	block: CodeKind,
 	language: String,
@@ -508,7 +508,8 @@ impl RegexRule for CodeRule {
 			if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
 				if block == CodeKind::MiniBlock
 				{
-					coderanges.add(matches.get(3).unwrap().range(), code_lang.clone());
+					let range = matches.get(3).unwrap().range();
+					coderanges.add(range.start+1..range.end, code_lang.clone());
 				}
 			}
 
