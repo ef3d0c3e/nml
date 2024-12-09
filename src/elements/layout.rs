@@ -340,8 +340,8 @@ pub struct LayoutRule {
 	re: [Regex; 3],
 }
 
-impl LayoutRule {
-	pub fn new() -> Self {
+impl Default for LayoutRule {
+	fn default() -> Self {
 		Self {
 			re: [
 				RegexBuilder::new(
@@ -365,44 +365,44 @@ impl LayoutRule {
 			],
 		}
 	}
+}
 
-	pub fn initialize_state(state: &ParserState) -> Rc<RefCell<dyn RuleState>> {
-		let mut rule_state_borrow = state.shared.rule_state.borrow_mut();
-		match rule_state_borrow.get(STATE_NAME) {
-			Some(state) => state,
-			None => {
-				// Insert as a new state
-				match rule_state_borrow.insert(
-					STATE_NAME.into(),
-					Rc::new(RefCell::new(LayoutState { stack: vec![] })),
-				) {
-					Err(err) => panic!("{err}"),
-					Ok(state) => state,
-				}
+pub fn initialize_state(state: &ParserState) -> Rc<RefCell<dyn RuleState>> {
+	let mut rule_state_borrow = state.shared.rule_state.borrow_mut();
+	match rule_state_borrow.get(STATE_NAME) {
+		Some(state) => state,
+		None => {
+			// Insert as a new state
+			match rule_state_borrow.insert(
+				STATE_NAME.into(),
+				Rc::new(RefCell::new(LayoutState { stack: vec![] })),
+			) {
+				Err(err) => panic!("{err}"),
+				Ok(state) => state,
 			}
 		}
 	}
+}
 
-	pub fn parse_properties<'a>(
-		mut reports: &mut Vec<Report>,
-		state: &ParserState,
-		token: &Token,
-		layout_type: Rc<dyn LayoutType>,
-		m: Option<Match>,
-	) -> Option<Box<dyn Any>> {
-		let prop_source = escape_source(
-			token.source(),
-			m.map_or(0..0, |m| m.range()),
-			format!("Layout {} Properties", layout_type.name()),
-			'\\',
-			"]",
-		);
-		layout_type.parse_properties(
-			reports,
-			state,
-			Token::new(0..prop_source.content().len(), prop_source),
-		)
-	}
+pub fn parse_properties<'a>(
+	mut reports: &mut Vec<Report>,
+	state: &ParserState,
+	token: &Token,
+	layout_type: Rc<dyn LayoutType>,
+	m: Option<Match>,
+) -> Option<Box<dyn Any>> {
+	let prop_source = escape_source(
+		token.source(),
+		m.map_or(0..0, |m| m.range()),
+		format!("Layout {} Properties", layout_type.name()),
+		'\\',
+		"]",
+	);
+	layout_type.parse_properties(
+		reports,
+		state,
+		Token::new(0..prop_source.content().len(), prop_source),
+	)
 }
 
 static STATE_NAME: &str = "elements.layout";
@@ -426,7 +426,7 @@ impl RegexRule for LayoutRule {
 	) -> Vec<Report> {
 		let mut reports = vec![];
 
-		let rule_state = LayoutRule::initialize_state(state);
+		let rule_state = initialize_state(state);
 
 		if index == 0
 		// BEGIN_LAYOUT
@@ -504,7 +504,7 @@ impl RegexRule for LayoutRule {
 					};
 
 					// Parse properties
-					let properties = match LayoutRule::parse_properties(
+					let properties = match parse_properties(
 						&mut reports,
 						state,
 						&token,
@@ -612,7 +612,7 @@ impl RegexRule for LayoutRule {
 			}
 
 			// Parse properties
-			let properties = match LayoutRule::parse_properties(
+			let properties = match parse_properties(
 				&mut reports,
 				state,
 				&token,
@@ -698,7 +698,7 @@ impl RegexRule for LayoutRule {
 			}
 
 			// Parse properties
-			let properties = match LayoutRule::parse_properties(
+			let properties = match parse_properties(
 				&mut reports,
 				state,
 				&token,
@@ -774,7 +774,7 @@ impl RegexRule for LayoutRule {
 					CTX.with_borrow_mut(|ctx| {
 						ctx.as_mut().map(|ctx| {
 							// Make sure the rule state has been initialized
-							let rule_state = LayoutRule::initialize_state(ctx.state);
+							let rule_state = initialize_state(ctx.state);
 
 							// Get layout
 							//

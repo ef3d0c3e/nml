@@ -33,8 +33,8 @@ pub struct CodeRule {
 	properties: PropertyParser,
 }
 
-impl CodeRule {
-	pub fn new() -> Self {
+impl Default for CodeRule {
+	fn default() -> Self {
 		let mut props = HashMap::new();
 		props.insert(
 			"line_offset".to_string(),
@@ -71,14 +71,14 @@ impl RegexRule for CodeRule {
 		state: &ParserState,
 		document: &dyn Document,
 		token: Token,
-		matches: Captures,
+		captures: Captures,
 	) -> Vec<Report> {
 		let mut reports = vec![];
 
 		// Properties
 		let prop_source = escape_source(
 			token.source(),
-			matches.get(1).map_or(0..0, |m| m.range()),
+			captures.get(1).map_or(0..0, |m| m.range()),
 			"Code Properties".into(),
 			'\\',
 			"]",
@@ -92,7 +92,7 @@ impl RegexRule for CodeRule {
 				None => return reports,
 			};
 
-		let code_lang = match matches.get(2) {
+		let code_lang = match captures.get(2) {
 			None => "Plain Text".to_string(),
 			Some(lang) => {
 				let mut code_lang = lang.as_str().trim_start().trim_end().to_string();
@@ -124,13 +124,13 @@ impl RegexRule for CodeRule {
 		};
 
 		let mut code_content = if index == 0 {
-			util::escape_text('\\', "```", matches.get(4).unwrap().as_str(), false)
+			util::escape_text('\\', "```", captures.get(4).unwrap().as_str(), false)
 		} else {
 			util::escape_text(
 				'\\',
 				"``",
-				matches.get(3).unwrap().as_str(),
-				!matches.get(3).unwrap().as_str().contains('\n'),
+				captures.get(3).unwrap().as_str(),
+				!captures.get(3).unwrap().as_str().contains('\n'),
 			)
 		};
 		if code_content.bytes().last() == Some(b'\n')
@@ -156,7 +156,7 @@ impl RegexRule for CodeRule {
 		if index == 0
 		// Block
 		{
-			let code_name = matches.get(3).and_then(|name| {
+			let code_name = captures.get(3).and_then(|name| {
 				let code_name = name.as_str().trim_end().trim_start().to_string();
 				(!code_name.is_empty()).then_some(code_name)
 			});
@@ -182,12 +182,12 @@ impl RegexRule for CodeRule {
 
 			// Code Ranges
 			if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
-				coderanges.add(matches.get(4).unwrap().range(), code_lang.clone());
+				coderanges.add(captures.get(4).unwrap().range(), code_lang.clone());
 			}
 
 			// Conceals
 			if let Some(conceals) = Conceals::from_source(token.source(), &state.shared.lsp) {
-				let range = matches
+				let range = captures
 					.get(0)
 					.map(|m| {
 						if token.source().content().as_bytes()[m.start()] == b'\n' {
@@ -213,7 +213,7 @@ impl RegexRule for CodeRule {
 					},
 				);
 
-				let range = matches
+				let range = captures
 					.get(0)
 					.map(|m| {
 						if token.source().content().as_bytes()[m.start()] == b'\n' {
@@ -253,7 +253,7 @@ impl RegexRule for CodeRule {
 			// Code Ranges
 			if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
 				if block == CodeKind::MiniBlock {
-					let range = matches.get(3).unwrap().range();
+					let range = captures.get(3).unwrap().range();
 					coderanges.add(range.start + 1..range.end, code_lang.clone());
 				}
 			}
@@ -261,7 +261,7 @@ impl RegexRule for CodeRule {
 			// Conceals
 			if let Some(conceals) = Conceals::from_source(token.source(), &state.shared.lsp) {
 				if block == CodeKind::MiniBlock {
-					let range = matches
+					let range = captures
 						.get(0)
 						.map(|m| {
 							if token.source().content().as_bytes()[m.start()] == b'\n' {
@@ -287,7 +287,7 @@ impl RegexRule for CodeRule {
 						},
 					);
 
-					let range = matches
+					let range = captures
 						.get(0)
 						.map(|m| {
 							if token.source().content().as_bytes()[m.start()] == b'\n' {
@@ -307,7 +307,7 @@ impl RegexRule for CodeRule {
 
 		// Semantic
 		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
-			let range = matches
+			let range = captures
 				.get(0)
 				.map(|m| {
 					if token.source().content().as_bytes()[m.start()] == b'\n' {
@@ -321,15 +321,15 @@ impl RegexRule for CodeRule {
 				range.start..range.start + if index == 0 { 3 } else { 2 },
 				tokens.code_sep,
 			);
-			if let Some(props) = matches.get(1).map(|m| m.range()) {
+			if let Some(props) = captures.get(1).map(|m| m.range()) {
 				sems.add(props.start - 1..props.start, tokens.code_props_sep);
 				sems.add(props.end..props.end + 1, tokens.code_props_sep);
 			}
-			if let Some(lang) = matches.get(2).map(|m| m.range()) {
+			if let Some(lang) = captures.get(2).map(|m| m.range()) {
 				sems.add(lang.clone(), tokens.code_lang);
 			}
 			if index == 0 {
-				if let Some(title) = matches.get(3).map(|m| m.range()) {
+				if let Some(title) = captures.get(3).map(|m| m.range()) {
 					sems.add(title.clone(), tokens.code_title);
 				}
 			}

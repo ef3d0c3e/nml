@@ -32,6 +32,7 @@ struct QuoteData {
 }
 
 #[derive(Debug)]
+#[auto_registry::auto_registry(registry = "blocks")]
 pub struct Quote {
 	properties: PropertyParser,
 }

@@ -45,13 +45,6 @@ pub struct VariableRule {
 }
 
 impl VariableRule {
-	pub fn new() -> Self {
-		Self {
-			re: [Regex::new(r"(?:^|\n)@(')?(.*?)=((?:\\\n|.)*)").unwrap()],
-			kinds: vec![("".into(), "Regular".into()), ("'".into(), "Path".into())],
-		}
-	}
-
 	pub fn make_variable(
 		&self,
 		colors: &ReportColors,
@@ -63,64 +56,73 @@ impl VariableRule {
 	) -> Result<Rc<dyn Variable>, String> {
 		match self.kinds[kind].0.as_str() {
 			"" => Ok(Rc::new(BaseVariable::new(
-				location,
-				name,
-				value_token,
-				value,
+						location,
+						name,
+						value_token,
+						value,
 			))),
 			"'" => {
 				match std::fs::canonicalize(value.as_str()) // TODO: not canonicalize
-                {
-                    Ok(path) => Ok(Rc::new(PathVariable::new(location, name, value_token, path))),
-                    Err(e) => Err(format!("Unable to canonicalize path `{}`: {}",
-                            value.fg(colors.highlight),
-                            e))
-                }
+				{
+					Ok(path) => Ok(Rc::new(PathVariable::new(location, name, value_token, path))),
+					Err(e) => Err(format!("Unable to canonicalize path `{}`: {}",
+							value.fg(colors.highlight),
+							e))
+				}
 			}
 			_ => panic!("Unhandled variable kind"),
 		}
 	}
+}
 
-	// Trim and check variable name for validity
-	pub fn validate_name<'a>(
-		colors: &ReportColors,
-		original_name: &'a str,
-	) -> Result<&'a str, String> {
-		let name = original_name.trim_start().trim_end();
-		if name.contains("%") {
-			return Err(format!("Name cannot contain '{}'", "%".fg(colors.info)));
+impl Default for VariableRule {
+	fn default() -> Self {
+		Self {
+			re: [Regex::new(r"(?:^|\n)@(')?(.*?)=((?:\\\n|.)*)").unwrap()],
+			kinds: vec![("".into(), "Regular".into()), ("'".into(), "Path".into())],
 		}
-		Ok(name)
 	}
+}
 
-	pub fn validate_value(original_value: &str) -> Result<String, String> {
-		let mut escaped = 0usize;
-		let mut result = String::new();
-		for c in original_value.trim_start().trim_end().chars() {
-			if c == '\\' {
-				escaped += 1
-			} else if c == '\n' {
-				match escaped {
-					0 => return Err("Unknown error wile capturing value".to_string()),
-					// Remove '\n'
-					1 => {}
-					// Insert '\n'
-					_ => {
-						result.push(c);
-						(0..escaped - 2).for_each(|_| result.push('\\'));
-					}
+// Trim and check variable name for validity
+pub fn validate_name<'a>(
+	colors: &ReportColors,
+	original_name: &'a str,
+) -> Result<&'a str, String> {
+	let name = original_name.trim_start().trim_end();
+	if name.contains("%") {
+		return Err(format!("Name cannot contain '{}'", "%".fg(colors.info)));
+	}
+	Ok(name)
+}
+
+pub fn validate_value(original_value: &str) -> Result<String, String> {
+	let mut escaped = 0usize;
+	let mut result = String::new();
+	for c in original_value.trim_start().trim_end().chars() {
+		if c == '\\' {
+			escaped += 1
+		} else if c == '\n' {
+			match escaped {
+				0 => return Err("Unknown error wile capturing value".to_string()),
+				// Remove '\n'
+				1 => {}
+				// Insert '\n'
+				_ => {
+					result.push(c);
+					(0..escaped - 2).for_each(|_| result.push('\\'));
 				}
-				escaped = 0;
-			} else {
-				(0..escaped).for_each(|_| result.push('\\'));
-				escaped = 0;
-				result.push(c);
 			}
+			escaped = 0;
+		} else {
+			(0..escaped).for_each(|_| result.push('\\'));
+			escaped = 0;
+			result.push(c);
 		}
-		(0..escaped).for_each(|_| result.push('\\'));
-
-		Ok(result)
 	}
+	(0..escaped).for_each(|_| result.push('\\'));
+
+				Ok(result)
 }
 
 impl RegexRule for VariableRule {
@@ -188,7 +190,7 @@ impl RegexRule for VariableRule {
 		};
 
 		let var_name = match matches.get(2) {
-			Some(name) => match VariableRule::validate_name(state.parser.colors(), name.as_str()) {
+			Some(name) => match validate_name(state.parser.colors(), name.as_str()) {
 				Ok(var_name) => var_name,
 				Err(msg) => {
 					report_err!(
@@ -211,7 +213,7 @@ impl RegexRule for VariableRule {
 		};
 
 		let (val_token, var_value) = match matches.get(3) {
-			Some(value) => match VariableRule::validate_value(value.as_str()) {
+			Some(value) => match validate_value(value.as_str()) {
 				Ok(var_value) => (Token::new(value.range(), token.source()), var_value),
 				Err(msg) => {
 					report_err!(
@@ -326,8 +328,8 @@ pub struct VariableSubstitutionRule {
 	re: [Regex; 1],
 }
 
-impl VariableSubstitutionRule {
-	pub fn new() -> Self {
+impl Default for VariableSubstitutionRule {
+	fn default() -> Self {
 		Self {
 			re: [Regex::new(r"%(.*?)%").unwrap()],
 		}
@@ -400,7 +402,7 @@ impl RegexRule for VariableSubstitutionRule {
 					return reports;
 				}
 				// Invalid name
-				if let Err(msg) = VariableRule::validate_name(state.parser.colors(), name.as_str())
+				if let Err(msg) = validate_name(state.parser.colors(), name.as_str())
 				{
 					report_err!(
 						&mut reports,

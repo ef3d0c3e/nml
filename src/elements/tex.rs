@@ -229,8 +229,8 @@ pub struct TexRule {
 	properties: PropertyParser,
 }
 
-impl TexRule {
-	pub fn new() -> Self {
+impl Default for TexRule {
+	fn default() -> Self {
 		let mut props = HashMap::new();
 		props.insert(
 			"env".to_string(),

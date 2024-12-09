@@ -38,8 +38,8 @@ pub struct CommentRule {
 	re: [Regex; 1],
 }
 
-impl CommentRule {
-	pub fn new() -> Self {
+impl Default for CommentRule {
+	fn default() -> Self {
 		Self {
 			re: [Regex::new(r"(?:(?:^|\n)|[^\S\n]+)::(.*)").unwrap()],
 		}

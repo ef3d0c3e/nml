@@ -25,35 +25,35 @@ pub struct ElemStyleRule {
 	start_re: Regex,
 }
 
-impl ElemStyleRule {
-	pub fn new() -> Self {
+impl Default for ElemStyleRule {
+	fn default() -> Self {
 		Self {
 			start_re: Regex::new(r"(?:^|\n)@@(.*?)=\s*\{").unwrap(),
 		}
 	}
+}
 
-	/// Finds the json substring inside aother string
-	pub fn json_substring(str: &str) -> Option<&str> {
-		let mut in_string = false;
-		let mut brace_depth = 0;
-		let mut escaped = false;
+/// Finds the json substring inside aother string
+fn json_substring(str: &str) -> Option<&str> {
+	let mut in_string = false;
+	let mut brace_depth = 0;
+	let mut escaped = false;
 
-		for (pos, c) in str.char_indices() {
-			match c {
-				'{' if !in_string => brace_depth += 1,
-				'}' if !in_string => brace_depth -= 1,
-				'\\' if in_string => escaped = !escaped,
-				'"' if !escaped => in_string = !in_string,
-				_ => escaped = false,
-			}
-
-			if brace_depth == 0 {
-				return Some(&str[..=pos]);
-			}
+	for (pos, c) in str.char_indices() {
+		match c {
+			'{' if !in_string => brace_depth += 1,
+			'}' if !in_string => brace_depth -= 1,
+			'\\' if in_string => escaped = !escaped,
+			'"' if !escaped => in_string = !in_string,
+			_ => escaped = false,
 		}
 
-		None
+		if brace_depth == 0 {
+			return Some(&str[..=pos]);
+		}
 	}
+
+	None
 }
 
 impl Rule for ElemStyleRule {
@@ -127,7 +127,7 @@ impl Rule for ElemStyleRule {
 		};
 
 		// Get value
-		let new_style = match ElemStyleRule::json_substring(
+		let new_style = match json_substring(
 			&cursor.source.clone().content().as_str()[cursor.pos..],
 		) {
 			None => {

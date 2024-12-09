@@ -137,8 +137,8 @@ pub struct StyleRule {
 	re: [Regex; 4],
 }
 
-impl StyleRule {
-	pub fn new() -> Self {
+impl Default for StyleRule {
+	fn default() -> Self {
 		Self {
 			re: [
 				// Bold

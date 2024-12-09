@@ -152,11 +152,8 @@ impl RuleState for CustomStyleState {
 static STATE_NAME: &str = "elements.custom_style";
 
 #[auto_registry::auto_registry(registry = "rules", path = "crate::elements::customstyle")]
+#[derive(Default)]
 pub struct CustomStyleRule;
-
-impl CustomStyleRule {
-	pub fn new() -> Self { Self {} }
-}
 
 impl Rule for CustomStyleRule {
 	fn name(&self) -> &'static str { "Custom Style" }

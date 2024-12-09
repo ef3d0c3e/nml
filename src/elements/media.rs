@@ -237,8 +237,8 @@ pub struct MediaRule {
 	properties: PropertyParser,
 }
 
-impl MediaRule {
-	pub fn new() -> Self {
+impl Default for MediaRule {
+	fn default() -> Self {
 		let mut props = HashMap::new();
 		props.insert(
 			"type".to_string(),
@@ -263,30 +263,31 @@ impl MediaRule {
 		}
 	}
 
-	fn validate_uri(uri: &str) -> Result<&str, String> {
-		let trimmed = uri.trim_start().trim_end();
+}
 
-		if trimmed.is_empty() {
-			return Err("URIs is empty".to_string());
-		}
+fn validate_uri(uri: &str) -> Result<&str, String> {
+	let trimmed = uri.trim_start().trim_end();
 
-		Ok(trimmed)
+	if trimmed.is_empty() {
+		return Err("URIs is empty".to_string());
 	}
 
-	fn detect_filetype(filename: &str) -> Option<MediaType> {
-		let sep = match filename.rfind('.') {
-			Some(pos) => pos,
-			None => return None,
-		};
+	Ok(trimmed)
+}
 
-		// TODO: https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Containers
-		match filename.split_at(sep + 1).1.to_ascii_lowercase().as_str() {
-			"png" | "apng" | "avif" | "gif" | "webp" | "svg" | "bmp" | "jpg" | "jpeg" | "jfif"
+fn detect_filetype(filename: &str) -> Option<MediaType> {
+	let sep = match filename.rfind('.') {
+		Some(pos) => pos,
+		None => return None,
+	};
+
+	// TODO: https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Containers
+	match filename.split_at(sep + 1).1.to_ascii_lowercase().as_str() {
+		"png" | "apng" | "avif" | "gif" | "webp" | "svg" | "bmp" | "jpg" | "jpeg" | "jfif"
 			| "pjpeg" | "pjp" => Some(MediaType::IMAGE),
 			"mp4" | "m4v" | "webm" | "mov" => Some(MediaType::VIDEO),
 			"mp3" | "ogg" | "flac" | "wav" => Some(MediaType::AUDIO),
 			_ => None,
-		}
 	}
 }
 
@@ -327,7 +328,7 @@ impl RegexRule for MediaRule {
 
 		let uri = match (
 			matches.get(2).unwrap(),
-			MediaRule::validate_uri(matches.get(2).unwrap().as_str()),
+			validate_uri(matches.get(2).unwrap().as_str()),
 		) {
 			(_, Ok(uri)) => util::escape_text('\\', ")", uri, true),
 			(m, Err(err)) => {
@@ -372,7 +373,7 @@ impl RegexRule for MediaRule {
 		) {
 			(Some(media_type), Some(caption), Some(width)) => {
 				if media_type.is_none() {
-					match Self::detect_filetype(uri.as_str()) {
+					match detect_filetype(uri.as_str()) {
 						None => {
 							report_err!(
 								&mut reports,
@@ -509,7 +510,7 @@ mod tests {
 
 	#[test]
 	fn regex() {
-		let rule = MediaRule::new();
+		let rule = MediaRule::default();
 		let re = &rule.regexes()[0];
 
 		assert!(re.is_match("![refname](some path...)[some properties] some description"));

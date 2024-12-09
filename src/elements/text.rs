@@ -41,11 +41,8 @@ impl Element for Text {
 }
 
 #[auto_registry::auto_registry(registry = "rules", path = "crate::elements::text")]
+#[derive(Default)]
 pub struct TextRule;
-
-impl TextRule {
-	pub fn new() -> Self { Self {} }
-}
 
 impl Rule for TextRule {
 	fn name(&self) -> &'static str { "Text" }

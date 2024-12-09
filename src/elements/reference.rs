@@ -161,8 +161,8 @@ pub struct ReferenceRule {
 	properties: PropertyParser,
 }
 
-impl ReferenceRule {
-	pub fn new() -> Self {
+impl Default for ReferenceRule {
+	fn default() -> Self {
 		let mut props = HashMap::new();
 		props.insert(
 			"caption".to_string(),

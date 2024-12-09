@@ -82,8 +82,8 @@ pub struct LinkRule {
 	re: [Regex; 1],
 }
 
-impl LinkRule {
-	pub fn new() -> Self {
+impl Default for LinkRule {
+	fn default() -> Self {
 		Self {
 			re: [Regex::new(r"\[((?:\\.|[^\\\\])*?)\]\(((?:\\.|[^\\\\])*?)\)").unwrap()],
 		}

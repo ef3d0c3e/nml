@@ -35,8 +35,8 @@ pub struct BlockRule {
 	continue_re: Regex,
 }
 
-impl BlockRule {
-	pub fn new() -> Self {
+impl Default for BlockRule {
+	fn default() -> Self {
 		Self {
 			start_re: Regex::new(
 				r"(?:^|\n)>[^\S\r\n]*(?:\[!((?:\\.|[^\\\\])*?)\])(?:\[((?:\\.|[^\\\\])*?)\])?[^\S\r\n]*",

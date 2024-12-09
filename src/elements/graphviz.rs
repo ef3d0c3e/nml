@@ -160,8 +160,8 @@ pub struct GraphRule {
 	properties: PropertyParser,
 }
 
-impl GraphRule {
-	pub fn new() -> Self {
+impl Default for GraphRule {
+	fn default() -> Self {
 		let mut props = HashMap::new();
 		props.insert(
 			"layout".to_string(),

@@ -150,8 +150,8 @@ pub struct SectionRule {
 	re: [Regex; 1],
 }
 
-impl SectionRule {
-	pub fn new() -> Self {
+impl Default for SectionRule {
+	fn default() -> Self {
 		Self {
 			re: [Regex::new(r"(?:^|\n)(#{1,})(?:\{(.*)\})?((\*|\+){1,})?(.*)").unwrap()],
 		}

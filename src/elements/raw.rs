@@ -53,8 +53,8 @@ pub struct RawRule {
 	properties: PropertyParser,
 }
 
-impl RawRule {
-	pub fn new() -> Self {
+impl Default for RawRule {
+	fn default() -> Self {
 		let mut props = HashMap::new();
 		props.insert(
 			"kind".to_string(),

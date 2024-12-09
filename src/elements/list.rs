@@ -165,8 +165,8 @@ pub struct ListRule {
 	properties: PropertyParser,
 }
 
-impl ListRule {
-	pub fn new() -> Self {
+impl Default for ListRule {
+	fn default() -> Self {
 		let mut props = HashMap::new();
 		props.insert(
 			"offset".to_string(),
@@ -184,97 +184,97 @@ impl ListRule {
 			properties: PropertyParser { properties: props },
 		}
 	}
+}
 
-	fn push_markers(
-		token: &Token,
-		state: &ParserState,
-		document: &dyn Document,
-		current: &Vec<(bool, usize)>,
-		target: &Vec<(bool, usize)>,
-	) {
-		let mut start_pos = 0;
-		for i in 0..std::cmp::min(target.len(), current.len()) {
-			if current[i].0 != target[i].0 {
-				break;
-			}
-
-			start_pos += 1;
+fn push_markers(
+	token: &Token,
+	state: &ParserState,
+	document: &dyn Document,
+	current: &Vec<(bool, usize)>,
+	target: &Vec<(bool, usize)>,
+) {
+	let mut start_pos = 0;
+	for i in 0..std::cmp::min(target.len(), current.len()) {
+		if current[i].0 != target[i].0 {
+			break;
 		}
 
-		// Close
-		for i in start_pos..current.len() {
-			state.push(
-				document,
-				Box::new(ListMarker {
-					location: token.clone(),
-					kind: MarkerKind::Close,
-					numbered: current[current.len() - 1 - (i - start_pos)].0,
-				}),
-			);
-		}
-
-		// Open
-		for i in start_pos..target.len() {
-			state.push(
-				document,
-				Box::new(ListMarker {
-					location: token.clone(),
-					kind: MarkerKind::Open,
-					numbered: target[i].0,
-				}),
-			);
-		}
+		start_pos += 1;
 	}
 
-	fn parse_depth(depth: &str, document: &dyn Document, offset: usize) -> Vec<(bool, usize)> {
-		let mut parsed = vec![];
-		let prev_entry = document
-			.last_element::<ListEntry>()
-			.and_then(|entry| Ref::filter_map(entry, |e| Some(&e.numbering)).ok());
+	// Close
+	for i in start_pos..current.len() {
+		state.push(
+			document,
+			Box::new(ListMarker {
+				location: token.clone(),
+				kind: MarkerKind::Close,
+				numbered: current[current.len() - 1 - (i - start_pos)].0,
+			}),
+		);
+	}
 
-		let mut continue_match = true;
-		depth.chars().enumerate().for_each(|(idx, c)| {
-			let number = if offset == usize::MAX || idx + 1 != depth.len() {
-				prev_entry
-					.as_ref()
-					.and_then(|v| {
-						if !continue_match {
-							return None;
-						}
-						let numbered = c == '-';
+	// Open
+	for i in start_pos..target.len() {
+		state.push(
+			document,
+			Box::new(ListMarker {
+				location: token.clone(),
+				kind: MarkerKind::Open,
+				numbered: target[i].0,
+			}),
+		);
+	}
+}
 
-						match v.get(idx) {
-							None => None,
-							Some((prev_numbered, prev_idx)) => {
-								if *prev_numbered != numbered {
-									continue_match = false;
-									None
-								}
-								// New depth
-								else if idx + 1 == v.len() {
-									Some(*prev_idx + 1)
-								}
-								// Increase from previous
-								else {
-									Some(*prev_idx)
-								} // Do nothing
+fn parse_depth(depth: &str, document: &dyn Document, offset: usize) -> Vec<(bool, usize)> {
+	let mut parsed = vec![];
+	let prev_entry = document
+		.last_element::<ListEntry>()
+		.and_then(|entry| Ref::filter_map(entry, |e| Some(&e.numbering)).ok());
+
+	let mut continue_match = true;
+	depth.chars().enumerate().for_each(|(idx, c)| {
+		let number = if offset == usize::MAX || idx + 1 != depth.len() {
+			prev_entry
+				.as_ref()
+				.and_then(|v| {
+					if !continue_match {
+						return None;
+					}
+					let numbered = c == '-';
+
+					match v.get(idx) {
+						None => None,
+						Some((prev_numbered, prev_idx)) => {
+							if *prev_numbered != numbered {
+								continue_match = false;
+								None
 							}
+							// New depth
+							else if idx + 1 == v.len() {
+								Some(*prev_idx + 1)
+							}
+							// Increase from previous
+							else {
+								Some(*prev_idx)
+							} // Do nothing
 						}
-					})
-					.unwrap_or(1)
-			} else {
-				offset
-			};
+					}
+				})
+			.unwrap_or(1)
+		} else {
+			offset
+		};
 
-			match c {
-				'*' => parsed.push((false, number)),
-				'-' => parsed.push((true, number)),
-				_ => panic!("Unimplemented"),
-			}
-		});
+		match c {
+			'*' => parsed.push((false, number)),
+			'-' => parsed.push((true, number)),
+			_ => panic!("Unimplemented"),
+		}
+	});
 
-		parsed
-	}
+	parsed
 }
 
 impl Rule for ListRule {
@@ -358,7 +358,7 @@ impl Rule for ListRule {
 				};
 
 				// Depth
-				let depth = ListRule::parse_depth(
+				let depth = parse_depth(
 					captures.get(1).unwrap().as_str(),
 					document,
 					offset.unwrap_or(usize::MAX),
@@ -506,9 +506,9 @@ impl Rule for ListRule {
 					.last_element::<ListEntry>()
 					.map(|ent| ent.numbering.clone())
 				{
-					ListRule::push_markers(&token, state, document, &previous_depth, &depth);
+					push_markers(&token, state, document, &previous_depth, &depth);
 				} else {
-					ListRule::push_markers(&token, state, document, &vec![], &depth);
+					push_markers(&token, state, document, &vec![], &depth);
 				}
 
 				state.push(
@@ -535,7 +535,7 @@ impl Rule for ListRule {
 			.map(|ent| ent.numbering.clone())
 			.unwrap();
 		let token = Token::new(end_cursor.pos..end_cursor.pos, end_cursor.source.clone());
-		ListRule::push_markers(&token, state, document, &current, &Vec::new());
+		push_markers(&token, state, document, &current, &Vec::new());
 
 		(end_cursor, reports)
 	}

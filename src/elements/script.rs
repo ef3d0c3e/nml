@@ -29,7 +29,28 @@ pub struct ScriptRule {
 }
 
 impl ScriptRule {
-	pub fn new() -> Self {
+	fn validate_kind(&self, colors: &ReportColors, kind: &str) -> Result<usize, String> {
+		match self
+			.eval_kinds
+			.iter()
+			.position(|(kind_symbol, _)| kind == *kind_symbol)
+			{
+				Some(id) => Ok(id),
+				None => Err(format!(
+						"Unable to find eval kind `{}`. Available kinds:{}",
+						kind.fg(colors.highlight),
+						self.eval_kinds
+						.iter()
+						.fold(String::new(), |out, (symbol, name)| {
+							out + format!("\n - '{symbol}' => {name}").as_str()
+						})
+				)),
+			}
+	}
+}
+
+impl Default for ScriptRule {
+	fn default() -> Self {
 		Self {
 			re: [
 				Regex::new(r"(?:^|\n)@<(?:(.*)\n?)((?:\\.|[^\\\\])*?)(?:\n?)>@").unwrap(),
@@ -43,39 +64,20 @@ impl ScriptRule {
 			],
 		}
 	}
+}
 
-	fn validate_kernel_name(colors: &ReportColors, name: &str) -> Result<String, String> {
-		let trimmed = name.trim_end().trim_start();
-		if trimmed.is_empty() {
-			return Ok("main".to_string());
-		} else if trimmed.find(|c: char| c.is_whitespace()).is_some() {
-			return Err(format!(
+fn validate_kernel_name(colors: &ReportColors, name: &str) -> Result<String, String> {
+	let trimmed = name.trim_end().trim_start();
+	if trimmed.is_empty() {
+		return Ok("main".to_string());
+	} else if trimmed.find(|c: char| c.is_whitespace()).is_some() {
+		return Err(format!(
 				"Kernel name `{}` contains whitespaces",
 				trimmed.fg(colors.highlight)
-			));
-		}
-
-		Ok(trimmed.to_string())
+		));
 	}
 
-	fn validate_kind(&self, colors: &ReportColors, kind: &str) -> Result<usize, String> {
-		match self
-			.eval_kinds
-			.iter()
-			.position(|(kind_symbol, _)| kind == *kind_symbol)
-		{
-			Some(id) => Ok(id),
-			None => Err(format!(
-				"Unable to find eval kind `{}`. Available kinds:{}",
-				kind.fg(colors.highlight),
-				self.eval_kinds
-					.iter()
-					.fold(String::new(), |out, (symbol, name)| {
-						out + format!("\n - '{symbol}' => {name}").as_str()
-					})
-			)),
-		}
-	}
+	Ok(trimmed.to_string())
 }
 
 impl RegexRule for ScriptRule {
@@ -100,7 +102,7 @@ impl RegexRule for ScriptRule {
 		let kernel_name = match matches.get(1) {
 			None => "main".to_string(),
 			Some(name) => {
-				match ScriptRule::validate_kernel_name(state.parser.colors(), name.as_str()) {
+				match validate_kernel_name(state.parser.colors(), name.as_str()) {
 					Ok(name) => name,
 					Err(e) => {
 						report_err!(

@@ -34,9 +34,28 @@ pub trait BlockType: core::fmt::Debug {
 	) -> Result<String, String>;
 }
 
-#[derive(Default)]
 pub struct BlockHolder {
 	blocks: HashMap<String, Rc<dyn BlockType>>,
+}
+
+macro_rules! create_blocks {
+	( $($construct:expr),+ $(,)? ) => {{
+		let mut map = HashMap::new();
+		$(
+			let val = Rc::new($construct) as Rc<dyn BlockType>;
+			map.insert(val.name().to_string(), val);
+		)+
+		map
+	}};
+}
+#[auto_registry::generate_registry(registry = "blocks", target = make_blocks, return_type = HashMap<String, Rc<dyn BlockType>>, maker = create_blocks)]
+
+impl Default for BlockHolder {
+    fn default() -> Self {
+		Self {
+			blocks: make_blocks()
+		}
+    }
 }
 
 impl BlockHolder {

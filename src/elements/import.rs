@@ -22,21 +22,21 @@ pub struct ImportRule {
 	re: [Regex; 1],
 }
 
-impl ImportRule {
-	pub fn new() -> Self {
+impl Default for ImportRule {
+	fn default() -> Self {
 		Self {
 			re: [Regex::new(r"(?:^|\n)@import(?:\[(.*)\])?[^\S\r\n]+(.*)").unwrap()],
 		}
 	}
+}
 
-	pub fn validate_name(_colors: &ReportColors, name: &str) -> Result<String, String> {
-		Ok(name.to_string())
-	}
+fn validate_name(_colors: &ReportColors, name: &str) -> Result<String, String> {
+	Ok(name.to_string())
+}
 
-	pub fn validate_as(_colors: &ReportColors, as_name: &str) -> Result<String, String> {
-		// TODO: Use variable name validation rules
-		Ok(as_name.to_string())
-	}
+fn validate_as(_colors: &ReportColors, as_name: &str) -> Result<String, String> {
+	// TODO: Use variable name validation rules
+	Ok(as_name.to_string())
 }
 
 impl RegexRule for ImportRule {
@@ -60,7 +60,7 @@ impl RegexRule for ImportRule {
 
 		// Path
 		let import_file = match matches.get(2) {
-			Some(name) => match ImportRule::validate_name(state.parser.colors(), name.as_str()) {
+			Some(name) => match validate_name(state.parser.colors(), name.as_str()) {
 				Err(msg) => {
 					report_err!(
 						&mut reports,
@@ -121,7 +121,7 @@ impl RegexRule for ImportRule {
 
 		// [Optional] import as
 		let import_as = match matches.get(1) {
-			Some(as_name) => match ImportRule::validate_as(state.parser.colors(), as_name.as_str())
+			Some(as_name) => match validate_as(state.parser.colors(), as_name.as_str())
 			{
 				Ok(as_name) => as_name,
 				Err(msg) => {

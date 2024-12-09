@@ -269,7 +269,7 @@ pub fn generate_registry(attr: TokenStream, input: TokenStream) -> TokenStream {
 		for name in names {
 			let struct_name: proc_macro2::TokenStream = name.parse().unwrap();
 			stream.extend(quote::quote_spanned!(proc_macro2::Span::call_site() =>
-				#struct_name::new(),
+				#struct_name::default(),
 			));
 		}
 	} else {

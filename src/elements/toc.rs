@@ -126,8 +126,8 @@ pub struct TocRule {
 	re: [Regex; 1],
 }
 
-impl TocRule {
-	pub fn new() -> Self {
+impl Default for TocRule {
+	fn default() -> Self {
 		Self {
 			re: [
 				RegexBuilder::new(r"(?:^|\n)(?:[^\S\n]*)#\+TABLE_OF_CONTENT(.*)")

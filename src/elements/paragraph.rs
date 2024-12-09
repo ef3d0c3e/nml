@@ -92,8 +92,8 @@ pub struct ParagraphRule {
 	re: Regex,
 }
 
-impl ParagraphRule {
-	pub fn new() -> Self {
+impl Default for ParagraphRule {
+	fn default() -> Self {
 		Self {
 			re: Regex::new(r"\n{2,}").unwrap(),
 		}
