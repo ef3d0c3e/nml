@@ -444,17 +444,19 @@ impl RegexRule for CodeRule {
 			// Conceals
 			if let Some(conceals) = Conceals::from_source(token.source(), &state.shared.lsp) {
 				let range = matches
-				.get(0)
-				.map(|m| {
-					if token.source().content().as_bytes()[m.start()] == b'\n' {
-						m.start() + 1..m.end()
-					} else {
-						m.range()
-					}
-				})
-				.unwrap();
+					.get(0)
+					.map(|m| {
+						if token.source().content().as_bytes()[m.start()] == b'\n' {
+							m.start() + 1..m.end()
+						} else {
+							m.range()
+						}
+					})
+					.unwrap();
 				let start = range.start;
-				let end = token.source().content()[start..].find('\n').map_or(token.source().content().len(), |val| start + val);
+				let end = token.source().content()[start..]
+					.find('\n')
+					.map_or(token.source().content().len(), |val| start + val);
 
 				conceals.add(
 					start..end,
@@ -466,7 +468,7 @@ impl RegexRule for CodeRule {
 						}),
 					},
 				);
-				
+
 				let range = matches
 					.get(0)
 					.map(|m| {
@@ -476,10 +478,10 @@ impl RegexRule for CodeRule {
 							m.range()
 						}
 					})
-				.unwrap();
+					.unwrap();
 				conceals.add(
-					range.end-3..range.end,
-					lsp::conceal::ConcealTarget::Text("".into())
+					range.end - 3..range.end,
+					lsp::conceal::ConcealTarget::Text("".into()),
 				);
 			}
 		} else
@@ -506,17 +508,15 @@ impl RegexRule for CodeRule {
 
 			// Code Ranges
 			if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
-				if block == CodeKind::MiniBlock
-				{
+				if block == CodeKind::MiniBlock {
 					let range = matches.get(3).unwrap().range();
-					coderanges.add(range.start+1..range.end, code_lang.clone());
+					coderanges.add(range.start + 1..range.end, code_lang.clone());
 				}
 			}
 
 			// Conceals
 			if let Some(conceals) = Conceals::from_source(token.source(), &state.shared.lsp) {
-				if block == CodeKind::MiniBlock
-				{
+				if block == CodeKind::MiniBlock {
 					let range = matches
 						.get(0)
 						.map(|m| {
@@ -526,9 +526,11 @@ impl RegexRule for CodeRule {
 								m.range()
 							}
 						})
-					.unwrap();
+						.unwrap();
 					let start = range.start;
-					let end = token.source().content()[start..].find('\n').map_or(token.source().content().len(), |val| start + val);
+					let end = token.source().content()[start..]
+						.find('\n')
+						.map_or(token.source().content().len(), |val| start + val);
 
 					conceals.add(
 						start..end,
@@ -550,10 +552,10 @@ impl RegexRule for CodeRule {
 								m.range()
 							}
 						})
-					.unwrap();
+						.unwrap();
 					conceals.add(
-						range.end-2..range.end,
-						lsp::conceal::ConcealTarget::Text("".into())
+						range.end - 2..range.end,
+						lsp::conceal::ConcealTarget::Text("".into()),
 					);
 				}
 			}

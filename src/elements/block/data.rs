@@ -4,11 +4,11 @@ use std::rc::Rc;
 
 use crate::compiler::compiler::Compiler;
 use crate::document::document::Document;
-use crate::elements::block::Block;
+use crate::parser::parser::ParserState;
+use crate::parser::reports::Report;
+use crate::parser::source::Token;
 
-use super::parser::ParserState;
-use super::reports::Report;
-use super::source::Token;
+use super::elem::Block;
 
 /// The type of a block
 pub trait BlockType: core::fmt::Debug {
@@ -48,4 +48,3 @@ impl BlockHolder {
 		self.blocks.insert(block.name().into(), block);
 	}
 }
-

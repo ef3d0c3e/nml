@@ -354,8 +354,7 @@ impl RegexRule for TexRule {
 
 		// Code ranges
 		if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
-			if index == 0 && tex_content.contains('\n')
-			{
+			if index == 0 && tex_content.contains('\n') {
 				let range = matches
 					.get(2)
 					.map(|m| {
@@ -365,7 +364,7 @@ impl RegexRule for TexRule {
 							m.range()
 						}
 					})
-				.unwrap();
+					.unwrap();
 
 				coderanges.add(range, "Latex".into());
 			}
