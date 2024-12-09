@@ -1,23 +1,33 @@
-use crate::document::document::Document;
-use crate::document::document::DocumentAccessors;
-use crate::lsp::semantic::Semantics;
-use crate::parser::parser::ParseMode;
-use crate::parser::parser::ParserState;
-use crate::parser::parser::ReportColors;
-use crate::parser::reports::macros::*;
-use crate::parser::reports::*;
-use crate::parser::rule::RegexRule;
-use crate::parser::source::SourceFile;
-use crate::parser::source::Token;
-use ariadne::Fmt;
-use lsp::definition;
-use regex::Captures;
-use regex::Regex;
 use std::rc::Rc;
 
-use super::paragraph::Paragraph;
+use ariadne::Fmt;
+use document::document::Document;
+use document::document::DocumentAccessors;
+use elements::paragraph::Paragraph;
+use lsp::definition;
+use lsp::semantic::Semantics;
+use parser::parser::ParseMode;
+use parser::parser::ParserState;
+use parser::parser::ReportColors;
+use parser::rule::RegexRule;
+use parser::source::SourceFile;
+use parser::source::Token;
+use regex::Captures;
+use regex::Regex;
 
-#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::import")]
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
+
+fn validate_name(_colors: &ReportColors, name: &str) -> Result<String, String> {
+	Ok(name.to_string())
+}
+
+fn validate_as(_colors: &ReportColors, as_name: &str) -> Result<String, String> {
+	// TODO: Use variable name validation rules
+	Ok(as_name.to_string())
+}
+
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct ImportRule {
 	re: [Regex; 1],
 }
@@ -28,15 +38,6 @@ impl Default for ImportRule {
 			re: [Regex::new(r"(?:^|\n)@import(?:\[(.*)\])?[^\S\r\n]+(.*)").unwrap()],
 		}
 	}
-}
-
-fn validate_name(_colors: &ReportColors, name: &str) -> Result<String, String> {
-	Ok(name.to_string())
-}
-
-fn validate_as(_colors: &ReportColors, as_name: &str) -> Result<String, String> {
-	// TODO: Use variable name validation rules
-	Ok(as_name.to_string())
 }
 
 impl RegexRule for ImportRule {

@@ -3,7 +3,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::layout::LayoutHolder;
 use super::reports::Report;
 use super::rule::Rule;
 use super::source::Cursor;
@@ -17,6 +16,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::elements::block::data::BlockHolder;
 use crate::elements::customstyle::custom::CustomStyleHolder;
+use crate::elements::layout::data::LayoutHolder;
 use crate::elements::paragraph::Paragraph;
 use crate::lsp::data::LSPData;
 use crate::lua::kernel::Kernel;

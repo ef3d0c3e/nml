@@ -5,11 +5,11 @@ use std::rc::Rc;
 
 use crate::compiler::compiler::Compiler;
 use crate::document::document::Document;
-use crate::elements::layout::LayoutToken;
+use crate::parser::parser::ParserState;
+use crate::parser::reports::Report;
+use crate::parser::source::Token;
 
-use super::parser::ParserState;
-use super::reports::Report;
-use super::source::Token;
+use super::custom::LayoutToken;
 
 /// Represents the type of a layout
 pub trait LayoutType: core::fmt::Debug {
@@ -38,9 +38,28 @@ pub trait LayoutType: core::fmt::Debug {
 	) -> Result<String, String>;
 }
 
-#[derive(Default)]
 pub struct LayoutHolder {
 	layouts: HashMap<String, Rc<dyn LayoutType>>,
+}
+
+macro_rules! create_layouts {
+	( $($construct:expr),+ $(,)? ) => {{
+		let mut map = HashMap::new();
+		$(
+			let val = Rc::new($construct) as Rc<dyn LayoutType>;
+			map.insert(val.name().to_string(), val);
+		)+
+		map
+	}};
+}
+
+#[auto_registry::generate_registry(registry = "layouts", target = make_layouts, return_type = HashMap<String, Rc<dyn LayoutType>>, maker = create_layouts)]
+impl Default for LayoutHolder {
+    fn default() -> Self {
+		Self {
+			layouts: make_layouts()
+		}
+    }
 }
 
 impl LayoutHolder {

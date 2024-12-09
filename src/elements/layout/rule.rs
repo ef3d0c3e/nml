@@ -1,371 +1,37 @@
-use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::Target;
-use crate::document::document::Document;
-use crate::document::element::ElemKind;
-use crate::document::element::Element;
-use crate::lsp::semantic::Semantics;
-use crate::lua::kernel::CTX;
-use crate::parser::layout::LayoutType;
-use crate::parser::parser::ParseMode;
-use crate::parser::parser::ParserState;
-use crate::parser::reports::macros::*;
-use crate::parser::reports::*;
-use crate::parser::rule::RegexRule;
-use crate::parser::source::Token;
-use crate::parser::state::RuleState;
-use crate::parser::state::Scope;
+use std::any::Any;
+use std::str::FromStr;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
+
 use ariadne::Fmt;
+use document::document::Document;
+use elements::customstyle::state::STATE_NAME;
 use lsp::hints::Hints;
-use mlua::Error::BadArgument;
+use lsp::semantic::Semantics;
+use lua::kernel::CTX;
 use mlua::Function;
 use mlua::Lua;
-use parser::parser::SharedState;
+use parser::parser::ParseMode;
+use parser::parser::ParserState;
+use parser::rule::RegexRule;
 use parser::source::Source;
+use parser::source::Token;
 use parser::source::VirtualSource;
+use parser::state::RuleState;
 use parser::util::escape_source;
 use regex::Captures;
 use regex::Match;
 use regex::Regex;
 use regex::RegexBuilder;
-use std::any::Any;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::ops::Range;
-use std::rc::Rc;
-use std::str::FromStr;
-use std::sync::Arc;
+use mlua::Error::BadArgument;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LayoutToken {
-	Begin,
-	Next,
-	End,
-}
-
-impl FromStr for LayoutToken {
-	type Err = String;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s {
-			"Begin" | "begin" => Ok(LayoutToken::Begin),
-			"Next" | "next" => Ok(LayoutToken::Next),
-			"End" | "end" => Ok(LayoutToken::End),
-			_ => Err(format!("Unable to find LayoutToken with name: {s}")),
-		}
-	}
-}
-
-mod default_layouts {
-	use crate::parser::layout::LayoutType;
-	use crate::parser::property::Property;
-	use crate::parser::property::PropertyParser;
-
-	use super::*;
-
-	#[derive(Debug)]
-	pub struct Centered(PropertyParser);
-
-	impl Default for Centered {
-		fn default() -> Self {
-			let mut properties = HashMap::new();
-			properties.insert(
-				"style".to_string(),
-				Property::new(
-					"Additional style for the split".to_string(),
-					Some("".to_string()),
-				),
-			);
-
-			Self(PropertyParser { properties })
-		}
-	}
-
-	impl LayoutType for Centered {
-		fn name(&self) -> &'static str { "Centered" }
-
-		fn expects(&self) -> Range<usize> { 1..1 }
-
-		fn parse_properties(
-			&self,
-			reports: &mut Vec<Report>,
-			state: &ParserState,
-			token: Token,
-		) -> Option<Box<dyn Any>> {
-			let properties = match self.0.parse("Centered Layout", reports, state, token) {
-				Some(props) => props,
-				None => return None,
-			};
-
-			let style = match properties.get(reports, "style", |_, value| {
-				Result::<_, String>::Ok(value.value.clone())
-			}) {
-				Some(style) => style,
-				_ => return None,
-			};
-
-			Some(Box::new(style))
-		}
-
-		fn compile(
-			&self,
-			token: LayoutToken,
-			_id: usize,
-			properties: &Box<dyn Any>,
-			compiler: &Compiler,
-			_document: &dyn Document,
-		) -> Result<String, String> {
-			match compiler.target() {
-				Target::HTML => {
-					let style = match properties.downcast_ref::<String>().unwrap().as_str() {
-						"" => "".to_string(),
-						str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
-					};
-					match token {
-						LayoutToken::Begin => Ok(format!(r#"<div class="centered"{style}>"#)),
-						LayoutToken::Next => panic!(),
-						LayoutToken::End => Ok(r#"</div>"#.to_string()),
-					}
-				}
-				_ => todo!(""),
-			}
-		}
-	}
-
-	#[derive(Debug)]
-	pub struct Split(PropertyParser);
-
-	impl Default for Split {
-		fn default() -> Self {
-			let mut properties = HashMap::new();
-			properties.insert(
-				"style".to_string(),
-				Property::new(
-					"Additional style for the split".to_string(),
-					Some("".to_string()),
-				),
-			);
-
-			Self(PropertyParser { properties })
-		}
-	}
-
-	impl LayoutType for Split {
-		fn name(&self) -> &'static str { "Split" }
-
-		fn expects(&self) -> Range<usize> { 2..usize::MAX }
-
-		fn parse_properties(
-			&self,
-			reports: &mut Vec<Report>,
-			state: &ParserState,
-			token: Token,
-		) -> Option<Box<dyn Any>> {
-			let properties = match self.0.parse("Split Layout", reports, state, token) {
-				Some(props) => props,
-				None => return None,
-			};
-
-			let style = match properties.get(reports, "style", |_, value| {
-				Result::<_, String>::Ok(value.value.clone())
-			}) {
-				Some(style) => style,
-				_ => return None,
-			};
-
-			Some(Box::new(style))
-		}
-
-		fn compile(
-			&self,
-			token: LayoutToken,
-			_id: usize,
-			properties: &Box<dyn Any>,
-			compiler: &Compiler,
-			_document: &dyn Document,
-		) -> Result<String, String> {
-			match compiler.target() {
-				Target::HTML => {
-					let style = match properties.downcast_ref::<String>().unwrap().as_str() {
-						"" => "".to_string(),
-						str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
-					};
-					match token {
-						LayoutToken::Begin => Ok(format!(
-							r#"<div class="split-container"><div class="split"{style}>"#
-						)),
-						LayoutToken::Next => Ok(format!(r#"</div><div class="split"{style}>"#)),
-						LayoutToken::End => Ok(r#"</div></div>"#.to_string()),
-					}
-				}
-				_ => todo!(""),
-			}
-		}
-	}
-
-	#[derive(Debug)]
-	pub struct Spoiler(PropertyParser);
-
-	impl Default for Spoiler {
-		fn default() -> Self {
-			let mut properties = HashMap::new();
-			properties.insert(
-				"title".to_string(),
-				Property::new("Spoiler title".to_string(), Some("".to_string())),
-			);
-
-			Self(PropertyParser { properties })
-		}
-	}
-
-	impl LayoutType for Spoiler {
-		fn name(&self) -> &'static str { "Spoiler" }
-
-		fn expects(&self) -> Range<usize> { 1..1 }
-
-		fn parse_properties(
-			&self,
-			reports: &mut Vec<Report>,
-			state: &ParserState,
-			token: Token,
-		) -> Option<Box<dyn Any>> {
-			let properties = match self.0.parse("Spoiler Layout", reports, state, token) {
-				Some(props) => props,
-				None => return None,
-			};
-
-			let title = match properties.get(reports, "title", |_, value| {
-				Result::<_, String>::Ok(value.value.clone())
-			}) {
-				Some(title) => title,
-				_ => return None,
-			};
-
-			Some(Box::new(title))
-		}
-
-		fn compile(
-			&self,
-			token: LayoutToken,
-			_id: usize,
-			properties: &Box<dyn Any>,
-			compiler: &Compiler,
-			_document: &dyn Document,
-		) -> Result<String, String> {
-			match compiler.target() {
-				Target::HTML => {
-					let title = properties.downcast_ref::<String>().unwrap();
-					match token {
-						LayoutToken::Begin => Ok(format!(
-							r#"<details class="spoiler"><summary>{}</summary>"#,
-							Compiler::sanitize(compiler.target(), title)
-						)),
-						LayoutToken::End => Ok(r#"</details>"#.to_string()),
-						_ => panic!(),
-					}
-				}
-				_ => todo!(""),
-			}
-		}
-	}
-}
-
-#[derive(Debug)]
-struct Layout {
-	pub(self) location: Token,
-	pub(self) layout: Rc<dyn LayoutType>,
-	pub(self) id: usize,
-	pub(self) token: LayoutToken,
-	pub(self) properties: Box<dyn Any>,
-}
-
-impl Element for Layout {
-	fn location(&self) -> &Token { &self.location }
-	fn kind(&self) -> ElemKind { ElemKind::Block }
-	fn element_name(&self) -> &'static str { "Layout" }
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
-		self.layout
-			.compile(self.token, self.id, &self.properties, compiler, document)
-	}
-}
-
-struct LayoutState {
-	/// The layout stack
-	pub(self) stack: Vec<(Vec<Token>, Rc<dyn LayoutType>)>,
-}
-
-impl RuleState for LayoutState {
-	fn scope(&self) -> Scope { Scope::DOCUMENT }
-
-	fn on_remove(&self, state: &ParserState, document: &dyn Document) -> Vec<Report> {
-		let mut reports = vec![];
-
-		let doc_borrow = document.content().borrow();
-		let at = doc_borrow.last().map_or(
-			Token::new(
-				document.source().content().len()..document.source().content().len(),
-				document.source(),
-			),
-			|last| last.location().to_owned(),
-		);
-
-		for (tokens, layout_type) in &self.stack {
-			let start = tokens.first().unwrap();
-			report_err!(
-				&mut reports,
-				start.source(),
-				"Unterminated Layout".into(),
-				span(
-					start.source(),
-					start.range.start + 1..start.range.end,
-					format!(
-						"Layout {} stars here",
-						layout_type.name().fg(state.parser.colors().info)
-					)
-				),
-				span(at.source(), at.range.clone(), "Document ends here".into())
-			);
-		}
-
-		reports
-	}
-}
-
-#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::layout")]
-pub struct LayoutRule {
-	re: [Regex; 3],
-}
-
-impl Default for LayoutRule {
-	fn default() -> Self {
-		Self {
-			re: [
-				RegexBuilder::new(
-					r"(?:^|\n)(?:[^\S\n]*)#\+LAYOUT_BEGIN(?:\[((?:\\.|[^\\\\])*?)\])?(.*)",
-				)
-				.multi_line(true)
-				.build()
-				.unwrap(),
-				RegexBuilder::new(
-					r"(?:^|\n)(?:[^\S\n]*)#\+LAYOUT_NEXT(?:\[((?:\\.|[^\\\\])*?)\])?$",
-				)
-				.multi_line(true)
-				.build()
-				.unwrap(),
-				RegexBuilder::new(
-					r"(?:^|\n)(?:[^\S\n]*)#\+LAYOUT_END(?:\[((?:\\.|[^\\\\])*?)\])?$",
-				)
-				.multi_line(true)
-				.build()
-				.unwrap(),
-			],
-		}
-	}
-}
+use super::custom::LayoutToken;
+use super::data::LayoutType;
+use super::elem::Layout;
+use super::state::LayoutState;
 
 pub fn initialize_state(state: &ParserState) -> Rc<RefCell<dyn RuleState>> {
 	let mut rule_state_borrow = state.shared.rule_state.borrow_mut();
@@ -399,13 +65,43 @@ pub fn parse_properties<'a>(
 		"]",
 	);
 	layout_type.parse_properties(
-		reports,
+		&mut reports,
 		state,
 		Token::new(0..prop_source.content().len(), prop_source),
 	)
 }
 
-static STATE_NAME: &str = "elements.layout";
+#[auto_registry::auto_registry(registry = "rules")]
+pub struct LayoutRule {
+	re: [Regex; 3],
+}
+
+impl Default for LayoutRule {
+	fn default() -> Self {
+		Self {
+			re: [
+				RegexBuilder::new(
+					r"(?:^|\n)(?:[^\S\n]*)#\+LAYOUT_BEGIN(?:\[((?:\\.|[^\\\\])*?)\])?(.*)",
+				)
+				.multi_line(true)
+				.build()
+				.unwrap(),
+				RegexBuilder::new(
+					r"(?:^|\n)(?:[^\S\n]*)#\+LAYOUT_NEXT(?:\[((?:\\.|[^\\\\])*?)\])?$",
+				)
+				.multi_line(true)
+				.build()
+				.unwrap(),
+				RegexBuilder::new(
+					r"(?:^|\n)(?:[^\S\n]*)#\+LAYOUT_END(?:\[((?:\\.|[^\\\\])*?)\])?$",
+				)
+				.multi_line(true)
+				.build()
+				.unwrap(),
+			],
+		}
+	}
+}
 
 impl RegexRule for LayoutRule {
 	fn name(&self) -> &'static str { "Layout" }
@@ -951,237 +647,5 @@ impl RegexRule for LayoutRule {
 		));
 
 		bindings
-	}
-
-	fn register_shared_state(&self, state: &SharedState) {
-		let mut holder = state.layouts.borrow_mut();
-		holder.insert(Rc::new(default_layouts::Centered::default()));
-		holder.insert(Rc::new(default_layouts::Split::default()));
-		holder.insert(Rc::new(default_layouts::Spoiler::default()));
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use crate::elements::paragraph::Paragraph;
-	use crate::elements::text::Text;
-	use crate::parser::langparser::LangParser;
-	use crate::parser::parser::Parser;
-	use crate::parser::source::SourceFile;
-	use crate::validate_document;
-	use crate::validate_semantics;
-
-	use super::*;
-
-	#[test]
-	fn parser() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-#+LAYOUT_BEGIN[style=A] Split
-	A
-	#+LAYOUT_BEGIN[style=B] Centered
-		B
-	#+LAYOUT_END
-#+LAYOUT_NEXT[style=C]
-	C
-	#+LAYOUT_BEGIN[style=D] Split
-		D
-	#+LAYOUT_NEXT[style=E]
-		E
-	#+LAYOUT_END
-#+LAYOUT_END
-#+LAYOUT_BEGIN[title=F] Spoiler
-	F
-#+LAYOUT_END
-"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (doc, _) = parser.parse(
-			ParserState::new(&parser, None),
-			source,
-			None,
-			ParseMode::default(),
-		);
-
-		validate_document!(doc.content().borrow(), 0,
-			Layout { token == LayoutToken::Begin, id == 0 };
-			Paragraph {
-				Text { content == "A" };
-			};
-			Layout { token == LayoutToken::Begin, id == 0 };
-			Paragraph {
-				Text { content == "B" };
-			};
-			Layout { token == LayoutToken::End, id == 1 };
-			Layout { token == LayoutToken::Next, id == 1 };
-			Paragraph {
-				Text { content == "C" };
-			};
-			Layout { token == LayoutToken::Begin, id == 0 };
-			Paragraph {
-				Text { content == "D" };
-			};
-			Layout { token == LayoutToken::Next, id == 1 };
-			Paragraph {
-				Text { content == "E" };
-			};
-			Layout { token == LayoutToken::End, id == 2 };
-			Layout { token == LayoutToken::End, id == 2 };
-
-			Layout { token == LayoutToken::Begin, id == 0 };
-			Paragraph {
-				Text { content == "F" };
-			};
-			Layout { token == LayoutToken::End, id == 1 };
-		);
-	}
-
-	#[test]
-	fn lua() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-%<nml.layout.push("begin", "Split", "style=A")>%
-	A
-%<nml.layout.push("Begin", "Centered", "style=B")>%
-		B
-%<nml.layout.push("end", "Centered", "")>%
-%<nml.layout.push("next", "Split", "style=C")>%
-	C
-%<nml.layout.push("Begin", "Split", "style=D")>%
-		D
-%<nml.layout.push("Next", "Split", "style=E")>%
-		E
-%<nml.layout.push("End", "Split", "")>%
-%<nml.layout.push("End", "Split", "")>%
-
-%<nml.layout.push("Begin", "Spoiler", "title=Test Spoiler")>%
-	F
-%<nml.layout.push("End", "Spoiler", "")>%
-"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (doc, _) = parser.parse(
-			ParserState::new(&parser, None),
-			source,
-			None,
-			ParseMode::default(),
-		);
-
-		validate_document!(doc.content().borrow(), 0,
-			Layout { token == LayoutToken::Begin, id == 0 };
-			Paragraph {
-				Text { content == "A" };
-			};
-			Layout { token == LayoutToken::Begin, id == 0 };
-			Paragraph {
-				Text { content == "B" };
-			};
-			Layout { token == LayoutToken::End, id == 1 };
-			Layout { token == LayoutToken::Next, id == 1 };
-			Paragraph {
-				Text { content == "C" };
-			};
-			Layout { token == LayoutToken::Begin, id == 0 };
-			Paragraph {
-				Text { content == "D" };
-			};
-			Layout { token == LayoutToken::Next, id == 1 };
-			Paragraph {
-				Text { content == "E" };
-			};
-			Layout { token == LayoutToken::End, id == 2 };
-			Layout { token == LayoutToken::End, id == 2 };
-			Paragraph;
-			Layout { token == LayoutToken::Begin, id == 0 };
-			Paragraph {
-				Text { content == "F" };
-			};
-			Layout { token == LayoutToken::End, id == 1 };
-		);
-	}
-
-	#[test]
-	fn semantic() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-#+LAYOUT_BEGIN Split
-	#+LAYOUT_NEXT[style=aa]
-#+LAYOUT_END
-		"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (_, state) = parser.parse(
-			ParserState::new_with_semantics(&parser, None),
-			source.clone(),
-			None,
-			ParseMode::default(),
-		);
-		validate_semantics!(state, source.clone(), 0,
-			layout_sep { delta_line == 1, delta_start == 0, length == 2 };
-			layout_token { delta_line == 0, delta_start == 2, length == 12 };
-			layout_type { delta_line == 0, delta_start == 12, length == 6 };
-			layout_sep { delta_line == 1, delta_start == 1, length == 2 };
-			layout_token { delta_line == 0, delta_start == 2, length == 11 };
-			layout_props_sep { delta_line == 0, delta_start == 11, length == 1 };
-			prop_name { delta_line == 0, delta_start == 1, length == 5 };
-			prop_equal { delta_line == 0, delta_start == 5, length == 1 };
-			prop_value { delta_line == 0, delta_start == 1, length == 2 };
-			layout_props_sep { delta_line == 0, delta_start == 2, length == 1 };
-			layout_sep { delta_line == 1, delta_start == 0, length == 2 };
-			layout_token { delta_line == 0, delta_start == 2, length == 10 };
-		);
-	}
-
-	#[test]
-	fn hints() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-#+LAYOUT_BEGIN Split
-	A
-#+LAYOUT_NEXT
-	B
-#+LAYOUT_END
-		"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (_, state) = parser.parse(
-			ParserState::new_with_semantics(&parser, None),
-			source.clone(),
-			None,
-			ParseMode::default(),
-		);
-		if let Some(lsp) = &state.shared.lsp {
-			let borrow = lsp.borrow();
-
-			if let Some(hints) = borrow.inlay_hints.get(&(source as Rc<dyn Source>)) {
-				let borrow = hints.hints.borrow();
-				assert_eq!(
-					borrow[0].position,
-					tower_lsp::lsp_types::Position {
-						line: 3,
-						character: 13
-					}
-				);
-				assert_eq!(
-					borrow[1].position,
-					tower_lsp::lsp_types::Position {
-						line: 5,
-						character: 12
-					}
-				);
-			}
-		}
 	}
 }

@@ -1,26 +1,23 @@
-use crate::parser::parser::ParseMode;
-use crate::parser::style::ElementStyle;
 use std::any::Any;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Fmt;
+use document::document::Document;
 use lsp::semantic::Semantics;
-use mlua::Error::BadArgument;
-use mlua::Function;
-use mlua::Lua;
-use mlua::Value;
+use lua::kernel::CTX;
+use mlua::{Function, Lua, Value};
+use parser::parser::{ParseMode, ParserState};
+use parser::rule::Rule;
+use parser::source::Cursor;
+use parser::style::ElementStyle;
 use regex::Regex;
 
-use crate::document::document::Document;
-use crate::lua::kernel::CTX;
-use crate::parser::parser::ParserState;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-use crate::parser::rule::Rule;
-use crate::parser::source::Cursor;
+use mlua::Error::BadArgument;
 
-#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::elemstyle")]
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct ElemStyleRule {
 	start_re: Regex,
 }
@@ -72,7 +69,7 @@ impl Rule for ElemStyleRule {
 		}
 		self.start_re
 			.find_at(cursor.source.content(), cursor.pos)
-			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
+			.map(|m| (m.start(), Box::new(()) as Box<dyn Any>))
 	}
 
 	fn on_match<'a>(
@@ -238,46 +235,5 @@ impl Rule for ElemStyleRule {
 		));
 
 		bindings
-	}
-}
-
-#[cfg(test)]
-pub mod tests {
-	use parser::langparser::LangParser;
-	use parser::parser::Parser;
-	use parser::source::SourceFile;
-
-	use super::*;
-
-	#[test]
-	fn semantics() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-@@style.section = {
-	"link_pos": "Before",
-	"link": ["", "⛓️", "       "]
-}
-		"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (_, state) = parser.parse(
-			ParserState::new_with_semantics(&parser, None),
-			source.clone(),
-			None,
-			ParseMode::default(),
-		);
-
-		validate_semantics!(state, source.clone(), 0,
-			elemstyle_operator { delta_line == 1, delta_start == 0, length == 2 };
-			elemstyle_name { delta_line == 0, delta_start == 2, length == 14 };
-			elemstyle_equal { delta_line == 0, delta_start == 14, length == 1 };
-			elemstyle_value { delta_line == 0, delta_start == 2, length == 2 };
-			elemstyle_value { delta_line == 1, delta_start == 0, length == 23 };
-			elemstyle_value { delta_line == 1, delta_start == 0, length == 31 };
-			elemstyle_value { delta_line == 1, delta_start == 0, length == 2 };
-		);
 	}
 }
