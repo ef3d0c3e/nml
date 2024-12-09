@@ -1,15 +1,18 @@
 use std::any::Any;
-use std::str::FromStr;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::Arc;
 
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use ariadne::Fmt;
 use document::document::Document;
 use elements::customstyle::state::STATE_NAME;
 use lsp::hints::Hints;
 use lsp::semantic::Semantics;
 use lua::kernel::CTX;
+use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
 use parser::parser::ParseMode;
@@ -24,9 +27,6 @@ use regex::Captures;
 use regex::Match;
 use regex::Regex;
 use regex::RegexBuilder;
-use mlua::Error::BadArgument;
-use crate::parser::reports::macros::*;
-use crate::parser::reports::*;
 
 use super::custom::LayoutToken;
 use super::data::LayoutType;

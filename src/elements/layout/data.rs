@@ -55,11 +55,11 @@ macro_rules! create_layouts {
 
 #[auto_registry::generate_registry(registry = "layouts", target = make_layouts, return_type = HashMap<String, Rc<dyn LayoutType>>, maker = create_layouts)]
 impl Default for LayoutHolder {
-    fn default() -> Self {
+	fn default() -> Self {
 		Self {
-			layouts: make_layouts()
+			layouts: make_layouts(),
 		}
-    }
+	}
 }
 
 impl LayoutHolder {

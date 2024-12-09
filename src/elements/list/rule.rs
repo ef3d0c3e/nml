@@ -3,188 +3,35 @@ use std::cell::Ref;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::Target;
-use crate::document::document::Document;
-use crate::document::document::DocumentAccessors;
-use crate::document::element::ContainerElement;
-use crate::document::element::ElemKind;
-use crate::document::element::Element;
-use crate::lsp::semantic::Semantics;
-use crate::parser::parser::ParseMode;
-use crate::parser::parser::ParserState;
-use crate::parser::property::Property;
-use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
-use crate::parser::reports::Report;
 use crate::parser::reports::*;
-use crate::parser::rule::Rule;
-use crate::parser::source::Cursor;
-use crate::parser::source::Token;
-use crate::parser::source::VirtualSource;
-use crate::parser::util;
 use ariadne::Fmt;
 use lsp::conceal::ConcealTarget;
 use lsp::conceal::Conceals;
 use lsp::hints::Hints;
-use parser::util::escape_source;
+use lsp::semantic::Semantics;
+use parser::rule::Rule;
+use parser::source::Token;
+use parser::source::VirtualSource;
+use parser::util::parse_paragraph;
 use regex::Regex;
-use serde::Serialize;
 use serde_json::json;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum MarkerKind {
-	Open,
-	Close,
-}
+use crate::document::document::Document;
+use crate::document::document::DocumentAccessors;
+use crate::parser::parser::ParseMode;
+use crate::parser::parser::ParserState;
+use crate::parser::property::Property;
+use crate::parser::property::PropertyParser;
+use crate::parser::reports::Report;
+use crate::parser::source::Cursor;
+use crate::parser::util::escape_source;
 
-#[derive(Debug)]
-pub struct ListMarker {
-	pub(self) location: Token,
-	pub(self) numbered: bool,
-	pub(self) kind: MarkerKind,
-}
-
-impl Element for ListMarker {
-	fn location(&self) -> &Token { &self.location }
-
-	fn kind(&self) -> ElemKind { ElemKind::Block }
-
-	fn element_name(&self) -> &'static str { "List Marker" }
-
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		_document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
-		match compiler.target() {
-			Target::HTML => match (self.kind, self.numbered) {
-				(MarkerKind::Close, true) => Ok("</ol>".to_string()),
-				(MarkerKind::Close, false) => Ok("</ul>".to_string()),
-				(MarkerKind::Open, true) => Ok("<ol>".to_string()),
-				(MarkerKind::Open, false) => Ok("<ul>".to_string()),
-			},
-			_ => todo!(),
-		}
-	}
-}
-
-/// State of a checkbox
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum CheckboxState {
-	Unchecked,
-	Partial,
-	Checked,
-}
-
-/// Customization data for the list
-#[derive(Debug, PartialEq, Eq)]
-pub enum CustomListData {
-	Checkbox(CheckboxState),
-}
-
-#[derive(Debug)]
-pub struct ListEntry {
-	pub(self) location: Token,
-	pub(self) numbering: Vec<(bool, usize)>,
-	pub(self) content: Vec<Box<dyn Element>>,
-	pub(self) bullet: Option<String>,
-	pub(self) custom: Option<CustomListData>,
-}
-
-impl Element for ListEntry {
-	fn location(&self) -> &Token { &self.location }
-
-	fn kind(&self) -> ElemKind { ElemKind::Block }
-
-	fn element_name(&self) -> &'static str { "List Entry" }
-
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
-		match compiler.target() {
-			Target::HTML => {
-				let mut result = String::new();
-				if let Some((numbered, number)) = self.numbering.last() {
-					if *numbered {
-						result += format!("<li value=\"{number}\">").as_str();
-					} else {
-						result += "<li>";
-					}
-				}
-				match &self.custom {
-					Some(CustomListData::Checkbox(checkbox_state)) => match checkbox_state {
-						CheckboxState::Unchecked => {
-							result += r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#
-						}
-						CheckboxState::Partial => {
-							result += r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#
-						}
-						CheckboxState::Checked => {
-							result += r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#
-						}
-					},
-					_ => {}
-				}
-				for elem in &self.content {
-					result += elem
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
-				}
-				result += "</li>";
-				Ok(result)
-			}
-			_ => todo!(),
-		}
-	}
-
-	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
-}
-
-impl ContainerElement for ListEntry {
-	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.content }
-
-	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
-		if elem.kind() == ElemKind::Block {
-			return Err("Cannot add block element inside a list".to_string());
-		}
-
-		self.content.push(elem);
-		Ok(())
-	}
-}
-
-#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::list")]
-pub struct ListRule {
-	start_re: Regex,
-	continue_re: Regex,
-	properties: PropertyParser,
-}
-
-impl Default for ListRule {
-	fn default() -> Self {
-		let mut props = HashMap::new();
-		props.insert(
-			"offset".to_string(),
-			Property::new("Entry numbering offset".to_string(), None),
-		);
-		props.insert(
-			"bullet".to_string(),
-			Property::new("Entry bullet".to_string(), None),
-		);
-
-		Self {
-			start_re: Regex::new(r"(?:^|\n)(?:[^\S\r\n]+)([*-]+)(?:\[((?:\\.|[^\\\\])*?)\])?(?:[^\S\r\n]{0,1}\[((?:\\.|[^\\\\])*?)\])?(.*)")
-				.unwrap(),
-			continue_re: Regex::new(r"(?:^|\n)([^\S\r\n].*)").unwrap(),
-			properties: PropertyParser { properties: props },
-		}
-	}
-}
+use super::elem::CheckboxState;
+use super::elem::CustomListData;
+use super::elem::ListEntry;
+use super::elem::ListMarker;
+use super::elem::MarkerKind;
 
 fn push_markers(
 	token: &Token,
@@ -275,6 +122,34 @@ fn parse_depth(depth: &str, document: &dyn Document, offset: usize) -> Vec<(bool
 	});
 
 	parsed
+}
+
+#[auto_registry::auto_registry(registry = "rules")]
+pub struct ListRule {
+	start_re: Regex,
+	continue_re: Regex,
+	properties: PropertyParser,
+}
+
+impl Default for ListRule {
+	fn default() -> Self {
+		let mut props = HashMap::new();
+		props.insert(
+			"offset".to_string(),
+			Property::new("Entry numbering offset".to_string(), None),
+		);
+		props.insert(
+			"bullet".to_string(),
+			Property::new("Entry bullet".to_string(), None),
+		);
+
+		Self {
+			start_re: Regex::new(r"(?:^|\n)(?:[^\S\r\n]+)([*-]+)(?:\[((?:\\.|[^\\\\])*?)\])?(?:[^\S\r\n]{0,1}\[((?:\\.|[^\\\\])*?)\])?(.*)")
+				.unwrap(),
+			continue_re: Regex::new(r"(?:^|\n)([^\S\r\n].*)").unwrap(),
+			properties: PropertyParser { properties: props },
+		}
+	}
 }
 
 impl Rule for ListRule {
@@ -488,7 +363,7 @@ impl Rule for ListRule {
 					"List Entry".to_string(),
 					entry_content,
 				));
-				let parsed_content = match util::parse_paragraph(state, entry_src, document) {
+				let parsed_content = match parse_paragraph(state, entry_src, document) {
 					Err(err) => {
 						report_warn!(
 							&mut reports,
@@ -538,128 +413,5 @@ impl Rule for ListRule {
 		push_markers(&token, state, document, &current, &Vec::new());
 
 		(end_cursor, reports)
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::elements::paragraph::Paragraph;
-	use crate::elements::text::Text;
-	use crate::parser::langparser::LangParser;
-	use crate::parser::parser::Parser;
-	use crate::parser::source::SourceFile;
-	use crate::validate_document;
-	use crate::validate_semantics;
-
-	#[test]
-	fn parser() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
- * 1
- *[offset=7] 2
-	continued
- * 3
-
- * New list
- *-[bullet=(*)] A
- *- B
- * Back
- *-* More nested
-
-
- * [X] Checked
- * [x] Checked
- * [-] Partial
- * [] Unchecked
- * [ ] Unchecked
-"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let state = ParserState::new(&parser, None);
-		let (doc, _) = parser.parse(state, source, None, ParseMode::default());
-
-		validate_document!(doc.content().borrow(), 0,
-			ListMarker { numbered == false, kind == MarkerKind::Open };
-			ListEntry { numbering == vec![(false, 1)] } {
-				Text { content == "1" };
-			};
-			ListEntry { numbering == vec![(false, 7)] } {
-				Text { content == "2 continued" };
-			};
-			ListEntry { numbering == vec![(false, 8)] } {
-				Text { content == "3" };
-			};
-			ListMarker { numbered == false, kind == MarkerKind::Close };
-
-			Paragraph;
-
-			ListMarker { numbered == false, kind == MarkerKind::Open };
-			ListEntry { numbering == vec![(false, 1)] } {
-				Text { content == "New list" };
-			};
-			ListMarker { numbered == true, kind == MarkerKind::Open };
-				ListEntry { numbering == vec![(false, 2), (true, 1)], bullet == Some("(*)".to_string()) } {
-					Text { content == "A" };
-				};
-				ListEntry { numbering == vec![(false, 2), (true, 2)], bullet == Some("(*)".to_string()) } {
-					Text { content == "B" };
-				};
-			ListMarker { numbered == true, kind == MarkerKind::Close };
-			ListEntry { numbering == vec![(false, 2)] } {
-				Text { content == "Back" };
-			};
-			ListMarker { numbered == true, kind == MarkerKind::Open };
-			ListMarker { numbered == false, kind == MarkerKind::Open };
-			ListEntry { numbering == vec![(false, 3), (true, 1), (false, 1)] } {
-				Text { content == "More nested" };
-			};
-			ListMarker { numbered == false, kind == MarkerKind::Close };
-			ListMarker { numbered == true, kind == MarkerKind::Close };
-			ListMarker { numbered == false, kind == MarkerKind::Close };
-			Paragraph;
-			ListMarker { numbered == false, kind == MarkerKind::Open };
-			ListEntry { custom == Some(CustomListData::Checkbox(CheckboxState::Checked)) };
-			ListEntry;
-			ListEntry;
-			ListEntry;
-			ListEntry;
-			ListMarker { numbered == false, kind == MarkerKind::Close };
-		);
-	}
-
-	#[test]
-	fn semantic() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
- *[offset=5] First **bold**
-	Second line
- *- Another
-		"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (_, state) = parser.parse(
-			ParserState::new_with_semantics(&parser, None),
-			source.clone(),
-			None,
-			ParseMode::default(),
-		);
-		validate_semantics!(state, source.clone(), 0,
-			list_bullet { delta_line == 1, delta_start == 1, length == 1 };
-			list_props_sep { delta_line == 0, delta_start == 1, length == 1 };
-			prop_name { delta_line == 0, delta_start == 1, length == 6 };
-			prop_equal { delta_line == 0, delta_start == 6, length == 1 };
-			prop_value { delta_line == 0, delta_start == 1, length == 1 };
-			list_props_sep { delta_line == 0, delta_start == 1, length == 1 };
-			style_marker { delta_line == 0, delta_start == 8, length == 2 };
-			style_marker { delta_line == 0, delta_start == 6, length == 2 };
-			list_bullet { delta_line == 2, delta_start == 1, length == 2 };
-		);
 	}
 }

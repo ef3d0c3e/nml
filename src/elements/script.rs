@@ -317,10 +317,11 @@ impl RegexRule for ScriptRule {
 
 #[cfg(test)]
 mod tests {
+	use elements::link::elem::Link;
+	use elements::list::elem::ListEntry;
+	use elements::list::elem::ListMarker;
+
 	use super::*;
-	use crate::elements::link::Link;
-	use crate::elements::list::ListEntry;
-	use crate::elements::list::ListMarker;
 	use crate::elements::paragraph::Paragraph;
 	use crate::elements::style::Style;
 	use crate::parser::langparser::LangParser;
