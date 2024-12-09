@@ -71,7 +71,7 @@ impl Element for ListMarker {
 }
 
 /// State of a checkbox
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum CheckboxState {
 	Unchecked,
 	Partial,
@@ -79,7 +79,7 @@ pub enum CheckboxState {
 }
 
 /// Customization data for the list
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CustomListData {
 	Checkbox(CheckboxState),
 }
@@ -115,6 +115,20 @@ impl Element for ListEntry {
 					} else {
 						result += "<li>";
 					}
+				}
+				match &self.custom {
+					Some(CustomListData::Checkbox(checkbox_state)) => match checkbox_state {
+						CheckboxState::Unchecked => {
+							result += r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#
+						}
+						CheckboxState::Partial => {
+							result += r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#
+						}
+						CheckboxState::Checked => {
+							result += r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#
+						}
+					},
+					_ => {}
 				}
 				for elem in &self.content {
 					result += elem
@@ -164,7 +178,7 @@ impl ListRule {
 		);
 
 		Self {
-			start_re: Regex::new(r"(?:^|\n)(?:[^\S\r\n]+)([*-]+)(?:\[((?:\\.|[^\\\\])*?)\])?(?:[^\S\r\n]*\[((?:\\.|[^\\\\])*?)\])?(.*)")
+			start_re: Regex::new(r"(?:^|\n)(?:[^\S\r\n]+)([*-]+)(?:\[((?:\\.|[^\\\\])*?)\])?(?:[^\S\r\n]{0,1}\[((?:\\.|[^\\\\])*?)\])?(.*)")
 				.unwrap(),
 			continue_re: Regex::new(r"(?:^|\n)([^\S\r\n].*)").unwrap(),
 			properties: PropertyParser { properties: props },
@@ -381,7 +395,7 @@ impl Rule for ListRule {
 					{
 						match data {
 							CustomListData::Checkbox(checkbox_state) => conceals.add(
-								custom_data.start-1..custom_data.end+1,
+								custom_data.start - 1..custom_data.end + 1,
 								ConcealTarget::Token {
 									token: "checkbox".into(),
 									params: json!({
@@ -553,6 +567,13 @@ mod tests {
  *- B
  * Back
  *-* More nested
+
+
+ * [X] Checked
+ * [x] Checked
+ * [-] Partial
+ * [] Unchecked
+ * [ ] Unchecked
 "#
 			.to_string(),
 			None,
@@ -598,6 +619,14 @@ mod tests {
 			};
 			ListMarker { numbered == false, kind == MarkerKind::Close };
 			ListMarker { numbered == true, kind == MarkerKind::Close };
+			ListMarker { numbered == false, kind == MarkerKind::Close };
+			Paragraph;
+			ListMarker { numbered == false, kind == MarkerKind::Open };
+			ListEntry { custom == Some(CustomListData::Checkbox(CheckboxState::Checked)) };
+			ListEntry;
+			ListEntry;
+			ListEntry;
+			ListEntry;
 			ListMarker { numbered == false, kind == MarkerKind::Close };
 		);
 	}

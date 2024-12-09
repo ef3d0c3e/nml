@@ -364,7 +364,7 @@ nml.link.push("**BOLD link**", "another url")
 		let source = Rc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"
- - [la\](*testi*nk](url)
+ -  [la\](*testi*nk](url)
 		"#
 			.to_string(),
 			None,
@@ -379,7 +379,7 @@ nml.link.push("**BOLD link**", "another url")
 
 		validate_semantics!(state, source.clone(), 0,
 		list_bullet { delta_line == 1, delta_start == 1, length == 1 };
-		link_display_sep { delta_line == 0, delta_start == 2, length == 1 };
+		link_display_sep { delta_line == 0, delta_start == 3, length == 1 };
 		style_marker { delta_line == 0, delta_start == 6, length == 1 };
 		style_marker { delta_line == 0, delta_start == 6, length == 1 };
 		link_display_sep { delta_line == 0, delta_start == 3, length == 1 };
