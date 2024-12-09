@@ -28,9 +28,28 @@ pub trait ElementStyle: Downcast + core::fmt::Debug {
 impl_downcast!(ElementStyle);
 
 /// A structure that holds registered [`ElementStyle`]
-#[derive(Default)]
 pub struct StyleHolder {
 	styles: HashMap<String, Rc<dyn ElementStyle>>,
+}
+
+macro_rules! create_styles {
+	( $($construct:expr),+ $(,)? ) => {{
+		let mut map = HashMap::new();
+		$(
+			let val = Rc::new($construct) as Rc<dyn ElementStyle>;
+			map.insert(val.key().to_string(), val);
+		)+
+		map
+	}};
+}
+
+#[auto_registry::generate_registry(registry = "elem_styles", target = make_styles, return_type = HashMap<String, Rc<dyn ElementStyle>>, maker = create_styles)]
+impl Default for StyleHolder {
+	fn default() -> Self {
+		Self {
+			styles: make_styles(),
+		}
+	}
 }
 
 impl StyleHolder {
@@ -57,6 +76,9 @@ impl StyleHolder {
 #[macro_export]
 macro_rules! impl_elementstyle {
 	($t:ty, $key:expr) => {
+		impl $t {
+			pub fn key() -> &'static str { $key }
+		}
 		impl $crate::parser::style::ElementStyle for $t {
 			fn key(&self) -> &'static str { $key }
 

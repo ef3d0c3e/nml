@@ -56,10 +56,10 @@ impl VariableRule {
 	) -> Result<Rc<dyn Variable>, String> {
 		match self.kinds[kind].0.as_str() {
 			"" => Ok(Rc::new(BaseVariable::new(
-						location,
-						name,
-						value_token,
-						value,
+				location,
+				name,
+				value_token,
+				value,
 			))),
 			"'" => {
 				match std::fs::canonicalize(value.as_str()) // TODO: not canonicalize
@@ -85,10 +85,7 @@ impl Default for VariableRule {
 }
 
 // Trim and check variable name for validity
-pub fn validate_name<'a>(
-	colors: &ReportColors,
-	original_name: &'a str,
-) -> Result<&'a str, String> {
+pub fn validate_name<'a>(colors: &ReportColors, original_name: &'a str) -> Result<&'a str, String> {
 	let name = original_name.trim_start().trim_end();
 	if name.contains("%") {
 		return Err(format!("Name cannot contain '{}'", "%".fg(colors.info)));
@@ -122,7 +119,7 @@ pub fn validate_value(original_value: &str) -> Result<String, String> {
 	}
 	(0..escaped).for_each(|_| result.push('\\'));
 
-				Ok(result)
+	Ok(result)
 }
 
 impl RegexRule for VariableRule {
@@ -402,8 +399,7 @@ impl RegexRule for VariableSubstitutionRule {
 					return reports;
 				}
 				// Invalid name
-				if let Err(msg) = validate_name(state.parser.colors(), name.as_str())
-				{
+				if let Err(msg) = validate_name(state.parser.colors(), name.as_str()) {
 					report_err!(
 						&mut reports,
 						token.source(),

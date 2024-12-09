@@ -121,8 +121,7 @@ impl RegexRule for ImportRule {
 
 		// [Optional] import as
 		let import_as = match matches.get(1) {
-			Some(as_name) => match validate_as(state.parser.colors(), as_name.as_str())
-			{
+			Some(as_name) => match validate_as(state.parser.colors(), as_name.as_str()) {
 				Ok(as_name) => as_name,
 				Err(msg) => {
 					report_err!(

@@ -21,7 +21,6 @@ use super::data::BlockType;
 use super::elem::Block;
 use super::style::AuthorPos;
 use super::style::QuoteStyle;
-use super::style::STYLE_KEY_QUOTE;
 
 #[derive(Debug)]
 struct QuoteData {
@@ -32,7 +31,7 @@ struct QuoteData {
 }
 
 #[derive(Debug)]
-#[auto_registry::auto_registry(registry = "blocks")]
+#[auto_registry::auto_registry(registry = "block_types")]
 pub struct Quote {
 	properties: PropertyParser,
 }
@@ -94,7 +93,7 @@ impl BlockType for Quote {
 			.shared
 			.styles
 			.borrow()
-			.current(STYLE_KEY_QUOTE)
+			.current(QuoteStyle::key())
 			.downcast_rc::<QuoteStyle>()
 			.unwrap();
 
@@ -215,6 +214,7 @@ impl BlockType for Quote {
 }
 
 #[derive(Debug, Default)]
+#[auto_registry::auto_registry(registry = "block_types")]
 pub struct Warning;
 
 impl BlockType for Warning {
@@ -254,6 +254,7 @@ impl BlockType for Warning {
 }
 
 #[derive(Debug, Default)]
+#[auto_registry::auto_registry(registry = "block_types")]
 pub struct Note;
 
 impl BlockType for Note {
@@ -293,6 +294,7 @@ impl BlockType for Note {
 }
 
 #[derive(Debug, Default)]
+#[auto_registry::auto_registry(registry = "block_types")]
 pub struct Todo;
 
 impl BlockType for Todo {
@@ -332,6 +334,7 @@ impl BlockType for Todo {
 }
 
 #[derive(Debug, Default)]
+#[auto_registry::auto_registry(registry = "block_types")]
 pub struct Tip;
 
 impl BlockType for Tip {
@@ -371,6 +374,7 @@ impl BlockType for Tip {
 }
 
 #[derive(Debug, Default)]
+#[auto_registry::auto_registry(registry = "block_types")]
 pub struct Caution;
 
 impl BlockType for Caution {

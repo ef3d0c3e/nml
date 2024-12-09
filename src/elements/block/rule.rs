@@ -12,7 +12,6 @@ use elements::paragraph::Paragraph;
 use elements::text::Text;
 use lsp::conceal::Conceals;
 use lsp::semantic::Semantics;
-use parser::parser::SharedState;
 use parser::source::Token;
 use parser::source::VirtualSource;
 use parser::util::escape_source;
@@ -27,7 +26,6 @@ use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 
 use super::elem::Block;
-use super::style::QuoteStyle;
 
 #[auto_registry::auto_registry(registry = "rules")]
 pub struct BlockRule {
@@ -295,18 +293,5 @@ impl Rule for BlockRule {
 		);
 
 		(end_cursor, reports)
-	}
-
-	fn register_shared_state(&self, state: &SharedState) {
-		let mut holder = state.blocks.borrow_mut();
-		holder.insert(Rc::new(super::custom::Quote::default()));
-		holder.insert(Rc::new(super::custom::Warning::default()));
-		holder.insert(Rc::new(super::custom::Note::default()));
-		holder.insert(Rc::new(super::custom::Todo::default()));
-		holder.insert(Rc::new(super::custom::Tip::default()));
-		holder.insert(Rc::new(super::custom::Caution::default()));
-
-		let mut holder = state.styles.borrow_mut();
-		holder.set_current(Rc::new(QuoteStyle::default()));
 	}
 }

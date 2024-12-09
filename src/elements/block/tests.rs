@@ -3,7 +3,6 @@ use std::rc::Rc;
 use crate::elements::block::elem::Block;
 use crate::elements::block::style::AuthorPos;
 use crate::elements::block::style::QuoteStyle;
-use crate::elements::block::style::STYLE_KEY_QUOTE;
 use crate::elements::paragraph::Paragraph;
 use crate::elements::style::Style;
 use crate::elements::text::Text;
@@ -120,7 +119,7 @@ AFTER
 		.shared
 		.styles
 		.borrow()
-		.current(STYLE_KEY_QUOTE)
+		.current(QuoteStyle::key())
 		.downcast_rc::<QuoteStyle>()
 		.unwrap();
 

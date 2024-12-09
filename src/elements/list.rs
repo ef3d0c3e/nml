@@ -262,7 +262,7 @@ fn parse_depth(depth: &str, document: &dyn Document, offset: usize) -> Vec<(bool
 						}
 					}
 				})
-			.unwrap_or(1)
+				.unwrap_or(1)
 		} else {
 			offset
 		};

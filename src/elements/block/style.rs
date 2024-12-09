@@ -3,8 +3,6 @@ use serde::Serialize;
 
 use crate::impl_elementstyle;
 
-pub static STYLE_KEY_QUOTE: &str = "style.block.quote";
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum AuthorPos {
 	Before,
@@ -13,10 +11,12 @@ pub enum AuthorPos {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[auto_registry::auto_registry(registry = "elem_styles")]
 pub struct QuoteStyle {
 	pub author_pos: AuthorPos,
 	pub format: [String; 3],
 }
+impl_elementstyle!(QuoteStyle, "style.block.quote");
 
 impl Default for QuoteStyle {
 	fn default() -> Self {
@@ -30,5 +30,3 @@ impl Default for QuoteStyle {
 		}
 	}
 }
-
-impl_elementstyle!(QuoteStyle, STYLE_KEY_QUOTE);

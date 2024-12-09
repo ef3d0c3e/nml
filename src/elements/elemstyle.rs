@@ -127,63 +127,65 @@ impl Rule for ElemStyleRule {
 		};
 
 		// Get value
-		let new_style = match json_substring(
-			&cursor.source.clone().content().as_str()[cursor.pos..],
-		) {
-			None => {
-				report_err!(
-					&mut reports,
-					cursor.source.clone(),
-					"Invalid Style Value".into(),
-					span(
-						matches.get(0).unwrap().range(),
-						"Unable to parse json string after style key".into()
-					)
-				);
-				return (cursor, reports);
-			}
-			Some(json) => {
-				// Attempt to deserialize
-				match style.from_json(json) {
-					Err(err) => {
-						report_err!(
-							&mut reports,
-							cursor.source.clone(),
-							"Invalid Style Value".into(),
-							span(
-								cursor.pos..cursor.pos + json.len(),
-								format!(
-									"Failed to serialize `{}` into style with key `{}`: {err}",
-									json.fg(state.parser.colors().highlight),
-									style.key().fg(state.parser.colors().info)
+		let new_style =
+			match json_substring(&cursor.source.clone().content().as_str()[cursor.pos..]) {
+				None => {
+					report_err!(
+						&mut reports,
+						cursor.source.clone(),
+						"Invalid Style Value".into(),
+						span(
+							matches.get(0).unwrap().range(),
+							"Unable to parse json string after style key".into()
+						)
+					);
+					return (cursor, reports);
+				}
+				Some(json) => {
+					// Attempt to deserialize
+					match style.from_json(json) {
+						Err(err) => {
+							report_err!(
+								&mut reports,
+								cursor.source.clone(),
+								"Invalid Style Value".into(),
+								span(
+									cursor.pos..cursor.pos + json.len(),
+									format!(
+										"Failed to serialize `{}` into style with key `{}`: {err}",
+										json.fg(state.parser.colors().highlight),
+										style.key().fg(state.parser.colors().info)
+									)
 								)
-							)
-						);
-
-						cursor = cursor.at(cursor.pos + json.len());
-						return (cursor, reports);
-					}
-					Ok(style) => {
-						if let Some((sems, tokens)) =
-							Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
-						{
-							let style = matches.get(1).unwrap();
-							sems.add(style.start() - 2..style.start(), tokens.elemstyle_operator);
-							sems.add(style.range(), tokens.elemstyle_name);
-							sems.add(style.end()..style.end() + 1, tokens.elemstyle_equal);
-							sems.add(
-								matches.get(0).unwrap().end() - 1
-									..matches.get(0).unwrap().end() + json.len(),
-								tokens.elemstyle_value,
 							);
-						}
 
-						cursor = cursor.at(cursor.pos + json.len());
-						style
+							cursor = cursor.at(cursor.pos + json.len());
+							return (cursor, reports);
+						}
+						Ok(style) => {
+							if let Some((sems, tokens)) =
+								Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
+							{
+								let style = matches.get(1).unwrap();
+								sems.add(
+									style.start() - 2..style.start(),
+									tokens.elemstyle_operator,
+								);
+								sems.add(style.range(), tokens.elemstyle_name);
+								sems.add(style.end()..style.end() + 1, tokens.elemstyle_equal);
+								sems.add(
+									matches.get(0).unwrap().end() - 1
+										..matches.get(0).unwrap().end() + json.len(),
+									tokens.elemstyle_value,
+								);
+							}
+
+							cursor = cursor.at(cursor.pos + json.len());
+							style
+						}
 					}
 				}
-			}
-		};
+			};
 
 		state.shared.styles.borrow_mut().set_current(new_style);
 

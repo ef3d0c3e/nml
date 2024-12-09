@@ -1,7 +1,4 @@
-use crate::lua::kernel::Kernel;
-use crate::parser::parser::ParseMode;
 use std::any::Any;
-use std::cell::Ref;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -12,146 +9,26 @@ use lsp::semantic::Semantics;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
+use parser::rule::Rule;
+use parser::source::Token;
 
-use crate::document::document::Document;
-use crate::lua::kernel::KernelContext;
-use crate::lua::kernel::CTX;
-use crate::parser::customstyle::CustomStyle;
-use crate::parser::customstyle::CustomStyleToken;
-use crate::parser::parser::ParserState;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-use crate::parser::rule::Rule;
+
+use crate::document::document::Document;
+use crate::lua::kernel::CTX;
+use crate::parser::parser::ParseMode;
+use crate::parser::parser::ParserState;
+use crate::parser::reports::Report;
 use crate::parser::source::Cursor;
-use crate::parser::source::Token;
-use crate::parser::state::RuleState;
-use crate::parser::state::Scope;
 
-#[derive(Debug)]
-struct LuaCustomStyle {
-	pub(self) name: String,
-	pub(self) tokens: CustomStyleToken,
-	pub(self) start: mlua::Function<'static>,
-	pub(self) end: mlua::Function<'static>,
-}
+use super::custom::CustomStyle;
+use super::custom::CustomStyleToken;
+use super::custom::LuaCustomStyle;
+use super::state::CustomStyleState;
+use super::state::STATE_NAME;
 
-impl CustomStyle for LuaCustomStyle {
-	fn name(&self) -> &str { self.name.as_str() }
-
-	fn tokens(&self) -> &CustomStyleToken { &self.tokens }
-
-	fn on_start<'a>(
-		&self,
-		location: Token,
-		state: &ParserState,
-		document: &'a dyn Document<'a>,
-	) -> Vec<Report> {
-		let kernel: Ref<'_, Kernel> =
-			Ref::map(state.shared.kernels.borrow(), |b| b.get("main").unwrap());
-		//let kernel = RefMut::map(parser_state.shared.kernels.borrow(), |ker| ker.get("main").unwrap());
-		let mut ctx = KernelContext::new(location.clone(), state, document);
-
-		let mut reports = vec![];
-		kernel.run_with_context(&mut ctx, |_lua| {
-			if let Err(err) = self.start.call::<_, ()>(()) {
-				report_err!(
-					&mut reports,
-					location.source(),
-					"Lua execution failed".into(),
-					span(location.range.clone(), err.to_string()),
-					note(format!(
-						"When trying to start custom style {}",
-						self.name().fg(state.parser.colors().info)
-					))
-				);
-			}
-		});
-
-		reports.extend(ctx.reports);
-		reports
-	}
-
-	fn on_end<'a>(
-		&self,
-		location: Token,
-		state: &ParserState,
-		document: &'a dyn Document<'a>,
-	) -> Vec<Report> {
-		let kernel: Ref<'_, Kernel> =
-			Ref::map(state.shared.kernels.borrow(), |b| b.get("main").unwrap());
-		let mut ctx = KernelContext::new(location.clone(), state, document);
-
-		let mut reports = vec![];
-		kernel.run_with_context(&mut ctx, |_lua| {
-			if let Err(err) = self.end.call::<_, ()>(()) {
-				report_err!(
-					&mut reports,
-					location.source(),
-					"Lua execution failed".into(),
-					span(location.range.clone(), err.to_string()),
-					note(format!(
-						"When trying to end custom style {}",
-						self.name().fg(state.parser.colors().info)
-					))
-				);
-			}
-		});
-
-		reports.extend(ctx.reports);
-		reports
-	}
-}
-
-struct CustomStyleState {
-	toggled: HashMap<String, Token>,
-}
-
-impl RuleState for CustomStyleState {
-	fn scope(&self) -> Scope { Scope::PARAGRAPH }
-
-	fn on_remove(&self, state: &ParserState, document: &dyn Document) -> Vec<Report> {
-		let mut reports = vec![];
-
-		self.toggled.iter().for_each(|(style, token)| {
-			let container = std::cell::Ref::filter_map(document.content().borrow(), |content| {
-				content.last().and_then(|last| last.as_container())
-			})
-			.ok();
-			if container.is_none() {
-				return;
-			}
-			let paragraph_end = container
-				.unwrap()
-				.contained()
-				.last()
-				.map(|last| {
-					(
-						last.location().source(),
-						last.location().end_offset(1)..last.location().end(),
-					)
-				})
-				.unwrap();
-
-			report_err!(
-				&mut reports,
-				token.source(),
-				"Unterminated Custom Style".into(),
-				span(
-					token.range.clone(),
-					format!("Style {} starts here", style.fg(state.parser.colors().info))
-				),
-				span(paragraph_end.1, "Paragraph ends here".into()),
-				note("Styles cannot span multiple documents (i.e @import)".into())
-			);
-		});
-
-		reports
-	}
-}
-
-static STATE_NAME: &str = "elements.custom_style";
-
-#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::customstyle")]
+#[auto_registry::auto_registry(registry = "rules")]
 #[derive(Default)]
 pub struct CustomStyleRule;
 
@@ -450,118 +327,5 @@ impl Rule for CustomStyleRule {
 		));
 
 		bindings
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use elements::paragraph::Paragraph;
-
-	use crate::elements::raw::Raw;
-	use crate::elements::text::Text;
-	use crate::parser::langparser::LangParser;
-	use crate::parser::parser::ParseMode;
-	use crate::parser::parser::Parser;
-	use crate::parser::source::SourceFile;
-	use crate::validate_document;
-
-	use super::*;
-
-	#[test]
-	fn toggle() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-%<[main]
-function my_style_start()
-	nml.raw.push("inline", "start")
-end
-function my_style_end()
-	nml.raw.push("inline", "end")
-end
-function red_style_start()
-	nml.raw.push("inline", "<a style=\"color:red\">")
-end
-function red_style_end()
-	nml.raw.push("inline", "</a>")
-end
-nml.custom_style.define_toggled("My Style", "|", my_style_start, my_style_end)
-nml.custom_style.define_toggled("My Style2", "°", red_style_start, red_style_end)
->%
-pre |styled| post °Hello°.
-"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (doc, _) = parser.parse(
-			ParserState::new(&parser, None),
-			source,
-			None,
-			ParseMode::default(),
-		);
-
-		validate_document!(doc.content().borrow(), 0,
-			Paragraph {
-				Text { content == "pre " };
-				Raw { content == "start" };
-				Text { content == "styled" };
-				Raw { content == "end" };
-				Text { content == " post " };
-				Raw { content == "<a style=\"color:red\">" };
-				Text { content == "Hello" };
-				Raw { content == "</a>" };
-				Text { content == "." };
-			};
-		);
-	}
-
-	#[test]
-	fn paired() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-%<[main]
-function my_style_start()
-	nml.raw.push("inline", "start")
-end
-function my_style_end()
-	nml.raw.push("inline", "end")
-end
-function red_style_start()
-	nml.raw.push("inline", "<a style=\"color:red\">")
-end
-function red_style_end()
-	nml.raw.push("inline", "</a>")
-end
-nml.custom_style.define_paired("My Style", "[", "]", my_style_start, my_style_end)
-nml.custom_style.define_paired("My Style2", "(", ")", red_style_start, red_style_end)
->%
-pre [styled] post (Hello).
-"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (doc, _) = parser.parse(
-			ParserState::new(&parser, None),
-			source,
-			None,
-			ParseMode::default(),
-		);
-
-		validate_document!(doc.content().borrow(), 0,
-			Paragraph {
-				Text { content == "pre " };
-				Raw { content == "start" };
-				Text { content == "styled" };
-				Raw { content == "end" };
-				Text { content == " post " };
-				Raw { content == "<a style=\"color:red\">" };
-				Text { content == "Hello" };
-				Raw { content == "</a>" };
-				Text { content == "." };
-			};
-		);
 	}
 }

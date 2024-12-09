@@ -262,7 +262,6 @@ impl Default for MediaRule {
 			properties: PropertyParser { properties: props },
 		}
 	}
-
 }
 
 fn validate_uri(uri: &str) -> Result<&str, String> {
@@ -284,10 +283,10 @@ fn detect_filetype(filename: &str) -> Option<MediaType> {
 	// TODO: https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Containers
 	match filename.split_at(sep + 1).1.to_ascii_lowercase().as_str() {
 		"png" | "apng" | "avif" | "gif" | "webp" | "svg" | "bmp" | "jpg" | "jpeg" | "jfif"
-			| "pjpeg" | "pjp" => Some(MediaType::IMAGE),
-			"mp4" | "m4v" | "webm" | "mov" => Some(MediaType::VIDEO),
-			"mp3" | "ogg" | "flac" | "wav" => Some(MediaType::AUDIO),
-			_ => None,
+		| "pjpeg" | "pjp" => Some(MediaType::IMAGE),
+		"mp4" | "m4v" | "webm" | "mov" => Some(MediaType::VIDEO),
+		"mp3" | "ogg" | "flac" | "wav" => Some(MediaType::AUDIO),
+		_ => None,
 	}
 }
 

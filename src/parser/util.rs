@@ -243,7 +243,7 @@ mod tests {
 	use super::*;
 	use crate::document::element::ContainerElement;
 	use crate::document::langdocument::LangDocument;
-	use crate::elements::comment::Comment;
+	use crate::elements::comment::elem::Comment;
 	use crate::elements::style::Style;
 	use crate::elements::text::Text;
 	use crate::parser::source::SourceFile;

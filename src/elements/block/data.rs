@@ -48,14 +48,14 @@ macro_rules! create_blocks {
 		map
 	}};
 }
-#[auto_registry::generate_registry(registry = "blocks", target = make_blocks, return_type = HashMap<String, Rc<dyn BlockType>>, maker = create_blocks)]
 
+#[auto_registry::generate_registry(registry = "block_types", target = make_blocks, return_type = HashMap<String, Rc<dyn BlockType>>, maker = create_blocks)]
 impl Default for BlockHolder {
-    fn default() -> Self {
+	fn default() -> Self {
 		Self {
-			blocks: make_blocks()
+			blocks: make_blocks(),
 		}
-    }
+	}
 }
 
 impl BlockHolder {
