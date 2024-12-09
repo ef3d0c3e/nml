@@ -23,10 +23,13 @@ use crate::parser::source::Cursor;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::util;
+use ariadne::Fmt;
+use lsp::conceal::ConcealTarget;
 use lsp::conceal::Conceals;
 use lsp::hints::Hints;
 use parser::util::escape_source;
 use regex::Regex;
+use serde::Serialize;
 use serde_json::json;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -67,12 +70,27 @@ impl Element for ListMarker {
 	}
 }
 
+/// State of a checkbox
+#[derive(Debug, Clone, Copy, Serialize)]
+pub enum CheckboxState {
+	Unchecked,
+	Partial,
+	Checked,
+}
+
+/// Customization data for the list
+#[derive(Debug)]
+pub enum CustomListData {
+	Checkbox(CheckboxState),
+}
+
 #[derive(Debug)]
 pub struct ListEntry {
 	pub(self) location: Token,
 	pub(self) numbering: Vec<(bool, usize)>,
 	pub(self) content: Vec<Box<dyn Element>>,
 	pub(self) bullet: Option<String>,
+	pub(self) custom: Option<CustomListData>,
 }
 
 impl Element for ListEntry {
@@ -146,7 +164,7 @@ impl ListRule {
 		);
 
 		Self {
-			start_re: Regex::new(r"(?:^|\n)(?:[^\S\r\n]+)([*-]+)(?:\[((?:\\.|[^\\\\])*?)\])?(.*)")
+			start_re: Regex::new(r"(?:^|\n)(?:[^\S\r\n]+)([*-]+)(?:\[((?:\\.|[^\\\\])*?)\])?(?:[^\S\r\n]*\[((?:\\.|[^\\\\])*?)\])?(.*)")
 				.unwrap(),
 			continue_re: Regex::new(r"(?:^|\n)([^\S\r\n].*)").unwrap(),
 			properties: PropertyParser { properties: props },
@@ -332,6 +350,52 @@ impl Rule for ListRule {
 					offset.unwrap_or(usize::MAX),
 				);
 
+				// Custom list data
+				let custom_data = if let Some((custom_data, content)) =
+					captures.get(3).map(|m| (m.range(), m.as_str()))
+				{
+					let data = match content {
+						"" | " " => CustomListData::Checkbox(CheckboxState::Unchecked),
+						"-" => CustomListData::Checkbox(CheckboxState::Partial),
+						"x" | "X" => CustomListData::Checkbox(CheckboxState::Checked),
+						_ => {
+							report_err!(
+								&mut reports,
+								end_cursor.source.clone(),
+								"Unknown custom list data".into(),
+								span(
+									custom_data.clone(),
+									format!(
+										"Cannot understand custom list data: `{}`",
+										content.fg(state.parser.colors().highlight),
+									)
+								)
+							);
+							return (end_cursor, reports);
+						}
+					};
+
+					// Add conceal
+					if let Some(conceals) =
+						Conceals::from_source(cursor.source.clone(), &state.shared.lsp)
+					{
+						match data {
+							CustomListData::Checkbox(checkbox_state) => conceals.add(
+								custom_data.start-1..custom_data.end+1,
+								ConcealTarget::Token {
+									token: "checkbox".into(),
+									params: json!({
+										"state": checkbox_state,
+									}),
+								},
+							),
+						}
+					}
+					Some(data)
+				} else {
+					None
+				};
+
 				// Semantic
 				if let Some((sems, tokens)) =
 					Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
@@ -340,6 +404,9 @@ impl Rule for ListRule {
 					if let Some(props) = captures.get(2).map(|m| m.range()) {
 						sems.add(props.start - 1..props.start, tokens.list_props_sep);
 						sems.add(props.end..props.end + 1, tokens.list_props_sep);
+					}
+					if let Some(props) = captures.get(3).map(|m| m.range()) {
+						sems.add(props, tokens.list_entry_type);
 					}
 				}
 
@@ -375,8 +442,8 @@ impl Rule for ListRule {
 				}
 
 				// Content
-				let entry_start = captures.get(3).unwrap().start();
-				let mut entry_content = captures.get(3).unwrap().as_str().to_string();
+				let entry_start = captures.get(4).unwrap().start();
+				let mut entry_content = captures.get(4).unwrap().as_str().to_string();
 				while let Some(captures) = self.continue_re.captures_at(content, end_cursor.pos) {
 					// Break if next element is another entry
 					if captures.get(0).unwrap().start() != end_cursor.pos
@@ -440,6 +507,7 @@ impl Rule for ListRule {
 						numbering: depth,
 						content: parsed_content,
 						bullet,
+						custom: custom_data,
 					}),
 				);
 			} else {

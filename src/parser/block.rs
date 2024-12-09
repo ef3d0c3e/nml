@@ -48,3 +48,4 @@ impl BlockHolder {
 		self.blocks.insert(block.name().into(), block);
 	}
 }
+
