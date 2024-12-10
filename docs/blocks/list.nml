@@ -49,6 +49,28 @@ Lists can contain other lists as nested elements.
  - Back to the first list
 #+LAYOUT_END
 
+# Checkboxes
+
+You can add checkboxes to lists. Lists support the following checkboxes:
+ * Unchecked: with `[ ]` or `[]`.
+ * Partial: with `[-]`
+ * Cehcked: with `[x]` or `[X]`
+
+**Example**
+#+LAYOUT_BEGIN Split
+*The following...*
+```Markdown
+ * [x] Checked
+ * [-] Partial
+ * [] Unchecked
+```
+#+LAYOUT_NEXT
+*...gives the following*
+ * [x] Checked
+ * [-] Partial
+ * [] Unchecked
+#+LAYOUT_END
+
 # Properties
 
 Lists currently support these properties:

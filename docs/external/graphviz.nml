@@ -66,14 +66,14 @@ Graphs blocks are delimited by `` [graph]...[/graph]``
 # Properties
  * ``layout`` The layout engine, defaults to `dot`
 	see [Graphviz's documentation](https://graphviz.org/docs/layouts/). Allowed values:
- *- [`dot`](https://graphviz.org/docs/layouts/dot/)
- *- [`neato`](https://graphviz.org/docs/layouts/neato/)
- *- [`fdp`](https://graphviz.org/docs/layouts/fdp/)
- *- [`sfdp`](https://graphviz.org/docs/layouts/sfdp/)
- *- [`circo`](https://graphviz.org/docs/layouts/circo/)
- *- [`twopi`](https://graphviz.org/docs/layouts/twopi/)
- *- [`osage`](https://graphviz.org/docs/layouts/osage/)
- *- [`patchwork`](https://graphviz.org/docs/layouts/patchwork/)
+ *-  [`dot`](https://graphviz.org/docs/layouts/dot/)
+ *-  [`neato`](https://graphviz.org/docs/layouts/neato/)
+ *-  [`fdp`](https://graphviz.org/docs/layouts/fdp/)
+ *-  [`sfdp`](https://graphviz.org/docs/layouts/sfdp/)
+ *-  [`circo`](https://graphviz.org/docs/layouts/circo/)
+ *-  [`twopi`](https://graphviz.org/docs/layouts/twopi/)
+ *-  [`osage`](https://graphviz.org/docs/layouts/osage/)
+ *-  [`patchwork`](https://graphviz.org/docs/layouts/patchwork/)
  * ``width`` The resulting svg's width property, defaults to `100%`
 
 # Examples
