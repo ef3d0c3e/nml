@@ -1,28 +1,29 @@
-use crate::document::document::Document;
-use crate::lsp::semantic::Semantics;
-use crate::lua::kernel::Kernel;
-use crate::lua::kernel::KernelContext;
-use crate::parser::parser::ParseMode;
-use crate::parser::parser::ParserState;
-use crate::parser::parser::ReportColors;
-use crate::parser::reports::macros::*;
-use crate::parser::reports::*;
-use crate::parser::rule::RegexRule;
-use crate::parser::source::Source;
-use crate::parser::source::Token;
-use crate::parser::source::VirtualSource;
-use crate::parser::util;
-use crate::parser::util::escape_source;
-use ariadne::Fmt;
-use lsp::hints::Hints;
-use mlua::Lua;
-use regex::Captures;
-use regex::Regex;
 use std::rc::Rc;
 
-use super::text::Text;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
+use ariadne::Fmt;
+use document::document::Document;
+use elements::text::Text;
+use lsp::hints::Hints;
+use lsp::semantic::Semantics;
+use lua::kernel::Kernel;
+use lua::kernel::KernelContext;
+use mlua::Lua;
+use parser::parser::ParseMode;
+use parser::parser::ParserState;
+use parser::rule::RegexRule;
+use parser::source::Source;
+use parser::source::Token;
+use parser::source::VirtualSource;
+use parser::util::escape_source;
+use parser::util::process_text;
+use regex::Captures;
+use regex::Regex;
 
-#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::script")]
+use crate::parser::parser::ReportColors;
+
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct ScriptRule {
 	re: [Regex; 2],
 	eval_kinds: [(&'static str, &'static str); 3],
@@ -208,7 +209,7 @@ impl RegexRule for ScriptRule {
 										document,
 										Box::new(Text::new(
 											Token::new(1..source.content().len(), source.clone()),
-											util::process_text(document, result.as_str()),
+											process_text(document, result.as_str()),
 										)),
 									);
 								}
@@ -312,111 +313,5 @@ impl RegexRule for ScriptRule {
 
 		reports.extend(ctx.reports);
 		reports
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use elements::link::elem::Link;
-	use elements::list::elem::ListEntry;
-	use elements::list::elem::ListMarker;
-	use elements::paragraph::elem::Paragraph;
-
-	use super::*;
-	use crate::elements::style::Style;
-	use crate::parser::langparser::LangParser;
-	use crate::parser::parser::Parser;
-	use crate::parser::source::SourceFile;
-	use crate::validate_document;
-	use crate::validate_semantics;
-
-	#[test]
-	fn parser() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-Simple evals:
- * 1+1: %< 1+1>%
- * %<" 1+1>% = 2
- * %<! "**bold**">%
-
-Definition:
-@<
-function make_ref(name, ref)
-	return "[" .. name .. "](#" .. ref .. ")"
-end
->@
-Evaluation: %<! make_ref("hello", "id")>%
-		"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (doc, _) = parser.parse(
-			ParserState::new(&parser, None),
-			source,
-			None,
-			ParseMode::default(),
-		);
-
-		validate_document!(doc.content().borrow(), 0,
-			Paragraph;
-			ListMarker;
-			ListEntry;
-			ListEntry {
-				Text { content == "2" };
-				Text { content == " = 2" };
-			};
-			ListEntry {
-				Style;
-				Text { content == "bold" };
-				Style;
-			};
-			ListMarker;
-			Paragraph {
-				Text; Text;
-				Link { url == "#id" } { Text { content == "hello" }; };
-			};
-		);
-	}
-
-	#[test]
-	fn semantic() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-%<[test]! "Hello World">%
-@<main
-function add(x, y)
-	return x + y
-end
->@
-		"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (_, state) = parser.parse(
-			ParserState::new_with_semantics(&parser, None),
-			source.clone(),
-			None,
-			ParseMode::default(),
-		);
-		validate_semantics!(state, source.clone(), 0,
-			script_sep { delta_line == 1, delta_start == 0, length == 2 };
-			script_kernel_sep { delta_line == 0, delta_start == 2, length == 1 };
-			script_kernel { delta_line == 0, delta_start == 1, length == 4 };
-			script_kernel_sep { delta_line == 0, delta_start == 4, length == 1 };
-			script_kind { delta_line == 0, delta_start == 1, length == 1 };
-			script_content { delta_line == 0, delta_start == 1, length == 14 };
-			script_sep { delta_line == 0, delta_start == 14, length == 2 };
-
-			script_sep { delta_line == 1, delta_start == 0, length == 2 };
-			script_kernel { delta_line == 0, delta_start == 2, length == 4 };
-			script_content { delta_line == 1, delta_start == 0, length == 19 };
-			script_content { delta_line == 1, delta_start == 0, length == 14 };
-			script_content { delta_line == 1, delta_start == 0, length == 3 };
-			script_sep { delta_line == 1, delta_start == 0, length == 2 };
-		);
 	}
 }

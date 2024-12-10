@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
-use crate::elements::reference::InternalReference;
+use crate::elements::reference::elem::InternalReference;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;

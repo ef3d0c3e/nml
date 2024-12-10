@@ -9,7 +9,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::elements::paragraph::elem::Paragraph;
-use crate::elements::reference::InternalReference;
+use crate::elements::reference::elem::InternalReference;
 use crate::parser::source::Token;
 
 #[derive(Debug, PartialEq, Eq)]
