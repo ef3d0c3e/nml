@@ -1,10 +1,21 @@
-use std::{io::{Read, Write}, process::{Command, Stdio}, str::FromStr, sync::Once};
+use std::io::Read;
+use std::io::Write;
+use std::process::Command;
+use std::process::Stdio;
+use std::str::FromStr;
+use std::sync::Once;
 
-use crypto::{digest::Digest, sha2::Sha512};
-use crate::{cache::cache::Cached, compiler::compiler::Target::HTML};
+use crate::cache::cache::Cached;
+use crate::compiler::compiler::Target::HTML;
+use crypto::digest::Digest;
+use crypto::sha2::Sha512;
 
-use crate::{cache::cache::CachedError, compiler::compiler::Compiler, document::{document::Document, element::{ElemKind, Element}}, parser::source::Token};
-
+use crate::cache::cache::CachedError;
+use crate::compiler::compiler::Compiler;
+use crate::document::document::Document;
+use crate::document::element::ElemKind;
+use crate::document::element::Element;
+use crate::parser::source::Token;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TexKind {
@@ -178,11 +189,8 @@ impl Element for Tex {
 					if let (Some(caption), Some(start)) = (&self.caption, result.find('>')) {
 						result.insert_str(
 							start + 1,
-							format!(
-								"<title>{}</title>",
-								Compiler::sanitize(HTML, caption)
-							)
-							.as_str(),
+							format!("<title>{}</title>", Compiler::sanitize(HTML, caption))
+								.as_str(),
 						);
 					}
 					result

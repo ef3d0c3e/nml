@@ -1,25 +1,30 @@
-
-use std::collections::HashMap;
-use std::str::FromStr;
-use std::sync::Arc;
-use mlua::Error::BadArgument;
 use ariadne::Fmt;
 use document::document::Document;
 use lsp::code::CodeRange;
 use lsp::semantic::Semantics;
 use lua::kernel::CTX;
-use mlua::{Function, Lua};
-use parser::parser::{ParseMode, ParserState};
-use parser::property::{Property, PropertyParser};
+use mlua::Error::BadArgument;
+use mlua::Function;
+use mlua::Lua;
+use parser::parser::ParseMode;
+use parser::parser::ParserState;
+use parser::property::Property;
+use parser::property::PropertyParser;
 use parser::rule::RegexRule;
 use parser::source::Token;
-use parser::util::{escape_source, escape_text};
-use regex::{Captures, Regex};
+use parser::util::escape_source;
+use parser::util::escape_text;
+use regex::Captures;
+use regex::Regex;
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 
-use super::elem::{Tex, TexKind};
+use super::elem::Tex;
+use super::elem::TexKind;
 #[auto_registry::auto_registry(registry = "rules")]
 pub struct TexRule {
 	re: [Regex; 2],

@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
+use crate::elements::text::elem::Text;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use ariadne::Fmt;
 use document::document::Document;
-use elements::text::Text;
 use lsp::hints::Hints;
 use lsp::semantic::Semantics;
 use lua::kernel::Kernel;

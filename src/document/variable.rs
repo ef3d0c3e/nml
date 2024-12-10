@@ -1,5 +1,5 @@
 use super::document::Document;
-use crate::elements::text::Text;
+use crate::elements::text::elem::Text;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::source::Source;

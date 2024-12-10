@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::style::elem::Style;
-use crate::elements::text::Text;
+use crate::elements::text::elem::Text;
 use crate::parser::langparser::LangParser;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::Parser;

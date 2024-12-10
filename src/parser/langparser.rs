@@ -5,7 +5,7 @@ use std::rc::Rc;
 use crate::document::document::Document;
 use crate::document::element::DocumentEnd;
 use crate::document::langdocument::LangDocument;
-use crate::elements::text::Text;
+use crate::elements::text::elem::Text;
 use crate::lsp::semantic::Semantics;
 
 use super::parser::ParseMode;

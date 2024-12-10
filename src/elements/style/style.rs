@@ -28,7 +28,7 @@ use std::sync::Arc;
 mod tests {
 	use elements::paragraph::elem::Paragraph;
 
-	use crate::elements::text::Text;
+	use crate::elements::text::elem::Text;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;

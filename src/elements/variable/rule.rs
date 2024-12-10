@@ -1,24 +1,25 @@
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
+use ariadne::Fmt;
+use lsp::definition;
+use lsp::hints::Hints;
+use lsp::semantic::Semantics;
+use lua::kernel::CTX;
+use mlua::Function;
+use mlua::Lua;
+use parser::parser::ParseMode;
+use regex::Regex;
+use std::rc::Rc;
+use std::str::FromStr;
+
 use crate::document::document::Document;
 use crate::document::variable::BaseVariable;
 use crate::document::variable::PathVariable;
 use crate::document::variable::Variable;
-use crate::lsp::semantic::Semantics;
-use crate::lua::kernel::CTX;
-use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::parser::ReportColors;
-use crate::parser::reports::macros::*;
-use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
-use ariadne::Fmt;
-use lsp::definition;
-use lsp::hints::Hints;
-use mlua::Function;
-use mlua::Lua;
-use regex::Regex;
-use std::rc::Rc;
-use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum VariableKind {
@@ -38,7 +39,7 @@ impl FromStr for VariableKind {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::variable")]
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct VariableRule {
 	re: [Regex; 1],
 	kinds: Vec<(String, String)>,
@@ -320,7 +321,7 @@ impl RegexRule for VariableRule {
 	}
 }
 
-#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::variable")]
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct VariableSubstitutionRule {
 	re: [Regex; 1],
 }

@@ -245,7 +245,7 @@ mod tests {
 	use crate::document::langdocument::LangDocument;
 	use crate::elements::comment::elem::Comment;
 	use crate::elements::style::elem::Style;
-use crate::elements::text::Text;
+	use crate::elements::text::elem::Text;
 	use crate::parser::source::SourceFile;
 	use crate::parser::source::Token;
 	use std::rc::Rc;
@@ -295,10 +295,10 @@ use crate::elements::text::Text;
 		(&doc as &dyn Document)
 			.last_element_mut::<Paragraph>()
 			.unwrap()
-			.push(Box::new(Style{
+			.push(Box::new(Style {
 				location: tok.clone(),
 				kind: 0,
-				close: false
+				close: false,
 			}))
 			.unwrap();
 		assert_eq!(process_text(&doc, "\na"), " a");

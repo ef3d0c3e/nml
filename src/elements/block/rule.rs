@@ -3,13 +3,13 @@ use crate::parser::reports::*;
 use std::any::Any;
 use std::rc::Rc;
 
+use crate::elements::text::elem::Text;
 use ariadne::Fmt;
 use document::element::ElemKind;
 use document::element::Element;
 use elements::list::elem::ListEntry;
 use elements::list::elem::ListMarker;
 use elements::paragraph::elem::Paragraph;
-use elements::text::Text;
 use lsp::conceal::Conceals;
 use lsp::semantic::Semantics;
 use parser::source::Token;
