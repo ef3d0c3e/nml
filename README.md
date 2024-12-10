@@ -1,6 +1,13 @@
 # NML -- Not a markup language!
 
+![Screenshot of NML in NeoVim](./showcase.png)
+
+NML is a language server that comes with a tool for rendering to HTML. The goal of NML is to be a org mode replacement compatible with any editor supporting the language server protocol.
+
 Documentation is available [here](https://ef3d0c3e.github.io/nml/readme/Getting%20Started.html)
+
+## Integration
+ * **NeoVim** Check my plugin for neovim integration of the language servers extensions: [nml-nvim](https://github.com/ef3d0c3e/nml-nvim/).
 
 # Requirements
 
