@@ -17,7 +17,7 @@ use crate::document::element::Element;
 use crate::elements::block::data::BlockHolder;
 use crate::elements::customstyle::custom::CustomStyleHolder;
 use crate::elements::layout::data::LayoutHolder;
-use crate::elements::paragraph::Paragraph;
+use crate::elements::paragraph::elem::Paragraph;
 use crate::lsp::data::LSPData;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;

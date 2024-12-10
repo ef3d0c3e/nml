@@ -5,7 +5,7 @@ use crate::elements::list::elem::CustomListData;
 use crate::elements::list::elem::ListEntry;
 use crate::elements::list::elem::ListMarker;
 use crate::elements::list::elem::MarkerKind;
-use crate::elements::paragraph::Paragraph;
+use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::text::Text;
 use crate::parser::langparser::LangParser;
 use crate::parser::parser::ParseMode;

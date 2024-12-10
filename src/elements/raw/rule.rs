@@ -1,53 +1,33 @@
-use crate::compiler::compiler::Compiler;
-use crate::document::document::Document;
-use crate::document::element::ElemKind;
-use crate::document::element::Element;
-use crate::lsp::semantic::Semantics;
-use crate::lua::kernel::CTX;
-use crate::parser::parser::ParseMode;
-use crate::parser::parser::ParserState;
-use crate::parser::property::Property;
-use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-use crate::parser::rule::RegexRule;
-use crate::parser::source::Token;
-use crate::parser::util::{self};
-use ariadne::Fmt;
-use mlua::Error::BadArgument;
-use mlua::Function;
-use mlua::Lua;
-use parser::util::escape_source;
-use regex::Captures;
-use regex::Regex;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
-#[derive(Debug)]
-pub struct Raw {
-	pub location: Token,
-	pub kind: ElemKind,
-	pub content: String,
-}
+use ariadne::Fmt;
+use document::element::ElemKind;
+use lsp::semantic::Semantics;
+use lua::kernel::CTX;
+use mlua::Error::BadArgument;
+use mlua::Function;
+use mlua::Lua;
+use parser::util::escape_source;
+use parser::util::{self};
+use regex::Captures;
+use regex::Regex;
 
-impl Element for Raw {
-	fn location(&self) -> &Token { &self.location }
-	fn kind(&self) -> ElemKind { self.kind.clone() }
+use crate::document::document::Document;
+use crate::parser::parser::ParseMode;
+use crate::parser::parser::ParserState;
+use crate::parser::property::Property;
+use crate::parser::property::PropertyParser;
+use crate::parser::reports::Report;
+use crate::parser::rule::RegexRule;
+use crate::parser::source::Token;
 
-	fn element_name(&self) -> &'static str { "Raw" }
+use super::elem::Raw;
 
-	fn compile(
-		&self,
-		_compiler: &Compiler,
-		_document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
-		Ok(self.content.clone())
-	}
-}
-
-#[auto_registry::auto_registry(registry = "rules", path = "crate::elements::raw")]
+#[auto_registry::auto_registry(registry = "rules")]
 pub struct RawRule {
 	re: [Regex; 1],
 	properties: PropertyParser,
@@ -213,107 +193,5 @@ impl RegexRule for RawRule {
 		));
 
 		bindings
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::elements::paragraph::Paragraph;
-	use crate::elements::text::Text;
-	use crate::parser::langparser::LangParser;
-	use crate::parser::parser::Parser;
-	use crate::parser::source::SourceFile;
-	use crate::validate_document;
-	use crate::validate_semantics;
-	use std::rc::Rc;
-
-	#[test]
-	fn parser() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-Break{?[kind=block] Raw?}NewParagraph{?<b>?}
-				"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (doc, _) = parser.parse(
-			ParserState::new(&parser, None),
-			source,
-			None,
-			ParseMode::default(),
-		);
-
-		validate_document!(doc.content().borrow(), 0,
-			Paragraph;
-			Raw { kind == ElemKind::Block, content == "Raw" };
-			Paragraph {
-				Text;
-				Raw { kind == ElemKind::Inline, content == "<b>" };
-			};
-		);
-	}
-
-	#[test]
-	fn lua() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-Break%<nml.raw.push("block", "Raw")>%NewParagraph%<nml.raw.push("inline", "<b>")>%
-				"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (doc, _) = parser.parse(
-			ParserState::new(&parser, None),
-			source,
-			None,
-			ParseMode::default(),
-		);
-
-		validate_document!(doc.content().borrow(), 0,
-		Paragraph;
-		Raw { kind == ElemKind::Block, content == "Raw" };
-		Paragraph {
-			Text;
-			Raw { kind == ElemKind::Inline, content == "<b>" };
-		};
-		);
-	}
-
-	#[test]
-	fn semantic() {
-		let source = Rc::new(SourceFile::with_content(
-			"".to_string(),
-			r#"
-{?[kind=block] Raw?}
-{?<b>?}
-		"#
-			.to_string(),
-			None,
-		));
-		let parser = LangParser::default();
-		let (_, state) = parser.parse(
-			ParserState::new_with_semantics(&parser, None),
-			source.clone(),
-			None,
-			ParseMode::default(),
-		);
-		validate_semantics!(state, source.clone(), 0,
-			raw_sep { delta_line == 1, delta_start == 0, length == 2 };
-			raw_props_sep { delta_line == 0, delta_start == 2, length == 1 };
-			prop_name { delta_line == 0, delta_start == 1, length == 4 };
-			prop_equal { delta_line == 0, delta_start == 4, length == 1 };
-			prop_value { delta_line == 0, delta_start == 1, length == 5 };
-			raw_props_sep { delta_line == 0, delta_start == 5, length == 1 };
-			raw_content { delta_line == 0, delta_start == 1, length == 4 };
-			raw_sep { delta_line == 0, delta_start == 4, length == 2 };
-			raw_sep { delta_line == 1, delta_start == 0, length == 2 };
-			raw_content { delta_line == 0, delta_start == 2, length == 3 };
-			raw_sep { delta_line == 0, delta_start == 3, length == 2 };
-		);
 	}
 }

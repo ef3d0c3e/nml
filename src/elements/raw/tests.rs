@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
-use crate::elements::link::elem::Link;
+use crate::document::element::ElemKind;
 use crate::elements::paragraph::elem::Paragraph;
-use crate::elements::style::Style;
+use crate::elements::raw::elem::Raw;
 use crate::elements::text::Text;
 use crate::parser::langparser::LangParser;
 use crate::parser::parser::ParseMode;
@@ -17,9 +17,8 @@ fn parser() {
 	let source = Rc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
-Some [link](url).
-[**BOLD link**](another url)
-			"#
+Break{?[kind=block] Raw?}NewParagraph{?<b>?}
+				"#
 		.to_string(),
 		None,
 	));
@@ -32,15 +31,11 @@ Some [link](url).
 	);
 
 	validate_document!(doc.content().borrow(), 0,
+		Paragraph;
+		Raw { kind == ElemKind::Block, content == "Raw" };
 		Paragraph {
-			Text { content == "Some " };
-			Link { url == "url" } { Text { content == "link" }; };
-			Text { content == "." };
-			Link { url == "another url" } {
-				Style;
-				Text { content == "BOLD link" };
-				Style;
-			};
+			Text;
+			Raw { kind == ElemKind::Inline, content == "<b>" };
 		};
 	);
 }
@@ -50,11 +45,8 @@ fn lua() {
 	let source = Rc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
-Some %<nml.link.push("link", "url")>%.
-%<
-nml.link.push("**BOLD link**", "another url")
->%
-			"#
+Break%<nml.raw.push("block", "Raw")>%NewParagraph%<nml.raw.push("inline", "<b>")>%
+				"#
 		.to_string(),
 		None,
 	));
@@ -67,25 +59,22 @@ nml.link.push("**BOLD link**", "another url")
 	);
 
 	validate_document!(doc.content().borrow(), 0,
-		Paragraph {
-			Text { content == "Some " };
-			Link { url == "url" } { Text { content == "link" }; };
-			Text { content == "." };
-			Link { url == "another url" } {
-				Style;
-				Text { content == "BOLD link" };
-				Style;
-			};
-		};
+	Paragraph;
+	Raw { kind == ElemKind::Block, content == "Raw" };
+	Paragraph {
+		Text;
+		Raw { kind == ElemKind::Inline, content == "<b>" };
+	};
 	);
 }
 
 #[test]
-fn semantics() {
+fn semantic() {
 	let source = Rc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
- -  [la\](*testi*nk](url)
+{?[kind=block] Raw?}
+{?<b>?}
 		"#
 		.to_string(),
 		None,
@@ -97,15 +86,17 @@ fn semantics() {
 		None,
 		ParseMode::default(),
 	);
-
 	validate_semantics!(state, source.clone(), 0,
-	list_bullet { delta_line == 1, delta_start == 1, length == 1 };
-	link_display_sep { delta_line == 0, delta_start == 3, length == 1 };
-	style_marker { delta_line == 0, delta_start == 6, length == 1 };
-	style_marker { delta_line == 0, delta_start == 6, length == 1 };
-	link_display_sep { delta_line == 0, delta_start == 3, length == 1 };
-	link_url_sep { delta_line == 0, delta_start == 1, length == 1 };
-	link_url { delta_line == 0, delta_start == 1, length == 3 };
-	link_url_sep { delta_line == 0, delta_start == 3, length == 1 };
+		raw_sep { delta_line == 1, delta_start == 0, length == 2 };
+		raw_props_sep { delta_line == 0, delta_start == 2, length == 1 };
+		prop_name { delta_line == 0, delta_start == 1, length == 4 };
+		prop_equal { delta_line == 0, delta_start == 4, length == 1 };
+		prop_value { delta_line == 0, delta_start == 1, length == 5 };
+		raw_props_sep { delta_line == 0, delta_start == 5, length == 1 };
+		raw_content { delta_line == 0, delta_start == 1, length == 4 };
+		raw_sep { delta_line == 0, delta_start == 4, length == 2 };
+		raw_sep { delta_line == 1, delta_start == 0, length == 2 };
+		raw_content { delta_line == 0, delta_start == 2, length == 3 };
+		raw_sep { delta_line == 0, delta_start == 3, length == 2 };
 	);
 }

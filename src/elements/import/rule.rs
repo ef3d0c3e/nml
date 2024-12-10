@@ -3,7 +3,7 @@ use std::rc::Rc;
 use ariadne::Fmt;
 use document::document::Document;
 use document::document::DocumentAccessors;
-use elements::paragraph::Paragraph;
+use elements::paragraph::elem::Paragraph;
 use lsp::definition;
 use lsp::semantic::Semantics;
 use parser::parser::ParseMode;

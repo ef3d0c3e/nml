@@ -375,8 +375,9 @@ mod reference_style {
 
 #[cfg(test)]
 mod tests {
+	use elements::paragraph::elem::Paragraph;
+
 	use crate::compiler::process::process_from_memory;
-	use crate::elements::paragraph::Paragraph;
 	use crate::elements::section::Section;
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;

@@ -495,7 +495,8 @@ impl RegexRule for TexRule {
 
 #[cfg(test)]
 mod tests {
-	use crate::elements::paragraph::Paragraph;
+	use elements::paragraph::elem::Paragraph;
+
 	use crate::parser::langparser::LangParser;
 	use crate::parser::parser::Parser;
 	use crate::parser::source::SourceFile;

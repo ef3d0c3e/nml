@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use crate::elements::paragraph::Paragraph;
-use crate::elements::raw::Raw;
+use crate::elements::paragraph::elem::Paragraph;
+use crate::elements::raw::elem::Raw;
 use crate::elements::text::Text;
 use crate::parser::langparser::LangParser;
 use crate::parser::parser::ParseMode;

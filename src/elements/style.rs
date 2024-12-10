@@ -317,7 +317,7 @@ impl RegexRule for StyleRule {
 
 #[cfg(test)]
 mod tests {
-	use elements::paragraph::Paragraph;
+	use elements::paragraph::elem::Paragraph;
 
 	use crate::elements::text::Text;
 	use crate::parser::langparser::LangParser;

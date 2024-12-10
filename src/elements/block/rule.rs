@@ -8,7 +8,7 @@ use document::element::ElemKind;
 use document::element::Element;
 use elements::list::elem::ListEntry;
 use elements::list::elem::ListMarker;
-use elements::paragraph::Paragraph;
+use elements::paragraph::elem::Paragraph;
 use elements::text::Text;
 use lsp::conceal::Conceals;
 use lsp::semantic::Semantics;

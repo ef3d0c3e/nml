@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::elements::block::elem::Block;
 use crate::elements::block::style::AuthorPos;
 use crate::elements::block::style::QuoteStyle;
-use crate::elements::paragraph::Paragraph;
+use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::style::Style;
 use crate::elements::text::Text;
 use crate::parser::langparser::LangParser;

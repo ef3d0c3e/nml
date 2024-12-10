@@ -6,7 +6,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::document::document::Document;
 use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
-use crate::elements::paragraph::Paragraph;
+use crate::elements::paragraph::elem::Paragraph;
 
 use super::parser::ParseMode;
 use super::parser::ParserState;

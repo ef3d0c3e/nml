@@ -1,5 +1,5 @@
 use crate::elements::comment::elem::Comment;
-use crate::elements::paragraph::Paragraph;
+use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::style::Style;
 use crate::elements::text::Text;
 use crate::parser::langparser::LangParser;
