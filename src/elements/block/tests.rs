@@ -4,7 +4,7 @@ use crate::elements::block::elem::Block;
 use crate::elements::block::style::AuthorPos;
 use crate::elements::block::style::QuoteStyle;
 use crate::elements::paragraph::elem::Paragraph;
-use crate::elements::style::Style;
+use crate::elements::style::elem::Style;
 use crate::elements::text::Text;
 use crate::parser::langparser::LangParser;
 use crate::parser::parser::ParseMode;

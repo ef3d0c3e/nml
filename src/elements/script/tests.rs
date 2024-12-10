@@ -4,7 +4,7 @@ use crate::elements::link::elem::Link;
 use crate::elements::list::elem::ListEntry;
 use crate::elements::list::elem::ListMarker;
 use crate::elements::paragraph::elem::Paragraph;
-use crate::elements::style::Style;
+use crate::elements::style::elem::Style;
 use crate::elements::text::Text;
 use crate::parser::langparser::LangParser;
 use crate::parser::parser::ParseMode;
