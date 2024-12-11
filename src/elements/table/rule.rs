@@ -23,6 +23,7 @@ use elements::list::elem::ListEntry;
 use elements::list::elem::ListMarker;
 use elements::paragraph::elem::Paragraph;
 use elements::text::elem::Text;
+use lsp::semantic::Semantics;
 use parser::property::PropertyMap;
 use parser::source::Token;
 use regex::Regex;
@@ -32,6 +33,7 @@ use super::elem::CellData;
 use super::elem::CellProperties;
 use super::elem::Table;
 
+/// Represents a position inside the table grid
 #[derive(Clone, Copy)]
 struct GridPosition(usize, usize);
 
@@ -41,7 +43,9 @@ impl Display for GridPosition {
 	}
 }
 
-/// Holds all cells that span over multiple cells
+/// Holds all cells that span over multiple cells e.g a rectangle.
+///
+/// Cells with size (1, 1) (default) do not need to be added to this list.
 #[derive(Default)]
 struct Overlaps {
 	// Holds top-left, bottom-right
@@ -49,11 +53,16 @@ struct Overlaps {
 }
 
 impl Overlaps {
+	/// Adds a cell rectangle to the overlap list
 	pub fn push(&mut self, span: (Range<usize>, GridPosition, GridPosition)) {
 		self.cells.push(span)
 	}
 
-	/// Gets whether a given rectangle is occupied by another cell
+	/// Gets whether a given cell rectangle overlaps with another cell rectangle
+	///
+	/// # Return
+	///
+	/// The range of the original overlapping cell as well as it's position and dimensions.
 	pub fn is_occupied(
 		&self,
 		pos: &GridPosition,
@@ -72,9 +81,13 @@ impl Overlaps {
 	}
 }
 
+/// Represents state of the table parser
 struct TableState {
+	/// Whether the currently parsed row is the first table row
 	pub first_row: bool,
+	/// Range of the current row, for reporting
 	pub current_row: Range<usize>,
+	/// Stores rectangle cells that needs to be checked against for overlaps
 	pub overlaps: Overlaps,
 }
 
@@ -185,7 +198,7 @@ impl Rule for TableRule {
 		state: &ParserState,
 		document: &'a (dyn Document<'a> + 'a),
 		cursor: Cursor,
-		match_data: Box<dyn Any>,
+		_match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report>) {
 		let mut reports = vec![];
 		let mut end_cursor = cursor.clone();
@@ -227,8 +240,19 @@ impl Rule for TableRule {
 				None => return (end_cursor, reports),
 			};
 
+			// Semantics
+			if let Some((sems, tokens)) =
+				Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
+			{
+				sems.add(range.start..range.start + 1, tokens.table_sep);
+				if let Some(range) = captures.get(1).map(|m| m.range()) {
+					sems.add(range.start - 1..range.start, tokens.table_props_sep);
+					sems.add(range.end..range.end + 1, tokens.table_props_sep);
+				}
+			}
+
 			// Parse cell
-			let mut cell_source = escape_source(
+			let cell_source = escape_source(
 				end_cursor.source.clone(),
 				captures.get(2).unwrap().range(),
 				format!(":Cell:({}, {})", cell_pos.0, cell_pos.1),
@@ -310,9 +334,9 @@ impl Rule for TableRule {
 				}
 			}
 
-			// If empty, insert reference to owning cell
+			// If empty, insert reference to owning cell, may insert multiple references
 			if prop_source.content().is_empty() && cell_source.content().trim_start().len() == 0 {
-				if let Some((overlap_range, pos, size)) = table_state
+				if let Some((_overlap_range, pos, size)) = table_state
 					.overlaps
 					.is_occupied(&cell_pos, &GridPosition(1, 1))
 				{
@@ -321,6 +345,7 @@ impl Rule for TableRule {
 					}
 					cell_pos.0 += size.0 - 1;
 				} else {
+					// No overlap, insert empty cell as owning
 					cells.push(Cell::Owning(CellData {
 						location: Token::new(
 							captures.get(2).unwrap().range(),
@@ -374,8 +399,14 @@ impl Rule for TableRule {
 
 				table_state.current_row = table_state.current_row.start..end_cursor.pos;
 			} else {
-				table_state.current_row = table_state.current_row.start..end_cursor.pos + 1;
+				if let Some((sems, tokens)) =
+					Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
+				{
+					sems.add(range.end - 1..range.end, tokens.table_sep);
+				}
+
 				// Next row
+				table_state.current_row = table_state.current_row.start..end_cursor.pos + 1;
 				if !table_state.first_row && cell_pos.0 != dimensions.0 {
 					report_err!(
 						&mut reports,
@@ -402,7 +433,26 @@ impl Rule for TableRule {
 				cell_pos.0 = 0;
 			}
 		}
-		// TODO: Check if there are multi-cell cells whose height leads after the table end
+		// Checks for cells whose height leads outside the table
+		if let Some((overlap_range, _, size)) = table_state
+			.overlaps
+			.is_occupied(&GridPosition(0, cell_pos.1), &GridPosition(1, dimensions.1))
+		{
+			report_err!(
+				&mut reports,
+				cursor.source.clone(),
+				"Invalid Table Cell".into(),
+				span(
+					overlap_range,
+					format!(
+						"Cell {} has height {}, which is outside the table",
+						cell_pos.fg(state.parser.colors().info),
+						size.1.fg(state.parser.colors().info)
+					)
+				)
+			);
+			return (end_cursor, reports);
+		}
 
 		state.push(
 			document,

@@ -144,7 +144,7 @@ impl Default for ListRule {
 		);
 
 		Self {
-			start_re: Regex::new(r"(?:^|\n)(?:[^\S\r\n]+)([*-]+)(?:\[((?:\\.|[^\\\\])*?)\])?(?:[^\S\r\n]{0,1}\[((?:\\.|[^\\\\])*?)\])?(.*)")
+			start_re: Regex::new(r"(?:^|\n)(?:[^\S\r\n]+)([*-]+)(?:\[((?:\\.|[^\\\\])*?)\])?(?:[^\S\r\n]{0,1}\[((?:\\.|[^\\\\])*?)\])?(?:[^\S\r\n]+)(.*)")
 				.unwrap(),
 			continue_re: Regex::new(r"(?:^|\n)([^\S\r\n].*)").unwrap(),
 			properties: PropertyParser { properties: props },
