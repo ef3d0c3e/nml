@@ -12,7 +12,7 @@ pub struct CellProperties {
 	/// Horizontal span of the cell
 	pub(crate) hspan: usize,
 	// TODO: Contains borders as well as their display
-	// TODO: Unspecified constraints should lookup to the column
+	// TODO: Unspecified constraints should lookup to the column/row
 }
 
 /// The data inside of a table's cell
@@ -70,6 +70,52 @@ impl Element for Table {
 		document: &dyn Document,
 		cursor: usize,
 	) -> Result<String, String> {
-		todo!()
+		// TODO: colgroup
+		let mut result = String::new();
+
+		let mut pos = (0usize, 0usize);
+		result += "<table>";
+		for cell in &self.data {
+			if pos.0 == 0 {
+				result += "<tr>";
+			}
+			match cell {
+				Cell::Owning(cell_data) => {
+					// TODO: Rowgroup
+					match (cell_data.properties.hspan, cell_data.properties.vspan) {
+						(1, 1) => result += "<td>",
+						(1, v) => result += format!("<td rowspan=\"{v}\">").as_str(),
+						(h, 1) => result += format!("<td colspan=\"{h}\">").as_str(),
+						(h, v) => {
+							result += format!("<td rowspan=\"{v}\" colspan=\"{h}\">").as_str()
+						}
+					}
+					for elem in &cell_data.content {
+						result += elem
+							.compile(compiler, document, cursor + result.len())?
+							.as_str();
+					}
+					result += "</td>";
+				}
+				Cell::Reference(id) => {
+					if let Cell::Owning(cell_data) = &self.data[*id] {
+						pos.0 += cell_data.properties.hspan - 1;
+					} else {
+						panic!("Invalid cells");
+					}
+				}
+			}
+
+			// Advance position
+			pos.0 += 1;
+			if pos.0 == self.size.0 {
+				result += "</tr>";
+				pos.0 = 0;
+				pos.1 += 1;
+			}
+		}
+		result += "</table>";
+
+		Ok(result)
 	}
 }
