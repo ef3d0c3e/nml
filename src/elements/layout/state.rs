@@ -13,7 +13,7 @@ use crate::parser::state::Scope;
 
 use super::data::LayoutType;
 
-static STATE_NAME: &str = "elements.layout";
+pub static STATE_NAME: &str = "elements.layout";
 
 pub struct LayoutState {
 	/// The layout stack

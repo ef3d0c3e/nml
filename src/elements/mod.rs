@@ -15,6 +15,7 @@ pub mod reference;
 pub mod script;
 pub mod section;
 pub mod style;
+pub mod table;
 pub mod tex;
 pub mod text;
 pub mod toc;

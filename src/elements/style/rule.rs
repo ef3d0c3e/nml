@@ -47,7 +47,7 @@ impl Default for StyleRule {
 impl RegexRule for StyleRule {
 	fn name(&self) -> &'static str { "Style" }
 
-	fn previous(&self) -> Option<&'static str> { Some("Toc") }
+	fn previous(&self) -> Option<&'static str> { Some("Table") }
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

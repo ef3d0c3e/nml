@@ -8,7 +8,6 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use ariadne::Fmt;
 use document::document::Document;
-use elements::customstyle::state::STATE_NAME;
 use lsp::hints::Hints;
 use lsp::semantic::Semantics;
 use lua::kernel::CTX;
@@ -32,6 +31,7 @@ use super::custom::LayoutToken;
 use super::data::LayoutType;
 use super::elem::Layout;
 use super::state::LayoutState;
+use super::state::STATE_NAME;
 
 pub fn initialize_state(state: &ParserState) -> Rc<RefCell<dyn RuleState>> {
 	let mut rule_state_borrow = state.shared.rule_state.borrow_mut();

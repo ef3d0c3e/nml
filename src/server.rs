@@ -322,7 +322,7 @@ impl LanguageServer for Backend {
 		//let uri = params.text_document_position.text_document.uri;
 		//let position = params.text_document_position.position;
 		let completions = || -> Option<Vec<CompletionItem>> {
-			let mut ret = Vec::with_capacity(0);
+			let ret = Vec::with_capacity(0);
 
 			Some(ret)
 		}();

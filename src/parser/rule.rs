@@ -218,6 +218,7 @@ mod tests {
 				"Media",
 				"Layout",
 				"Toc",
+				"Table",
 				"Style",
 				"Custom Style",
 				"Section",

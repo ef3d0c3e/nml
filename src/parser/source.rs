@@ -8,7 +8,7 @@ use downcast_rs::Downcast;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Trait for source content
-pub trait Source: Downcast + Debug {
+pub trait Source: Downcast {
 	/// Gets the source's location
 	///
 	/// This usually means the parent source.
@@ -22,6 +22,12 @@ pub trait Source: Downcast + Debug {
 	fn content(&self) -> &String;
 }
 impl_downcast!(Source);
+
+impl core::fmt::Debug for dyn Source {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.name())
+	}
+}
 
 impl core::fmt::Display for dyn Source {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
