@@ -160,8 +160,9 @@ fn parse_properties(
 		borders: [None; 4],
 	};
 
-	// Row align
+	// Row
 	let mut row = &mut table_state.rows[position.1];
+	// Row Align
 	match (
 		&mut row,
 		match properties.get_opt(reports, "ralign", |_, value| {
@@ -197,13 +198,6 @@ fn parse_properties(
 			});
 		}
 		_ => {}
-	}
-	// Row vspan
-	if let Some(row) = row {
-		row.vspan = match parse_span(reports, "rvspan") {
-			Some(span) => span,
-			None => return None,
-		};
 	}
 	// Row vspan
 	if let Some(span) = match parse_span(reports, "rvspan") {

@@ -472,3 +472,12 @@ blockquote p::after {
 	border-left: 4px solid #c0ffcc;
 	background-color: #c0ffcc20;
 }
+
+/* Tables */
+table, td, tr {
+	 border: 1px solid #444;
+}
+
+table {
+	border-collapse: collapse;
+}

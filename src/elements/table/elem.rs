@@ -1,5 +1,3 @@
-use ariadne::Color;
-
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
@@ -214,39 +212,6 @@ pub struct Table {
 	pub(crate) data: Vec<Cell>,
 }
 
-/// Utility macro to get a property either directly via the cell, or it's parent row, or it's parent column, or it's parent table
-/// This is meant to be used for spans
-macro_rules! property {
-	($table:expr, $pos:expr, $name:ident) => {{
-		if let Some(prop) = match &$table.data[$table.size.0 * $pos.1 + $pos.0] {
-			Cell::Owning(cell_data) => &cell_data.properties.$name,
-			Cell::Reference(id) => {
-				if let Cell::Owning(cell_data) = &$table.data[*id] {
-					&cell_data.properties.$name
-				} else {
-					panic!()
-				}
-			}
-		} {
-			prop
-		} else if let Some(prop) = $table.rows[$pos.1]
-			.as_ref()
-			.and_then(|row| row.$name.as_ref())
-		{
-			prop
-		} else if let Some(prop) = $table.columns[$pos.0]
-			.as_ref()
-			.and_then(|col| col.$name.as_ref())
-		{
-			prop
-		} else if let Some(prop) = &$table.properties.$name {
-			prop
-		} else {
-			&Default::default()
-		}
-	}};
-}
-
 impl Element for Table {
 	fn location(&self) -> &Token { &self.location }
 
@@ -269,7 +234,6 @@ impl Element for Table {
 		let colgroup = if self.columns.iter().fold(false, |v, col| v || col.is_some()) {
 			let mut result = "<colgroup>".to_string();
 			for col in &self.columns {
-				println!("{col:#?}");
 				let style = col.to_style(compiler.target());
 				result += "<col";
 				if let Some(span) = col.as_ref().and_then(|c| c.hspan) {
