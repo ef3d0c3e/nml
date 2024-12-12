@@ -28,10 +28,14 @@ use parser::property::PropertyMap;
 use parser::source::Token;
 use regex::Regex;
 
+use super::elem::Align;
 use super::elem::Cell;
 use super::elem::CellData;
 use super::elem::CellProperties;
+use super::elem::ColumnProperties;
+use super::elem::RowProperties;
 use super::elem::Table;
+use super::elem::TableProperties;
 
 /// Represents a position inside the table grid
 #[derive(Clone, Copy)]
@@ -89,6 +93,12 @@ struct TableState {
 	pub current_row: Range<usize>,
 	/// Stores rectangle cells that needs to be checked against for overlaps
 	pub overlaps: Overlaps,
+	/// Properties for columns
+	pub columns: Vec<Option<ColumnProperties>>,
+	/// Properties for rows
+	pub rows: Vec<Option<RowProperties>>,
+	/// Properties for the table
+	pub properties: TableProperties,
 }
 
 impl TableState {
@@ -97,6 +107,9 @@ impl TableState {
 			first_row: true,
 			current_row: row,
 			overlaps: Overlaps::default(),
+			columns: vec![],
+			rows: vec![],
+			properties: TableProperties::default(),
 		}
 	}
 }
@@ -105,43 +118,115 @@ fn parse_properties(
 	properties: &PropertyMap,
 	reports: &mut Vec<Report>,
 	state: &ParserState,
+	position: &GridPosition,
+	table_state: &mut TableState,
 ) -> Option<CellProperties> {
-	let (vspan, hspan) =
-		match (
-			properties.get(reports, "vspan", |_, value| {
-				let result = value.value.parse::<usize>().map_err(|e| {
-					format!("Failed to parse `{}` as positive integer: {e}", value.value)
-				});
-				if let Ok(val) = result {
-					if val == 0 {
-						return Err(format!(
-							"{0} may not be 0",
-							"hspan".fg(state.parser.colors().info)
-						));
-					}
+	let mut parse_span = |reports: &mut Vec<Report>, key: &'static str| {
+		properties.get_opt(reports, key, |_, value| {
+			let result = value
+				.value
+				.parse::<usize>()
+				.map_err(|e| format!("Failed to parse `{}` as positive integer: {e}", value.value));
+			if let Ok(val) = result {
+				if val == 0 {
+					return Err(format!(
+						"{0} may not be 0",
+						key.fg(state.parser.colors().info)
+					));
 				}
-				result
-			}),
-			properties.get(reports, "hspan", |_, value| {
-				let result = value.value.parse::<usize>().map_err(|e| {
-					format!("Failed to parse `{}` as positive integer: {e}", value.value)
-				});
-				if let Ok(val) = result {
-					if val == 0 {
-						return Err(format!(
-							"{0} may not be 0",
-							"hspan".fg(state.parser.colors().info)
-						));
-					}
-				}
-				result
-			}),
-		) {
-			(Some(vspan), Some(hspan)) => (vspan, hspan),
-			_ => return None,
-		};
+			}
+			result
+		})
+	};
 
-	Some(CellProperties { vspan, hspan })
+	// Cells
+	let hspan = match parse_span(reports, "hspan") {
+		Some(span) => span,
+		None => return None,
+	};
+	let vspan = match parse_span(reports, "vspan") {
+		Some(span) => span,
+		None => return None,
+	};
+	let align = match properties.get_opt(reports, "align", |_, value| Align::try_from(&value.value))
+	{
+		Some(align) => align,
+		None => return None,
+	};
+	let cell_properties = CellProperties {
+		vspan: hspan.unwrap_or(1),
+		hspan: vspan.unwrap_or(1),
+		align,
+		borders: [None; 4],
+	};
+
+	// Row align
+	let mut row = &mut table_state.rows[position.1];
+	match (
+		&mut row,
+		match properties.get_opt(reports, "ralign", |_, value| {
+			Align::try_from(&value.value).map(|val| (value.value_range.clone(), val))
+		}) {
+			Some(align) => align,
+			None => return None,
+		},
+	) {
+		(Some(row), Some(align)) => {
+			if row.align.is_some() {
+				report_err!(
+					reports,
+					properties.token.source(),
+					"Duplicate row property".into(),
+					span(
+						align.0,
+						format!(
+							"Property {} is already specified",
+							"ralign".fg(state.parser.colors().info)
+						)
+					),
+				);
+				return None;
+			}
+			row.align.replace(align.1);
+		}
+		(None, Some(align)) => {
+			row.replace(RowProperties {
+				align: Some(align.1),
+				borders: [None; 4],
+			});
+		}
+		_ => {}
+	}
+
+	// Table align
+	match match properties.get_opt(reports, "talign", |_, value| {
+		Align::try_from(&value.value).map(|val| (value.value_range.clone(), val))
+	}) {
+		Some(align) => align,
+		None => return None,
+	} {
+		Some(align) => {
+			if table_state.properties.align.is_some() {
+				report_err!(
+					reports,
+					properties.token.source(),
+					"Duplicate table property".into(),
+					span(
+						align.0,
+						format!(
+							"Property {} is already specified",
+							"talign".fg(state.parser.colors().info)
+						)
+					),
+				);
+				return None;
+			}
+			table_state.properties.align.replace(align.1);
+		}
+		_ => {}
+	}
+
+	Some(cell_properties)
 }
 
 #[auto_registry::auto_registry(registry = "rules")]
@@ -154,18 +239,35 @@ pub struct TableRule {
 impl Default for TableRule {
 	fn default() -> Self {
 		let mut props = HashMap::new();
+		// Cell properties
 		props.insert(
 			"vspan".to_string(),
-			Property::new("Cell vertial span".to_string(), Some("1".into())),
+			Property::new("Cell vertial span".to_string(), None),
 		);
 		props.insert(
 			"hspan".to_string(),
-			Property::new("Cell horizontal span".to_string(), Some("1".into())),
+			Property::new("Cell horizontal span".to_string(), None),
+		);
+		props.insert(
+			"align".to_string(),
+			Property::new("Cell text alignment".to_string(), None),
+		);
+
+		// Row properties
+		props.insert(
+			"ralign".to_string(),
+			Property::new("Row text alignment".to_string(), None),
+		);
+
+		// Table properties
+		props.insert(
+			"talign".to_string(),
+			Property::new("Table text alignment".to_string(), None),
 		);
 
 		Self {
 			properties: PropertyParser { properties: props },
-			re: Regex::new(r"(:?^|\n)\|").unwrap(),
+			re: Regex::new(r"(?:^|\n)\|").unwrap(),
 			cell_re: Regex::new(
 				r"\|(?:[^\S\r\n]*:([^\n](?:\\[^\n]|[^\\\\])*?):)?([^\n](?:\\[^\n]|[^\n\\\\])*?)\|",
 			)
@@ -202,7 +304,9 @@ impl Rule for TableRule {
 	) -> (Cursor, Vec<Report>) {
 		let mut reports = vec![];
 		let mut end_cursor = cursor.clone();
-		end_cursor.pos += 1;
+		if cursor.source.content().as_bytes()[cursor.pos] == b'\n' {
+			end_cursor.pos += 1;
+		}
 
 		let mut cell_pos = GridPosition(0, 0);
 		let mut dimensions = cell_pos;
@@ -218,6 +322,14 @@ impl Rule for TableRule {
 				break;
 			}
 
+			// Insert column and rows
+			while table_state.rows.len() <= cell_pos.1 {
+				table_state.rows.push(None)
+			}
+			while table_state.columns.len() <= cell_pos.0 {
+				table_state.columns.push(None)
+			}
+
 			// Get properties
 			let prop_source = escape_source(
 				cursor.source.clone(),
@@ -227,7 +339,7 @@ impl Rule for TableRule {
 				":",
 			);
 			let properties = match self.properties.parse(
-				"Block Quote",
+				"Table",
 				&mut reports,
 				state,
 				prop_source.clone().into(),
@@ -235,7 +347,13 @@ impl Rule for TableRule {
 				Some(props) => props,
 				None => return (end_cursor, reports),
 			};
-			let cell_properties = match parse_properties(&properties, &mut reports, state) {
+			let cell_properties = match parse_properties(
+				&properties,
+				&mut reports,
+				state,
+				&cell_pos,
+				&mut table_state,
+			) {
 				Some(props) => props,
 				None => return (end_cursor, reports),
 			};
@@ -459,9 +577,9 @@ impl Rule for TableRule {
 			Box::new(Table {
 				location: Token::new(cursor.pos..end_cursor.pos, cursor.source.clone()),
 				size: (dimensions.0, dimensions.1),
-				// TODO
-				columns: vec![],
-				rows: vec![],
+				columns: table_state.columns,
+				rows: table_state.rows,
+				properties: table_state.properties,
 				data: cells,
 			}),
 		);

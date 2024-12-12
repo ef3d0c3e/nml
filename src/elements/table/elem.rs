@@ -1,8 +1,85 @@
+use ariadne::Color;
+
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::Target;
+use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::source::Token;
+
+/// Converts to style
+trait ToStyle {
+	fn to_style(&self, target: Target) -> String;
+}
+
+/// Text alignment for table cells
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Align {
+	#[default]
+	Left,
+	Right,
+	Center,
+}
+
+impl TryFrom<&String> for Align {
+	type Error = String;
+
+	fn try_from(value: &String) -> Result<Self, Self::Error> {
+		match value.as_str() {
+			"left" => Ok(Align::Left),
+			"right" => Ok(Align::Right),
+			"center" => Ok(Align::Center),
+			_ => Err(format!("Unknown alignment: `{value}`")),
+		}
+	}
+}
+
+impl ToStyle for Option<Align> {
+	fn to_style(&self, target: Target) -> String {
+		match target {
+			HTML => match self {
+				Some(Align::Right) => "text-align: right;".into(),
+				Some(Align::Center) => "text-align: center;".into(),
+				Some(Align::Left) | None => "".into(),
+			},
+			_ => todo!(),
+		}
+	}
+}
+
+/// Border style for cells
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BorderStyle {
+	#[default]
+	Solid,
+	Dashed,
+	Dotted,
+	None,
+}
+
+impl ToStyle for Option<BorderStyle> {
+	fn to_style(&self, target: Target) -> String {
+		if self.is_none() {
+			return String::new();
+		}
+		todo!();
+	}
+}
+
+impl TryFrom<&String> for BorderStyle {
+	type Error = String;
+
+	fn try_from(value: &String) -> Result<Self, Self::Error> {
+		match value.as_str() {
+			"solid" => Ok(BorderStyle::Solid),
+			"dashed" => Ok(BorderStyle::Dashed),
+			"dotted" => Ok(BorderStyle::Dotted),
+			"none" => Ok(BorderStyle::None),
+			_ => Err(format!("Unknown border style: `{value}`")),
+		}
+	}
+}
 
 /// Formatting for cells
 #[derive(Debug, Clone)]
@@ -11,8 +88,93 @@ pub struct CellProperties {
 	pub(crate) vspan: usize,
 	/// Horizontal span of the cell
 	pub(crate) hspan: usize,
-	// TODO: Contains borders as well as their display
-	// TODO: Unspecified constraints should lookup to the column/row
+	/// Text alignment for the cell
+	pub(crate) align: Option<Align>,
+	/// Borders formatting for the cell
+	pub(crate) borders: [Option<BorderStyle>; 4],
+}
+
+impl ToStyle for Option<CellProperties> {
+	fn to_style(&self, target: Target) -> String {
+		if self.is_none() {
+			return String::new();
+		}
+
+		let props = self.as_ref().unwrap();
+		let mut style = String::new();
+		style += props.align.to_style(target).as_str();
+		for border in &props.borders {
+			style += border.to_style(target).as_str();
+		}
+		return style;
+	}
+}
+
+/// Data for columns
+#[derive(Debug)]
+pub struct ColumnProperties {
+	/// Borders formatting for cells in this column
+	pub(crate) borders: [Option<BorderStyle>; 4],
+}
+
+impl ToStyle for Option<ColumnProperties> {
+	fn to_style(&self, target: Target) -> String {
+		if self.is_none() {
+			return String::new();
+		}
+
+		let props = self.as_ref().unwrap();
+		let mut style = String::new();
+		for border in &props.borders {
+			style += border.to_style(target).as_str();
+		}
+		return style;
+	}
+}
+
+/// Data for rows
+#[derive(Debug)]
+pub struct RowProperties {
+	/// Text alignment for the cells in this row
+	pub(crate) align: Option<Align>,
+	/// Borders formatting for cells in this row
+	pub(crate) borders: [Option<BorderStyle>; 4],
+}
+
+impl ToStyle for Option<RowProperties> {
+	fn to_style(&self, target: Target) -> String {
+		if self.is_none() {
+			return String::new();
+		}
+
+		let props = self.as_ref().unwrap();
+		let mut style = String::new();
+		style += props.align.to_style(target).as_str();
+		for border in &props.borders {
+			style += border.to_style(target).as_str();
+		}
+		return style;
+	}
+}
+
+/// Data for entire table
+#[derive(Default, Debug)]
+pub struct TableProperties {
+	/// Text alignment for the cells in this table
+	pub(crate) align: Option<Align>,
+	/// Borders formatting for cells in this table
+	pub(crate) borders: [Option<BorderStyle>; 4],
+}
+
+impl ToStyle for TableProperties {
+	fn to_style(&self, target: Target) -> String {
+		let mut style = String::new();
+		style += self.align.to_style(target).as_str();
+		for border in &self.borders {
+			style += border.to_style(target).as_str();
+		}
+		return style;
+	}
 }
 
 /// The data inside of a table's cell
@@ -31,30 +193,53 @@ pub enum Cell {
 	Reference(usize),
 }
 
-/// Data for columns
-#[derive(Debug, Default)]
-pub struct ColumnData {
-	// TODO: Contains alignment, formatting e.g vertical lines & style
-}
-
-/// Data for rows
-#[derive(Debug, Default)]
-pub struct RowData {
-	// TODO: formatting e.g horizontal lines & style
-}
-
 /// The table
 #[derive(Debug)]
 pub struct Table {
+	/// Token for the table
 	pub(crate) location: Token,
 	/// Number of colunms and rows in the table
 	pub(crate) size: (usize, usize),
-	/// Data for each column
-	pub(crate) columns: Vec<Option<ColumnData>>,
-	/// Data for each row
-	pub(crate) rows: Vec<Option<RowData>>,
+	/// Properties for each columns
+	pub(crate) columns: Vec<Option<ColumnProperties>>,
+	/// Properties for each rows
+	pub(crate) rows: Vec<Option<RowProperties>>,
+	/// Properties for the entire table
+	pub(crate) properties: TableProperties,
 	/// Content of the table
 	pub(crate) data: Vec<Cell>,
+}
+
+/// Utility macro to get a property either directly via the cell, or it's parent row, or it's parent column, or it's parent table
+macro_rules! property {
+	($table:expr, $pos:expr, $name:ident) => {{
+		if let Some(prop) = match &$table.data[$table.size.0 * $pos.1 + $pos.0] {
+			Cell::Owning(cell_data) => &cell_data.properties.$name,
+			Cell::Reference(id) => {
+				if let Cell::Owning(cell_data) = &$table.data[*id] {
+					&cell_data.properties.$name
+				} else {
+					panic!()
+				}
+			}
+		} {
+			prop
+		} else if let Some(prop) = $table.rows[$pos.1]
+			.as_ref()
+			.and_then(|row| row.$name.as_ref())
+		{
+			prop
+		} else if let Some(prop) = $table.columns[$pos.0]
+			.as_ref()
+			.and_then(|col| col.$name.as_ref())
+		{
+			prop
+		} else if let Some(prop) = &$table.properties.$name {
+			prop
+		} else {
+			&Default::default()
+		}
+	}};
 }
 
 impl Element for Table {
@@ -73,21 +258,56 @@ impl Element for Table {
 		// TODO: colgroup
 		let mut result = String::new();
 
+		let table_style = self.properties.to_style(compiler.target());
+
+		// Colgroup styling
+		let colgroup = if self.columns.iter().fold(false, |v, col| v || col.is_some()) {
+			let mut result = "<colgroup>".to_string();
+			for col in &self.columns {
+				println!("{col:#?}");
+				let style = col.to_style(compiler.target());
+				if !style.is_empty() {
+					result += "<col style=\"";
+					result += style.as_str();
+					result += "\">";
+				} else {
+					result += "<col>";
+				}
+			}
+			result + "</colgroup>"
+		} else {
+			String::new()
+		};
+
 		let mut pos = (0usize, 0usize);
-		result += "<table>";
+		if !table_style.is_empty() {
+			result += format!("<table style=\"{table_style}\">").as_str()
+		} else {
+			result += "<table>"
+		}
+		result += colgroup.as_str();
 		for cell in &self.data {
 			if pos.0 == 0 {
 				result += "<tr>";
 			}
 			match cell {
 				Cell::Owning(cell_data) => {
-					// TODO: Rowgroup
+					// Row styling
+					let style = {
+						let result = self.rows[pos.1].to_style(compiler.target());
+						if result.is_empty() {
+							result
+						} else {
+							format!(" style=\"{result}\"")
+						}
+					};
 					match (cell_data.properties.hspan, cell_data.properties.vspan) {
-						(1, 1) => result += "<td>",
-						(1, v) => result += format!("<td rowspan=\"{v}\">").as_str(),
-						(h, 1) => result += format!("<td colspan=\"{h}\">").as_str(),
+						(1, 1) => result += format!("<td{style}>").as_str(),
+						(1, v) => result += format!("<td rowspan=\"{v}\"{style}>").as_str(),
+						(h, 1) => result += format!("<td colspan=\"{h}\"{style}>").as_str(),
 						(h, v) => {
-							result += format!("<td rowspan=\"{v}\" colspan=\"{h}\">").as_str()
+							result +=
+								format!("<td rowspan=\"{v}\" colspan=\"{h}\"{style}>").as_str()
 						}
 					}
 					for elem in &cell_data.content {
