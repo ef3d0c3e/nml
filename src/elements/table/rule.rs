@@ -154,8 +154,8 @@ fn parse_properties(
 		None => return None,
 	};
 	let cell_properties = CellProperties {
-		vspan: hspan.unwrap_or(1),
-		hspan: vspan.unwrap_or(1),
+		hspan,
+		vspan,
 		align,
 		borders: [None; 4],
 	};
@@ -191,11 +191,53 @@ fn parse_properties(
 		}
 		(None, Some(align)) => {
 			row.replace(RowProperties {
+				vspan: None,
 				align: Some(align.1),
 				borders: [None; 4],
 			});
 		}
 		_ => {}
+	}
+	// Row vspan
+	if let Some(row) = row {
+		row.vspan = match parse_span(reports, "rvspan") {
+			Some(span) => span,
+			None => return None,
+		};
+	}
+	// Row vspan
+	if let Some(span) = match parse_span(reports, "rvspan") {
+		Some(span) => span,
+		None => return None,
+	} {
+		match row {
+			Some(row) => row.vspan = Some(span),
+			None => {
+				row.replace(RowProperties {
+					vspan: Some(span),
+					align: None,
+					borders: [None; 4],
+				});
+			}
+		}
+	}
+
+	// Column
+	let col = &mut table_state.columns[position.0];
+	// Column hspan
+	if let Some(span) = match parse_span(reports, "chspan") {
+		Some(span) => span,
+		None => return None,
+	} {
+		match col {
+			Some(col) => col.hspan = Some(span),
+			None => {
+				col.replace(ColumnProperties {
+					hspan: Some(span),
+					borders: [None; 4],
+				});
+			}
+		}
 	}
 
 	// Table align
@@ -257,6 +299,16 @@ impl Default for TableRule {
 		props.insert(
 			"ralign".to_string(),
 			Property::new("Row text alignment".to_string(), None),
+		);
+		props.insert(
+			"rvspan".to_string(),
+			Property::new("Row vertical span".to_string(), None),
+		);
+
+		// Column properties
+		props.insert(
+			"chspan".to_string(),
+			Property::new("Column horizontal span".to_string(), None),
 		);
 
 		// Table properties
@@ -357,6 +409,8 @@ impl Rule for TableRule {
 				Some(props) => props,
 				None => return (end_cursor, reports),
 			};
+			let hspan = cell_properties.hspan.unwrap_or(1);
+			let vspan = cell_properties.vspan.unwrap_or(1);
 
 			// Semantics
 			if let Some((sems, tokens)) =
@@ -379,10 +433,10 @@ impl Rule for TableRule {
 			);
 			// Check for overlaps in case the cell is not empty
 			if !prop_source.content().is_empty() || cell_source.content().trim_start().len() != 0 {
-				if let Some((overlap_range, pos, size)) = table_state.overlaps.is_occupied(
-					&cell_pos,
-					&GridPosition(cell_properties.hspan, cell_properties.vspan),
-				) {
+				if let Some((overlap_range, pos, size)) = table_state
+					.overlaps
+					.is_occupied(&cell_pos, &GridPosition(hspan, vspan))
+				{
 					report_err!(
 						&mut reports,
 						cursor.source.clone(),
@@ -485,27 +539,24 @@ impl Rule for TableRule {
 					properties: cell_properties.clone(),
 				}));
 
-				for _i in 0..cell_properties.hspan - 1 {
+				for _i in 0..hspan - 1 {
 					cells.push(Cell::Reference(cell_pos.0 + cell_pos.1 * dimensions.1));
 				}
 			}
 
 			// Insert cell to the overlaps if not a (1, 1) cell
-			if cell_properties.vspan != 1 || cell_properties.hspan != 1 {
+			if vspan != 1 || hspan != 1 {
 				table_state.overlaps.push((
 					range.start + 1..range.end - 1,
 					GridPosition(cell_pos.0, cell_pos.1),
-					GridPosition(
-						cell_pos.0 + cell_properties.hspan,
-						cell_pos.1 + cell_properties.vspan,
-					),
+					GridPosition(cell_pos.0 + hspan, cell_pos.1 + vspan),
 				));
 			}
 
 			// Update width
-			cell_pos.0 += cell_properties.hspan;
+			cell_pos.0 += hspan;
 			if table_state.first_row {
-				dimensions.0 += cell_properties.hspan;
+				dimensions.0 += hspan;
 			}
 
 			end_cursor.pos = range.end - 1;

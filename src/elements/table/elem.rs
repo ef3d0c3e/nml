@@ -85,9 +85,9 @@ impl TryFrom<&String> for BorderStyle {
 #[derive(Debug, Clone)]
 pub struct CellProperties {
 	/// Vertial span of the cell
-	pub(crate) vspan: usize,
+	pub(crate) vspan: Option<usize>,
 	/// Horizontal span of the cell
-	pub(crate) hspan: usize,
+	pub(crate) hspan: Option<usize>,
 	/// Text alignment for the cell
 	pub(crate) align: Option<Align>,
 	/// Borders formatting for the cell
@@ -113,6 +113,8 @@ impl ToStyle for Option<CellProperties> {
 /// Data for columns
 #[derive(Debug)]
 pub struct ColumnProperties {
+	/// Span for the cells in this column
+	pub(crate) hspan: Option<usize>,
 	/// Borders formatting for cells in this column
 	pub(crate) borders: [Option<BorderStyle>; 4],
 }
@@ -135,6 +137,8 @@ impl ToStyle for Option<ColumnProperties> {
 /// Data for rows
 #[derive(Debug)]
 pub struct RowProperties {
+	/// Span for the cells in this row
+	pub(crate) vspan: Option<usize>,
 	/// Text alignment for the cells in this row
 	pub(crate) align: Option<Align>,
 	/// Borders formatting for cells in this row
@@ -211,6 +215,7 @@ pub struct Table {
 }
 
 /// Utility macro to get a property either directly via the cell, or it's parent row, or it's parent column, or it's parent table
+/// This is meant to be used for spans
 macro_rules! property {
 	($table:expr, $pos:expr, $name:ident) => {{
 		if let Some(prop) = match &$table.data[$table.size.0 * $pos.1 + $pos.0] {
@@ -266,13 +271,16 @@ impl Element for Table {
 			for col in &self.columns {
 				println!("{col:#?}");
 				let style = col.to_style(compiler.target());
-				if !style.is_empty() {
-					result += "<col style=\"";
-					result += style.as_str();
-					result += "\">";
-				} else {
-					result += "<col>";
+				result += "<col";
+				if let Some(span) = col.as_ref().and_then(|c| c.hspan) {
+					result += format!(" span=\"{span}\"").as_str();
 				}
+				if !style.is_empty() {
+					result += " style=\"";
+					result += style.as_str();
+					result += "\"";
+				}
+				result += ">";
 			}
 			result + "</colgroup>"
 		} else {
@@ -288,7 +296,11 @@ impl Element for Table {
 		result += colgroup.as_str();
 		for cell in &self.data {
 			if pos.0 == 0 {
-				result += "<tr>";
+				if let Some(span) = self.rows[pos.1].as_ref().and_then(|row| row.vspan) {
+					result += format!("<tr span=\"{span}\">").as_str();
+				} else {
+					result += "<tr>";
+				}
 			}
 			match cell {
 				Cell::Owning(cell_data) => {
@@ -301,7 +313,11 @@ impl Element for Table {
 							format!(" style=\"{result}\"")
 						}
 					};
-					match (cell_data.properties.hspan, cell_data.properties.vspan) {
+					let (hspan, vspan) = (
+						cell_data.properties.hspan.unwrap_or(1),
+						cell_data.properties.vspan.unwrap_or(1),
+					);
+					match (hspan, vspan) {
 						(1, 1) => result += format!("<td{style}>").as_str(),
 						(1, v) => result += format!("<td rowspan=\"{v}\"{style}>").as_str(),
 						(h, 1) => result += format!("<td colspan=\"{h}\"{style}>").as_str(),
@@ -319,7 +335,7 @@ impl Element for Table {
 				}
 				Cell::Reference(id) => {
 					if let Cell::Owning(cell_data) = &self.data[*id] {
-						pos.0 += cell_data.properties.hspan - 1;
+						pos.0 += cell_data.properties.hspan.unwrap_or(1) - 1;
 					} else {
 						panic!("Invalid cells");
 					}
