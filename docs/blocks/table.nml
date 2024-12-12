@@ -1,0 +1,44 @@
+@import ../template.nml
+%<make_doc({"Blocks"}, "Tables", "Tables")>%
+
+# Tables
+
+NML support for tables is still very limited, though it is possible to build complex layouts like this one:
+#+LAYOUT_BEGIN Centered
+| **First column**       |:hspan=2: **Second column** |
+|:align=center: Centered | B            | C           |
+|:hspan=2: 1                            | 2           |
+
+#+LAYOUT_END
+
+
+#+LAYOUT_BEGIN[title=Given by the following code] Spoiler
+``Plain Text,
+| **First column**       |:hspan=2: **Second column** |
+|:align=center: Centered | B            | C           |
+|:hspan=2: 1                            | 2           |``
+#+LAYOUT_END
+
+When a line starts with `|` is is considered as the start of a table. Other `|`'s delimit the cells of a table row.
+
+# Properties
+
+On each cell of a table, you may specify properties for the cell, row, column or table. Properties are specified between `:`'s at the start of a cell. It is not possible to redefine an already present property (e.g setting the table text-alignment twicce). Below are the supported properties:
+
+ * **Cells**
+ *- `align` The text-alignment of the cell
+ *- `hspan` The horizontal span of the cell (1 if unset)
+ *- `vspan` The vertical span of the cell (1 if unset)
+ * **Rows** *Cells will inherit properties from their parent row*
+ *- `align` The text-alignment of the row
+ *- `rvspan` The vertical span of the row (1 if unset)
+ * **Columns** *Cells will inherit properties from their parent column*
+ *- `chspan` The horizontal span of the column (1 if unset)
+ * **Table** *Each cell will inherit these properties*
+ *- `align` Text-alignment for the entire table
+
+# Current limitations
+
+Current known limitations for tables, may change in the future:
+ * Referenceable elements cannot be referenced if defined inside of a table.
+ * Table layouts are limited and it is not possible to `split` a cell in half if it's parent column has a span of 2.

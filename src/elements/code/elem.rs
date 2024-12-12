@@ -82,7 +82,7 @@ impl Code {
 				.as_str();
 			}
 
-			result += "<div class=\"code-block-content\"><table cellspacing=\"0\">"
+			result += "<div class=\"code-block-content\"><table class=\"code-block-table\" cellspacing=\"0\">"
 				.to_string()
 				.as_str();
 			for (line_id, line) in self.code.split('\n').enumerate() {
@@ -117,7 +117,7 @@ impl Code {
 
 			result += "</table></div></div>";
 		} else if self.block == CodeKind::MiniBlock {
-			result += "<div class=\"code-block\"><div class=\"code-block-content\"><table cellspacing=\"0\">";
+			result += "<div class=\"code-block\"><div class=\"code-block-content\"><table class=\"code-block-table\" cellspacing=\"0\">";
 
 			for line in self.code.split('\n') {
 				result += "<tr><td class=\"code-block-line\"><pre>";

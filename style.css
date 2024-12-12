@@ -88,11 +88,12 @@ em {
 	padding-right: .1em;
 
 	border-radius: 3px;
-	border: solid 1px #100c1e;
+	border: solid 1px #15151a;
 
 
-	color: #ffb454;
-	background-color: #191f26;
+	font-style: normal;
+	color: #Bf4484;
+	background-color: #191f20;
 }
 
 a {
@@ -474,10 +475,21 @@ blockquote p::after {
 }
 
 /* Tables */
-table, td, tr {
-	 border: 1px solid #444;
+table:not(.code-block-table) {
+	border-collapse: collapse;
+	margin: 0 auto;
+	text-align: left;
+	border: 1px solid #444;
+	margin-bottom: 1em;
 }
 
-table {
-	border-collapse: collapse;
+
+table:not(.code-block-table) tr  {
+	border: 1px solid #444;
+}
+
+table:not(.code-block-table) td  {
+	border: 1px solid #444;
+	padding-left: 0.3em;
+	padding-right: 0.3em;
 }

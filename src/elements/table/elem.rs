@@ -92,16 +92,11 @@ pub struct CellProperties {
 	pub(crate) borders: [Option<BorderStyle>; 4],
 }
 
-impl ToStyle for Option<CellProperties> {
+impl ToStyle for CellProperties {
 	fn to_style(&self, target: Target) -> String {
-		if self.is_none() {
-			return String::new();
-		}
-
-		let props = self.as_ref().unwrap();
 		let mut style = String::new();
-		style += props.align.to_style(target).as_str();
-		for border in &props.borders {
+		style += self.align.to_style(target).as_str();
+		for border in &self.borders {
 			style += border.to_style(target).as_str();
 		}
 		return style;
@@ -260,27 +255,39 @@ impl Element for Table {
 		result += colgroup.as_str();
 		for cell in &self.data {
 			if pos.0 == 0 {
+				// Row styling
+				let style = {
+					let result = self.rows[pos.1].to_style(compiler.target());
+					if result.is_empty() {
+						result
+					} else {
+						format!(" style=\"{result}\"")
+					}
+				};
+
 				if let Some(span) = self.rows[pos.1].as_ref().and_then(|row| row.vspan) {
-					result += format!("<tr span=\"{span}\">").as_str();
+					result += format!("<tr span=\"{span}\"{style}>").as_str();
 				} else {
-					result += "<tr>";
+					result += format!("<tr{style}>").as_str();
 				}
 			}
 			match cell {
 				Cell::Owning(cell_data) => {
-					// Row styling
+					// Cell styling
 					let style = {
-						let result = self.rows[pos.1].to_style(compiler.target());
+						let result = cell_data.properties.to_style(compiler.target());
 						if result.is_empty() {
 							result
 						} else {
 							format!(" style=\"{result}\"")
 						}
 					};
+
 					let (hspan, vspan) = (
 						cell_data.properties.hspan.unwrap_or(1),
 						cell_data.properties.vspan.unwrap_or(1),
 					);
+
 					match (hspan, vspan) {
 						(1, 1) => result += format!("<td{style}>").as_str(),
 						(1, v) => result += format!("<td rowspan=\"{v}\"{style}>").as_str(),
@@ -297,13 +304,7 @@ impl Element for Table {
 					}
 					result += "</td>";
 				}
-				Cell::Reference(id) => {
-					if let Cell::Owning(cell_data) = &self.data[*id] {
-						pos.0 += cell_data.properties.hspan.unwrap_or(1) - 1;
-					} else {
-						panic!("Invalid cells");
-					}
-				}
+				Cell::Reference(_) => {}
 			}
 
 			// Advance position
