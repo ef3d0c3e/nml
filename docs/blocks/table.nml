@@ -23,7 +23,7 @@ When a line starts with `|` is is considered as the start of a table. Other `|`'
 
 # Properties
 
-On each cell of a table, you may specify properties for the cell, row, column or table. Properties are specified between `:`'s at the start of a cell. It is not possible to redefine an already present property (e.g setting the table text-alignment twicce). Below are the supported properties:
+On each cell of a table, you may specify properties for the cell, row, column or table. Properties are specified between `:`'s at the start of a cell. It is not possible to redefine an already present property (e.g setting the table text-alignment twice). Below are the supported properties:
 
  * **Cells**
  *- `align` The text-alignment of the cell

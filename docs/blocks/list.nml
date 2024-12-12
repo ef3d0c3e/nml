@@ -54,7 +54,7 @@ Lists can contain other lists as nested elements.
 You can add checkboxes to lists. Lists support the following checkboxes:
  * Unchecked: with `[ ]` or `[]`.
  * Partial: with `[-]`
- * Cehcked: with `[x]` or `[X]`
+ * Checked: with `[x]` or `[X]`
 
 **Example**
 #+LAYOUT_BEGIN Split

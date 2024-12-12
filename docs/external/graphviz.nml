@@ -331,12 +331,12 @@ digraph UML_Class_diagram {
 ``
 #+LAYOUT_END
 
-# Graphiz cache
+# Graphviz cache
 
 Graphviz graphs that have been rendered to **svg** are stored in the cache database, under table ``cached_dot``.
 Unless you modify the graph or it's properties, it won't be rendered again, instead it will be sourced from the database.
 
-# Bindigs
+# Bindings
 
  * ``Lua, nml.graphviz.push(layout, width, dot)``
  ** ``layout`` *(string)* the layout engine
