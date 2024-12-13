@@ -20,9 +20,15 @@ pub struct Layout {
 }
 
 impl Element for Layout {
-	fn location(&self) -> &Token { &self.location }
-	fn kind(&self) -> ElemKind { ElemKind::Block }
-	fn element_name(&self) -> &'static str { "Layout" }
+	fn location(&self) -> &Token {
+		&self.location
+	}
+	fn kind(&self) -> ElemKind {
+		ElemKind::Block
+	}
+	fn element_name(&self) -> &'static str {
+		"Layout"
+	}
 	fn compile(
 		&self,
 		compiler: &Compiler,

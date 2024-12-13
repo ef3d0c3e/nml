@@ -208,11 +208,17 @@ pub struct Table {
 }
 
 impl Element for Table {
-	fn location(&self) -> &Token { &self.location }
+	fn location(&self) -> &Token {
+		&self.location
+	}
 
-	fn kind(&self) -> ElemKind { ElemKind::Block }
+	fn kind(&self) -> ElemKind {
+		ElemKind::Block
+	}
 
-	fn element_name(&self) -> &'static str { "Table" }
+	fn element_name(&self) -> &'static str {
+		"Table"
+	}
 
 	fn compile(
 		&self,

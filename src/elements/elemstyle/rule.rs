@@ -57,9 +57,13 @@ fn json_substring(str: &str) -> Option<&str> {
 }
 
 impl Rule for ElemStyleRule {
-	fn name(&self) -> &'static str { "Element Style" }
+	fn name(&self) -> &'static str {
+		"Element Style"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Script") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Script")
+	}
 
 	fn next_match(
 		&self,

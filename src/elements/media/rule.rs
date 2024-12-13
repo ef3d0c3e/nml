@@ -87,13 +87,21 @@ fn detect_filetype(filename: &str) -> Option<MediaType> {
 }
 
 impl RegexRule for MediaRule {
-	fn name(&self) -> &'static str { "Media" }
+	fn name(&self) -> &'static str {
+		"Media"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Graphviz") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Graphviz")
+	}
 
-	fn regexes(&self) -> &[regex::Regex] { &self.re }
+	fn regexes(&self) -> &[regex::Regex] {
+		&self.re
+	}
 
-	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool {
+		!mode.paragraph_only
+	}
 
 	fn on_regex_match<'a>(
 		&self,

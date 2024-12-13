@@ -63,13 +63,24 @@ pub fn get_rule_registry() -> Vec<Box<dyn Rule>> {
 }
 
 pub trait Rule: Downcast {
-	/// The rule name
+	/// Returns the name of the rule
 	fn name(&self) -> &'static str;
 
-	/// The name of the rule that should come before this one
+	/// Returns the name of the rule that should preceed this one in terms of priority
 	fn previous(&self) -> Option<&'static str>;
 
 	/// Finds the next match starting from `cursor`
+	///
+	/// # Return
+	///
+	/// This method returns the position of the next match (if any) as well as data that needs to
+	/// be passed to [`Self::on_match`] when the rules is chosen. It is the job of the parser to
+	/// keep track of this temporary data.
+	///
+	/// # Parameters
+	///
+	/// `mode` Speficies the current parser mode. Some elements react differently to different
+	/// modes. For instance mode `paragraph_only` makes the rule for `Section`s to be ignored.
 	fn next_match(
 		&self,
 		mode: &ParseMode,
@@ -77,7 +88,17 @@ pub trait Rule: Downcast {
 		cursor: &Cursor,
 	) -> Option<(usize, Box<dyn Any>)>;
 
-	/// Callback when rule matches
+	/// Method called when the rule is chosen by the parser.
+	///
+	/// # Return
+	///
+	/// This function must return the cursor position after processing the match, as well as a list
+	/// of reports generated during processing. In case of error, the parser may continue parsing,
+	/// therefore it is required that this method advances the cursor to prevent infinite loops.
+	///
+	/// # Parameters
+	///
+	/// `match_data` is the temporary returned by [`Self::on_match`].
 	fn on_match<'a>(
 		&self,
 		state: &ParserState,
@@ -86,11 +107,10 @@ pub trait Rule: Downcast {
 		match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report>);
 
-	/// Registers lua bindings
-	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
-
-	/// Registers shared state
-	fn register_shared_state(&self, _state: &SharedState) {}
+	/// Registers lua bindings for this rule
+	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+		vec![]
+	}
 }
 impl_downcast!(Rule);
 
@@ -101,19 +121,24 @@ impl core::fmt::Debug for dyn Rule {
 }
 
 pub trait RegexRule {
-	/// The rule name
+	/// Returns the name of the rule
 	fn name(&self) -> &'static str;
 
-	/// The name of the rule that should come before this one
+	/// Returns the name of the rule that should preceed this one in terms of priority
 	fn previous(&self) -> Option<&'static str>;
 
 	/// Returns the rule's regexes
 	fn regexes(&self) -> &[regex::Regex];
 
-	/// Wheter parsing for the rule is enabled
+	/// Checks whether the rule should be enabled for a given [`ParseMode`].
+	///
+	/// # Parameters
+	///
+	/// `index` represents the index of the regex (given by [`Self::regexes`]) that is checked
+	/// against.
 	fn enabled(&self, mode: &ParseMode, index: usize) -> bool;
 
-	/// Callback on regex rule match
+	/// Method called when the rule is chosen by the parser
 	fn on_regex_match<'a>(
 		&self,
 		index: usize,
@@ -123,14 +148,19 @@ pub trait RegexRule {
 		matches: regex::Captures,
 	) -> Vec<Report>;
 
-	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
-	fn register_shared_state(&self, _state: &SharedState) {}
+	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
+		vec![]
+	}
 }
 
 impl<T: RegexRule + 'static> Rule for T {
-	fn name(&self) -> &'static str { RegexRule::name(self) }
+	fn name(&self) -> &'static str {
+		RegexRule::name(self)
+	}
 
-	fn previous(&self) -> Option<&'static str> { RegexRule::previous(self) }
+	fn previous(&self) -> Option<&'static str> {
+		RegexRule::previous(self)
+	}
 
 	/// Finds the next match starting from [`Cursor`]
 	fn next_match(
@@ -185,8 +215,6 @@ impl<T: RegexRule + 'static> Rule for T {
 	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
 		self.register_bindings(lua)
 	}
-
-	fn register_shared_state(&self, state: &SharedState) { self.register_shared_state(state); }
 }
 
 #[cfg(test)]

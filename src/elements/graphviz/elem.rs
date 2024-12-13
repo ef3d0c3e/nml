@@ -60,9 +60,13 @@ impl Cached for Graphviz {
 				svg    BLOB NOT NULL);"
 	}
 
-	fn sql_get_query() -> &'static str { "SELECT svg FROM cached_dot WHERE digest = (?1)" }
+	fn sql_get_query() -> &'static str {
+		"SELECT svg FROM cached_dot WHERE digest = (?1)"
+	}
 
-	fn sql_insert_query() -> &'static str { "INSERT INTO cached_dot (digest, svg) VALUES (?1, ?2)" }
+	fn sql_insert_query() -> &'static str {
+		"INSERT INTO cached_dot (digest, svg) VALUES (?1, ?2)"
+	}
 
 	fn key(&self) -> <Self as Cached>::Key {
 		let mut hasher = Sha512::new();
@@ -75,11 +79,17 @@ impl Cached for Graphviz {
 }
 
 impl Element for Graphviz {
-	fn location(&self) -> &Token { &self.location }
+	fn location(&self) -> &Token {
+		&self.location
+	}
 
-	fn kind(&self) -> ElemKind { ElemKind::Block }
+	fn kind(&self) -> ElemKind {
+		ElemKind::Block
+	}
 
-	fn element_name(&self) -> &'static str { "Graphviz" }
+	fn element_name(&self) -> &'static str {
+		"Graphviz"
+	}
 
 	fn compile(
 		&self,

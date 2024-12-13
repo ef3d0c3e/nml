@@ -41,13 +41,21 @@ impl Default for ImportRule {
 }
 
 impl RegexRule for ImportRule {
-	fn name(&self) -> &'static str { "Import" }
+	fn name(&self) -> &'static str {
+		"Import"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Paragraph") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Paragraph")
+	}
 
-	fn regexes(&self) -> &[Regex] { &self.re }
+	fn regexes(&self) -> &[Regex] {
+		&self.re
+	}
 
-	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool {
+		!mode.paragraph_only
+	}
 
 	fn on_regex_match<'a>(
 		&self,

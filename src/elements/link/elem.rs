@@ -16,9 +16,15 @@ pub struct Link {
 }
 
 impl Element for Link {
-	fn location(&self) -> &Token { &self.location }
-	fn kind(&self) -> ElemKind { ElemKind::Inline }
-	fn element_name(&self) -> &'static str { "Link" }
+	fn location(&self) -> &Token {
+		&self.location
+	}
+	fn kind(&self) -> ElemKind {
+		ElemKind::Inline
+	}
+	fn element_name(&self) -> &'static str {
+		"Link"
+	}
 	fn compile(
 		&self,
 		compiler: &Compiler,
@@ -45,11 +51,15 @@ impl Element for Link {
 		}
 	}
 
-	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
+	fn as_container(&self) -> Option<&dyn ContainerElement> {
+		Some(self)
+	}
 }
 
 impl ContainerElement for Link {
-	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.display }
+	fn contained(&self) -> &Vec<Box<dyn Element>> {
+		&self.display
+	}
 
 	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
 		if elem.downcast_ref::<Link>().is_some() {

@@ -39,13 +39,21 @@ pub mod section_kind {
 }
 
 impl RegexRule for SectionRule {
-	fn name(&self) -> &'static str { "Section" }
+	fn name(&self) -> &'static str {
+		"Section"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Custom Style") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Custom Style")
+	}
 
-	fn regexes(&self) -> &[Regex] { &self.re }
+	fn regexes(&self) -> &[Regex] {
+		&self.re
+	}
 
-	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool {
+		!mode.paragraph_only
+	}
 
 	fn on_regex_match(
 		&self,

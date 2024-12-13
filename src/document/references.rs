@@ -90,6 +90,12 @@ pub mod tests {
 }
 
 /// References inside the current document
+///
+/// # Note
+///
+/// It is only possible to reference an element nested by at most 1 level.
+/// For instance, it is possible to reference an element inside a `Block`. But not if the block is
+/// inside another `Block`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ElemReference {
 	Direct(usize),

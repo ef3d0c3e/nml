@@ -124,13 +124,21 @@ pub fn validate_value(original_value: &str) -> Result<String, String> {
 }
 
 impl RegexRule for VariableRule {
-	fn name(&self) -> &'static str { "Variable" }
+	fn name(&self) -> &'static str {
+		"Variable"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Element Style") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Element Style")
+	}
 
-	fn regexes(&self) -> &[Regex] { &self.re }
+	fn regexes(&self) -> &[Regex] {
+		&self.re
+	}
 
-	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool {
+		!mode.paragraph_only
+	}
 
 	fn on_regex_match(
 		&self,
@@ -335,13 +343,21 @@ impl Default for VariableSubstitutionRule {
 }
 
 impl RegexRule for VariableSubstitutionRule {
-	fn name(&self) -> &'static str { "Variable Substitution" }
+	fn name(&self) -> &'static str {
+		"Variable Substitution"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Variable") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Variable")
+	}
 
-	fn regexes(&self) -> &[regex::Regex] { &self.re }
+	fn regexes(&self) -> &[regex::Regex] {
+		&self.re
+	}
 
-	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool {
+		true
+	}
 
 	fn on_regex_match<'a>(
 		&self,

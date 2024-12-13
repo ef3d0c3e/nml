@@ -73,12 +73,20 @@ impl<'a> LangParser<'a> {
 }
 
 impl<'b> Parser for LangParser<'b> {
-	fn colors(&self) -> &ReportColors { &self.colors }
+	fn colors(&self) -> &ReportColors {
+		&self.colors
+	}
 
-	fn rules(&self) -> &Vec<Box<dyn Rule>> { &self.rules }
-	fn rules_mut(&mut self) -> &mut Vec<Box<dyn Rule>> { &mut self.rules }
+	fn rules(&self) -> &Vec<Box<dyn Rule>> {
+		&self.rules
+	}
+	fn rules_mut(&mut self) -> &mut Vec<Box<dyn Rule>> {
+		&mut self.rules
+	}
 
-	fn has_error(&self) -> bool { *self.err_flag.borrow() }
+	fn has_error(&self) -> bool {
+		*self.err_flag.borrow()
+	}
 
 	fn parse<'p, 'a, 'doc>(
 		&'p self,

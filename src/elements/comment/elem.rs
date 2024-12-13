@@ -12,9 +12,15 @@ pub struct Comment {
 }
 
 impl Element for Comment {
-	fn location(&self) -> &Token { &self.location }
-	fn kind(&self) -> ElemKind { ElemKind::Invisible }
-	fn element_name(&self) -> &'static str { "Comment" }
+	fn location(&self) -> &Token {
+		&self.location
+	}
+	fn kind(&self) -> ElemKind {
+		ElemKind::Invisible
+	}
+	fn element_name(&self) -> &'static str {
+		"Comment"
+	}
 	fn compile(
 		&self,
 		_compiler: &Compiler,

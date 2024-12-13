@@ -174,7 +174,9 @@ impl Cached for Code {
 				highlighted  BLOB NOT NULL);"
 	}
 
-	fn sql_get_query() -> &'static str { "SELECT highlighted FROM cached_code WHERE digest = (?1)" }
+	fn sql_get_query() -> &'static str {
+		"SELECT highlighted FROM cached_code WHERE digest = (?1)"
+	}
 
 	fn sql_insert_query() -> &'static str {
 		"INSERT INTO cached_code (digest, highlighted) VALUES (?1, ?2)"
@@ -198,11 +200,17 @@ impl Cached for Code {
 }
 
 impl Element for Code {
-	fn location(&self) -> &Token { &self.location }
+	fn location(&self) -> &Token {
+		&self.location
+	}
 
-	fn kind(&self) -> ElemKind { (&self.block).into() }
+	fn kind(&self) -> ElemKind {
+		(&self.block).into()
+	}
 
-	fn element_name(&self) -> &'static str { "Code Block" }
+	fn element_name(&self) -> &'static str {
+		"Code Block"
+	}
 
 	fn compile(
 		&self,

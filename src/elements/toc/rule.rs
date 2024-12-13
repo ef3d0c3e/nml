@@ -33,13 +33,21 @@ impl Default for TocRule {
 }
 
 impl RegexRule for TocRule {
-	fn name(&self) -> &'static str { "Toc" }
+	fn name(&self) -> &'static str {
+		"Toc"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Layout") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Layout")
+	}
 
-	fn regexes(&self) -> &[regex::Regex] { &self.re }
+	fn regexes(&self) -> &[regex::Regex] {
+		&self.re
+	}
 
-	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool {
+		!mode.paragraph_only
+	}
 
 	fn on_regex_match(
 		&self,

@@ -58,13 +58,21 @@ impl Default for TexRule {
 }
 
 impl RegexRule for TexRule {
-	fn name(&self) -> &'static str { "Tex" }
+	fn name(&self) -> &'static str {
+		"Tex"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Code") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Code")
+	}
 
-	fn regexes(&self) -> &[regex::Regex] { &self.re }
+	fn regexes(&self) -> &[regex::Regex] {
+		&self.re
+	}
 
-	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool {
+		true
+	}
 
 	fn on_regex_match(
 		&self,

@@ -94,11 +94,6 @@ impl SharedState {
 			.borrow_mut()
 			.insert("main".to_string(), Kernel::new(parser));
 
-		// Default styles & layouts
-		parser.rules().iter().for_each(|rule| {
-			rule.register_shared_state(&s);
-		});
-
 		s
 	}
 }
@@ -345,8 +340,13 @@ impl<'a, 'b> ParserState<'a, 'b> {
 	}
 }
 
+/// Set mode for the parser.
+///
+/// This is useful when the parser is invoked recursively as it can modify how the parser
+/// processes text.
 #[derive(Default)]
 pub struct ParseMode {
+	/// Sets the parser to only parse element-compatible types.
 	pub paragraph_only: bool,
 }
 

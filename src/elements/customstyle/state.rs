@@ -17,7 +17,9 @@ pub struct CustomStyleState {
 }
 
 impl RuleState for CustomStyleState {
-	fn scope(&self) -> Scope { Scope::PARAGRAPH }
+	fn scope(&self) -> Scope {
+		Scope::PARAGRAPH
+	}
 
 	fn on_remove(&self, state: &ParserState, document: &dyn Document) -> Vec<Report> {
 		let mut reports = vec![];

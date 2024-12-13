@@ -21,7 +21,9 @@ pub struct LayoutState {
 }
 
 impl RuleState for LayoutState {
-	fn scope(&self) -> Scope { Scope::DOCUMENT }
+	fn scope(&self) -> Scope {
+		Scope::DOCUMENT
+	}
 
 	fn on_remove(&self, state: &ParserState, document: &dyn Document) -> Vec<Report> {
 		let mut reports = vec![];

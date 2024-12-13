@@ -53,13 +53,21 @@ impl BaseVariable {
 }
 
 impl Variable for BaseVariable {
-	fn location(&self) -> &Token { &self.location }
+	fn location(&self) -> &Token {
+		&self.location
+	}
 
-	fn name(&self) -> &str { self.name.as_str() }
+	fn name(&self) -> &str {
+		self.name.as_str()
+	}
 
-	fn to_string(&self) -> String { self.value.clone() }
+	fn to_string(&self) -> String {
+		self.value.clone()
+	}
 
-	fn value_token(&self) -> &Token { &self.value_token }
+	fn value_token(&self) -> &Token {
+		&self.value_token
+	}
 
 	fn parse<'a>(&self, state: &ParserState, _location: Token, document: &'a dyn Document<'a>) {
 		let source = Rc::new(VirtualSource::new(
@@ -97,13 +105,21 @@ impl PathVariable {
 }
 
 impl Variable for PathVariable {
-	fn location(&self) -> &Token { &self.location }
+	fn location(&self) -> &Token {
+		&self.location
+	}
 
-	fn name(&self) -> &str { self.name.as_str() }
+	fn name(&self) -> &str {
+		self.name.as_str()
+	}
 
-	fn to_string(&self) -> String { self.path.to_str().unwrap().to_string() }
+	fn to_string(&self) -> String {
+		self.path.to_str().unwrap().to_string()
+	}
 
-	fn value_token(&self) -> &Token { &self.value_token }
+	fn value_token(&self) -> &Token {
+		&self.value_token
+	}
 
 	fn parse(&self, state: &ParserState, location: Token, document: &dyn Document) {
 		let source = Rc::new(VirtualSource::new(

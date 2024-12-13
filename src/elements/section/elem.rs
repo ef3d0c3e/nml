@@ -29,9 +29,15 @@ pub struct Section {
 }
 
 impl Element for Section {
-	fn location(&self) -> &Token { &self.location }
-	fn kind(&self) -> ElemKind { ElemKind::Block }
-	fn element_name(&self) -> &'static str { "Section" }
+	fn location(&self) -> &Token {
+		&self.location
+	}
+	fn kind(&self) -> ElemKind {
+		ElemKind::Block
+	}
+	fn element_name(&self) -> &'static str {
+		"Section"
+	}
 	fn compile(
 		&self,
 		compiler: &Compiler,
@@ -94,13 +100,19 @@ impl Element for Section {
 		}
 	}
 
-	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
+	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> {
+		Some(self)
+	}
 }
 
 impl ReferenceableElement for Section {
-	fn reference_name(&self) -> Option<&String> { self.reference.as_ref() }
+	fn reference_name(&self) -> Option<&String> {
+		self.reference.as_ref()
+	}
 
-	fn refcount_key(&self) -> &'static str { "section" }
+	fn refcount_key(&self) -> &'static str {
+		"section"
+	}
 
 	fn compile_reference(
 		&self,

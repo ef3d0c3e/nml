@@ -153,9 +153,13 @@ impl Default for ListRule {
 }
 
 impl Rule for ListRule {
-	fn name(&self) -> &'static str { "List" }
+	fn name(&self) -> &'static str {
+		"List"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Raw") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Raw")
+	}
 
 	fn next_match(
 		&self,

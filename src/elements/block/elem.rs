@@ -19,9 +19,15 @@ pub struct Block {
 }
 
 impl Element for Block {
-	fn location(&self) -> &Token { &self.location }
-	fn kind(&self) -> ElemKind { ElemKind::Block }
-	fn element_name(&self) -> &'static str { "Block" }
+	fn location(&self) -> &Token {
+		&self.location
+	}
+	fn kind(&self) -> ElemKind {
+		ElemKind::Block
+	}
+	fn element_name(&self) -> &'static str {
+		"Block"
+	}
 	fn compile(
 		&self,
 		compiler: &Compiler,
@@ -32,11 +38,15 @@ impl Element for Block {
 			.compile(self, &self.block_properties, compiler, document, cursor)
 	}
 
-	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
+	fn as_container(&self) -> Option<&dyn ContainerElement> {
+		Some(self)
+	}
 }
 
 impl ContainerElement for Block {
-	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.content }
+	fn contained(&self) -> &Vec<Box<dyn Element>> {
+		&self.content
+	}
 
 	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
 		self.content.push(elem);

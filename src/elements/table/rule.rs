@@ -323,9 +323,13 @@ impl Default for TableRule {
 }
 
 impl Rule for TableRule {
-	fn name(&self) -> &'static str { "Table" }
+	fn name(&self) -> &'static str {
+		"Table"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Toc") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Toc")
+	}
 
 	fn next_match(
 		&self,

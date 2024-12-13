@@ -47,10 +47,14 @@ pub trait Element: Downcast + core::fmt::Debug {
 	fn element_name(&self) -> &'static str;
 
 	/// Gets the element as a referenceable i.e an element that can be referenced
-	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { None }
+	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> {
+		None
+	}
 
 	/// Gets the element as a container containing other elements
-	fn as_container(&self) -> Option<&dyn ContainerElement> { None }
+	fn as_container(&self) -> Option<&dyn ContainerElement> {
+		None
+	}
 
 	/// Compiles element
 	fn compile(
@@ -95,11 +99,17 @@ pub trait ContainerElement: Element {
 pub struct DocumentEnd(pub Token);
 
 impl Element for DocumentEnd {
-	fn location(&self) -> &Token { &self.0 }
+	fn location(&self) -> &Token {
+		&self.0
+	}
 
-	fn kind(&self) -> ElemKind { ElemKind::Invisible }
+	fn kind(&self) -> ElemKind {
+		ElemKind::Invisible
+	}
 
-	fn element_name(&self) -> &'static str { "Document End" }
+	fn element_name(&self) -> &'static str {
+		"Document End"
+	}
 
 	fn compile(
 		&self,

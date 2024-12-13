@@ -258,7 +258,9 @@ impl LanguageServer for Backend {
 			.await;
 	}
 
-	async fn shutdown(&self) -> tower_lsp::jsonrpc::Result<()> { Ok(()) }
+	async fn shutdown(&self) -> tower_lsp::jsonrpc::Result<()> {
+		Ok(())
+	}
 
 	async fn did_open(&self, params: DidOpenTextDocumentParams) {
 		self.client
