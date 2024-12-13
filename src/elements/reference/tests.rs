@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::compiler::compiler::Target;
 use crate::compiler::process::process_from_memory;
-use crate::document::document::CrossReference;
+use crate::document::references::CrossReference;
 use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::reference::elem::ExternalReference;
 use crate::elements::reference::elem::InternalReference;

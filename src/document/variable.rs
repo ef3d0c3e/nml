@@ -8,16 +8,21 @@ use crate::parser::source::VirtualSource;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+/// Trait for document variables
 pub trait Variable {
+	/// Gets the definition location of the variable
 	fn location(&self) -> &Token;
 
+	/// Gets the name of the variable
 	fn name(&self) -> &str;
 
 	/// Converts variable to a string
 	fn to_string(&self) -> String;
 
+	/// The token when the variable value was defined from
 	fn value_token(&self) -> &Token;
 
+	/// Expands the variable when it is requested
 	fn parse<'a>(&self, state: &ParserState, location: Token, document: &'a dyn Document<'a>);
 }
 
@@ -27,6 +32,7 @@ impl core::fmt::Debug for dyn Variable {
 	}
 }
 
+/// Base variables, a variable that is parsed when invoked
 #[derive(Debug)]
 pub struct BaseVariable {
 	location: Token,
@@ -70,6 +76,7 @@ impl Variable for BaseVariable {
 	}
 }
 
+/// A path-aware variable, expanded as text when processed
 #[derive(Debug)]
 pub struct PathVariable {
 	location: Token,

@@ -8,6 +8,9 @@ use downcast_rs::Downcast;
 
 use super::document::Document;
 
+/// The kind for an element
+///
+/// The kind of an element determines how it affects paragraphing as well as nested elements.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ElemKind {
 	/// An invisible element (i.e comment)

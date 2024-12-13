@@ -7,7 +7,7 @@ use runtime_format::FormatKeyError;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
-use crate::document::document::CrossReference;
+use crate::document::references::CrossReference;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;

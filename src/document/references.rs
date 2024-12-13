@@ -1,5 +1,16 @@
+use serde::{Deserialize, Serialize};
+
 use super::document::Document;
 
+/// Validates the name of a reference, returning an error message in case the name is invalid
+///
+/// # Notes
+///
+/// A valid reference name must not be empty and cannot contain the following:
+///  - Ascii punctuation outside of `.` and `_`. This is imposed in order to avoid confusion when
+///  passing a reference as a property, as properties are often delimited by `[]` or `:`
+///  - white spaces, e.g spaces, tabs or `\n`
+///  - no special ascii characters (no control sequences)
 pub fn validate_refname<'a>(
 	document: &dyn Document,
 	name: &'a str,
@@ -75,5 +86,34 @@ pub mod tests {
 
 		// Duplicate
 		assert!(validate_refname(&*doc, "ref", true).is_err());
+	}
+}
+
+/// References inside the current document
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum ElemReference {
+	Direct(usize),
+
+	// Reference nested inside another element, e.g [`Paragraph`] or [`Media`]
+	Nested(usize, usize),
+}
+
+/// A reference that points to another document. Either the other document is specified by name or
+/// unspecified -- in which case all documents are searched for the reference.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CrossReference {
+	/// When the referenced document is unspecified
+	Unspecific(String),
+
+	/// When the referenced document is specified
+	Specific(String, String),
+}
+
+impl core::fmt::Display for CrossReference {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			CrossReference::Unspecific(name) => write!(f, "#{name}"),
+			CrossReference::Specific(doc_name, name) => write!(f, "{doc_name}#{name}"),
+		}
 	}
 }

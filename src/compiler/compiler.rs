@@ -5,9 +5,9 @@ use std::rc::Rc;
 
 use rusqlite::Connection;
 
-use crate::document::document::CrossReference;
 use crate::document::document::Document;
-use crate::document::document::ElemReference;
+use crate::document::references::CrossReference;
+use crate::document::references::ElemReference;
 use crate::document::variable::Variable;
 
 use super::postprocess::PostProcess;

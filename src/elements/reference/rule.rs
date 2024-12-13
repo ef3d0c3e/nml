@@ -1,6 +1,6 @@
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-use document::document::CrossReference;
+use crate::document::references::CrossReference;
 use lsp::semantic::Semantics;
 use parser::property::PropertyParser;
 use parser::util::escape_source;

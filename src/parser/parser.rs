@@ -23,6 +23,8 @@ use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
 use ariadne::Color;
 
+/// Store the different colors used for diagnostics.
+/// Colors have to be set to `None` for the language server.
 #[derive(Debug)]
 pub struct ReportColors {
 	pub error: Option<Color>,
@@ -51,7 +53,7 @@ impl ReportColors {
 	}
 }
 
-/// The state that is shared with the state's childre
+/// The state that is shared between all parsers instances
 pub struct SharedState {
 	pub rule_state: RefCell<RuleStateHolder>,
 
@@ -184,14 +186,14 @@ impl<'a, 'b> ParserState<'a, 'b> {
 	///  2. (Optional) The winning match with it's match data
 	/// If the winning match is None, it means that the document has no more
 	/// rule to match. I.e The rest of the content should be added as a
-	/// [`crate::elements::text::Text`] element.
+	/// [`crate::elements::text::elem::Text`] element.
 	/// The match data should be passed to the [`Rule::on_match`] method.
 	///
 	/// # Strategy
 	///
 	/// This function call [`Rule::next_match`] on the rules defined for the
 	/// parser. It then takes the rule that has the closest `next_match` and
-	/// returns it. If next_match starts on an escaped character i.e `\\`,
+	/// returns it. If `next_match` starts on an escaped character i.e `\\`,
 	/// then it starts over to find another match for that rule.
 	/// In case multiple rules have the same `next_match`, the rules that are
 	/// defined first in the parser are prioritized. See [Parser::add_rule] for
@@ -303,12 +305,13 @@ impl<'a, 'b> ParserState<'a, 'b> {
 
 	/// Resets the position and the match_data for a given rule. This is used
 	/// in order to have 'dynamic' rules that may not match at first, but may match
-	/// in the future when modified.
+	/// in the future when modified. E.g when changing the rules for a [`Rule`], call this function
+	/// in order to make sure the old data doesn't prevent the rule from matching.
 	///
 	/// This function also recursively calls itself on it's `parent`, in order
 	/// to fully reset the match.
 	///
-	/// See [`crate::elements::customstyle::CustomStyleRule`] for an example of how this is used.
+	/// See [`crate::elements::customstyle::rule::CustomStyleRule`] for an example of how this is used.
 	///
 	/// # Error
 	///
@@ -403,6 +406,8 @@ pub trait Parser {
 	) -> ParserState<'p, 'a>;
 
 	/// Adds a rule to the parser.
+	///
+	/// The rule is added at the end, therefore it has the least priority.
 	///
 	/// # Warning
 	///

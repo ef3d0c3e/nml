@@ -46,7 +46,7 @@ fn main() -> ExitCode {
 	opts.optopt("o", "output", "Output path", "PATH");
 	opts.optopt("d", "database", "Cache database location", "PATH");
 	opts.optflag("", "force-rebuild", "Force rebuilding of cached documents");
-	opts.optmulti("z", "debug", "Debug options", "OPTS");
+	opts.optmulti("z", "debug", "Debug options", "[ast,ref,var]");
 	opts.optflag("h", "help", "Print this help menu");
 	opts.optflag("v", "version", "Print program version and licenses");
 

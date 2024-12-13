@@ -4,41 +4,12 @@ use std::cell::RefMut;
 use std::collections::hash_map::HashMap;
 use std::rc::Rc;
 
-use serde::Deserialize;
-use serde::Serialize;
-
 use crate::parser::source::Source;
 
 use super::element::Element;
 use super::element::ReferenceableElement;
+use super::references::ElemReference;
 use super::variable::Variable;
-
-/// For references inside the current document
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum ElemReference {
-	Direct(usize),
-
-	// Reference nested inside another element, e.g [`Paragraph`] or [`Media`]
-	Nested(usize, usize),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CrossReference {
-	/// When the referenced document is unspecified
-	Unspecific(String),
-
-	/// When the referenced document is specified
-	Specific(String, String),
-}
-
-impl core::fmt::Display for CrossReference {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			CrossReference::Unspecific(name) => write!(f, "#{name}"),
-			CrossReference::Specific(doc_name, name) => write!(f, "{doc_name}#{name}"),
-		}
-	}
-}
 
 #[derive(Debug)]
 pub struct Scope {

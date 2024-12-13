@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use crate::document::document::CrossReference;
+use crate::document::references::CrossReference;
 
 use super::compiler::CompiledDocument;
 use super::compiler::Target;
