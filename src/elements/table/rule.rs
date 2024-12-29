@@ -18,6 +18,7 @@ use crate::report_err;
 use ariadne::Fmt;
 use document::element::ElemKind;
 use document::element::Element;
+use document::references::validate_refname;
 use elements::block::elem::Block;
 use elements::list::elem::ListEntry;
 use elements::list::elem::ListMarker;
@@ -313,7 +314,7 @@ impl Default for TableRule {
 
 		Self {
 			properties: PropertyParser { properties: props },
-			re: Regex::new(r"(?:^|\n)\|").unwrap(),
+			re: Regex::new(r"(?:(?:^|\n):TABLE(?:[^\S\r\n]+?\{(.*)\})?[^\S\r\n]*)?(?:^|\n)\|").unwrap(),
 			cell_re: Regex::new(
 				r"\|(?:[^\S\r\n]*:([^\n](?:\\[^\n]|[^\\\\])*?):)?([^\n](?:\\[^\n]|[^\n\\\\])*?)\|",
 			)
@@ -354,9 +355,50 @@ impl Rule for TableRule {
 	) -> (Cursor, Vec<Report>) {
 		let mut reports = vec![];
 		let mut end_cursor = cursor.clone();
+		let Some(table_capture) = self.re.captures_at(cursor.source.content(), cursor.pos) else {
+			panic!("Invalid table regex");
+		};
 		if cursor.source.content().as_bytes()[cursor.pos] == b'\n' {
 			end_cursor.pos += 1;
 		}
+
+		// Get table refname if any
+		let refname = match table_capture.get(1) {
+			Some(m) => match validate_refname(document, m.as_str(), true) {
+				Ok(name) => {
+					if let Some((sems, tokens)) =
+						Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
+					{
+						if let Some(range) = table_capture.get(0).map(|m| m.range()) {
+							let start = if cursor.source.content().as_bytes()[range.start] == b'\n' {
+								range.start + 1
+							} else {
+								range.start
+							};
+							sems.add(start..start + ":TABLE".len(), tokens.table_specifier);
+							sems.add(m.start()-1..m.end()+1, tokens.table_reference);
+						}
+					}
+					Some(name.to_owned())
+				},
+				Err(err) => {
+					report_err!(
+						&mut reports,
+						cursor.source.clone(),
+						"Invalid Table Refname".into(),
+						span(
+							m.range(),
+							format!(
+								"Reference name `{}` is invalid for a table: {err}",
+								m.as_str().fg(state.parser.colors().highlight),
+							)
+						),
+					);
+					return (end_cursor, reports);
+				},
+			}
+			None => None,
+		};
 
 		let mut cell_pos = GridPosition(0, 0);
 		let mut dimensions = cell_pos;
@@ -630,6 +672,7 @@ impl Rule for TableRule {
 				rows: table_state.rows,
 				properties: table_state.properties,
 				data: cells,
+				reference: refname,
 			}),
 		);
 

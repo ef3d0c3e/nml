@@ -217,11 +217,13 @@ impl ReferenceableElement for Medium {
 				// TODO Handle other kind of media
 				match self.media_type {
 					MediaType::IMAGE => Ok(format!(
-						"<a class=\"medium-ref\" href=\"#medium-{refid}\">{caption}<img src=\"{}\"></a>",
+						"<a class=\"medium-ref\" href=\"#{}\">{caption}<img src=\"{}\"></a>",
+						self.refid(compiler, refid),
 						self.uri
 					)),
 					MediaType::VIDEO => Ok(format!(
-						"<a class=\"medium-ref\" href=\"#medium-{refid}\">{caption}<video><source src=\"{0}\"></video></a>",
+						"<a class=\"medium-ref\" href=\"#{}\">{caption}<video><source src=\"{}\"></video></a>",
+						self.refid(compiler, refid),
 						self.uri
 					)),
 					_ => todo!(""),

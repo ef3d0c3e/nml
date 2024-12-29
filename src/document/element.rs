@@ -71,6 +71,9 @@ pub trait ReferenceableElement: Element {
 	fn reference_name(&self) -> Option<&String>;
 
 	/// Key for refcounting
+	///
+	/// Each unique key will have a unique associated counter.
+	/// This is used to have different counters when referencing tables, sections or media.
 	fn refcount_key(&self) -> &'static str;
 
 	/// Creates the reference element

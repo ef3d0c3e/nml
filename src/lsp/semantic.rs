@@ -174,6 +174,8 @@ pub struct Tokens {
 	pub layout_props_sep: (u32, u32),
 	pub layout_type: (u32, u32),
 
+	pub table_specifier: (u32, u32),
+	pub table_reference: (u32, u32),
 	pub table_sep: (u32, u32),
 	pub table_props_sep: (u32, u32),
 
@@ -274,6 +276,8 @@ impl Tokens {
 			layout_props_sep: token!("operator"),
 			layout_type: token!("function"),
 
+			table_specifier: token!("comment"),
+			table_reference: token!("enum", "async"),
 			table_sep: token!("comment"),
 			table_props_sep: token!("operator"),
 

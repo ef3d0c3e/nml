@@ -4,6 +4,8 @@ use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::document::element::ReferenceableElement;
+use crate::elements::reference::elem::InternalReference;
 use crate::parser::source::Token;
 
 /// Converts to style
@@ -205,6 +207,8 @@ pub struct Table {
 	pub(crate) properties: TableProperties,
 	/// Content of the table
 	pub(crate) data: Vec<Cell>,
+	/// Optional reference name for the table
+	pub(crate) reference: Option<String>,
 }
 
 impl Element for Table {
@@ -325,4 +329,41 @@ impl Element for Table {
 
 		Ok(result)
 	}
+
+	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> {
+		Some(self)
+	}
+}
+
+impl ReferenceableElement for Table {
+    fn reference_name(&self) -> Option<&String> {
+        self.reference.as_ref()
+    }
+
+    fn refcount_key(&self) -> &'static str {
+		"table"
+    }
+
+    fn compile_reference(
+		    &self,
+		    compiler: &Compiler,
+		    _document: &dyn Document,
+		    reference: &InternalReference,
+		    refid: usize,
+	    ) -> Result<String, String> {
+		match compiler.target() {
+			Target::HTML => {
+				let caption = reference
+					.caption()
+					.map_or(format!("(Table {refid})"), |cap| cap.clone());
+
+				Ok(format!("<a class=\"table-ref\" href=\"#{}\">{caption}</a>", self.refid(compiler, refid)))
+			},
+			_ => todo!(""),
+		}
+    }
+
+    fn refid(&self, _compiler: &Compiler, refid: usize) -> String {
+		format!("table-{refid}")
+    }
 }
