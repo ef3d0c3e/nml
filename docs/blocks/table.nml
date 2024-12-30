@@ -4,16 +4,15 @@
 # Tables
 
 NML support for tables is still very limited, though it is possible to build complex layouts like this one:
-#+LAYOUT_BEGIN Centered
+:TABLE {sample_table} Sample table
 | **First column**       |:hspan=2: **Second column** |
 |:align=center: Centered | B            | C           |
 |:hspan=2: 1                            | 2           |
 
-#+LAYOUT_END
-
 
 #+LAYOUT_BEGIN[title=Given by the following code] Spoiler
 ``Plain Text,
+:TABLE {sample_table} Sample table
 | **First column**       |:hspan=2: **Second column** |
 |:align=center: Centered | B            | C           |
 |:hspan=2: 1                            | 2           |``
