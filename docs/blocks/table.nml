@@ -18,7 +18,8 @@ NML support for tables is still very limited, though it is possible to build com
 |:hspan=2: 1                            | 2           |``
 #+LAYOUT_END
 
-When a line starts with `|` is is considered as the start of a table. Other `|`'s delimit the cells of a table row.
+When a line starts with `|` it is considered as the start of a table. Other `|`'s delimit the cells of a table row.
+You can also use `:TABLE {refname} Title` before the first line of the table, to make the table into a referenceable element.
 
 # Properties
 

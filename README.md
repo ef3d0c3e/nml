@@ -47,7 +47,7 @@ cargo build --release --bin nml
  - [x] LSP
  - [ ] Complete Lua api
  - [ ] Documentation
- - [ ] Table
+ - [x] Table
  - [ ] LaTeX output
 
 # License

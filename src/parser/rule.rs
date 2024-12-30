@@ -1,6 +1,5 @@
 use super::parser::ParseMode;
 use super::parser::ParserState;
-use super::parser::SharedState;
 use super::reports::Report;
 use super::source::Cursor;
 use super::source::Token;

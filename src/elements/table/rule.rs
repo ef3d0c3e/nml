@@ -122,7 +122,7 @@ fn parse_properties(
 	position: &GridPosition,
 	table_state: &mut TableState,
 ) -> Option<CellProperties> {
-	let mut parse_span = |reports: &mut Vec<Report>, key: &'static str| {
+	let parse_span = |reports: &mut Vec<Report>, key: &'static str| {
 		properties.get_opt(reports, key, |_, value| {
 			let result = value
 				.value

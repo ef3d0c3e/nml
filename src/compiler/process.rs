@@ -91,11 +91,6 @@ pub fn process(
 			.modified()
 			.map_err(|err| format!("Unable to query modification time for `{file:#?}`: {err}"))?;
 
-		// Move to file's directory
-		let file_parent_path = file
-			.parent()
-			.ok_or(format!("Failed to get parent path for `{file:#?}`"))?;
-
 		let parse_and_compile = || -> Result<(CompiledDocument, Option<PostProcess>), String> {
 			// Parse
 			let source = SourceFile::new(file.to_str().unwrap().to_string(), None).unwrap();

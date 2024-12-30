@@ -59,7 +59,7 @@ pub enum BorderStyle {
 }
 
 impl ToStyle for Option<BorderStyle> {
-	fn to_style(&self, target: Target) -> String {
+	fn to_style(&self, _target: Target) -> String {
 		if self.is_none() {
 			return String::new();
 		}
