@@ -110,13 +110,9 @@ impl Cached for FormattedTex {
 				svg    BLOB NOT NULL);"
 	}
 
-	fn sql_get_query() -> &'static str {
-		"SELECT svg FROM cached_tex WHERE digest = (?1)"
-	}
+	fn sql_get_query() -> &'static str { "SELECT svg FROM cached_tex WHERE digest = (?1)" }
 
-	fn sql_insert_query() -> &'static str {
-		"INSERT INTO cached_tex (digest, svg) VALUES (?1, ?2)"
-	}
+	fn sql_insert_query() -> &'static str { "INSERT INTO cached_tex (digest, svg) VALUES (?1, ?2)" }
 
 	fn key(&self) -> <Self as Cached>::Key {
 		let mut hasher = Sha512::new();
@@ -127,17 +123,11 @@ impl Cached for FormattedTex {
 }
 
 impl Element for Tex {
-	fn location(&self) -> &Token {
-		&self.location
-	}
+	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		(&self.kind).into()
-	}
+	fn kind(&self) -> ElemKind { (&self.kind).into() }
 
-	fn element_name(&self) -> &'static str {
-		"LaTeX"
-	}
+	fn element_name(&self) -> &'static str { "LaTeX" }
 
 	fn compile(
 		&self,

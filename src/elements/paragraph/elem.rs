@@ -22,17 +22,11 @@ impl Paragraph {
 }
 
 impl Element for Paragraph {
-	fn location(&self) -> &Token {
-		&self.location
-	}
+	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		ElemKind::Special
-	}
+	fn kind(&self) -> ElemKind { ElemKind::Special }
 
-	fn element_name(&self) -> &'static str {
-		"Paragraph"
-	}
+	fn element_name(&self) -> &'static str { "Paragraph" }
 
 	fn compile(
 		&self,
@@ -66,15 +60,11 @@ impl Element for Paragraph {
 		}
 	}
 
-	fn as_container(&self) -> Option<&dyn ContainerElement> {
-		Some(self)
-	}
+	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
 }
 
 impl ContainerElement for Paragraph {
-	fn contained(&self) -> &Vec<Box<dyn Element>> {
-		&self.content
-	}
+	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.content }
 
 	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
 		if elem.location().source() == self.location().source() {

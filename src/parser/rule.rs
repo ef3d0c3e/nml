@@ -108,9 +108,7 @@ pub trait Rule: Downcast {
 	) -> (Cursor, Vec<Report>);
 
 	/// Registers lua bindings for this rule
-	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
-		vec![]
-	}
+	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }
 impl_downcast!(Rule);
 
@@ -148,19 +146,13 @@ pub trait RegexRule {
 		matches: regex::Captures,
 	) -> Vec<Report>;
 
-	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
-		vec![]
-	}
+	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }
 
 impl<T: RegexRule + 'static> Rule for T {
-	fn name(&self) -> &'static str {
-		RegexRule::name(self)
-	}
+	fn name(&self) -> &'static str { RegexRule::name(self) }
 
-	fn previous(&self) -> Option<&'static str> {
-		RegexRule::previous(self)
-	}
+	fn previous(&self) -> Option<&'static str> { RegexRule::previous(self) }
 
 	/// Finds the next match starting from [`Cursor`]
 	fn next_match(

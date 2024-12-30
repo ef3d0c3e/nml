@@ -36,17 +36,13 @@ impl core::fmt::Display for dyn Source {
 }
 
 impl std::cmp::PartialEq for dyn Source {
-	fn eq(&self, other: &Self) -> bool {
-		self.name() == other.name()
-	}
+	fn eq(&self, other: &Self) -> bool { self.name() == other.name() }
 }
 
 impl std::cmp::Eq for dyn Source {}
 
 impl std::hash::Hash for dyn Source {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.name().hash(state)
-	}
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) { self.name().hash(state) }
 }
 
 /// [`SourceFile`] is a type of [`Source`] that represents a real file.
@@ -86,21 +82,13 @@ impl SourceFile {
 	}
 
 	/// Gets the path of this [`SourceFile`]
-	pub fn path(&self) -> &String {
-		&self.path
-	}
+	pub fn path(&self) -> &String { &self.path }
 }
 
 impl Source for SourceFile {
-	fn location(&self) -> Option<&Token> {
-		self.location.as_ref()
-	}
-	fn name(&self) -> &String {
-		&self.path
-	}
-	fn content(&self) -> &String {
-		&self.content
-	}
+	fn location(&self) -> Option<&Token> { self.location.as_ref() }
+	fn name(&self) -> &String { &self.path }
+	fn content(&self) -> &String { &self.content }
 }
 
 /// Stores the offsets in a virtual source
@@ -185,15 +173,9 @@ impl VirtualSource {
 }
 
 impl Source for VirtualSource {
-	fn location(&self) -> Option<&Token> {
-		Some(&self.location)
-	}
-	fn name(&self) -> &String {
-		&self.name
-	}
-	fn content(&self) -> &String {
-		&self.content
-	}
+	fn location(&self) -> Option<&Token> { Some(&self.location) }
+	fn name(&self) -> &String { &self.name }
+	fn content(&self) -> &String { &self.content }
 }
 
 /// Trait for accessing position in a parent [`SourceFile`]
@@ -282,9 +264,7 @@ pub struct Cursor {
 }
 
 impl Cursor {
-	pub fn new(pos: usize, source: Rc<dyn Source>) -> Self {
-		Self { pos, source }
-	}
+	pub fn new(pos: usize, source: Rc<dyn Source>) -> Self { Self { pos, source } }
 
 	/// Creates [`Cursor`] at `new_pos` in the same [`Source`]
 	pub fn at(&self, new_pos: usize) -> Self {
@@ -382,24 +362,16 @@ pub struct Token {
 
 impl Token {
 	/// Creates a new token from a range and a source
-	pub fn new(range: Range<usize>, source: Rc<dyn Source>) -> Self {
-		Self { range, source }
-	}
+	pub fn new(range: Range<usize>, source: Rc<dyn Source>) -> Self { Self { range, source } }
 
 	/// Retrieve the source of the token
-	pub fn source(&self) -> Rc<dyn Source> {
-		self.source.clone()
-	}
+	pub fn source(&self) -> Rc<dyn Source> { self.source.clone() }
 
 	/// Get the start byte position of the token
-	pub fn start(&self) -> usize {
-		self.range.start
-	}
+	pub fn start(&self) -> usize { self.range.start }
 
 	/// Get the end byte position of the token
-	pub fn end(&self) -> usize {
-		self.range.end
-	}
+	pub fn end(&self) -> usize { self.range.end }
 
 	/// Get a byte position from a grapheme offset
 	///

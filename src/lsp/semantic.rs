@@ -176,6 +176,7 @@ pub struct Tokens {
 
 	pub table_specifier: (u32, u32),
 	pub table_reference: (u32, u32),
+	pub table_title: (u32, u32),
 	pub table_sep: (u32, u32),
 	pub table_props_sep: (u32, u32),
 
@@ -278,6 +279,7 @@ impl Tokens {
 
 			table_specifier: token!("comment"),
 			table_reference: token!("enum", "async"),
+			table_title: token!("string"),
 			table_sep: token!("comment"),
 			table_props_sep: token!("operator"),
 

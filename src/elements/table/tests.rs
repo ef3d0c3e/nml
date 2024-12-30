@@ -16,6 +16,10 @@ pub fn parser() {
 		r#"
 | :rvspan=3: 0 | :talign=right: 1 | :chspan=2: |
 | :hspan=2: 2  | :align=center: test           |
+
+:TABLE {refname} Title
+| A | B |
+| 1 | 2 |
 "#
 		.to_string(),
 		None,
@@ -29,9 +33,17 @@ pub fn parser() {
 	);
 
 	let borrow = doc.content().borrow_mut();
-	let table = &borrow[0].downcast_ref::<Table>().unwrap();
-	assert_eq!(table.size, (3, 2));
-	assert_eq!(table.properties.align, Some(Align::Right));
-	assert_eq!(table.rows[0].as_ref().and_then(|row| row.vspan), Some(3));
-	assert_eq!(table.columns[2].as_ref().and_then(|col| col.hspan), Some(2));
+	let table1 = &borrow[0].downcast_ref::<Table>().unwrap();
+	assert_eq!(table1.size, (3, 2));
+	assert_eq!(table1.properties.align, Some(Align::Right));
+	assert_eq!(table1.rows[0].as_ref().and_then(|row| row.vspan), Some(3));
+	assert_eq!(
+		table1.columns[2].as_ref().and_then(|col| col.hspan),
+		Some(2)
+	);
+
+	let table2 = &borrow[1].downcast_ref::<Table>().unwrap();
+	assert_eq!(table2.size, (2, 2));
+	assert_eq!(table2.reference, Some("refname".to_string()));
+	assert_eq!(table2.title, Some("Title".to_string()));
 }

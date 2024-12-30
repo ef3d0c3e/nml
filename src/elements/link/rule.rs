@@ -37,21 +37,13 @@ impl Default for LinkRule {
 }
 
 impl RegexRule for LinkRule {
-	fn name(&self) -> &'static str {
-		"Link"
-	}
+	fn name(&self) -> &'static str { "Link" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Link")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("Link") }
 
-	fn regexes(&self) -> &[Regex] {
-		&self.re
-	}
+	fn regexes(&self) -> &[Regex] { &self.re }
 
-	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool {
-		true
-	}
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
 	fn on_regex_match<'a>(
 		&self,

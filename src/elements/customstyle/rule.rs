@@ -33,13 +33,9 @@ use super::state::STATE_NAME;
 pub struct CustomStyleRule;
 
 impl Rule for CustomStyleRule {
-	fn name(&self) -> &'static str {
-		"Custom Style"
-	}
+	fn name(&self) -> &'static str { "Custom Style" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Style")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("Style") }
 
 	fn next_match(
 		&self,

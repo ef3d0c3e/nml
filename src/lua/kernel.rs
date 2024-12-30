@@ -113,9 +113,7 @@ pub struct KernelHolder {
 }
 
 impl KernelHolder {
-	pub fn get(&self, kernel_name: &str) -> Option<&Kernel> {
-		self.kernels.get(kernel_name)
-	}
+	pub fn get(&self, kernel_name: &str) -> Option<&Kernel> { self.kernels.get(kernel_name) }
 
 	pub fn insert(&mut self, kernel_name: String, kernel: Kernel) {
 		self.kernels.insert(kernel_name, kernel);

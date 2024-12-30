@@ -12,16 +12,10 @@ pub struct Raw {
 }
 
 impl Element for Raw {
-	fn location(&self) -> &Token {
-		&self.location
-	}
-	fn kind(&self) -> ElemKind {
-		self.kind.clone()
-	}
+	fn location(&self) -> &Token { &self.location }
+	fn kind(&self) -> ElemKind { self.kind.clone() }
 
-	fn element_name(&self) -> &'static str {
-		"Raw"
-	}
+	fn element_name(&self) -> &'static str { "Raw" }
 
 	fn compile(
 		&self,

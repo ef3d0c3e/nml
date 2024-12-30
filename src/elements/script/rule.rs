@@ -82,21 +82,13 @@ fn validate_kernel_name(colors: &ReportColors, name: &str) -> Result<String, Str
 }
 
 impl RegexRule for ScriptRule {
-	fn name(&self) -> &'static str {
-		"Script"
-	}
+	fn name(&self) -> &'static str { "Script" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Import")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("Import") }
 
-	fn regexes(&self) -> &[regex::Regex] {
-		&self.re
-	}
+	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-	fn enabled(&self, mode: &ParseMode, id: usize) -> bool {
-		!mode.paragraph_only || id != 0
-	}
+	fn enabled(&self, mode: &ParseMode, id: usize) -> bool { !mode.paragraph_only || id != 0 }
 
 	fn on_regex_match<'a>(
 		&self,

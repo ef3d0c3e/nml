@@ -164,9 +164,7 @@ impl<'a> Compiler<'a> {
 			.push((pos, reference));
 	}
 
-	pub fn target(&self) -> Target {
-		self.target
-	}
+	pub fn target(&self) -> Target { self.target }
 
 	pub fn cache(&self) -> Option<&'a Connection> {
 		self.cache
@@ -314,9 +312,7 @@ pub struct CompiledDocument {
 }
 
 impl CompiledDocument {
-	pub fn get_variable(&self, name: &str) -> Option<&String> {
-		self.variables.get(name)
-	}
+	pub fn get_variable(&self, name: &str) -> Option<&String> { self.variables.get(name) }
 
 	fn sql_table() -> &'static str {
 		"CREATE TABLE IF NOT EXISTS compiled_documents(
@@ -330,9 +326,7 @@ impl CompiledDocument {
 		);"
 	}
 
-	fn sql_get_query() -> &'static str {
-		"SELECT * FROM compiled_documents WHERE input = (?1)"
-	}
+	fn sql_get_query() -> &'static str { "SELECT * FROM compiled_documents WHERE input = (?1)" }
 
 	fn sql_insert_query() -> &'static str {
 		"INSERT OR REPLACE INTO compiled_documents (input, mtime, variables, internal_references, header, body, footer) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"

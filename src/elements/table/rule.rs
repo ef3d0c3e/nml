@@ -314,7 +314,7 @@ impl Default for TableRule {
 
 		Self {
 			properties: PropertyParser { properties: props },
-			re: Regex::new(r"(?:(?:^|\n):TABLE(?:[^\S\r\n]+?\{(.*)\})?[^\S\r\n]*)?(?:^|\n)\|").unwrap(),
+			re: Regex::new(r"(?:(?:^|\n):TABLE(?:[^\S\r\n]+?\{(.*)\})?(.*))?(?:^|\n)(\|)").unwrap(),
 			cell_re: Regex::new(
 				r"\|(?:[^\S\r\n]*:([^\n](?:\\[^\n]|[^\\\\])*?):)?([^\n](?:\\[^\n]|[^\n\\\\])*?)\|",
 			)
@@ -324,13 +324,9 @@ impl Default for TableRule {
 }
 
 impl Rule for TableRule {
-	fn name(&self) -> &'static str {
-		"Table"
-	}
+	fn name(&self) -> &'static str { "Table" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Toc")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("Toc") }
 
 	fn next_match(
 		&self,
@@ -362,25 +358,34 @@ impl Rule for TableRule {
 			end_cursor.pos += 1;
 		}
 
+		// Semantics for the speficier
+		if cursor.source.content().as_bytes()[end_cursor.pos] == b':' {
+			if let Some((sems, tokens)) =
+				Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
+			{
+				if let Some(range) = table_capture.get(0).map(|m| m.range()) {
+					let start = if cursor.source.content().as_bytes()[range.start] == b'\n' {
+						range.start + 1
+					} else {
+						range.start
+					};
+					sems.add(start..start + ":TABLE".len(), tokens.table_specifier);
+				}
+			}
+		}
+
 		// Get table refname if any
 		let refname = match table_capture.get(1) {
 			Some(m) => match validate_refname(document, m.as_str(), true) {
 				Ok(name) => {
+					// Reference semantics
 					if let Some((sems, tokens)) =
 						Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
 					{
-						if let Some(range) = table_capture.get(0).map(|m| m.range()) {
-							let start = if cursor.source.content().as_bytes()[range.start] == b'\n' {
-								range.start + 1
-							} else {
-								range.start
-							};
-							sems.add(start..start + ":TABLE".len(), tokens.table_specifier);
-							sems.add(m.start()-1..m.end()+1, tokens.table_reference);
-						}
+						sems.add(m.start() - 1..m.end() + 1, tokens.table_reference);
 					}
 					Some(name.to_owned())
-				},
+				}
 				Err(err) => {
 					report_err!(
 						&mut reports,
@@ -395,10 +400,32 @@ impl Rule for TableRule {
 						),
 					);
 					return (end_cursor, reports);
-				},
+				}
+			},
+			None => None,
+		};
+
+		// Get table title if any
+		let title = match table_capture.get(2) {
+			Some(m) => {
+				let title = m.as_str().trim();
+				if !title.is_empty() {
+					// Title semantics
+					if let Some((sems, tokens)) =
+						Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
+					{
+						sems.add(m.start()..m.end(), tokens.table_title);
+					}
+
+					Some(title.to_owned())
+				} else {
+					None
+				}
 			}
 			None => None,
 		};
+
+		end_cursor.pos = table_capture.get(3).unwrap().start();
 
 		let mut cell_pos = GridPosition(0, 0);
 		let mut dimensions = cell_pos;
@@ -642,6 +669,12 @@ impl Rule for TableRule {
 				cell_pos.0 = 0;
 			}
 		}
+
+		// Go back 1 character
+		if cursor.source.content().as_bytes()[end_cursor.pos - 1] == b'\n' {
+			end_cursor.pos -= 1;
+		}
+
 		// Checks for cells whose height leads outside the table
 		if let Some((overlap_range, _, size)) = table_state
 			.overlaps
@@ -673,6 +706,7 @@ impl Rule for TableRule {
 				properties: table_state.properties,
 				data: cells,
 				reference: refname,
+				title,
 			}),
 		);
 

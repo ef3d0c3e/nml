@@ -207,22 +207,18 @@ pub struct Table {
 	pub(crate) properties: TableProperties,
 	/// Content of the table
 	pub(crate) data: Vec<Cell>,
+	/// Optional title for the table
+	pub(crate) title: Option<String>,
 	/// Optional reference name for the table
 	pub(crate) reference: Option<String>,
 }
 
 impl Element for Table {
-	fn location(&self) -> &Token {
-		&self.location
-	}
+	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		ElemKind::Block
-	}
+	fn kind(&self) -> ElemKind { ElemKind::Block }
 
-	fn element_name(&self) -> &'static str {
-		"Table"
-	}
+	fn element_name(&self) -> &'static str { "Table" }
 
 	fn compile(
 		&self,
@@ -232,6 +228,20 @@ impl Element for Table {
 	) -> Result<String, String> {
 		// TODO: colgroup
 		let mut result = String::new();
+
+		if self.reference.is_some() {
+			let elemref = document
+				.get_reference(self.reference.as_ref().unwrap().as_str())
+				.unwrap();
+			let refcount = compiler.reference_id(document, elemref);
+			result.push_str(
+				format!(
+					r#"<div class="media"><div id="{}" class="medium">"#,
+					self.refid(compiler, refcount)
+				)
+				.as_str(),
+			);
+		}
 
 		let table_style = self.properties.to_style(compiler.target());
 
@@ -327,43 +337,59 @@ impl Element for Table {
 		}
 		result += "</table>";
 
+		if self.reference.is_some() {
+			let elemref = document
+				.get_reference(self.reference.as_ref().unwrap().as_str())
+				.unwrap();
+			let refcount = compiler.reference_id(document, elemref);
+			result.push_str(
+				format!(
+					r#"<p class="medium-refname">({refcount}) {}</p>"#,
+					self.title.as_ref().map_or("", |s| s.as_str())
+				)
+				.as_str(),
+			);
+			result.push_str("</div></div>");
+		}
+
 		Ok(result)
 	}
 
-	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> {
-		Some(self)
-	}
+	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 }
 
 impl ReferenceableElement for Table {
-    fn reference_name(&self) -> Option<&String> {
-        self.reference.as_ref()
-    }
+	fn reference_name(&self) -> Option<&String> { self.reference.as_ref() }
 
-    fn refcount_key(&self) -> &'static str {
-		"table"
-    }
+	fn refcount_key(&self) -> &'static str {
+		if self.reference.is_some() {
+			"medium"
+		} else {
+			"table"
+		}
+	}
 
-    fn compile_reference(
-		    &self,
-		    compiler: &Compiler,
-		    _document: &dyn Document,
-		    reference: &InternalReference,
-		    refid: usize,
-	    ) -> Result<String, String> {
+	fn compile_reference(
+		&self,
+		compiler: &Compiler,
+		_document: &dyn Document,
+		reference: &InternalReference,
+		refid: usize,
+	) -> Result<String, String> {
 		match compiler.target() {
 			Target::HTML => {
 				let caption = reference
 					.caption()
 					.map_or(format!("(Table {refid})"), |cap| cap.clone());
 
-				Ok(format!("<a class=\"table-ref\" href=\"#{}\">{caption}</a>", self.refid(compiler, refid)))
-			},
+				Ok(format!(
+					"<a class=\"table-ref\" href=\"#{}\">{caption}</a>",
+					self.refid(compiler, refid)
+				))
+			}
 			_ => todo!(""),
 		}
-    }
+	}
 
-    fn refid(&self, _compiler: &Compiler, refid: usize) -> String {
-		format!("table-{refid}")
-    }
+	fn refid(&self, _compiler: &Compiler, refid: usize) -> String { format!("table-{refid}") }
 }

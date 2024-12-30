@@ -104,21 +104,13 @@ impl Default for LayoutRule {
 }
 
 impl RegexRule for LayoutRule {
-	fn name(&self) -> &'static str {
-		"Layout"
-	}
+	fn name(&self) -> &'static str { "Layout" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Media")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("Media") }
 
-	fn regexes(&self) -> &[regex::Regex] {
-		&self.re
-	}
+	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool {
-		!mode.paragraph_only
-	}
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
 
 	fn on_regex_match(
 		&self,

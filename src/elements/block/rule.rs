@@ -46,13 +46,9 @@ impl Default for BlockRule {
 }
 
 impl Rule for BlockRule {
-	fn name(&self) -> &'static str {
-		"Block"
-	}
+	fn name(&self) -> &'static str { "Block" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("List")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("List") }
 
 	fn next_match(
 		&self,

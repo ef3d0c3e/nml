@@ -11,21 +11,13 @@ pub struct Text {
 }
 
 impl Text {
-	pub fn new(location: Token, content: String) -> Text {
-		Text { location, content }
-	}
+	pub fn new(location: Token, content: String) -> Text { Text { location, content } }
 }
 
 impl Element for Text {
-	fn location(&self) -> &Token {
-		&self.location
-	}
-	fn kind(&self) -> ElemKind {
-		ElemKind::Inline
-	}
-	fn element_name(&self) -> &'static str {
-		"Text"
-	}
+	fn location(&self) -> &Token { &self.location }
+	fn kind(&self) -> ElemKind { ElemKind::Inline }
+	fn element_name(&self) -> &'static str { "Text" }
 
 	fn compile(
 		&self,

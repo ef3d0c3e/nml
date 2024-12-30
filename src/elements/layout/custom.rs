@@ -53,13 +53,9 @@ impl Default for Centered {
 }
 
 impl LayoutType for Centered {
-	fn name(&self) -> &'static str {
-		"Centered"
-	}
+	fn name(&self) -> &'static str { "Centered" }
 
-	fn expects(&self) -> Range<usize> {
-		1..1
-	}
+	fn expects(&self) -> Range<usize> { 1..1 }
 
 	fn parse_properties(
 		&self,
@@ -127,13 +123,9 @@ impl Default for Split {
 }
 
 impl LayoutType for Split {
-	fn name(&self) -> &'static str {
-		"Split"
-	}
+	fn name(&self) -> &'static str { "Split" }
 
-	fn expects(&self) -> Range<usize> {
-		2..usize::MAX
-	}
+	fn expects(&self) -> Range<usize> { 2..usize::MAX }
 
 	fn parse_properties(
 		&self,
@@ -200,13 +192,9 @@ impl Default for Spoiler {
 }
 
 impl LayoutType for Spoiler {
-	fn name(&self) -> &'static str {
-		"Spoiler"
-	}
+	fn name(&self) -> &'static str { "Spoiler" }
 
-	fn expects(&self) -> Range<usize> {
-		1..1
-	}
+	fn expects(&self) -> Range<usize> { 1..1 }
 
 	fn parse_properties(
 		&self,

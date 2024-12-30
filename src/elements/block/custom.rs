@@ -80,9 +80,7 @@ impl FormatKey for QuoteFmtPair<'_> {
 }
 
 impl BlockType for Quote {
-	fn name(&self) -> &'static str {
-		"Quote"
-	}
+	fn name(&self) -> &'static str { "Quote" }
 
 	fn parse_properties(
 		&self,
@@ -220,9 +218,7 @@ impl BlockType for Quote {
 pub struct Warning;
 
 impl BlockType for Warning {
-	fn name(&self) -> &'static str {
-		"Warning"
-	}
+	fn name(&self) -> &'static str { "Warning" }
 
 	fn parse_properties(
 		&self,
@@ -262,9 +258,7 @@ impl BlockType for Warning {
 pub struct Note;
 
 impl BlockType for Note {
-	fn name(&self) -> &'static str {
-		"Note"
-	}
+	fn name(&self) -> &'static str { "Note" }
 
 	fn parse_properties(
 		&self,
@@ -304,9 +298,7 @@ impl BlockType for Note {
 pub struct Todo;
 
 impl BlockType for Todo {
-	fn name(&self) -> &'static str {
-		"Todo"
-	}
+	fn name(&self) -> &'static str { "Todo" }
 
 	fn parse_properties(
 		&self,
@@ -346,9 +338,7 @@ impl BlockType for Todo {
 pub struct Tip;
 
 impl BlockType for Tip {
-	fn name(&self) -> &'static str {
-		"Tip"
-	}
+	fn name(&self) -> &'static str { "Tip" }
 
 	fn parse_properties(
 		&self,
@@ -388,9 +378,7 @@ impl BlockType for Tip {
 pub struct Caution;
 
 impl BlockType for Caution {
-	fn name(&self) -> &'static str {
-		"Caution"
-	}
+	fn name(&self) -> &'static str { "Caution" }
 
 	fn parse_properties(
 		&self,

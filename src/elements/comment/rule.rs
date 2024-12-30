@@ -26,21 +26,13 @@ impl Default for CommentRule {
 }
 
 impl RegexRule for CommentRule {
-	fn name(&self) -> &'static str {
-		"Comment"
-	}
+	fn name(&self) -> &'static str { "Comment" }
 
-	fn previous(&self) -> Option<&'static str> {
-		None
-	}
+	fn previous(&self) -> Option<&'static str> { None }
 
-	fn regexes(&self) -> &[Regex] {
-		&self.re
-	}
+	fn regexes(&self) -> &[Regex] { &self.re }
 
-	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool {
-		true
-	}
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
 	fn on_regex_match(
 		&self,

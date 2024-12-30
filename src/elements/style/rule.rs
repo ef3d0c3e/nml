@@ -45,21 +45,13 @@ impl Default for StyleRule {
 }
 
 impl RegexRule for StyleRule {
-	fn name(&self) -> &'static str {
-		"Style"
-	}
+	fn name(&self) -> &'static str { "Style" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Table")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("Table") }
 
-	fn regexes(&self) -> &[regex::Regex] {
-		&self.re
-	}
+	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool {
-		true
-	}
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
 	fn on_regex_match(
 		&self,

@@ -13,15 +13,9 @@ pub struct Style {
 }
 
 impl Element for Style {
-	fn location(&self) -> &Token {
-		&self.location
-	}
-	fn kind(&self) -> ElemKind {
-		ElemKind::Inline
-	}
-	fn element_name(&self) -> &'static str {
-		"Style"
-	}
+	fn location(&self) -> &Token { &self.location }
+	fn kind(&self) -> ElemKind { ElemKind::Inline }
+	fn element_name(&self) -> &'static str { "Style" }
 	fn compile(
 		&self,
 		compiler: &Compiler,

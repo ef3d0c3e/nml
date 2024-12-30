@@ -57,9 +57,7 @@ impl CustomStyleHolder {
 impl std::ops::Deref for CustomStyleHolder {
 	type Target = HashMap<String, Rc<dyn CustomStyle>>;
 
-	fn deref(&self) -> &Self::Target {
-		&self.custom_styles
-	}
+	fn deref(&self) -> &Self::Target { &self.custom_styles }
 }
 
 #[derive(Debug)]
@@ -71,13 +69,9 @@ pub struct LuaCustomStyle {
 }
 
 impl CustomStyle for LuaCustomStyle {
-	fn name(&self) -> &str {
-		self.name.as_str()
-	}
+	fn name(&self) -> &str { self.name.as_str() }
 
-	fn tokens(&self) -> &CustomStyleToken {
-		&self.tokens
-	}
+	fn tokens(&self) -> &CustomStyleToken { &self.tokens }
 
 	fn on_start<'a>(
 		&self,

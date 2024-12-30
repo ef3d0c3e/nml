@@ -39,21 +39,13 @@ pub struct Media {
 }
 
 impl Element for Media {
-	fn location(&self) -> &Token {
-		&self.location
-	}
+	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		ElemKind::Block
-	}
+	fn kind(&self) -> ElemKind { ElemKind::Block }
 
-	fn element_name(&self) -> &'static str {
-		"Media"
-	}
+	fn element_name(&self) -> &'static str { "Media" }
 
-	fn as_container(&self) -> Option<&dyn ContainerElement> {
-		Some(self)
-	}
+	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
 
 	fn compile(
 		&self,
@@ -81,9 +73,7 @@ impl Element for Media {
 }
 
 impl ContainerElement for Media {
-	fn contained(&self) -> &Vec<Box<dyn Element>> {
-		&self.media
-	}
+	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.media }
 
 	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
 		let medium = match elem.downcast_ref::<Medium>() {
@@ -116,21 +106,13 @@ pub struct Medium {
 }
 
 impl Element for Medium {
-	fn location(&self) -> &Token {
-		&self.location
-	}
+	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		ElemKind::Block
-	}
+	fn kind(&self) -> ElemKind { ElemKind::Block }
 
-	fn element_name(&self) -> &'static str {
-		"Medium"
-	}
+	fn element_name(&self) -> &'static str { "Medium" }
 
-	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> {
-		Some(self)
-	}
+	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 
 	fn compile(
 		&self,
@@ -176,7 +158,7 @@ impl Element for Medium {
 					.unwrap_or_default();
 
 				result.push_str(
-					format!(r#"<p class="medium-refname">({refcount}){caption}</p>"#).as_str(),
+					format!(r#"<p class="medium-refname">({refcount}) {caption}</p>"#).as_str(),
 				);
 				if let Some(paragraph) = self.description.as_ref() {
 					result += paragraph
@@ -193,13 +175,9 @@ impl Element for Medium {
 }
 
 impl ReferenceableElement for Medium {
-	fn reference_name(&self) -> Option<&String> {
-		Some(&self.reference)
-	}
+	fn reference_name(&self) -> Option<&String> { Some(&self.reference) }
 
-	fn refcount_key(&self) -> &'static str {
-		"medium"
-	}
+	fn refcount_key(&self) -> &'static str { "medium" }
 
 	fn compile_reference(
 		&self,
@@ -233,7 +211,5 @@ impl ReferenceableElement for Medium {
 		}
 	}
 
-	fn refid(&self, _compiler: &Compiler, refid: usize) -> String {
-		format!("medium-{refid}")
-	}
+	fn refid(&self, _compiler: &Compiler, refid: usize) -> String { format!("medium-{refid}") }
 }

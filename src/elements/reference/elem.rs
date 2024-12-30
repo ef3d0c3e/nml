@@ -23,23 +23,15 @@ pub struct InternalReference {
 }
 
 impl InternalReference {
-	pub fn caption(&self) -> Option<&String> {
-		self.caption.as_ref()
-	}
+	pub fn caption(&self) -> Option<&String> { self.caption.as_ref() }
 }
 
 impl Element for InternalReference {
-	fn location(&self) -> &Token {
-		&self.location
-	}
+	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		ElemKind::Inline
-	}
+	fn kind(&self) -> ElemKind { ElemKind::Inline }
 
-	fn element_name(&self) -> &'static str {
-		"Reference"
-	}
+	fn element_name(&self) -> &'static str { "Reference" }
 
 	fn compile(
 		&self,
@@ -78,9 +70,7 @@ pub struct ExternalReference {
 }
 
 impl ExternalReference {
-	pub fn style(&self) -> &Rc<ExternalReferenceStyle> {
-		&self.style
-	}
+	pub fn style(&self) -> &Rc<ExternalReferenceStyle> { &self.style }
 }
 
 struct FmtPair<'a>(Target, &'a ExternalReference);
@@ -106,17 +96,11 @@ impl FormatKey for FmtPair<'_> {
 }
 
 impl Element for ExternalReference {
-	fn location(&self) -> &Token {
-		&self.location
-	}
+	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		ElemKind::Inline
-	}
+	fn kind(&self) -> ElemKind { ElemKind::Inline }
 
-	fn element_name(&self) -> &'static str {
-		"Reference"
-	}
+	fn element_name(&self) -> &'static str { "Reference" }
 
 	fn compile(
 		&self,

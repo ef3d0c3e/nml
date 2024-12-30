@@ -70,21 +70,13 @@ impl Default for GraphRule {
 }
 
 impl RegexRule for GraphRule {
-	fn name(&self) -> &'static str {
-		"Graphviz"
-	}
+	fn name(&self) -> &'static str { "Graphviz" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Tex")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("Tex") }
 
-	fn regexes(&self) -> &[regex::Regex] {
-		&self.re
-	}
+	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool {
-		!mode.paragraph_only
-	}
+	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
 
 	fn on_regex_match(
 		&self,

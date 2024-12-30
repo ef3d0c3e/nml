@@ -18,13 +18,9 @@ use super::elem::Text;
 pub struct TextRule;
 
 impl Rule for TextRule {
-	fn name(&self) -> &'static str {
-		"Text"
-	}
+	fn name(&self) -> &'static str { "Text" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Link")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("Link") }
 
 	fn next_match(
 		&self,

@@ -26,13 +26,9 @@ impl Default for ParagraphRule {
 }
 
 impl Rule for ParagraphRule {
-	fn name(&self) -> &'static str {
-		"Paragraph"
-	}
+	fn name(&self) -> &'static str { "Paragraph" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Comment")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("Comment") }
 
 	fn next_match(
 		&self,

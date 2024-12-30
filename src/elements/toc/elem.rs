@@ -14,15 +14,9 @@ pub struct Toc {
 }
 
 impl Element for Toc {
-	fn location(&self) -> &Token {
-		&self.location
-	}
-	fn kind(&self) -> ElemKind {
-		ElemKind::Block
-	}
-	fn element_name(&self) -> &'static str {
-		"Toc"
-	}
+	fn location(&self) -> &Token { &self.location }
+	fn kind(&self) -> ElemKind { ElemKind::Block }
+	fn element_name(&self) -> &'static str { "Toc" }
 	fn compile(
 		&self,
 		compiler: &Compiler,

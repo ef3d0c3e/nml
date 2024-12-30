@@ -54,21 +54,13 @@ impl Default for RawRule {
 }
 
 impl RegexRule for RawRule {
-	fn name(&self) -> &'static str {
-		"Raw"
-	}
+	fn name(&self) -> &'static str { "Raw" }
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Variable Substitution")
-	}
+	fn previous(&self) -> Option<&'static str> { Some("Variable Substitution") }
 
-	fn regexes(&self) -> &[regex::Regex] {
-		&self.re
-	}
+	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
-	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool {
-		true
-	}
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
 	fn on_regex_match(
 		&self,

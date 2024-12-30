@@ -22,17 +22,11 @@ pub struct ListMarker {
 }
 
 impl Element for ListMarker {
-	fn location(&self) -> &Token {
-		&self.location
-	}
+	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		ElemKind::Block
-	}
+	fn kind(&self) -> ElemKind { ElemKind::Block }
 
-	fn element_name(&self) -> &'static str {
-		"List Marker"
-	}
+	fn element_name(&self) -> &'static str { "List Marker" }
 
 	fn compile(
 		&self,
@@ -76,17 +70,11 @@ pub struct ListEntry {
 }
 
 impl Element for ListEntry {
-	fn location(&self) -> &Token {
-		&self.location
-	}
+	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind {
-		ElemKind::Block
-	}
+	fn kind(&self) -> ElemKind { ElemKind::Block }
 
-	fn element_name(&self) -> &'static str {
-		"List Entry"
-	}
+	fn element_name(&self) -> &'static str { "List Entry" }
 
 	fn compile(
 		&self,
@@ -130,15 +118,11 @@ impl Element for ListEntry {
 		}
 	}
 
-	fn as_container(&self) -> Option<&dyn ContainerElement> {
-		Some(self)
-	}
+	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
 }
 
 impl ContainerElement for ListEntry {
-	fn contained(&self) -> &Vec<Box<dyn Element>> {
-		&self.content
-	}
+	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.content }
 
 	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
 		if elem.kind() == ElemKind::Block {
