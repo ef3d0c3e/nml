@@ -1,7 +1,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use graphviz_rust::attributes::overlap_scaling;
+use mlua::IntoLua;
 use mlua::Lua;
+use mlua::Table;
 
 use crate::document::document::Document;
 use crate::parser::parser::Parser;
@@ -56,6 +59,9 @@ impl Kernel {
 
 		{
 			let nml_table = lua.create_table().unwrap();
+			nml_table
+				.set("tables", lua.create_table().unwrap())
+				.unwrap();
 
 			for rule in parser.rules() {
 				let table = lua.create_table().unwrap();
@@ -104,6 +110,21 @@ impl Kernel {
 		CTX.set(None);
 
 		ret
+	}
+
+	/// Exports a table to lua
+	pub fn export_table<'lua, K: IntoLua<'lua>>(
+		&'lua self,
+		name: &str,
+		table: Vec<K>,
+	) -> Result<(), String> {
+		let nml: Table<'_> = self.lua.globals().get("nml").unwrap();
+		let tables: Table<'_> = nml.get("tables").unwrap();
+		if let Err(err) = tables.set(name, table) {
+			return Err(err.to_string());
+		}
+
+		Ok(())
 	}
 }
 

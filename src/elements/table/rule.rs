@@ -25,6 +25,7 @@ use elements::list::elem::ListMarker;
 use elements::paragraph::elem::Paragraph;
 use elements::text::elem::Text;
 use lsp::semantic::Semantics;
+use lua::kernel::CTX;
 use parser::property::PropertyMap;
 use parser::source::Token;
 use regex::Regex;
@@ -269,52 +270,66 @@ fn parse_properties(
 #[auto_registry::auto_registry(registry = "rules")]
 pub struct TableRule {
 	properties: PropertyParser,
+	cell_properties: PropertyParser,
 	re: Regex,
 	cell_re: Regex,
 }
 
 impl Default for TableRule {
 	fn default() -> Self {
+		// Table properties
 		let mut props = HashMap::new();
-		// Cell properties
 		props.insert(
+			"export_as".to_string(),
+			Property::new("Export the table to LUA".to_string(), None),
+		);
+
+		// Cell properties
+		let mut cell_props = HashMap::new();
+		cell_props.insert(
 			"vspan".to_string(),
 			Property::new("Cell vertial span".to_string(), None),
 		);
-		props.insert(
+		cell_props.insert(
 			"hspan".to_string(),
 			Property::new("Cell horizontal span".to_string(), None),
 		);
-		props.insert(
+		cell_props.insert(
 			"align".to_string(),
 			Property::new("Cell text alignment".to_string(), None),
 		);
 
 		// Row properties
-		props.insert(
+		cell_props.insert(
 			"ralign".to_string(),
 			Property::new("Row text alignment".to_string(), None),
 		);
-		props.insert(
+		cell_props.insert(
 			"rvspan".to_string(),
 			Property::new("Row vertical span".to_string(), None),
 		);
 
 		// Column properties
-		props.insert(
+		cell_props.insert(
 			"chspan".to_string(),
 			Property::new("Column horizontal span".to_string(), None),
 		);
 
 		// Table properties
-		props.insert(
+		cell_props.insert(
 			"talign".to_string(),
 			Property::new("Table text alignment".to_string(), None),
 		);
 
 		Self {
 			properties: PropertyParser { properties: props },
-			re: Regex::new(r"(?:(?:^|\n):TABLE(?:[^\S\r\n]+?\{(.*)\})?(.*))?(?:^|\n)(\|)").unwrap(),
+			cell_properties: PropertyParser {
+				properties: cell_props,
+			},
+			re: Regex::new(
+				r"(?:(?:^|\n):TABLE(?:\[((?:\\.|[^\\\\])*?)\])?(?:[^\S\r\n]+?\{(.*)\})?(.*))?(?:^|\n)(\|)",
+			)
+			.unwrap(),
 			cell_re: Regex::new(
 				r"\|(?:[^\S\r\n]*:([^\n](?:\\[^\n]|[^\\\\])*?):)?([^\n](?:\\[^\n]|[^\n\\\\])*?)\|",
 			)
@@ -374,8 +389,42 @@ impl Rule for TableRule {
 			}
 		}
 
+		// Parse properties
+		let prop_source = escape_source(
+			cursor.source.clone(),
+			table_capture.get(1).map_or(0..0, |m| m.range()),
+			"Table Properties".into(),
+			'\\',
+			"]",
+		);
+		let properties = match self.properties.parse(
+			"Table",
+			&mut reports,
+			state,
+			Token::new(0..prop_source.content().len(), prop_source),
+		) {
+			Some(props) => props,
+			None => return (end_cursor, reports),
+		};
+
+		// Properties semantics
+		if let (Some((sems, tokens)), Some(props)) = (
+			Semantics::from_source(cursor.source.clone(), &state.shared.lsp),
+			table_capture.get(1).map(|m| m.range()),
+		) {
+			sems.add(props.start - 1..props.start, tokens.table_props_sep);
+			sems.add(props.end..props.end + 1, tokens.table_props_sep);
+		}
+
+		let export_as = match properties.get_opt(&mut reports, "export_as", |_, value| {
+			Result::<_, String>::Ok(value.value.clone())
+		}) {
+			Some(name) => name,
+			None => return (end_cursor, reports),
+		};
+
 		// Get table refname if any
-		let refname = match table_capture.get(1) {
+		let refname = match table_capture.get(2) {
 			Some(m) => match validate_refname(document, m.as_str(), true) {
 				Ok(name) => {
 					// Reference semantics
@@ -406,7 +455,7 @@ impl Rule for TableRule {
 		};
 
 		// Get table title if any
-		let title = match table_capture.get(2) {
+		let title = match table_capture.get(3) {
 			Some(m) => {
 				let title = m.as_str().trim();
 				if !title.is_empty() {
@@ -425,7 +474,7 @@ impl Rule for TableRule {
 			None => None,
 		};
 
-		end_cursor.pos = table_capture.get(3).unwrap().start();
+		end_cursor.pos = table_capture.get(4).unwrap().start();
 
 		let mut cell_pos = GridPosition(0, 0);
 		let mut dimensions = cell_pos;
@@ -457,7 +506,7 @@ impl Rule for TableRule {
 				'\\',
 				":",
 			);
-			let properties = match self.properties.parse(
+			let properties = match self.cell_properties.parse(
 				"Table",
 				&mut reports,
 				state,
@@ -590,6 +639,7 @@ impl Rule for TableRule {
 							captures.get(2).unwrap().range(),
 							end_cursor.source.clone(),
 						),
+						content_location: cell_source.into(),
 						content: parsed_content,
 						properties: cell_properties.clone(),
 					}))
@@ -602,6 +652,7 @@ impl Rule for TableRule {
 						captures.get(2).unwrap().range(),
 						end_cursor.source.clone(),
 					),
+					content_location: cell_source.into(),
 					content: parsed_content,
 					properties: cell_properties.clone(),
 				}));
@@ -694,6 +745,51 @@ impl Rule for TableRule {
 				)
 			);
 			return (end_cursor, reports);
+		}
+
+		if let Some(export_as) = export_as {
+			let mut kernels_borrow = state.shared.kernels.borrow_mut();
+			let kernel = kernels_borrow.get("main").unwrap();
+
+			let mut columns = Vec::with_capacity(dimensions.1);
+			for i in 0..dimensions.1 {
+				let mut row = Vec::with_capacity(dimensions.0);
+				for j in 0..dimensions.0 {
+					match &cells[j + i * dimensions.0] {
+						Cell::Owning(cell_data) => row.push(
+							cell_data.content_location.source().content()
+								[cell_data.content_location.range.clone()]
+							.to_owned(),
+						),
+						Cell::Reference(id) => {
+							if let Cell::Owning(cell_data) = &cells[*id] {
+								row.push(
+									cell_data.content_location.source().content()
+										[cell_data.content_location.range.clone()]
+									.to_owned(),
+								)
+							}
+						}
+					}
+				}
+
+				columns.push(row);
+			}
+
+			if let Err(err) = kernel.export_table(export_as.as_str(), columns) {
+				report_err!(
+					&mut reports,
+					cursor.source.clone(),
+					"Failed to export lua table".into(),
+					span(
+						table_capture.get(0).unwrap().range(),
+						format!(
+							"Table `{}` could not be exported: {err}",
+							export_as.fg(state.parser.colors().info)
+						)
+					)
+				);
+			}
 		}
 
 		state.push(

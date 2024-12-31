@@ -42,7 +42,7 @@ pub fn parser() {
 		Some(2)
 	);
 
-	let table2 = &borrow[1].downcast_ref::<Table>().unwrap();
+	let table2 = &borrow[2].downcast_ref::<Table>().unwrap();
 	assert_eq!(table2.size, (2, 2));
 	assert_eq!(table2.reference, Some("refname".to_string()));
 	assert_eq!(table2.title, Some("Title".to_string()));

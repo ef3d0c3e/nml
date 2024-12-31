@@ -180,6 +180,7 @@ impl ToStyle for TableProperties {
 #[derive(Debug)]
 pub struct CellData {
 	pub(crate) location: Token,
+	pub(crate) content_location: Token,
 	pub(crate) content: Vec<Box<dyn Element>>,
 	pub(crate) properties: CellProperties,
 }
@@ -241,6 +242,8 @@ impl Element for Table {
 				)
 				.as_str(),
 			);
+		} else if self.title.is_some() {
+			result.push_str(format!(r#"<div class="media"><div class="medium">"#,).as_str());
 		}
 
 		let table_style = self.properties.to_style(compiler.target());
@@ -345,6 +348,15 @@ impl Element for Table {
 			result.push_str(
 				format!(
 					r#"<p class="medium-refname">({refcount}) {}</p>"#,
+					self.title.as_ref().map_or("", |s| s.as_str())
+				)
+				.as_str(),
+			);
+			result.push_str("</div></div>");
+		} else if self.title.is_some() {
+			result.push_str(
+				format!(
+					r#"<p class="medium-refname">{}</p>"#,
 					self.title.as_ref().map_or("", |s| s.as_str())
 				)
 				.as_str(),
