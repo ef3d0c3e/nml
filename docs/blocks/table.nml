@@ -19,9 +19,9 @@ NML support for tables is still very limited, though it is possible to build com
 #+LAYOUT_END
 
 When a line starts with `|` it is considered as the start of a table. Other `|`'s delimit the cells of a table row.
-You can also use `:TABLE {refname} Title` before the first line of the table, to make the table into a referenceable element.
+You can also use `:TABLE {refname} Title` before the first line of the table, to make the table into a referenceable element. Tables declared like this are displayed as `media`.
 
-# Properties
+# Cell Properties
 
 On each cell of a table, you may specify properties for the cell, row, column or table. Properties are specified between `:`'s at the start of a cell. It is not possible to redefine an already present property (e.g setting the table text-alignment twice). Below are the supported properties:
 
@@ -36,6 +36,60 @@ On each cell of a table, you may specify properties for the cell, row, column or
  *- `chspan` The horizontal span of the column (1 if unset)
  * **Table** *Each cell will inherit these properties*
  *- `align` Text-alignment for the entire table
+
+# Tables to Lua
+
+You can export a table to use it inside a lua snippet.
+Using `:TABLE[export_as=table1]` will make the table available to lua as `nml.tables.table1`.
+
+**Example**:
+#+LAYOUT_BEGIN Split
+Using Lua, you can perform computations on table rows, cells, etc.
+:TABLE[export_as=measures]
+| Length | Occurences |
+| 1.15   | 357        |
+| 1.20   | 143        |
+| 1.23   | 72         |
+@<main
+function weighted_average(table, i, j)
+	local weighted_sum = 0
+	local total = 0
+	for rowIndex, row in pairs(table) do
+		if rowIndex ~= 1 then
+			weighted_sum = weighted_sum + row[i] * row[j];
+			total = total + row[j]
+		end
+	end
+	return weighted_sum / total
+end
+>@
+
+Average = %<" weighted_average(nml.tables.measures, 1, 2)>%
+#+LAYOUT_NEXT
+Which is given by:
+```Plain Text,
+:TABLE[export_as=measures]
+| Length | Occurences |
+| 1.15   | 357        |
+| 1.20   | 143        |
+| 1.23   | 72         |
+@<main
+function weighted_average(table, i, j)
+	local weighted_sum = 0
+	local total = 0
+	for rowIndex, row in pairs(table) do
+		if rowIndex ~= 1 then
+			weighted_sum = weighted_sum + row[i] * row[j];
+			total = total + row[j]
+		end
+	end
+	return weighted_sum / total
+end
+>@
+
+Average = %<" weighted_average(nml.tables.measures, 1, 2)>%
+```
+#+LAYOUT_END
 
 # Current limitations
 

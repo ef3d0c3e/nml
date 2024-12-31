@@ -120,7 +120,7 @@ impl Kernel {
 	) -> Result<(), String> {
 		let nml: Table<'_> = self.lua.globals().get("nml").unwrap();
 		let tables: Table<'_> = nml.get("tables").unwrap();
-		if let Err(err) = tables.set(name, table) {
+		if let Err(err) = tables.raw_set(name, table) {
 			return Err(err.to_string());
 		}
 
