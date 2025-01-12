@@ -2,7 +2,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::{Compiler, CompilerOutput};
 use crate::document::document::Document;
 use crate::parser::parser::ParserState;
 use crate::parser::reports::Report;
@@ -30,8 +30,8 @@ pub trait BlockType: core::fmt::Debug {
 		properties: &Box<dyn Any>,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String>;
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>>;
 }
 
 /// Holds all registered [`BlockType`]

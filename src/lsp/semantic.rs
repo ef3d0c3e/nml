@@ -147,7 +147,6 @@ pub struct Tokens {
 	pub script_kernel_sep: (u32, u32),
 	pub script_kernel: (u32, u32),
 	pub script_kind: (u32, u32),
-	pub script_content: (u32, u32),
 
 	pub list_bullet: (u32, u32),
 	pub list_props_sep: (u32, u32),
@@ -250,7 +249,6 @@ impl Tokens {
 			script_kernel_sep: token!("operator"),
 			script_kernel: token!("function"),
 			script_kind: token!("function"),
-			script_content: token!("string"),
 
 			list_bullet: token!("macro"),
 			list_props_sep: token!("operator"),

@@ -9,10 +9,12 @@ use graphviz_rust::exec_dot;
 use crate::cache::cache::Cached;
 use crate::cache::cache::CachedError;
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 #[derive(Debug)]
@@ -85,8 +87,8 @@ impl Element for Graphviz {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				static CACHE_INIT: Once = Once::new();
@@ -99,6 +101,7 @@ impl Element for Graphviz {
 				});
 				// TODO: Format svg in a div
 
+				// TODO: Make a task
 				if let Some(con) = compiler.cache() {
 					match self.cached(con, |s| s.dot_to_svg()) {
 						Ok(s) => Ok(s),
@@ -118,5 +121,6 @@ impl Element for Graphviz {
 			}
 			_ => todo!("Unimplemented"),
 		}
+		Ok(())
 	}
 }

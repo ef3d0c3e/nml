@@ -1,14 +1,21 @@
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::future::Future;
 use std::rc::Rc;
 
 use rusqlite::Connection;
 
+use crate::document;
 use crate::document::document::Document;
+use crate::document::element::ElementCompileResult::Content;
+use crate::document::element::ElementCompileResult::Task;
 use crate::document::references::CrossReference;
 use crate::document::references::ElemReference;
 use crate::document::variable::Variable;
+use crate::parser::parser::ReportColors;
+use crate::parser::reports::Report;
 
 use super::postprocess::PostProcess;
 
@@ -17,6 +24,26 @@ pub enum Target {
 	HTML,
 	#[allow(unused)]
 	LATEX,
+}
+
+#[derive(Default)]
+pub struct CompilerOutput
+{
+	pub(self) tasks: Vec<(usize, Box<dyn Future<Output = Result<String, Report>>>)>,
+	pub(self) content: String,
+}
+
+impl CompilerOutput
+{
+	/// Adds content to the output
+	pub fn add_content<S: AsRef<str>>(&mut self, s: S) {
+		self.content.push_str(s.as_ref());
+	}
+
+	/// Adds an async task to the output. The task's result will be appended at the current output position
+	pub fn add_task(&mut self, task: Box<dyn Future<Output = Result<String, Report>>>) {
+		self.tasks.push((self.content.len(), task));
+	}
 }
 
 pub struct Compiler<'a> {
@@ -225,7 +252,7 @@ impl<'a> Compiler<'a> {
 		result
 	}
 
-	pub fn compile(&self, document: &dyn Document) -> (CompiledDocument, PostProcess) {
+	pub fn compile(&self, document: &dyn Document, colors: &ReportColors) -> (CompiledDocument, PostProcess) {
 		let borrow = document.content().borrow();
 
 		// Header
@@ -233,13 +260,14 @@ impl<'a> Compiler<'a> {
 
 		// Body
 		let mut body = r#"<div class="content">"#.to_string();
+		let mut output = CompilerOutput::default();
 
 		for i in 0..borrow.len() {
 			let elem = &borrow[i];
 
-			match elem.compile(self, document, body.len()) {
-				Ok(result) => body.push_str(result.as_str()),
-				Err(err) => println!("Unable to compile element: {err}\n{elem:#?}"),
+			if let Err(reports) = elem.compile(self, document, &mut output)
+			{
+				Report::reports_to_stdout(colors, reports);
 			}
 		}
 		body.push_str("</div>");
@@ -283,6 +311,8 @@ impl<'a> Compiler<'a> {
 			body,
 			footer,
 		};
+
+		// TODO: Process async tasks
 
 		(cdoc, postprocess)
 	}

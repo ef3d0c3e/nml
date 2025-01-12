@@ -5,6 +5,7 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use ariadne::Fmt;
 use document::document::Document;
+use lsp::code::CodeRange;
 use lsp::hints::Hints;
 use lsp::semantic::Semantics;
 use lua::kernel::Kernel;
@@ -141,7 +142,7 @@ impl RegexRule for ScriptRule {
 				&mut reports,
 				token.source(),
 				"Invalid Kernel Code".into(),
-				span(script_range, "Kernel code is empty".into())
+				span(script_range.clone(), "Kernel code is empty".into())
 			);
 		}
 
@@ -151,6 +152,12 @@ impl RegexRule for ScriptRule {
 			if index == 0
 			// Exec @<>@
 			{
+				// Code Ranges
+				if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
+					let range = script_range;
+					coderanges.add(range.start + 1..range.end, "lua".to_string());
+				}
+
 				if let Err(e) = chunk.exec() {
 					report_err!(
 						&mut reports,
@@ -284,7 +291,6 @@ impl RegexRule for ScriptRule {
 				if let Some(kernel) = matches.get(1).map(|m| m.range()) {
 					sems.add(kernel, tokens.script_kernel);
 				}
-				sems.add(matches.get(2).unwrap().range(), tokens.script_content);
 			} else {
 				if let Some(kernel) = matches.get(1).map(|m| m.range()) {
 					sems.add(kernel.start - 1..kernel.start, tokens.script_kernel_sep);
@@ -294,7 +300,6 @@ impl RegexRule for ScriptRule {
 				if let Some(kind) = matches.get(2).map(|m| m.range()) {
 					sems.add(kind, tokens.script_kind);
 				}
-				sems.add(matches.get(3).unwrap().range(), tokens.script_content);
 			}
 			sems.add(range.end - 2..range.end, tokens.script_sep);
 		}

@@ -188,6 +188,22 @@ pub mod macros {
 	}
 
 	#[macro_export]
+	macro_rules! make_err {
+		($source:expr, $message:expr, $($tail:tt)*) => {{
+			let mut r = Report {
+				kind: ReportKind::Error,
+				source: $source,
+				message: $message,
+				note: None,
+				help: None,
+				spans: vec![],
+			};
+			report_label!(r, $($tail)*);
+			r
+		}}
+	}
+
+	#[macro_export]
 	macro_rules! report_err {
 		($reports:expr, $source:expr, $message:expr, $($tail:tt)*) => {{
 			let mut r = Report {

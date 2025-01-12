@@ -1,8 +1,11 @@
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use core::fmt;
 use std::any::Any;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use compiler::compiler::CompilerOutput;
 use runtime_format::FormatArgs;
 use runtime_format::FormatKey;
 use runtime_format::FormatKeyError;
@@ -129,14 +132,14 @@ impl BlockType for Quote {
 		properties: &Box<dyn Any>,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		let quote = properties.downcast_ref::<QuoteData>().unwrap();
 
 		match compiler.target() {
 			HTML => {
-				let mut result = r#"<div class="blockquote-content">"#.to_string();
-				let format_author = || -> Result<String, String> {
+				output.add_content(r#"<div class="blockquote-content">"#);
+				let format_author = || -> Result<String, Vec<Report>> {
 					let mut result = String::new();
 
 					if quote.cite.is_some() || quote.author.is_some() {
@@ -158,9 +161,10 @@ impl BlockType for Quote {
 							_ => panic!(""),
 						};
 						let args = FormatArgs::new(format_string.as_str(), &fmt_pair);
-						args.status().map_err(|err| {
-							format!("Failed to format Blockquote style `{format_string}`: {err}")
-						})?;
+						args.status().map_err(|err| vec![
+							make_err!(block.location.source(), "Invalid Blockquote".into(),
+								span(block.location.range.clone(), format!("Failed to format Blockquote style `{format_string}`: {err}")))] );
+
 						result += args.to_string().as_str();
 						result += "</p>";
 					}
@@ -168,48 +172,44 @@ impl BlockType for Quote {
 				};
 
 				if let Some(url) = &quote.url {
-					result += format!(r#"<blockquote cite="{}">"#, Compiler::sanitize(HTML, url))
-						.as_str();
+					output.add_content(format!(r#"<blockquote cite="{}">"#, Compiler::sanitize(HTML, url))
+						.as_str());
 				} else {
-					result += "<blockquote>";
+					output.add_content("<blockquote>");
 				}
 				if quote.style.author_pos == AuthorPos::Before {
-					result += format_author()?.as_str();
+					output.add_content(format_author()?.as_str());
 				}
 
 				let mut in_paragraph = false;
 				for elem in &block.content {
 					if elem.kind() == ElemKind::Block {
 						if in_paragraph {
-							result += "</p>";
+							output.add_content("</p>");
 							in_paragraph = false;
 						}
-						result += elem
-							.compile(compiler, document, cursor + result.len())?
-							.as_str();
+						elem.compile(compiler, document, output)?;
 					} else {
 						if !in_paragraph {
-							result += "<p>";
+							output.add_content("<p>");
 							in_paragraph = true;
 						}
-						result += elem
-							.compile(compiler, document, cursor + result.len())?
-							.as_str();
+						elem.compile(compiler, document, output)?;
 					}
 				}
 				if in_paragraph {
-					result += "</p>";
+					output.add_content("</p>");
 				}
-				result += "</blockquote>";
+				output.add_content("</blockquote>");
 				if quote.style.author_pos == AuthorPos::After {
-					result += format_author().map_err(|err| err.to_string())?.as_str();
+					output.add_content(format_author()?);
 				}
 
-				result += "</div>";
-				Ok(result)
+				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
+		Ok(())
 	}
 }
 
@@ -235,21 +235,19 @@ impl BlockType for Warning {
 		_properties: &Box<dyn Any>,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
-				let mut result = r#"<div class="block-warning">"#.to_string();
+				output.add_content(r#"<div class="block-warning">"#);
 				for elem in &block.content {
-					result += elem
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
+					elem.compile(compiler, document, output)?;
 				}
-				result += "</div>";
-				Ok(result)
+				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
+		Ok(())
 	}
 }
 
@@ -275,21 +273,20 @@ impl BlockType for Note {
 		_properties: &Box<dyn Any>,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
-				let mut result = r#"<div class="block-note">"#.to_string();
+				output.add_content(r#"<div class="block-note">"#);
 				for elem in &block.content {
-					result += elem
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
+					elem
+						.compile(compiler, document, output)?
 				}
-				result += "</div>";
-				Ok(result)
+				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
+			Ok(())
 	}
 }
 
@@ -315,21 +312,20 @@ impl BlockType for Todo {
 		_properties: &Box<dyn Any>,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
-				let mut result = r#"<div class="block-todo">"#.to_string();
+				output.add_content(r#"<div class="block-todo">"#);
 				for elem in &block.content {
-					result += elem
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
+					elem
+						.compile(compiler, document, output)?
 				}
-				result += "</div>";
-				Ok(result)
+				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
+		Ok(())
 	}
 }
 
@@ -355,21 +351,19 @@ impl BlockType for Tip {
 		_properties: &Box<dyn Any>,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
-				let mut result = r#"<div class="block-tip">"#.to_string();
+				output.add_content(r#"<div class="block-tip">"#);
 				for elem in &block.content {
-					result += elem
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
+					elem.compile(compiler, document, output)?;
 				}
-				result += "</div>";
-				Ok(result)
+				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
+		Ok(())
 	}
 }
 
@@ -395,20 +389,18 @@ impl BlockType for Caution {
 		_properties: &Box<dyn Any>,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
-				let mut result = r#"<div class="block-caution">"#.to_string();
+				output.add_content(r#"<div class="block-caution">"#);
 				for elem in &block.content {
-					result += elem
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
+					elem.compile(compiler, document, output)?;
 				}
-				result += "</div>";
-				Ok(result)
+				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
+		Ok(())
 	}
 }

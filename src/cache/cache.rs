@@ -1,3 +1,7 @@
+use std::collections::HashSet;
+use std::future::Future;
+use std::pin::Pin;
+
 use rusqlite::types::FromSql;
 use rusqlite::Connection;
 use rusqlite::ToSql;
@@ -81,5 +85,20 @@ pub trait Cached {
 				Err(e) => Err(CachedError::SqlErr(e)),
 			}
 		}
+	}
+}
+
+struct Cache<'con>
+{
+	con: &'con mut Connection,
+	tasks: HashSet<Box<dyn Future<Output = ()>>>,
+}
+
+impl<'con> Cache<'con>
+{
+
+	pub fn get<C: Cached, GenFn>(&self, cached: C, f: GenFn)
+	{
+
 	}
 }

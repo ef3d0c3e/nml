@@ -2,10 +2,12 @@ use std::any::Any;
 use std::rc::Rc;
 
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::document::document::Document;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 use super::data::BlockType;
@@ -26,10 +28,9 @@ impl Element for Block {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
-		self.block_type
-			.compile(self, &self.block_properties, compiler, document, cursor)
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
+		self.block_type.compile(self, &self.block_properties, compiler, document, output)
 	}
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }

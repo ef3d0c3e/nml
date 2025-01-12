@@ -1,7 +1,11 @@
+use std::future::Future;
+use std::ops::Try;
 use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::elements::reference::elem::InternalReference;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
@@ -57,8 +61,8 @@ pub trait Element: Downcast + core::fmt::Debug {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String>;
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>>;
 }
 impl_downcast!(Element);
 
@@ -108,8 +112,8 @@ impl Element for DocumentEnd {
 		&self,
 		_compiler: &Compiler,
 		_document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
-		Ok(String::new())
+		_output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
+		Ok(())
 	}
 }
