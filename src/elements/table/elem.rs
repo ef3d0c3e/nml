@@ -223,12 +223,12 @@ impl Element for Table {
 
 	fn element_name(&self) -> &'static str { "Table" }
 
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		mut output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		// TODO: colgroup
 		if self.reference.is_some() {
 			let elemref = document
@@ -315,8 +315,8 @@ impl Element for Table {
 						(h, v) => output.add_content(format!("<td rowspan=\"{v}\" colspan=\"{h}\"{style}>")),
 					}
 					for elem in &cell_data.content {
-						elem
-							.compile(compiler, document, output)?
+						output = elem
+							.compile(compiler, document, output)?;
 					}
 					output.add_content("</td>");
 				}
@@ -354,7 +354,7 @@ impl Element for Table {
 			output.add_content("</div></div>");
 		}
 
-		Ok(())
+		Ok(output)
 	}
 
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }

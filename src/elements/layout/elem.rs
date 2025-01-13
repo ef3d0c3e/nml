@@ -2,9 +2,11 @@ use std::any::Any;
 use std::rc::Rc;
 
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 use super::custom::LayoutToken;
@@ -23,13 +25,13 @@ impl Element for Layout {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 	fn element_name(&self) -> &'static str { "Layout" }
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		self.layout
-			.compile(self.token, self.id, &self.properties, compiler, document)
+			.compile(self.token, self.id, &self.properties, compiler, document, output)
 	}
 }

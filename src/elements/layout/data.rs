@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
-use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::{Compiler, CompilerOutput};
 use crate::document::document::Document;
 use crate::parser::parser::ParserState;
 use crate::parser::reports::Report;
@@ -28,14 +28,15 @@ pub trait LayoutType: core::fmt::Debug {
 	fn expects(&self) -> Range<usize>;
 
 	/// Compile layout
-	fn compile(
-		&self,
+	fn compile<'e>(
+		&'e self,
 		token: LayoutToken,
 		id: usize,
-		properties: &Box<dyn Any>,
-		compiler: &Compiler,
-		document: &dyn Document,
-	) -> Result<String, String>;
+		properties: &'e Box<dyn Any>,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>>;
 }
 
 pub struct LayoutHolder {

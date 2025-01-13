@@ -21,13 +21,13 @@ impl Element for Text {
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Text" }
 
-	fn compile(
+	fn compile<'e>(
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		output.add_content(Compiler::sanitize(compiler.target(), self.content.as_str()));
-		Ok(())
+		Ok(output)
 	}
 }

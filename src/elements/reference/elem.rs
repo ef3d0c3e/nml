@@ -12,7 +12,9 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::references::CrossReference;
+use crate::parser::reports::macros::*;
 use crate::parser::reports::Report;
+use crate::parser::reports::*;
 use crate::parser::source::Token;
 
 use super::style::ExternalReferenceStyle;
@@ -35,32 +37,41 @@ impl Element for InternalReference {
 
 	fn element_name(&self) -> &'static str { "Reference" }
 
-	fn compile(
+	fn compile<'e>(
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let elemref = document
 					.get_reference(self.refname.as_str())
-					.ok_or(format!(
-						"Unable to find reference `{}` in current document",
-						self.refname
+					.ok_or(compile_err!(
+						self.location(),
+						"Failed to compile internal reference".into(),
+						format!(
+							"Unable to find reference `{}` in current document",
+							self.refname
+						)
 					))?;
 				let elem = document.get_from_reference(&elemref).unwrap();
 
-				elem.compile_reference(
-					compiler,
-					document,
-					self,
-					compiler.reference_id(document, elemref),
-				)?;
+				output.add_content(
+					elem.compile_reference(
+						compiler,
+						document,
+						self,
+						compiler.reference_id(document, elemref),
+					)
+					.map_err(|err| {
+						compile_err!(self.location(), "Failed to compile internal reference".into(), err)
+					})?,
+				);
 			}
 			_ => todo!(""),
 		}
-		Ok(())
+		Ok(output)
 	}
 }
 
@@ -105,18 +116,18 @@ impl Element for ExternalReference {
 
 	fn element_name(&self) -> &'static str { "Reference" }
 
-	fn compile(
+	fn compile<'e>(
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let mut result = "<a href=\"".to_string();
 
-				// Link position
-				let crossreference_pos = cursor + result.len();
+				// Add crossreference
+				output.add_external_reference(self.reference.clone());
 
 				if let Some(caption) = &self.caption {
 					result += format!("\">{}</a>", Compiler::sanitize(HTML, caption)).as_str();
@@ -134,17 +145,15 @@ impl Element for ExternalReference {
 						),
 					};
 					let args = FormatArgs::new(format_string.as_str(), &fmt_pair);
-					args.status().map_err(|err| {
+					args.status().map_err(|err| compile_err!(self.location(), "Failed to compile external reference".into(),
 						format!("Failed to format ExternalReference style `{format_string}`: {err}")
-					})?;
+					))?;
 
 					result += format!("\">{}</a>", args).as_str();
 				}
-				// Add crossreference
-				compiler.insert_crossreference(crossreference_pos, self.reference.clone());
-				Ok(result)
 			}
 			_ => todo!(""),
 		}
+		Ok(output)
 	}
 }

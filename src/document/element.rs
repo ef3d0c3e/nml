@@ -1,5 +1,4 @@
 use std::future::Future;
-use std::ops::Try;
 use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
@@ -61,8 +60,8 @@ pub trait Element: Downcast + core::fmt::Debug {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>>;
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>>;
 }
 impl_downcast!(Element);
 
@@ -108,12 +107,12 @@ impl Element for DocumentEnd {
 
 	fn element_name(&self) -> &'static str { "Document End" }
 
-	fn compile(
-		&self,
-		_compiler: &Compiler,
-		_document: &dyn Document,
-		_output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
-		Ok(())
+	fn compile<'e>(
+		&'e self,
+		_compiler: &'e Compiler,
+		_document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		Ok(output)
 	}
 }

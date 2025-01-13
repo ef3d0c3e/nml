@@ -1,4 +1,5 @@
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::parser::parser::ParserState;
@@ -78,14 +79,15 @@ impl LayoutType for Centered {
 		Some(Box::new(style))
 	}
 
-	fn compile(
-		&self,
+	fn compile<'e>(
+		&'e self,
 		token: LayoutToken,
 		_id: usize,
-		properties: &Box<dyn Any>,
-		compiler: &Compiler,
-		_document: &dyn Document,
-	) -> Result<String, String> {
+		properties: &'e Box<dyn Any>,
+		compiler: &'e Compiler,
+		_document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let style = match properties.downcast_ref::<String>().unwrap().as_str() {
@@ -93,13 +95,14 @@ impl LayoutType for Centered {
 					str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
 				};
 				match token {
-					LayoutToken::Begin => Ok(format!(r#"<div class="centered"{style}>"#)),
+					LayoutToken::Begin => output.add_content(format!(r#"<div class="centered"{style}>"#)),
 					LayoutToken::Next => panic!(),
-					LayoutToken::End => Ok(r#"</div>"#.to_string()),
+					LayoutToken::End => output.add_content(r#"</div>"#.to_string()),
 				}
 			}
 			_ => todo!(""),
 		}
+		Ok(output)
 	}
 }
 
@@ -148,14 +151,15 @@ impl LayoutType for Split {
 		Some(Box::new(style))
 	}
 
-	fn compile(
-		&self,
+	fn compile<'e>(
+		&'e self,
 		token: LayoutToken,
 		_id: usize,
-		properties: &Box<dyn Any>,
-		compiler: &Compiler,
-		_document: &dyn Document,
-	) -> Result<String, String> {
+		properties: &'e Box<dyn Any>,
+		compiler: &'e Compiler,
+		_document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let style = match properties.downcast_ref::<String>().unwrap().as_str() {
@@ -163,15 +167,16 @@ impl LayoutType for Split {
 					str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
 				};
 				match token {
-					LayoutToken::Begin => Ok(format!(
+					LayoutToken::Begin => output.add_content(format!(
 						r#"<div class="split-container"><div class="split"{style}>"#
 					)),
-					LayoutToken::Next => Ok(format!(r#"</div><div class="split"{style}>"#)),
-					LayoutToken::End => Ok(r#"</div></div>"#.to_string()),
+					LayoutToken::Next => output.add_content(format!(r#"</div><div class="split"{style}>"#)),
+					LayoutToken::End => output.add_content(r#"</div></div>"#.to_string()),
 				}
 			}
 			_ => todo!(""),
 		}
+		Ok(output)
 	}
 }
 
@@ -217,27 +222,29 @@ impl LayoutType for Spoiler {
 		Some(Box::new(title))
 	}
 
-	fn compile(
-		&self,
+	fn compile<'e>(
+		&'e self,
 		token: LayoutToken,
 		_id: usize,
-		properties: &Box<dyn Any>,
-		compiler: &Compiler,
-		_document: &dyn Document,
-	) -> Result<String, String> {
+		properties: &'e Box<dyn Any>,
+		compiler: &'e Compiler,
+		_document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let title = properties.downcast_ref::<String>().unwrap();
 				match token {
-					LayoutToken::Begin => Ok(format!(
+					LayoutToken::Begin => output.add_content(format!(
 						r#"<details class="spoiler"><summary>{}</summary>"#,
 						Compiler::sanitize(compiler.target(), title)
 					)),
-					LayoutToken::End => Ok(r#"</details>"#.to_string()),
+					LayoutToken::End => output.add_content(r#"</details>"#.to_string()),
 					_ => panic!(),
 				}
 			}
 			_ => todo!(""),
 		}
+		Ok(output)
 	}
 }

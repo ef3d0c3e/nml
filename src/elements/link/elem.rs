@@ -21,12 +21,12 @@ impl Element for Link {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Link" }
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		mut output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(format!(
@@ -35,14 +35,14 @@ impl Element for Link {
 				));
 
 				for elem in &self.display {
-					elem.compile(compiler, document, output)?;
+					output = elem.compile(compiler, document, output)?;
 				}
 
 				output.add_content("</a>");
 			}
 			_ => todo!(""),
 		}
-		Ok(())
+		Ok(output)
 	}
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }

@@ -6,7 +6,9 @@ use std::str::FromStr;
 use std::sync::Once;
 
 use crate::cache::cache::Cached;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
+use crate::parser::reports::Report;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 
@@ -16,6 +18,8 @@ use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::source::Token;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TexKind {
@@ -129,12 +133,12 @@ impl Element for Tex {
 
 	fn element_name(&self) -> &'static str { "LaTeX" }
 
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				static CACHE_INIT: Once = Once::new();
@@ -170,33 +174,41 @@ impl Element for Tex {
 					Tex::format_latex(&fontsize, &preamble, &format!("{prepend}{}", self.tex))
 				};
 
-				let result = if let Some(con) = compiler.cache() {
-					match latex.cached(con, |s| s.latex_to_svg(&exec, &fontsize)) {
-						Ok(s) => Ok(s),
-						Err(e) => match e {
-							CachedError::SqlErr(e) => {
-								Err(format!("Querying the cache failed: {e}"))
-							}
-							CachedError::GenErr(e) => Err(e),
-						},
-					}
-				} else {
-					latex.latex_to_svg(&exec, &fontsize)
-				};
+				let fut = async move
+				{
+					let result = if let Some(con) = compiler.cache() {
+						match latex.cached(con, |s| s.latex_to_svg(&exec, &fontsize)) {
+							Ok(s) => Ok(s),
+							Err(e) => match e {
+								CachedError::SqlErr(e) => {
+									Err(format!("Querying the cache failed: {e}"))
+								}
+								CachedError::GenErr(e) => Err(e),
+							},
+						}
+					} else {
+						latex.latex_to_svg(&exec, &fontsize)
+					};
 
-				// Caption
-				result.map(|mut result| {
+					if let Err(e) = result {
+						return Err(compile_err!(self.location(), "Failed to compile LaTeX element".into(), e));
+					}
+
+					// Caption
+					let mut result = result.unwrap();
 					if let (Some(caption), Some(start)) = (&self.caption, result.find('>')) {
 						result.insert_str(
 							start + 1,
 							format!("<title>{}</title>", Compiler::sanitize(HTML, caption))
-								.as_str(),
+							.as_str(),
 						);
 					}
-					result
-				})
+					Ok(result)
+				};
+				output.add_task(Box::new(fut));
 			}
 			_ => todo!("Unimplemented"),
 		}
+		Ok(output)
 	}
 }

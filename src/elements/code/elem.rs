@@ -3,10 +3,12 @@ use std::sync::Once;
 use crate::cache::cache::Cached;
 use crate::cache::cache::CachedError;
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
@@ -14,6 +16,8 @@ use lazy_static::lazy_static;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CodeKind {
@@ -204,12 +208,12 @@ impl Element for Code {
 
 	fn element_name(&self) -> &'static str { "Code Block" }
 
-	fn compile(
-		&self,
-		compiler: &Compiler,
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
 		_document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				static CACHE_INIT: Once = Once::new();
@@ -221,21 +225,23 @@ impl Element for Code {
 					}
 				});
 
-				if let Some(con) = compiler.cache() {
-					match self.cached(con, |s| s.highlight_html(compiler)) {
-						Ok(s) => Ok(s),
-						Err(e) => match e {
-							CachedError::SqlErr(e) => {
-								Err(format!("Querying the cache failed: {e}"))
-							}
-							CachedError::GenErr(e) => Err(e),
-						},
+				let fut = async {
+					if let Some(con) = compiler.cache() {
+						match self.cached(con, |s| s.highlight_html(compiler)) {
+							Ok(s) => Ok(s),
+							Err(e) => match e {
+								CachedError::SqlErr(e) => Err(compile_err!(self.location(), "Failed to compile code".into(), format!("Querying the cache failed: {e}"))),
+								CachedError::GenErr(e) => Err(compile_err!(self.location(), "Failed to compile code".into(), e)),
+							},
+						}
+					} else {
+						self.highlight_html(compiler).map_err(|err| compile_err!(self.location(), "Failed to compile code".into(), format!("Highlighting failed: {err}")))
 					}
-				} else {
-					self.highlight_html(compiler)
-				}
+				};
+				output.add_task(Box::new(fut));
 			}
 			_ => todo!(""),
 		}
+		Ok(output)
 	}
 }

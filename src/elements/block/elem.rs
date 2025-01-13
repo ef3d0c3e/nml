@@ -24,12 +24,12 @@ impl Element for Block {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 	fn element_name(&self) -> &'static str { "Block" }
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		self.block_type.compile(self, &self.block_properties, compiler, document, output)
 	}
 

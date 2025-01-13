@@ -1,11 +1,18 @@
+use std::borrow::BorrowMut;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::future::Future;
+use std::pin::Pin;
 use std::rc::Rc;
 
 use rusqlite::Connection;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::task;
+use tokio::task::JoinHandle;
 
 use crate::document;
 use crate::document::document::Document;
@@ -24,26 +31,81 @@ pub enum Target {
 	LATEX,
 }
 
-#[derive(Default)]
 pub struct CompilerOutput<'e>
 {
-	pub(self) tasks: Vec<(usize, Box<dyn Future<Output = Result<String, Vec<Report>>> + 'e>)>,
+	// Holds the content of the resulting document
 	pub(self) content: String,
+	pub(self) references: HashMap<usize, CrossReference>,
+	//pub(self) tasks: Vec<(usize, Box<dyn Future<Output = Result<String, Vec<Report>>> + 'e>)>,
+	/// Holds the position of every cross-document reference
+	pub(self) task_results: Vec<(usize, Result<String, Vec<Report>>)>,
+
+	task_sender: UnboundedSender<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>,
+	task_receiver: UnboundedReceiver<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>,
+	task_processor: Option<JoinHandle<()>>,
+}
+
+impl Default for CompilerOutput<'_>
+{
+    fn default() -> Self {
+		let (sender, receiver) = mpsc::unbounded_channel::<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>();
+        Self {
+			content: String::default(),
+			references: HashMap::default(),
+			task_results: Vec::default(),
+			task_sender: sender,
+			task_receiver: receiver,
+			task_processor: None,
+		}
+    }
 }
 
 impl<'e> CompilerOutput<'e>
 {
-	/// Adds content to the output
+	/// Appends content to the output
 	pub fn add_content<S: AsRef<str>>(&mut self, s: S) {
 		self.content.push_str(s.as_ref());
 	}
 
 	/// Adds an async task to the output. The task's result will be appended at the current output position
-	pub fn add_task<F>(&'e mut self, task: Box<F>)
+	///
+	/// The task is a future that returns it's result in a string, or errors as a Vec of [`Report`]s
+	pub fn add_task<F>(&mut self, task: Pin<Box<F>>)
 		where
-			F: 'e + Future<Output = Result<String, Vec<Report>>>
+			F: 'e + Future<Output = Result<String, Vec<Report>>> + 'static + Send
 	{
-		self.tasks.push((self.content.len(), task));
+		self.task_sender.send((self.content.len(), task)).unwrap();
+	}
+
+	/// Inserts a new cross-reference that will be resolved during post-processing.
+	///
+	/// Once resolved, a link to the references element will be inserted at the current output position.
+	///
+	/// # Note
+	///
+	/// There can only be one cross-reference at a given output position.
+	/// In case another cross-reference is inserted at the same location (which should never happen),
+	/// The program will panic
+	pub fn add_external_reference(&mut self, xref: CrossReference)
+	{
+		if self.references.get(&self.content.len()).is_some()
+		{
+			panic!("Duplicate cross-reference in one location");
+		}
+		self.references.insert(self.content.len(), xref);
+	}
+
+	pub fn spawn_processor<'s>(&'s mut self) -> &'s JoinHandle<()> {
+		self.task_processor.replace(task::spawn(async {
+			while let Some((index, future)) = self.task_receiver.recv().await {
+				task::spawn(async move {
+					let result = future.await;
+					self.task_results.push((index, result));
+					println!("Future at position {} completed with result: {}", index, result.unwrap());
+				});
+			}
+		}));
+		return self.task_processor.as_ref().unwrap();
 	}
 }
 
@@ -260,19 +322,27 @@ impl<'a> Compiler<'a> {
 		let header = self.header(document);
 
 		// Body
-		let mut body = r#"<div class="content">"#.to_string();
 		let mut output = CompilerOutput::default();
+		output.add_content(r#"<div class="content">"#);
+		let mut output_ref = output.borrow_mut();
 
 		for i in 0..borrow.len() {
 			let elem = &borrow[i];
 
-			if let Err(reports) = elem.compile(self, document, &mut output)
-			{
-				Report::reports_to_stdout(colors, reports);
+			match elem.compile(self, document, output_ref) {
+				Ok(new) => output_ref = new,
+				Err(reports) => {Report::reports_to_stdout(colors, reports); break;}
 			}
 		}
-		body.push_str("</div>");
+		output.add_content("</div>");
 
+		// Wait for all tasks
+		let fut = async {
+			;
+		}
+		output.tasks.iter().for_each(|task| {
+			task.1.wai;
+		});
 		// Footer
 		let footer = self.footer(document);
 

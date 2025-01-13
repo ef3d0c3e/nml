@@ -24,14 +24,14 @@ pub trait BlockType: core::fmt::Debug {
 	) -> Option<Box<dyn Any>>;
 
 	/// Compile block
-	fn compile(
-		&self,
-		block: &Block,
-		properties: &Box<dyn Any>,
-		compiler: &Compiler,
-		document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>>;
+	fn compile<'e>(
+		&'e self,
+		block: &'e Block,
+		properties: &'e Box<dyn Any>,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&mut CompilerOutput<'e>, Vec<Report>>;
 }
 
 /// Holds all registered [`BlockType`]

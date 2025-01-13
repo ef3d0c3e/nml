@@ -49,23 +49,23 @@ impl Element for Media {
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
 
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		mut output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content("<div class=\"media\">");
 				for medium in &self.media {
-					medium.compile(compiler, document, output)?;
+					output = medium.compile(compiler, document, output)?;
 				}
 				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
-		Ok(())
+		Ok(output)
 	}
 }
 
@@ -111,12 +111,12 @@ impl Element for Medium {
 
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }
 
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		mut output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			Target::HTML => {
 				// Reference
@@ -154,13 +154,13 @@ impl Element for Medium {
 					format!(r#"<p class="medium-refname">({refcount}) {caption}</p>"#),
 				);
 				if let Some(paragraph) = self.description.as_ref() {
-					paragraph.compile(compiler, document, output)?;
+					output = paragraph.compile(compiler, document, output)?;
 				}
 				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
-		Ok(())
+		Ok(output)
 	}
 }
 

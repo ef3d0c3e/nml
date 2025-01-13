@@ -30,27 +30,27 @@ impl Element for Paragraph {
 
 	fn element_name(&self) -> &'static str { "Paragraph" }
 
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		mut output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		if self.content.is_empty() {
-			return Ok(());
+			return Ok(output);
 		}
 
 		match compiler.target() {
 			HTML => {
 				output.add_content("<p>");
 				for elem in &self.content {
-					elem.compile(compiler, document, output)?;
+					output = elem.compile(compiler, document, output)?;
 				}
 				output.add_content("</p>");
 			}
 			_ => todo!("Unimplemented compiler"),
 		}
-		Ok(())
+		Ok(output)
 	}
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }

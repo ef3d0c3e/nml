@@ -1,12 +1,14 @@
 use std::rc::Rc;
 
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::elements::reference::elem::InternalReference;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 use super::rule::section_kind;
@@ -32,12 +34,12 @@ impl Element for Section {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 	fn element_name(&self) -> &'static str { "Section" }
-	fn compile(
+	fn compile<'e>(
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				// Section numbering
@@ -56,12 +58,13 @@ impl Element for Section {
 				};
 
 				if self.style.link_pos == SectionLinkPos::None {
-					return Ok(format!(
+					output.add_content(format!(
 						r#"<h{0} id="{1}">{number}{2}</h{0}>"#,
 						self.depth,
 						Compiler::refname(compiler.target(), self.title.as_str()),
 						Compiler::sanitize(compiler.target(), self.title.as_str())
 					));
+					return Ok(output);
 				}
 
 				let refname = Compiler::refname(compiler.target(), self.title.as_str());
@@ -73,16 +76,16 @@ impl Element for Section {
 				);
 
 				if self.style.link_pos == SectionLinkPos::After {
-					Ok(format!(
+					output.add_content(format!(
 						r#"<h{0} id="{1}">{number}{2}{link}</h{0}>"#,
 						self.depth,
 						Compiler::refname(compiler.target(), self.title.as_str()),
 						Compiler::sanitize(compiler.target(), self.title.as_str())
-					))
+					));
 				} else
 				// Before
 				{
-					Ok(format!(
+					output.add_content(format!(
 						r#"<h{0} id="{1}">{link}{number}{2}</h{0}>"#,
 						self.depth,
 						Compiler::refname(compiler.target(), self.title.as_str()),
@@ -92,6 +95,7 @@ impl Element for Section {
 			}
 			_ => todo!(""),
 		}
+		Ok(output)
 	}
 
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }

@@ -18,12 +18,12 @@ impl Element for Style {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Inline }
 	fn element_name(&self) -> &'static str { "Style" }
-	fn compile(
+	fn compile<'e>(
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(
@@ -38,6 +38,6 @@ impl Element for Style {
 			}
 			_ => todo!(""),
 		}
-		Ok(())
+		Ok(output)
 	}
 }

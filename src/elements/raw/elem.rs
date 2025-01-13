@@ -20,12 +20,12 @@ impl Element for Raw {
 	fn element_name(&self) -> &'static str { "Raw" }
 
 	fn compile<'e>(
-		&'e self,
-		_compiler: &'e Compiler,
-		_document: &'e dyn Document,
+		&self,
+		_compiler: &Compiler,
+		_document: &dyn Document,
 		output: &'e mut CompilerOutput<'e>,
-	) -> Result<(), Vec<Report>> {
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		output.add_content(self.content.as_str());
-		Ok(())
+		Ok(output)
 	}
 }

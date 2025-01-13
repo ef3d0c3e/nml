@@ -90,9 +90,9 @@ impl Element for Graphviz {
 	fn compile<'e>(
 		&'e self,
 		compiler: &'e Compiler,
-		_document: &'e dyn Document,
+		_document: &dyn Document,
 		output: &'e mut CompilerOutput<'e>,
-	) -> Result<(), Vec<Report>> {
+	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				static CACHE_INIT: Once = Once::new();
@@ -139,6 +139,6 @@ impl Element for Graphviz {
 			}
 			_ => todo!("Unimplemented"),
 		}
-		Ok(())
+		Ok(output)
 	}
 }
