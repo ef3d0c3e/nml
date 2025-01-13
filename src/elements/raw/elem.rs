@@ -1,7 +1,9 @@
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 #[derive(Debug)]
@@ -17,12 +19,13 @@ impl Element for Raw {
 
 	fn element_name(&self) -> &'static str { "Raw" }
 
-	fn compile(
-		&self,
-		_compiler: &Compiler,
-		_document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
-		Ok(self.content.clone())
+	fn compile<'e>(
+		&'e self,
+		_compiler: &'e Compiler,
+		_document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>,
+	) -> Result<(), Vec<Report>> {
+		output.add_content(self.content.as_str());
+		Ok(())
 	}
 }

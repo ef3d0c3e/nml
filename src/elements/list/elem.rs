@@ -1,11 +1,13 @@
 use serde::Serialize;
 
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -32,17 +34,18 @@ impl Element for ListMarker {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => match (self.kind, self.numbered) {
-				(MarkerKind::Close, true) => Ok("</ol>".to_string()),
-				(MarkerKind::Close, false) => Ok("</ul>".to_string()),
-				(MarkerKind::Open, true) => Ok("<ol>".to_string()),
-				(MarkerKind::Open, false) => Ok("<ul>".to_string()),
+				(MarkerKind::Close, true) => output.add_content("</ol>"),
+				(MarkerKind::Close, false) => output.add_content("</ul>"),
+				(MarkerKind::Open, true) => output.add_content("<ol>"),
+				(MarkerKind::Open, false) => output.add_content("<ul>"),
 			},
 			_ => todo!(),
 		}
+		Ok(())
 	}
 }
 
@@ -80,42 +83,39 @@ impl Element for ListEntry {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
-				let mut result = String::new();
 				if let Some((numbered, number)) = self.numbering.last() {
 					if *numbered {
-						result += format!("<li value=\"{number}\">").as_str();
+						output.add_content(format!("<li value=\"{number}\">"));
 					} else {
-						result += "<li>";
+						output.add_content("<li>");
 					}
 				}
 				match &self.custom {
 					Some(CustomListData::Checkbox(checkbox_state)) => match checkbox_state {
 						CheckboxState::Unchecked => {
-							result += r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#
+							output.add_content(r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#);
 						}
 						CheckboxState::Partial => {
-							result += r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#
+							output.add_content(r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#);
 						}
 						CheckboxState::Checked => {
-							result += r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#
+							output.add_content(r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#);
 						}
 					},
 					_ => {}
 				}
 				for elem in &self.content {
-					result += elem
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
+					elem.compile(compiler, document, output)?;
 				}
-				result += "</li>";
-				Ok(result)
+				output.add_content("</li>");
 			}
 			_ => todo!(),
 		}
+		Ok(())
 	}
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }

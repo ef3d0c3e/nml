@@ -5,12 +5,14 @@ use runtime_format::FormatKey;
 use runtime_format::FormatKeyError;
 
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::references::CrossReference;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 use super::style::ExternalReferenceStyle;
@@ -37,8 +39,8 @@ impl Element for InternalReference {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let elemref = document
@@ -54,10 +56,11 @@ impl Element for InternalReference {
 					document,
 					self,
 					compiler.reference_id(document, elemref),
-				)
+				)?;
 			}
 			_ => todo!(""),
 		}
+		Ok(())
 	}
 }
 

@@ -204,6 +204,22 @@ pub mod macros {
 	}
 
 	#[macro_export]
+	macro_rules! compile_err {
+		($token:expr, $message:expr, $explanation:expr) => {{
+			let mut r = Report {
+				kind: ReportKind::Error,
+				source: $token.source(),
+				message: $message,
+				note: None,
+				help: None,
+				spans: vec![],
+			};
+			report_label!(r, span($token.range.clone(), $explanation));
+			vec![r]
+		}}
+	}
+
+	#[macro_export]
 	macro_rules! report_err {
 		($reports:expr, $source:expr, $message:expr, $($tail:tt)*) => {{
 			let mut r = Report {

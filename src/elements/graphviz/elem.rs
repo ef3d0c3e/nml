@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::sync::Once;
 
 use crypto::digest::Digest;
@@ -6,8 +7,11 @@ use graphviz_rust::cmd::Format;
 use graphviz_rust::cmd::Layout;
 use graphviz_rust::exec_dot;
 
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 use crate::cache::cache::Cached;
 use crate::cache::cache::CachedError;
+use crate::compile_err;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
@@ -83,11 +87,11 @@ impl Element for Graphviz {
 
 	fn element_name(&self) -> &'static str { "Graphviz" }
 
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		_document: &dyn Document,
-		output: &mut CompilerOutput,
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		_document: &'e dyn Document,
+		output: &'e mut CompilerOutput<'e>,
 	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
@@ -99,25 +103,39 @@ impl Element for Graphviz {
 						}
 					}
 				});
-				// TODO: Format svg in a div
 
-				// TODO: Make a task
-				if let Some(con) = compiler.cache() {
-					match self.cached(con, |s| s.dot_to_svg()) {
-						Ok(s) => Ok(s),
-						Err(e) => match e {
-							CachedError::SqlErr(e) => {
-								Err(format!("Querying the cache failed: {e}"))
-							}
-							CachedError::GenErr(e) => Err(e),
-						},
+				// TODO: Format svg in a div
+				let fut = async {
+					if let Some(con) = compiler.cache() {
+						match self.cached(con, |s| s.dot_to_svg()) {
+							Ok(s) => Ok(s),
+							Err(e) => match e {
+								CachedError::SqlErr(e) =>
+									Err(compile_err!(
+											self.location(),
+											"Failed to compile Graphviz element".into(),
+											format!("Querying the cache failed: {e}")
+									)),
+								CachedError::GenErr(e) =>
+									Err(compile_err!(
+											self.location(),
+											"Failed to compile Graphviz element".into(),
+											e.to_string()
+									)),
+							},
+						}
+					} else {
+						match self.dot_to_svg() {
+							Ok(svg) => Ok(svg),
+							Err(e) => Err(compile_err!(
+									self.location(),
+									"Failed to compile Graphviz element".into(),
+									e.to_string()
+							)),
+						}
 					}
-				} else {
-					match self.dot_to_svg() {
-						Ok(svg) => Ok(svg),
-						Err(e) => Err(e),
-					}
-				}
+				};
+				output.add_task(Box::new(fut));
 			}
 			_ => todo!("Unimplemented"),
 		}

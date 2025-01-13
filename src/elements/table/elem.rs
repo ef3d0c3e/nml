@@ -1,4 +1,5 @@
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
@@ -6,6 +7,7 @@ use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::elements::reference::elem::InternalReference;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 /// Converts to style
@@ -225,25 +227,20 @@ impl Element for Table {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		// TODO: colgroup
-		let mut result = String::new();
-
 		if self.reference.is_some() {
 			let elemref = document
 				.get_reference(self.reference.as_ref().unwrap().as_str())
 				.unwrap();
 			let refcount = compiler.reference_id(document, elemref);
-			result.push_str(
-				format!(
+			output.add_content(format!(
 					r#"<div class="media"><div id="{}" class="medium">"#,
 					self.refid(compiler, refcount)
-				)
-				.as_str(),
-			);
+				));
 		} else if self.title.is_some() {
-			result.push_str(format!(r#"<div class="media"><div class="medium">"#,).as_str());
+			output.add_content(format!(r#"<div class="media"><div class="medium">"#));
 		}
 
 		let table_style = self.properties.to_style(compiler.target());
@@ -271,11 +268,11 @@ impl Element for Table {
 
 		let mut pos = (0usize, 0usize);
 		if !table_style.is_empty() {
-			result += format!("<table style=\"{table_style}\">").as_str()
+			output.add_content(format!("<table style=\"{table_style}\">"));
 		} else {
-			result += "<table>"
+			output.add_content("<table>");
 		}
-		result += colgroup.as_str();
+		output.add_content(colgroup);
 		for cell in &self.data {
 			if pos.0 == 0 {
 				// Row styling
@@ -289,9 +286,9 @@ impl Element for Table {
 				};
 
 				if let Some(span) = self.rows[pos.1].as_ref().and_then(|row| row.vspan) {
-					result += format!("<tr span=\"{span}\"{style}>").as_str();
+					output.add_content(format!("<tr span=\"{span}\"{style}>"));
 				} else {
-					result += format!("<tr{style}>").as_str();
+					output.add_content(format!("<tr{style}>"));
 				}
 			}
 			match cell {
@@ -312,20 +309,16 @@ impl Element for Table {
 					);
 
 					match (hspan, vspan) {
-						(1, 1) => result += format!("<td{style}>").as_str(),
-						(1, v) => result += format!("<td rowspan=\"{v}\"{style}>").as_str(),
-						(h, 1) => result += format!("<td colspan=\"{h}\"{style}>").as_str(),
-						(h, v) => {
-							result +=
-								format!("<td rowspan=\"{v}\" colspan=\"{h}\"{style}>").as_str()
-						}
+						(1, 1) => output.add_content(format!("<td{style}>")),
+						(1, v) => output.add_content(format!("<td rowspan=\"{v}\"{style}>")),
+						(h, 1) => output.add_content(format!("<td colspan=\"{h}\"{style}>")),
+						(h, v) => output.add_content(format!("<td rowspan=\"{v}\" colspan=\"{h}\"{style}>")),
 					}
 					for elem in &cell_data.content {
-						result += elem
-							.compile(compiler, document, cursor + result.len())?
-							.as_str();
+						elem
+							.compile(compiler, document, output)?
 					}
-					result += "</td>";
+					output.add_content("</td>");
 				}
 				Cell::Reference(_) => {}
 			}
@@ -333,38 +326,35 @@ impl Element for Table {
 			// Advance position
 			pos.0 += 1;
 			if pos.0 == self.size.0 {
-				result += "</tr>";
+				output.add_content("</tr>");
 				pos.0 = 0;
 				pos.1 += 1;
 			}
 		}
-		result += "</table>";
+		output.add_content("</table>");
 
 		if self.reference.is_some() {
 			let elemref = document
 				.get_reference(self.reference.as_ref().unwrap().as_str())
 				.unwrap();
 			let refcount = compiler.reference_id(document, elemref);
-			result.push_str(
-				format!(
+			output.add_content(format!(
 					r#"<p class="medium-refname">({refcount}) {}</p>"#,
 					self.title.as_ref().map_or("", |s| s.as_str())
-				)
-				.as_str(),
-			);
-			result.push_str("</div></div>");
+				));
+			output.add_content("</div></div>");
 		} else if self.title.is_some() {
-			result.push_str(
+			output.add_content(
 				format!(
 					r#"<p class="medium-refname">{}</p>"#,
 					self.title.as_ref().map_or("", |s| s.as_str())
 				)
 				.as_str(),
 			);
-			result.push_str("</div></div>");
+			output.add_content("</div></div>");
 		}
 
-		Ok(result)
+		Ok(())
 	}
 
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }

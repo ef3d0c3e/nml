@@ -1,7 +1,9 @@
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 #[derive(Debug)]
@@ -23,8 +25,9 @@ impl Element for Text {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
-		Ok(Compiler::sanitize(compiler.target(), self.content.as_str()))
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
+		output.add_content(Compiler::sanitize(compiler.target(), self.content.as_str()));
+		Ok(())
 	}
 }

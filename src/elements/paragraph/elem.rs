@@ -1,9 +1,11 @@
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 #[derive(Debug)]
@@ -32,32 +34,23 @@ impl Element for Paragraph {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		if self.content.is_empty() {
-			return Ok(String::new());
+			return Ok(());
 		}
 
 		match compiler.target() {
 			HTML => {
-				if self.content.is_empty() {
-					return Ok(String::new());
+				output.add_content("<p>");
+				for elem in &self.content {
+					elem.compile(compiler, document, output)?;
 				}
-
-				let mut result = String::new();
-				result.push_str("<p>");
-
-				for elems in &self.content {
-					result += elems
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
-				}
-
-				result.push_str("</p>");
-				Ok(result)
+				output.add_content("</p>");
 			}
 			_ => todo!("Unimplemented compiler"),
 		}
+		Ok(())
 	}
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }

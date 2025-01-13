@@ -1,10 +1,12 @@
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::elements::section::elem::Section;
 use crate::elements::section::rule::section_kind;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 #[derive(Debug)]
@@ -17,12 +19,12 @@ impl Element for Toc {
 	fn location(&self) -> &Token { &self.location }
 	fn kind(&self) -> ElemKind { ElemKind::Block }
 	fn element_name(&self) -> &'static str { "Toc" }
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		_cursor: usize,
-	) -> Result<String, String> {
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		let mut result = String::new();
 		let mut sections: Vec<(&Section, usize)> = vec![];
 		// Find last section with given depth
@@ -57,7 +59,7 @@ impl Element for Toc {
 		}
 
 		if sections.is_empty() {
-			return Ok("".into());
+			return Ok(());
 		}
 
 		match compiler.target() {
@@ -104,9 +106,10 @@ impl Element for Toc {
 				}
 				match_depth(current_depth, 0);
 				result += "</div>";
+				output.add_content(result.as_str());
 			}
 			_ => todo!(""),
 		}
-		Ok(result)
+		Ok(())
 	}
 }

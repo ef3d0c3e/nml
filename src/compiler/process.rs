@@ -99,7 +99,7 @@ pub fn process(
 
 			// Compile
 			let compiler = Compiler::new(target, Some(&con));
-			let (mut compiled, postprocess) = compiler.compile(&*doc);
+			let (mut compiled, postprocess) = compiler.compile(&*doc, parser.colors());
 
 			compiled.mtime = modified.duration_since(UNIX_EPOCH).unwrap().as_secs();
 

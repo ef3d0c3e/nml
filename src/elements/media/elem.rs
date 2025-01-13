@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
@@ -10,6 +11,7 @@ use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::reference::elem::InternalReference;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -51,24 +53,19 @@ impl Element for Media {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
-				let mut result = String::new();
-
-				result.push_str("<div class=\"media\">");
+				output.add_content("<div class=\"media\">");
 				for medium in &self.media {
-					result += medium
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
+					medium.compile(compiler, document, output)?;
 				}
-				result.push_str("</div>");
-
-				Ok(result)
+				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
+		Ok(())
 	}
 }
 
@@ -118,12 +115,10 @@ impl Element for Medium {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			Target::HTML => {
-				let mut result = String::new();
-
 				// Reference
 				let elemref = document.get_reference(self.reference.as_str()).unwrap();
 				let refcount = compiler.reference_id(document, elemref);
@@ -132,14 +127,13 @@ impl Element for Medium {
 					.width
 					.as_ref()
 					.map_or(String::new(), |w| format!(r#" style="width:{w};""#));
-				result.push_str(
+				output.add_content(
 					format!(
 						r#"<div id="{}" class="medium"{width}>"#,
 						self.refid(compiler, refcount)
 					)
-					.as_str(),
 				);
-				result += match self.media_type {
+				output.add_content(match self.media_type {
 					MediaType::IMAGE => format!(r#"<a href="{0}"><img src="{0}"></a>"#, self.uri),
 					MediaType::VIDEO => format!(
 						r#"<video controls{width}><source src="{0}"></video>"#,
@@ -148,8 +142,7 @@ impl Element for Medium {
 					MediaType::AUDIO => {
 						format!(r#"<audio controls src="{0}"{width}></audio>"#, self.uri)
 					}
-				}
-				.as_str();
+				});
 
 				let caption = self
 					.caption
@@ -157,20 +150,17 @@ impl Element for Medium {
 					.map(|cap| format!(" {}", Compiler::sanitize(compiler.target(), cap.as_str())))
 					.unwrap_or_default();
 
-				result.push_str(
-					format!(r#"<p class="medium-refname">({refcount}) {caption}</p>"#).as_str(),
+				output.add_content(
+					format!(r#"<p class="medium-refname">({refcount}) {caption}</p>"#),
 				);
 				if let Some(paragraph) = self.description.as_ref() {
-					result += paragraph
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
+					paragraph.compile(compiler, document, output)?;
 				}
-				result.push_str("</div>");
-
-				Ok(result)
+				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
+		Ok(())
 	}
 }
 

@@ -1,9 +1,11 @@
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
 #[derive(Debug)]
@@ -23,26 +25,24 @@ impl Element for Link {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		cursor: usize,
-	) -> Result<String, String> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
-				let mut result = format!(
+				output.add_content(format!(
 					"<a href=\"{}\">",
 					Compiler::sanitize(compiler.target(), self.url.as_str())
-				);
+				));
 
 				for elem in &self.display {
-					result += elem
-						.compile(compiler, document, cursor + result.len())?
-						.as_str();
+					elem.compile(compiler, document, output)?;
 				}
 
-				result += "</a>";
-				Ok(result)
+				output.add_content("</a>");
 			}
 			_ => todo!(""),
 		}
+		Ok(())
 	}
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }

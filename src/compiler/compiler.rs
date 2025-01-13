@@ -9,8 +9,6 @@ use rusqlite::Connection;
 
 use crate::document;
 use crate::document::document::Document;
-use crate::document::element::ElementCompileResult::Content;
-use crate::document::element::ElementCompileResult::Task;
 use crate::document::references::CrossReference;
 use crate::document::references::ElemReference;
 use crate::document::variable::Variable;
@@ -27,13 +25,13 @@ pub enum Target {
 }
 
 #[derive(Default)]
-pub struct CompilerOutput
+pub struct CompilerOutput<'e>
 {
-	pub(self) tasks: Vec<(usize, Box<dyn Future<Output = Result<String, Report>>>)>,
+	pub(self) tasks: Vec<(usize, Box<dyn Future<Output = Result<String, Vec<Report>>> + 'e>)>,
 	pub(self) content: String,
 }
 
-impl CompilerOutput
+impl<'e> CompilerOutput<'e>
 {
 	/// Adds content to the output
 	pub fn add_content<S: AsRef<str>>(&mut self, s: S) {
@@ -41,7 +39,10 @@ impl CompilerOutput
 	}
 
 	/// Adds an async task to the output. The task's result will be appended at the current output position
-	pub fn add_task(&mut self, task: Box<dyn Future<Output = Result<String, Report>>>) {
+	pub fn add_task<F>(&'e mut self, task: Box<F>)
+		where
+			F: 'e + Future<Output = Result<String, Vec<Report>>>
+	{
 		self.tasks.push((self.content.len(), task));
 	}
 }

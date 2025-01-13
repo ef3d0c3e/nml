@@ -57,10 +57,10 @@ pub trait Element: Downcast + core::fmt::Debug {
 	fn as_container(&self) -> Option<&dyn ContainerElement> { None }
 
 	/// Compiles element
-	fn compile(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
+	fn compile<'e>(
+		&'e self,
+		compiler: &'e Compiler,
+		document: &'e dyn Document,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>>;
 }
