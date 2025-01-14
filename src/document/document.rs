@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::cell::RefMut;
 use std::collections::hash_map::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::parser::source::Source;
 
@@ -75,7 +76,7 @@ impl Scope {
 
 pub trait Document<'a>: core::fmt::Debug {
 	/// Gets the document [`Source`]
-	fn source(&self) -> Rc<dyn Source>;
+	fn source(&self) -> Arc<dyn Source>;
 
 	/// Gets the document parent (if it exists)
 	fn parent(&self) -> Option<&'a dyn Document<'a>>;

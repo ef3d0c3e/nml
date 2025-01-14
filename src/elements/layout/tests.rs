@@ -205,7 +205,7 @@ fn hints() {
 	if let Some(lsp) = &state.shared.lsp {
 		let borrow = lsp.borrow();
 
-		if let Some(hints) = borrow.inlay_hints.get(&(source as Rc<dyn Source>)) {
+		if let Some(hints) = borrow.inlay_hints.get(&(source as Arc<dyn Source>)) {
 			let borrow = hints.hints.borrow();
 			assert_eq!(
 				borrow[0].position,

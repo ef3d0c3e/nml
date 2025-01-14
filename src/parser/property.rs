@@ -474,7 +474,7 @@ mod tests {
 			"".into(),
 			"width=15,length=-10".into(),
 			None,
-		)) as Rc<dyn Source>;
+		)) as Arc<dyn Source>;
 		let pm = parser
 			.parse("Test", &mut reports, &state, source.into())
 			.unwrap();

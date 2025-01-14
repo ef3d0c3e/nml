@@ -1,5 +1,6 @@
 use std::ops::Range;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -100,12 +101,12 @@ pub fn process_text(document: &dyn Document, content: &str) -> String {
 ///
 /// If you only need to escape content that won't be parsed, use [`escape_text`] instead.
 pub fn escape_source(
-	source: Rc<dyn Source>,
+	source: Arc<dyn Source>,
 	range: Range<usize>,
 	name: String,
 	escape: char,
 	token: &'static str,
-) -> Rc<dyn Source> {
+) -> Arc<dyn Source> {
 	let content = &source.content()[range.clone()];
 
 	let mut processed = String::new();
@@ -141,7 +142,7 @@ pub fn escape_source(
 	// Add trailing escapes
 	(0..escaped).for_each(|_| processed.push('\\'));
 
-	Rc::new(VirtualSource::new_offsets(
+	Arc::new(VirtualSource::new_offsets(
 		Token::new(range, source),
 		name,
 		processed,
@@ -207,7 +208,7 @@ pub fn escape_text<S: AsRef<str>>(
 /// If source contains anything but a single paragraph, an error is returned
 pub fn parse_paragraph<'a>(
 	state: &ParserState,
-	source: Rc<dyn Source>,
+	source: Arc<dyn Source>,
 	document: &'a dyn Document<'a>,
 ) -> Result<Box<Paragraph>, &'static str> {
 	let parsed = state.with_state(|new_state| -> Box<dyn Document> {
@@ -252,7 +253,7 @@ mod tests {
 
 	#[test]
 	fn process_text_tests() {
-		let source = Rc::new(SourceFile::with_content(
+		let source = Arc::new(SourceFile::with_content(
 			"".to_string(),
 			"".to_string(),
 			None,

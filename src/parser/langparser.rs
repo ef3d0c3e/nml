@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::document::document::Document;
 use crate::document::element::DocumentEnd;
@@ -83,7 +83,7 @@ impl<'b> Parser for LangParser<'b> {
 	fn parse<'p, 'a, 'doc>(
 		&'p self,
 		state: ParserState<'p, 'a>,
-		source: Rc<dyn Source>,
+		source: Arc<dyn Source>,
 		parent: Option<&'doc dyn Document<'doc>>,
 		mode: ParseMode,
 	) -> (Box<dyn Document<'doc> + 'doc>, ParserState<'p, 'a>) {
@@ -100,8 +100,7 @@ impl<'b> Parser for LangParser<'b> {
 		let path = source
 			.original_position(0)
 			.0
-			.downcast_rc::<SourceFile>()
-			.ok()
+			.downcast_ref::<SourceFile>()
 			.map(|source| {
 				if source.path().is_empty()
 				// Test mode
@@ -136,7 +135,7 @@ impl<'b> Parser for LangParser<'b> {
 
 		// Insert lsp data into state
 		if let (Some(_), Some(lsp)) = (
-			source.clone().downcast_rc::<SourceFile>().ok(),
+			source.downcast_ref::<SourceFile>(),
 			state.shared.lsp.as_ref(),
 		) {
 			lsp.borrow_mut().new_source(source.clone());
@@ -229,7 +228,7 @@ impl<'b> Parser for LangParser<'b> {
 	fn parse_into<'p, 'a, 'doc>(
 		&'p self,
 		state: ParserState<'p, 'a>,
-		source: Rc<dyn Source>,
+		source: Arc<dyn Source>,
 		document: &'doc dyn Document<'doc>,
 		mode: ParseMode,
 	) -> ParserState<'p, 'a> {

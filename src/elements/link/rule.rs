@@ -183,7 +183,7 @@ impl RegexRule for LinkRule {
 				let mut result = Ok(());
 				CTX.with_borrow(|ctx| {
 					ctx.as_ref().map(|ctx| {
-						let source = Rc::new(VirtualSource::new(
+						let source = Arc::new(VirtualSource::new(
 							ctx.location.clone(),
 							"Link Display".to_string(),
 							display,

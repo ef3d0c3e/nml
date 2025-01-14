@@ -238,7 +238,7 @@ impl Element for Code {
 						self.highlight_html(compiler).map_err(|err| compile_err!(self.location(), "Failed to compile code".into(), format!("Highlighting failed: {err}")))
 					}
 				};
-				output.add_task(Box::new(fut));
+				//output.add_task(Box::pin(fut));
 			}
 			_ => todo!(""),
 		}

@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use ariadne::Fmt;
 use document::document::Document;
@@ -145,7 +146,7 @@ impl RegexRule for ImportRule {
 		};
 
 		let import = match SourceFile::new(import_file, Some(token.clone())) {
-			Ok(import) => Rc::new(import),
+			Ok(import) => Arc::new(import),
 			Err(path) => {
 				report_err!(
 					&mut reports,

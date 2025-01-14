@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::text::elem::Text;
 use crate::parser::reports::macros::*;
@@ -235,11 +236,11 @@ impl RegexRule for ScriptRule {
 									hints.add(matches.get(0).unwrap().end(), result.clone());
 								}
 
-								let parse_source = Rc::new(VirtualSource::new(
+								let parse_source = Arc::new(VirtualSource::new(
 									Token::new(0..source.content().len(), source.clone()),
 									format!(":LUA:parse({})", source.name()),
 									result,
-								)) as Rc<dyn Source>;
+								)) as Arc<dyn Source>;
 
 								state.with_state(|new_state| {
 									new_state.parser.parse_into(

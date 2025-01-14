@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
 use rusqlite::Connection;
@@ -21,7 +22,7 @@ use super::postprocess::PostProcess;
 /// Parses a source file into a document
 fn parse(
 	parser: &LangParser,
-	source: Rc<dyn Source>,
+	source: Arc<dyn Source>,
 	debug_opts: &Vec<String>,
 ) -> Result<Box<dyn Document<'static>>, String> {
 	// Parse
@@ -95,7 +96,7 @@ pub fn process(
 			// Parse
 			let source = SourceFile::new(file.to_str().unwrap().to_string(), None).unwrap();
 			println!("Parsing {}...", source.name());
-			let doc = parse(&parser, Rc::new(source), debug_opts)?;
+			let doc = parse(&parser, Arc::new(source), debug_opts)?;
 
 			// Compile
 			let compiler = Compiler::new(target, Some(&con));
@@ -162,7 +163,7 @@ pub fn process_from_memory(
 		let parse_and_compile = || -> Result<(CompiledDocument, Option<PostProcess>), String> {
 			// Parse
 			let source = SourceFile::with_content(format!("{idx}"), content.clone(), None);
-			let doc = parse(&parser, Rc::new(source), &vec![])?;
+			let doc = parse(&parser, Arc::new(source), &vec![])?;
 
 			// Compile
 			let compiler = Compiler::new(target, None);

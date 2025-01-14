@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use tower_lsp::lsp_types::Location;
 use tower_lsp::lsp_types::Position;
@@ -32,7 +32,7 @@ impl DefinitionData {
 }
 
 fn from_source_impl(
-	source: Rc<dyn Source>,
+	source: Arc<dyn Source>,
 	target: &Token,
 	lsp: &Option<RefCell<LSPData>>,
 	original: Token,
@@ -45,14 +45,12 @@ fn from_source_impl(
 
 	if let Some(location) = source
 		.clone()
-		.downcast_rc::<VirtualSource>()
-		.ok()
-		.as_ref()
+		.downcast_ref::<VirtualSource>()
 		.map(|parent| parent.location())
 		.unwrap_or(None)
 	{
 		return from_source_impl(location.source(), target, lsp, original);
-	} else if let Ok(sourcefile) = source.downcast_rc::<SourceFile>() {
+	} else if source.downcast_ref::<SourceFile>().is_some() {
 		let borrow = lsp.as_ref().unwrap().borrow();
 		if let Some(def_data) = borrow.definitions.get(&original.source()) {
 			let mut db = def_data.definitions.borrow_mut();
@@ -73,7 +71,7 @@ fn from_source_impl(
 			};
 
 			// Resolve source
-			let mut source_cursor = LineCursor::new(sourcefile, OffsetEncoding::Utf16);
+			let mut source_cursor = LineCursor::new(source, OffsetEncoding::Utf16);
 			source_cursor.move_to(token.start);
 			let source_start = Position {
 				line: source_cursor.line as u32,

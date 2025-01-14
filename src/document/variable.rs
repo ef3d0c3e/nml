@@ -7,6 +7,7 @@ use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
 /// Trait for document variables
 pub trait Variable {
@@ -62,7 +63,7 @@ impl Variable for BaseVariable {
 	fn value_token(&self) -> &Token { &self.value_token }
 
 	fn parse<'a>(&self, state: &ParserState, _location: Token, document: &'a dyn Document<'a>) {
-		let source = Rc::new(VirtualSource::new(
+		let source = Arc::new(VirtualSource::new(
 			self.location().clone(),
 			format!(":VAR:{}", self.name()),
 			self.to_string(),
@@ -106,7 +107,7 @@ impl Variable for PathVariable {
 	fn value_token(&self) -> &Token { &self.value_token }
 
 	fn parse(&self, state: &ParserState, location: Token, document: &dyn Document) {
-		let source = Rc::new(VirtualSource::new(
+		let source = Arc::new(VirtualSource::new(
 			location,
 			self.name().to_string(),
 			self.to_string(),

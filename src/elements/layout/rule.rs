@@ -491,7 +491,7 @@ impl RegexRule for LayoutRule {
 							};
 
 							// Parse properties
-							let prop_source = Rc::new(VirtualSource::new(ctx.location.clone(), ":LUA:Layout Properties".into(), properties)) as Rc<dyn Source>;
+							let prop_source = Arc::new(VirtualSource::new(ctx.location.clone(), ":LUA:Layout Properties".into(), properties)) as Arc<dyn Source>;
 							let layout_properties = match layout_type.parse_properties(&mut ctx.reports, ctx.state, prop_source.into()) {
 								None => {
 									result = Err(BadArgument {

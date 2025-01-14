@@ -2,6 +2,7 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use std::any::Any;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::text::elem::Text;
 use ariadne::Fmt;
@@ -233,7 +234,7 @@ impl Rule for BlockRule {
 
 		// Parse entry content
 		let token = Token::new(entry_start..end_cursor.pos, end_cursor.source.clone());
-		let entry_src = Rc::new(VirtualSource::new_offsets(
+		let entry_src = Arc::new(VirtualSource::new_offsets(
 			token.clone(),
 			"Block Entry".to_string(),
 			entry_content,

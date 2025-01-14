@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::reports::Report;
@@ -380,7 +381,7 @@ pub trait Parser {
 	fn parse<'p, 'a, 'doc>(
 		&'p self,
 		state: ParserState<'p, 'a>,
-		source: Rc<dyn Source>,
+		source: Arc<dyn Source>,
 		parent: Option<&'doc dyn Document<'doc>>,
 		mode: ParseMode,
 	) -> (Box<dyn Document<'doc> + 'doc>, ParserState<'p, 'a>);
@@ -400,7 +401,7 @@ pub trait Parser {
 	fn parse_into<'p, 'a, 'doc>(
 		&'p self,
 		state: ParserState<'p, 'a>,
-		source: Rc<dyn Source>,
+		source: Arc<dyn Source>,
 		document: &'doc dyn Document<'doc>,
 		mode: ParseMode,
 	) -> ParserState<'p, 'a>;

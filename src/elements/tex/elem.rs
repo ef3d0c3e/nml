@@ -205,7 +205,7 @@ impl Element for Tex {
 					}
 					Ok(result)
 				};
-				output.add_task(Box::new(fut));
+				//output.add_task(Box::pin(fut));
 			}
 			_ => todo!("Unimplemented"),
 		}

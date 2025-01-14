@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::ops::Range;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use dashmap::DashMap;
 use tower_lsp::lsp_types::Diagnostic;
@@ -46,7 +46,7 @@ pub struct ReportSpan {
 #[derive(Debug)]
 pub struct Report {
 	pub kind: ReportKind,
-	pub source: Rc<dyn Source>,
+	pub source: Arc<dyn Source>,
 	pub message: String,
 	pub note: Option<String>,
 	pub help: Option<String>,
@@ -65,8 +65,8 @@ impl Report {
 		self,
 		colors: &ReportColors,
 	) -> (
-		ariadne::Report<'static, (Rc<dyn Source>, Range<usize>)>,
-		impl ariadne::Cache<Rc<dyn Source>>,
+		ariadne::Report<'static, (Arc<dyn Source>, Range<usize>)>,
+		impl ariadne::Cache<Arc<dyn Source>>,
 	) {
 		let mut cache = HashMap::new();
 		let source = self.source.original_position(0).0;

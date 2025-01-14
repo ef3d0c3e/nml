@@ -2,6 +2,7 @@ use std::any::Any;
 use std::cell::Ref;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
@@ -358,7 +359,7 @@ impl Rule for ListRule {
 
 				// Parse entry content
 				let token = Token::new(entry_start..end_cursor.pos, end_cursor.source.clone());
-				let entry_src = Rc::new(VirtualSource::new(
+				let entry_src = Arc::new(VirtualSource::new(
 					token.clone(),
 					"List Entry".to_string(),
 					entry_content,

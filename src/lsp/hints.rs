@@ -1,6 +1,6 @@
 use std::cell::Ref;
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use tower_lsp::lsp_types::InlayHint;
 
@@ -24,7 +24,7 @@ pub struct HintsData {
 }
 
 impl HintsData {
-	pub fn new(source: Rc<dyn Source>) -> Self {
+	pub fn new(source: Arc<dyn Source>) -> Self {
 		Self {
 			cursor: RefCell::new(LineCursor::new(source, OffsetEncoding::Utf16)),
 			hints: RefCell::new(vec![]),
@@ -37,16 +37,16 @@ impl HintsData {
 pub struct Hints<'a> {
 	pub(self) hints: Ref<'a, HintsData>,
 	// The source used when resolving the parent source
-	pub(self) original_source: Rc<dyn Source>,
+	pub(self) original_source: Arc<dyn Source>,
 	/// The resolved parent source
-	pub(self) source: Rc<dyn Source>,
+	pub(self) source: Arc<dyn Source>,
 }
 
 impl<'a> Hints<'a> {
 	fn from_source_impl(
-		source: Rc<dyn Source>,
+		source: Arc<dyn Source>,
 		lsp: &'a Option<RefCell<LSPData>>,
-		original_source: Rc<dyn Source>,
+		original_source: Arc<dyn Source>,
 	) -> Option<Self> {
 		if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
 			&& source.downcast_ref::<VirtualSource>().is_some()
@@ -56,16 +56,14 @@ impl<'a> Hints<'a> {
 
 		if let Some(location) = source
 			.clone()
-			.downcast_rc::<VirtualSource>()
-			.ok()
-			.as_ref()
+			.downcast_ref::<VirtualSource>()
 			.map(|parent| parent.location())
 			.unwrap_or(None)
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
-		} else if let Ok(source) = source.clone().downcast_rc::<SourceFile>() {
+		} else if source.downcast_ref::<SourceFile>().is_some() {
 			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
-				lsp.inlay_hints.get(&(source.clone() as Rc<dyn Source>))
+				lsp.inlay_hints.get(&(source.clone()))
 			})
 			.ok()
 			.map(|hints| Self {
@@ -77,7 +75,7 @@ impl<'a> Hints<'a> {
 		None
 	}
 
-	pub fn from_source(source: Rc<dyn Source>, lsp: &'a Option<RefCell<LSPData>>) -> Option<Self> {
+	pub fn from_source(source: Arc<dyn Source>, lsp: &'a Option<RefCell<LSPData>>) -> Option<Self> {
 		if lsp.is_none() {
 			return None;
 		}

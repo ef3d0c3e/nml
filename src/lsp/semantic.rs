@@ -2,7 +2,7 @@ use std::cell::Ref;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::ops::Range;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use tower_lsp::lsp_types::SemanticToken;
 use tower_lsp::lsp_types::SemanticTokenModifier;
@@ -309,7 +309,7 @@ pub struct SemanticsData {
 }
 
 impl SemanticsData {
-	pub fn new(source: Rc<dyn Source>) -> Self {
+	pub fn new(source: Arc<dyn Source>) -> Self {
 		Self {
 			cursor: RefCell::new(LineCursor::new(source, OffsetEncoding::Utf16)),
 			semantic_queue: RefCell::new(VecDeque::new()),
@@ -323,16 +323,16 @@ impl SemanticsData {
 pub struct Semantics<'a> {
 	pub(self) sems: Ref<'a, SemanticsData>,
 	// The source used when resolving the parent source
-	pub(self) original_source: Rc<dyn Source>,
+	pub(self) original_source: Arc<dyn Source>,
 	/// The resolved parent source
-	pub(self) source: Rc<dyn Source>,
+	pub(self) source: Arc<dyn Source>,
 }
 
 impl<'a> Semantics<'a> {
 	fn from_source_impl(
-		source: Rc<dyn Source>,
+		source: Arc<dyn Source>,
 		lsp: &'a Option<RefCell<LSPData>>,
-		original_source: Rc<dyn Source>,
+		original_source: Arc<dyn Source>,
 	) -> Option<(Self, Ref<'a, Tokens>)> {
 		if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
 			&& source.downcast_ref::<VirtualSource>().is_some()
@@ -342,16 +342,14 @@ impl<'a> Semantics<'a> {
 
 		if let Some(location) = source
 			.clone()
-			.downcast_rc::<VirtualSource>()
-			.ok()
-			.as_ref()
+			.downcast_ref::<VirtualSource>()
 			.map(|parent| parent.location())
 			.unwrap_or(None)
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
-		} else if let Ok(source) = source.clone().downcast_rc::<SourceFile>() {
+		} else if source.downcast_ref::<SourceFile>().is_some() {
 			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
-				lsp.semantic_data.get(&(source.clone() as Rc<dyn Source>))
+				lsp.semantic_data.get(&(source.clone()))
 			})
 			.ok()
 			.map(|sems| {
@@ -371,7 +369,7 @@ impl<'a> Semantics<'a> {
 	}
 
 	pub fn from_source(
-		source: Rc<dyn Source>,
+		source: Arc<dyn Source>,
 		lsp: &'a Option<RefCell<LSPData>>,
 	) -> Option<(Self, Ref<'a, Tokens>)> {
 		if lsp.is_none() {
@@ -383,7 +381,7 @@ impl<'a> Semantics<'a> {
 	/// Method that should be called at the end of parsing
 	///
 	/// This function will process the end of the semantic queue
-	pub fn on_document_end(lsp: &'a Option<RefCell<LSPData>>, source: Rc<dyn Source>) {
+	pub fn on_document_end(lsp: &'a Option<RefCell<LSPData>>, source: Arc<dyn Source>) {
 		if source.content().is_empty() {
 			return;
 		}
@@ -474,7 +472,7 @@ pub mod tests {
 				.unwrap()
 				.borrow()
 				.semantic_data
-				.get(&($source as std::rc::Rc<dyn crate::parser::source::Source>))
+				.get(&($source as std::sync::Arc<dyn crate::parser::source::Source>))
 				.unwrap()
 				.tokens
 				.borrow()

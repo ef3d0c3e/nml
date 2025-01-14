@@ -1,7 +1,7 @@
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::ops::Range;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -56,16 +56,16 @@ impl StylesData {
 pub struct Styles<'a> {
 	pub(self) styles: Ref<'a, StylesData>,
 	// The source used when resolving the parent source
-	pub(self) original_source: Rc<dyn Source>,
+	pub(self) original_source: Arc<dyn Source>,
 	/// The resolved parent source
-	pub(self) source: Rc<dyn Source>,
+	pub(self) source: Arc<dyn Source>,
 }
 
 impl<'a> Styles<'a> {
 	fn from_source_impl(
-		source: Rc<dyn Source>,
+		source: Arc<dyn Source>,
 		lsp: &'a Option<RefCell<LSPData>>,
-		original_source: Rc<dyn Source>,
+		original_source: Arc<dyn Source>,
 	) -> Option<Self> {
 		if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
 			&& source.downcast_ref::<VirtualSource>().is_some()
@@ -75,16 +75,14 @@ impl<'a> Styles<'a> {
 
 		if let Some(location) = source
 			.clone()
-			.downcast_rc::<VirtualSource>()
-			.ok()
-			.as_ref()
+			.downcast_ref::<VirtualSource>()
 			.map(|parent| parent.location())
 			.unwrap_or(None)
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
-		} else if let Ok(source) = source.clone().downcast_rc::<SourceFile>() {
+		} else if source.downcast_ref::<SourceFile>().is_some() {
 			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
-				lsp.styles.get(&(source.clone() as Rc<dyn Source>))
+				lsp.styles.get(&(source.clone()))
 			})
 			.ok()
 			.map(|styles| Self {
@@ -96,7 +94,7 @@ impl<'a> Styles<'a> {
 		None
 	}
 
-	pub fn from_source(source: Rc<dyn Source>, lsp: &'a Option<RefCell<LSPData>>) -> Option<Self> {
+	pub fn from_source(source: Arc<dyn Source>, lsp: &'a Option<RefCell<LSPData>>) -> Option<Self> {
 		if lsp.is_none() {
 			return None;
 		}

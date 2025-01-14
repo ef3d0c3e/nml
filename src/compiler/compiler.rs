@@ -40,8 +40,8 @@ pub struct CompilerOutput<'e>
 	/// Holds the position of every cross-document reference
 	pub(self) task_results: Vec<(usize, Result<String, Vec<Report>>)>,
 
-	task_sender: UnboundedSender<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>,
-	task_receiver: UnboundedReceiver<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>,
+	task_sender: UnboundedSender<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send + 'e >>)>,
+	task_receiver: UnboundedReceiver<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send + 'e >>)>,
 	task_processor: Option<JoinHandle<()>>,
 }
 
@@ -72,7 +72,7 @@ impl<'e> CompilerOutput<'e>
 	/// The task is a future that returns it's result in a string, or errors as a Vec of [`Report`]s
 	pub fn add_task<F>(&mut self, task: Pin<Box<F>>)
 		where
-			F: 'e + Future<Output = Result<String, Vec<Report>>> + 'static + Send
+			F: 'e + Future<Output = Result<String, Vec<Report>>> + Send
 	{
 		self.task_sender.send((self.content.len(), task)).unwrap();
 	}
@@ -96,15 +96,17 @@ impl<'e> CompilerOutput<'e>
 	}
 
 	pub fn spawn_processor<'s>(&'s mut self) -> &'s JoinHandle<()> {
+		/*
 		self.task_processor.replace(task::spawn(async {
 			while let Some((index, future)) = self.task_receiver.recv().await {
-				task::spawn(async move {
+				task::spawn(async {
 					let result = future.await;
 					self.task_results.push((index, result));
 					println!("Future at position {} completed with result: {}", index, result.unwrap());
 				});
 			}
 		}));
+		*/
 		return self.task_processor.as_ref().unwrap();
 	}
 }
@@ -112,11 +114,14 @@ impl<'e> CompilerOutput<'e>
 pub struct Compiler<'a> {
 	target: Target,
 	cache: Option<&'a Connection>,
+	// TODO: Move refcounting/references to the output
 	reference_count: RefCell<HashMap<String, HashMap<String, usize>>>,
 	sections_counter: RefCell<Vec<usize>>,
 
 	unresolved_references: RefCell<Vec<(usize, CrossReference)>>,
 }
+
+unsafe impl Sync for Compiler<'_> {}
 
 impl<'a> Compiler<'a> {
 	pub fn new(target: Target, con: Option<&'a Connection>) -> Self {
@@ -337,12 +342,12 @@ impl<'a> Compiler<'a> {
 		output.add_content("</div>");
 
 		// Wait for all tasks
-		let fut = async {
+		/*let fut = async {
 			;
 		}
-		output.tasks.iter().for_each(|task| {
+		output.task_results.iter().for_each(|task| {
 			task.1.wai;
-		});
+		});*/
 		// Footer
 		let footer = self.footer(document);
 
@@ -379,7 +384,7 @@ impl<'a> Compiler<'a> {
 			variables,
 			references,
 			header,
-			body,
+			body: output.content,
 			footer,
 		};
 

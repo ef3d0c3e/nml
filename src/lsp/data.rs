@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::parser::source::Source;
 
@@ -14,12 +14,12 @@ use super::styles::StylesData;
 #[derive(Debug)]
 pub struct LSPData {
 	pub semantic_tokens: Tokens,
-	pub semantic_data: HashMap<Rc<dyn Source>, SemanticsData>,
-	pub inlay_hints: HashMap<Rc<dyn Source>, HintsData>,
-	pub definitions: HashMap<Rc<dyn Source>, DefinitionData>,
-	pub conceals: HashMap<Rc<dyn Source>, ConcealsData>,
-	pub styles: HashMap<Rc<dyn Source>, StylesData>,
-	pub coderanges: HashMap<Rc<dyn Source>, CodeRangeData>,
+	pub semantic_data: HashMap<Arc<dyn Source>, SemanticsData>,
+	pub inlay_hints: HashMap<Arc<dyn Source>, HintsData>,
+	pub definitions: HashMap<Arc<dyn Source>, DefinitionData>,
+	pub conceals: HashMap<Arc<dyn Source>, ConcealsData>,
+	pub styles: HashMap<Arc<dyn Source>, StylesData>,
+	pub coderanges: HashMap<Arc<dyn Source>, CodeRangeData>,
 }
 
 impl LSPData {
@@ -36,7 +36,7 @@ impl LSPData {
 	}
 
 	/// Method that must be called when a source is added
-	pub fn new_source(&mut self, source: Rc<dyn Source>) {
+	pub fn new_source(&mut self, source: Arc<dyn Source>) {
 		if !self.semantic_data.contains_key(&source) {
 			self.semantic_data
 				.insert(source.clone(), SemanticsData::new(source.clone()));

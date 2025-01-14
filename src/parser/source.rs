@@ -1,14 +1,14 @@
 use core::fmt::Debug;
 use std::fs;
 use std::ops::Range;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Trait for source content
-pub trait Source: Downcast {
+pub trait Source: Downcast + Send + Sync {
 	/// Gets the source's location
 	///
 	/// This usually means the parent source.
@@ -197,17 +197,17 @@ pub trait SourcePosition {
 	///
 	/// This function will return the first parent [`SourceFile`] aswell as the position mapped
 	/// in that source
-	fn original_position(&self, pos: usize) -> (Rc<dyn Source>, usize);
+	fn original_position(&self, pos: usize) -> (Arc<dyn Source>, usize);
 
 	/// Transforms a range to the corresponding range in the oldest parent [`SourceFile`].
 	///
 	/// This function will return the first parent [`SourceFile`] aswell as the range mapped
 	/// in that source
-	fn original_range(&self, range: Range<usize>) -> (Rc<dyn Source>, Range<usize>);
+	fn original_range(&self, range: Range<usize>) -> (Arc<dyn Source>, Range<usize>);
 }
 
-impl SourcePosition for Rc<dyn Source> {
-	fn original_position(&self, mut pos: usize) -> (Rc<dyn Source>, usize) {
+impl SourcePosition for Arc<dyn Source> {
+	fn original_position(&self, mut pos: usize) -> (Arc<dyn Source>, usize) {
 		// Stop recursion
 		if self.downcast_ref::<SourceFile>().is_some() {
 			return (self.clone(), pos);
@@ -229,7 +229,7 @@ impl SourcePosition for Rc<dyn Source> {
 		(self.clone(), pos)
 	}
 
-	fn original_range(&self, mut range: Range<usize>) -> (Rc<dyn Source>, Range<usize>) {
+	fn original_range(&self, mut range: Range<usize>) -> (Arc<dyn Source>, Range<usize>) {
 		// Stop recursion
 		if self.downcast_ref::<SourceFile>().is_some() {
 			return (self.clone(), range);
@@ -260,11 +260,11 @@ impl SourcePosition for Rc<dyn Source> {
 #[derive(Debug, Clone)]
 pub struct Cursor {
 	pub pos: usize,
-	pub source: Rc<dyn Source>,
+	pub source: Arc<dyn Source>,
 }
 
 impl Cursor {
-	pub fn new(pos: usize, source: Rc<dyn Source>) -> Self { Self { pos, source } }
+	pub fn new(pos: usize, source: Arc<dyn Source>) -> Self { Self { pos, source } }
 
 	/// Creates [`Cursor`] at `new_pos` in the same [`Source`]
 	pub fn at(&self, new_pos: usize) -> Self {
@@ -297,14 +297,14 @@ pub struct LineCursor {
 	/// Position in the line
 	pub line_pos: usize,
 	/// Source
-	pub source: Rc<dyn Source>,
+	pub source: Arc<dyn Source>,
 	/// Offset encoding
 	pub encoding: OffsetEncoding,
 }
 
 impl LineCursor {
 	/// Creates a [`LineCursor`] at the begining of the source
-	pub fn new(source: Rc<dyn Source>, offset_encoding: OffsetEncoding) -> LineCursor {
+	pub fn new(source: Arc<dyn Source>, offset_encoding: OffsetEncoding) -> LineCursor {
 		Self {
 			pos: 0,
 			line: 0,
@@ -357,15 +357,15 @@ impl LineCursor {
 #[derive(Debug, Clone)]
 pub struct Token {
 	pub range: Range<usize>,
-	source: Rc<dyn Source>,
+	source: Arc<dyn Source>,
 }
 
 impl Token {
 	/// Creates a new token from a range and a source
-	pub fn new(range: Range<usize>, source: Rc<dyn Source>) -> Self { Self { range, source } }
+	pub fn new(range: Range<usize>, source: Arc<dyn Source>) -> Self { Self { range, source } }
 
 	/// Retrieve the source of the token
-	pub fn source(&self) -> Rc<dyn Source> { self.source.clone() }
+	pub fn source(&self) -> Arc<dyn Source> { self.source.clone() }
 
 	/// Get the start byte position of the token
 	pub fn start(&self) -> usize { self.range.start }
@@ -425,8 +425,8 @@ impl Token {
 	}
 }
 
-impl From<Rc<dyn Source>> for Token {
-	fn from(source: Rc<dyn Source>) -> Self {
+impl From<Arc<dyn Source>> for Token {
+	fn from(source: Arc<dyn Source>) -> Self {
 		Self {
 			range: 0..source.content().len(),
 			source,
