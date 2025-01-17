@@ -174,6 +174,7 @@ impl Element for Tex {
 					Tex::format_latex(&fontsize, &preamble, &format!("{prepend}{}", self.tex))
 				};
 
+				/*
 				let fut = async move
 				{
 					let result = if let Some(con) = compiler.cache() {
@@ -205,6 +206,7 @@ impl Element for Tex {
 					}
 					Ok(result)
 				};
+				*/
 				//output.add_task(Box::pin(fut));
 			}
 			_ => todo!("Unimplemented"),

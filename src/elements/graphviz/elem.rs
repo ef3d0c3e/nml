@@ -105,6 +105,7 @@ impl Element for Graphviz {
 				});
 
 				// TODO: Format svg in a div
+				/*
 				let fut = async move {
 					if let Some(con) = compiler.cache() {
 						match self.cached(con, |s| s.dot_to_svg()) {
@@ -136,6 +137,7 @@ impl Element for Graphviz {
 					}
 				};
 				output.add_task(Box::pin(fut));
+				*/
 			}
 			_ => todo!("Unimplemented"),
 		}
