@@ -212,8 +212,8 @@ impl Element for Code {
 		&'e self,
 		compiler: &'e Compiler,
 		_document: &dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				static CACHE_INIT: Once = Once::new();

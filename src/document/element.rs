@@ -60,8 +60,8 @@ pub trait Element: Downcast + core::fmt::Debug {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>>;
+		output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>>;
 }
 impl_downcast!(Element);
 
@@ -111,8 +111,8 @@ impl Element for DocumentEnd {
 		&'e self,
 		_compiler: &'e Compiler,
 		_document: &'e dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		Ok(output)
 	}
 }

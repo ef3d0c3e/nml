@@ -30,8 +30,8 @@ pub trait BlockType: core::fmt::Debug {
 		properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&mut CompilerOutput<'e>, Vec<Report>>;
+		output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>>;
 }
 
 /// Holds all registered [`BlockType`]

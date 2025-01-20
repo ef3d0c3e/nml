@@ -34,8 +34,8 @@ impl Element for ListMarker {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => match (self.kind, self.numbered) {
 				(MarkerKind::Close, true) => output.add_content("</ol>"),
@@ -83,8 +83,8 @@ impl Element for ListEntry {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				if let Some((numbered, number)) = self.numbering.last() {

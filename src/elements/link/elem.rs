@@ -25,8 +25,8 @@ impl Element for Link {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(format!(

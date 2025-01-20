@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::future::Future;
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
 use tokio::task;
 use tokio::task::JoinHandle;
+use tower_lsp::lsp_types::CompletionClientCapabilities;
 
 use crate::document;
 use crate::document::document::Document;
@@ -33,77 +35,62 @@ pub enum Target {
 	LATEX,
 }
 
-pub struct CompilerOutput<'e>
+pub struct CompilerOutput
 {
 	// Holds the content of the resulting document
 	pub(self) content: String,
 	/// Holds the position of every cross-document reference
 	pub(self) references: HashMap<usize, CrossReference>,
 
-
-	task_results: Arc<Mutex<Vec<(usize, Result<String, Vec<Report>>)>>>,
-	task_sender: UnboundedSender<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send + 'e>>)>,
-	task_receiver: Arc<Mutex<UnboundedReceiver<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send + 'static>>)>>>,
-	task_processor: Option<JoinHandle<()>>,
-	_phantom: std::marker::PhantomData<&'e ()>,
+	pub(self) task_sender: UnboundedSender<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>,
+	pub(self) task_receiver: Arc<Mutex<UnboundedReceiver<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>>>,
+	runtime: tokio::runtime::Runtime,
 }
 
-impl Default for CompilerOutput<'_>
+impl Default for CompilerOutput
 {
 	fn default() -> Self {
 		let (sender, receiver) = mpsc::unbounded_channel();
-		let mut output = Self {
+		let output = Self {
 			content: String::default(),
 			references: HashMap::default(),
-			task_results: Arc::new(Mutex::new(Vec::new())),
+
 			task_sender: sender,
 			task_receiver: Arc::new(Mutex::new(receiver)),
-			task_processor: None,
-			_phantom: std::marker::PhantomData,
+			runtime: tokio::runtime::Runtime::new().unwrap(),
 		};
-		output.start_processor();
 		output
 	}
 }
 
-async fn process_tasks<'e>(
-    mut receiver: UnboundedReceiver<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send + 'e>>)>,
-    results: Arc<Mutex<Vec<(usize, Result<String, Vec<Report>>)>>>,
-) {
-    while let Some((id, future)) = receiver.recv().await {
-        // Process each future within this task
-        let result = future.await;
-        let mut results = results.lock().await;
-        results.push((id, result));
-    }
-}
-
-impl<'e> CompilerOutput<'e>
+impl CompilerOutput
 {
-	fn start_processor(&mut self)
+	pub fn run_with_processor<F>(mut self, f: F) -> CompilerOutput
+		where F: FnOnce(CompilerOutput) -> CompilerOutput
 	{
-		let receiver = self.task_receiver.clone(); // Use Arc<Mutex> for task_receiver
-        let results = self.task_results.clone();
+		let receiver = self.task_receiver.clone();
 
-        self.task_processor = Some(tokio::spawn(async move {
-            while let Some((id, future)) = receiver.lock().await.recv().await {
-                let result = future.await;
-                let mut results = results.lock().await;
-                results.push((id, result));
-            }
-        }));
-	}
+		// Start processor
+        let task_processor = self.runtime.spawn(async move {
+			let results : Arc<Mutex<Vec<(usize, Result<String, Vec<Report>>)>>> = Arc::new(Mutex::new(vec![]));
+			results
+        });
 
-	pub fn stop_processor(&mut self) /*-> Vec<(usize, Result<String, Vec<Report>>)>*/ {
-		// Drop sender to ensure no more messages will be sent
-        drop(self.task_sender.clone());
+		self = f(self);
+		
+		// Stop processor
+		self.runtime.block_on(async {
+			eprintln!("HERE");
+			let results = task_processor.await.expect("Task processor failed");
 
-        // Block and wait for the processor task to complete
-        if let Some(handle) = self.task_processor.take() {
-            tokio::runtime::Handle::current().block_on(async {
-                handle.await.expect("Task processor failed")
-            });
-        }
+			// TODO: Apply results
+			let g = results.lock().await;
+			for res in g.iter()
+			{
+				eprintln!("{:#?}", res);
+			}
+		});
+		self
 	}
 
 	/// Appends content to the output
@@ -116,15 +103,13 @@ impl<'e> CompilerOutput<'e>
 	/// The task is a future that returns it's result in a string, or errors as a Vec of [`Report`]s
 	pub fn add_task<F>(&mut self, task: Pin<Box<F>>)
 		where
-			F: Future<Output = Result<String, Vec<Report>>> + Send + 'e
+			F: Future<Output = Result<String, Vec<Report>>> + Send + 'static
 	{
-        let dyn_future = Box::pin(async move {
+        let dyn_future = 
+			Box::pin(async move {
             task.await
         });
-
-        self.task_sender.send((self.content.len(), dyn_future))
-            .expect("Failed to send task");
-		//self.task_sender.send((self.content.len(), task)).unwrap();
+		self.task_sender.send((self.content.len(), dyn_future)).expect("Failed to send task");
 	}
 
 	/// Inserts a new cross-reference that will be resolved during post-processing.
@@ -143,21 +128,6 @@ impl<'e> CompilerOutput<'e>
 			panic!("Duplicate cross-reference in one location");
 		}
 		self.references.insert(self.content.len(), xref);
-	}
-
-	pub fn spawn_processor<'s>(&'s mut self) -> &'s JoinHandle<()> {
-		/*
-		self.task_processor.replace(task::spawn(async {
-			while let Some((index, future)) = self.task_receiver.recv().await {
-				task::spawn(async {
-					let result = future.await;
-					self.task_results.push((index, result));
-					println!("Future at position {} completed with result: {}", index, result.unwrap());
-				});
-			}
-		}));
-		*/
-		return self.task_processor.as_ref().unwrap();
 	}
 }
 
@@ -377,12 +347,23 @@ impl<'a> Compiler<'a> {
 		let header = self.header(document);
 
 		// Body
-		let mut output = CompilerOutput::default();
-		output.start_processor();
-		output.stop_processor();
+		{
+			let mut output = CompilerOutput::default();
+			output.run_with_processor(|mut output| {
+				{
+					//output.add_content(r#"<div class="content">"#);
+					for elem in borrow.iter() {
+						match elem.compile(self, document, output) {
+							Ok(new) => { output = new },
+							Err(reports) => { Report::reports_to_stdout(colors, reports); return CompilerOutput::default() }
+						};
+					}
+				}
+				output
+			});
+		}
 		//let mut output_ref = output.borrow_mut();
 		//{
-		//	//output.add_content(r#"<div class="content">"#);
 		//	for elem in borrow.iter() {
 		//		output_ref = match elem.compile(self, document, output_ref) {
 		//			Ok(new) => { new }/*output_ref = new*/,

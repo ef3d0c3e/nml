@@ -132,8 +132,8 @@ impl BlockType for Quote {
 		properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		let quote = properties.downcast_ref::<QuoteData>().unwrap();
 
 		match compiler.target() {
@@ -235,8 +235,8 @@ impl BlockType for Warning {
 		_properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(r#"<div class="block-warning">"#);
@@ -273,8 +273,8 @@ impl BlockType for Note {
 		_properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(r#"<div class="block-note">"#);
@@ -311,8 +311,8 @@ impl BlockType for Todo {
 		_properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(r#"<div class="block-todo">"#);
@@ -349,8 +349,8 @@ impl BlockType for Tip {
 		_properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(r#"<div class="block-tip">"#);
@@ -387,8 +387,8 @@ impl BlockType for Caution {
 		_properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(r#"<div class="block-caution">"#);

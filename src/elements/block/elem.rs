@@ -28,8 +28,8 @@ impl Element for Block {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		self.block_type.compile(self, &self.block_properties, compiler, document, output)
 	}
 

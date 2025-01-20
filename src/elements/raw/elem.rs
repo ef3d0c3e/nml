@@ -23,8 +23,8 @@ impl Element for Raw {
 		&self,
 		_compiler: &Compiler,
 		_document: &dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		output.add_content(self.content.as_str());
 		Ok(output)
 	}

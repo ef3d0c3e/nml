@@ -41,8 +41,8 @@ impl Element for InternalReference {
 		&self,
 		compiler: &Compiler,
 		document: &dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let elemref = document
@@ -120,8 +120,8 @@ impl Element for ExternalReference {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let mut result = "<a href=\"".to_string();

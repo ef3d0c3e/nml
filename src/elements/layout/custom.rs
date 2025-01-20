@@ -86,8 +86,8 @@ impl LayoutType for Centered {
 		properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		_document: &'e dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let style = match properties.downcast_ref::<String>().unwrap().as_str() {
@@ -158,8 +158,8 @@ impl LayoutType for Split {
 		properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		_document: &'e dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let style = match properties.downcast_ref::<String>().unwrap().as_str() {
@@ -229,8 +229,8 @@ impl LayoutType for Spoiler {
 		properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		_document: &'e dyn Document,
-		output: &'e mut CompilerOutput<'e>,
-	) -> Result<&'e mut CompilerOutput<'e>, Vec<Report>> {
+		mut output: CompilerOutput,
+	) -> Result<CompilerOutput, Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				let title = properties.downcast_ref::<String>().unwrap();
