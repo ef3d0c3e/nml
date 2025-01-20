@@ -34,8 +34,8 @@ impl Element for ListMarker {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => match (self.kind, self.numbered) {
 				(MarkerKind::Close, true) => output.add_content("</ol>"),
@@ -45,7 +45,7 @@ impl Element for ListMarker {
 			},
 			_ => todo!(),
 		}
-		Ok(output)
+		Ok(())
 	}
 }
 
@@ -83,8 +83,8 @@ impl Element for ListEntry {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				if let Some((numbered, number)) = self.numbering.last() {
@@ -109,13 +109,13 @@ impl Element for ListEntry {
 					_ => {}
 				}
 				for elem in &self.content {
-					output = elem.compile(compiler, document, output)?;
+					elem.compile(compiler, document, output)?;
 				}
 				output.add_content("</li>");
 			}
 			_ => todo!(),
 		}
-		Ok(output)
+		Ok(())
 	}
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }

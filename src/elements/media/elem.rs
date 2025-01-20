@@ -53,19 +53,19 @@ impl Element for Media {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content("<div class=\"media\">");
 				for medium in &self.media {
-					output = medium.compile(compiler, document, output)?;
+					medium.compile(compiler, document, output)?;
 				}
 				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 }
 
@@ -115,8 +115,8 @@ impl Element for Medium {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			Target::HTML => {
 				// Reference
@@ -154,13 +154,13 @@ impl Element for Medium {
 					format!(r#"<p class="medium-refname">({refcount}) {caption}</p>"#),
 				);
 				if let Some(paragraph) = self.description.as_ref() {
-					output = paragraph.compile(compiler, document, output)?;
+					paragraph.compile(compiler, document, output)?;
 				}
 				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 }
 

@@ -25,9 +25,9 @@ impl Element for Text {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		output.add_content(Compiler::sanitize(compiler.target(), self.content.as_str()));
-		Ok(output)
+		Ok(())
 	}
 }

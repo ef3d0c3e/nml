@@ -22,8 +22,8 @@ impl Element for Style {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(
@@ -38,6 +38,6 @@ impl Element for Style {
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 }

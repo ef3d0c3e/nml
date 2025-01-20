@@ -23,8 +23,8 @@ impl Element for Toc {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		let mut result = String::new();
 		let mut sections: Vec<(&Section, usize)> = vec![];
 		// Find last section with given depth
@@ -59,7 +59,7 @@ impl Element for Toc {
 		}
 
 		if sections.is_empty() {
-			return Ok(output);
+			return Ok(());
 		}
 
 		match compiler.target() {
@@ -110,6 +110,6 @@ impl Element for Toc {
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 }

@@ -38,8 +38,8 @@ impl Element for Section {
 		&self,
 		compiler: &Compiler,
 		_document: &dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				// Section numbering
@@ -64,7 +64,7 @@ impl Element for Section {
 						Compiler::refname(compiler.target(), self.title.as_str()),
 						Compiler::sanitize(compiler.target(), self.title.as_str())
 					));
-					return Ok(output);
+					return Ok(());
 				}
 
 				let refname = Compiler::refname(compiler.target(), self.title.as_str());
@@ -95,7 +95,7 @@ impl Element for Section {
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 
 	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { Some(self) }

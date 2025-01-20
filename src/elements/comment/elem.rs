@@ -21,8 +21,8 @@ impl Element for Comment {
 		&self,
 		_compiler: &Compiler,
 		_document: &dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
-		Ok(output)
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
+		Ok(())
 	}
 }

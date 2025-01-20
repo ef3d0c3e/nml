@@ -34,23 +34,23 @@ impl Element for Paragraph {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		if self.content.is_empty() {
-			return Ok(output);
+			return Ok(());
 		}
 
 		match compiler.target() {
 			HTML => {
 				output.add_content("<p>");
 				for elem in &self.content {
-					output = elem.compile(compiler, document, output)?;
+					elem.compile(compiler, document, output)?;
 				}
 				output.add_content("</p>");
 			}
 			_ => todo!("Unimplemented compiler"),
 		}
-		Ok(output)
+		Ok(())
 	}
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }

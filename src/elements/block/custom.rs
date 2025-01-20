@@ -132,8 +132,8 @@ impl BlockType for Quote {
 		properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		let quote = properties.downcast_ref::<QuoteData>().unwrap();
 
 		match compiler.target() {
@@ -162,7 +162,7 @@ impl BlockType for Quote {
 						};
 						let args = FormatArgs::new(format_string.as_str(), &fmt_pair);
 						args.status().map_err(|err| vec![
-							make_err!(block.location.source(), "Invalid Blockquote".into(),
+								make_err!(block.location.source(), "Invalid Blockquote".into(),
 								span(block.location.range.clone(), format!("Failed to format Blockquote style `{format_string}`: {err}")))] );
 
 						result += args.to_string().as_str();
@@ -188,13 +188,13 @@ impl BlockType for Quote {
 							output.add_content("</p>");
 							in_paragraph = false;
 						}
-						output = elem.compile(compiler, document, output)?;
+						elem.compile(compiler, document, output)?;
 					} else {
 						if !in_paragraph {
 							output.add_content("<p>");
 							in_paragraph = true;
 						}
-						output = elem.compile(compiler, document, output)?;
+						elem.compile(compiler, document, output)?;
 					}
 				}
 				if in_paragraph {
@@ -209,7 +209,7 @@ impl BlockType for Quote {
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 }
 
@@ -235,19 +235,19 @@ impl BlockType for Warning {
 		_properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(r#"<div class="block-warning">"#);
 				for elem in &block.content {
-					output = elem.compile(compiler, document, output)?;
+					elem.compile(compiler, document, output)?;
 				}
 				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 }
 
@@ -273,19 +273,19 @@ impl BlockType for Note {
 		_properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(r#"<div class="block-note">"#);
 				for elem in &block.content {
-					output = elem.compile(compiler, document, output)?;
+					elem.compile(compiler, document, output)?;
 				}
 				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 }
 
@@ -311,19 +311,19 @@ impl BlockType for Todo {
 		_properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(r#"<div class="block-todo">"#);
 				for elem in &block.content {
-					output = elem.compile(compiler, document, output)?;
+					elem.compile(compiler, document, output)?;
 				}
 				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 }
 
@@ -349,19 +349,19 @@ impl BlockType for Tip {
 		_properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(r#"<div class="block-tip">"#);
 				for elem in &block.content {
-					output = elem.compile(compiler, document, output)?;
+					elem.compile(compiler, document, output)?;
 				}
 				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 }
 
@@ -387,18 +387,18 @@ impl BlockType for Caution {
 		_properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(r#"<div class="block-caution">"#);
 				for elem in &block.content {
-					output = elem.compile(compiler, document, output)?;
+					elem.compile(compiler, document, output)?;
 				}
 				output.add_content("</div>");
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 }

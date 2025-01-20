@@ -2,11 +2,12 @@ use std::borrow::BorrowMut;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::future::Future;
-use std::marker::PhantomData;
 use std::pin::Pin;
 use std::rc::Rc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use rusqlite::Connection;
@@ -14,11 +15,6 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
-use tokio::task;
-use tokio::task::JoinHandle;
-use tower_lsp::lsp_types::CompletionClientCapabilities;
-
-use crate::document;
 use crate::document::document::Document;
 use crate::document::references::CrossReference;
 use crate::document::references::ElemReference;
@@ -44,53 +40,72 @@ pub struct CompilerOutput
 
 	pub(self) task_sender: UnboundedSender<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>,
 	pub(self) task_receiver: Arc<Mutex<UnboundedReceiver<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>>>,
+	task_count: Arc<AtomicUsize>,
 	runtime: tokio::runtime::Runtime,
 }
 
-impl Default for CompilerOutput
+impl CompilerOutput
 {
-	fn default() -> Self {
+	/// Run work function `f` with the task processor running
+	///
+	/// The result of async taks will be inserted into the output
+	pub fn run_with_processor<F>(colors: &ReportColors, f: F) -> CompilerOutput
+		where F: FnOnce(CompilerOutput) -> CompilerOutput
+	{
 		let (sender, receiver) = mpsc::unbounded_channel();
-		let output = Self {
+		let mut output = Self {
 			content: String::default(),
 			references: HashMap::default(),
 
 			task_sender: sender,
 			task_receiver: Arc::new(Mutex::new(receiver)),
+			task_count: Arc::new(AtomicUsize::new(0)),
 			runtime: tokio::runtime::Runtime::new().unwrap(),
 		};
-		output
-	}
-}
 
-impl CompilerOutput
-{
-	pub fn run_with_processor<F>(mut self, f: F) -> CompilerOutput
-		where F: FnOnce(CompilerOutput) -> CompilerOutput
-	{
-		let receiver = self.task_receiver.clone();
+		let all_tasks_posted = Arc::new(AtomicBool::new(false));
 
 		// Start processor
-        let task_processor = self.runtime.spawn(async move {
-			let results : Arc<Mutex<Vec<(usize, Result<String, Vec<Report>>)>>> = Arc::new(Mutex::new(vec![]));
-			results
-        });
-
-		self = f(self);
-		
-		// Stop processor
-		self.runtime.block_on(async {
-			eprintln!("HERE");
-			let results = task_processor.await.expect("Task processor failed");
-
-			// TODO: Apply results
-			let g = results.lock().await;
-			for res in g.iter()
-			{
-				eprintln!("{:#?}", res);
+		let task_processor = output.runtime.spawn({
+			let receiver = output.task_receiver.clone();
+			let results: Arc<Mutex<Vec<(usize, Result<String, Vec<Report>>)>>> = Arc::new(Mutex::new(vec![]));
+			let all_tasks_posted = Arc::clone(&all_tasks_posted);
+			let task_count = Arc::clone(&output.task_count);
+			async move {
+				while !all_tasks_posted.load(Ordering::Acquire) || task_count.load(Ordering::Acquire) > 0 {
+					if let Some((id, task)) = receiver.lock().await.recv().await {
+						let result = task.await;
+						results.lock().await.push((id, result));
+						task_count.fetch_sub(1, Ordering::Release);
+					} else {
+						// Break if receiver is closed and no tasks remain
+						break;
+					}
+				}
+				results
 			}
 		});
-		self
+
+		output = f(output);
+		all_tasks_posted.store(true, Ordering::Release);
+		
+		
+		// Stop processor
+		let mut results = output.runtime.block_on(async {
+			let results = task_processor.await.expect("Task processor failed");
+			let processed = std::mem::take(&mut *results.lock().await);
+			processed
+		});
+
+		// Insert tasks results
+		for (pos, result) in results.drain(..).rev()
+		{
+			match result {
+				Ok(content) => output.content.insert_str(pos, content.as_str()),
+				Err(err) => { Report::reports_to_stdout(colors, err) },
+			}
+		}
+		output
 	}
 
 	/// Appends content to the output
@@ -105,11 +120,15 @@ impl CompilerOutput
 		where
 			F: Future<Output = Result<String, Vec<Report>>> + Send + 'static
 	{
-        let dyn_future = 
+        let dyn_future =
 			Box::pin(async move {
             task.await
         });
-		self.task_sender.send((self.content.len(), dyn_future)).expect("Failed to send task");
+		self.task_count
+			.fetch_add(1, Ordering::Release);
+		self.task_sender
+			.send((self.content.len(), dyn_future))
+			.expect("Failed to send task");
 	}
 
 	/// Inserts a new cross-reference that will be resolved during post-processing.
@@ -347,41 +366,20 @@ impl<'a> Compiler<'a> {
 		let header = self.header(document);
 
 		// Body
-		{
-			let mut output = CompilerOutput::default();
-			output.run_with_processor(|mut output| {
-				{
-					//output.add_content(r#"<div class="content">"#);
-					for elem in borrow.iter() {
-						match elem.compile(self, document, output) {
-							Ok(new) => { output = new },
-							Err(reports) => { Report::reports_to_stdout(colors, reports); return CompilerOutput::default() }
-						};
-					}
+		let mut output = CompilerOutput::run_with_processor(colors, |mut output| {
+			{
+				output.add_content(r#"<div class="content">"#);
+				for elem in borrow.iter() {
+					match elem.compile(self, document, &mut output) {
+						Err(reports) => { Report::reports_to_stdout(colors, reports); }
+						_ => {},
+					};
 				}
-				output
-			});
-		}
-		//let mut output_ref = output.borrow_mut();
-		//{
-		//	for elem in borrow.iter() {
-		//		output_ref = match elem.compile(self, document, output_ref) {
-		//			Ok(new) => { new }/*output_ref = new*/,
-		//			Err(reports) => {Report::reports_to_stdout(colors, reports); break;}
-		//		};
-		//	}
-		//	//drop(output_ref);
-		//	//output_ref.add_content("</div>");
-		//}
+				output.add_content(r#"</div>"#);
+			}
+			output
+		});
 
-
-		// Wait for all tasks
-		/*let fut = async {
-			;
-		}
-		output.task_results.iter().for_each(|task| {
-			task.1.wai;
-		});*/
 		// Footer
 		let footer = self.footer(document);
 
@@ -418,7 +416,7 @@ impl<'a> Compiler<'a> {
 			variables,
 			references,
 			header,
-			body: String::new(),//output_ref.content.clone(),
+			body: output.content,
 			footer,
 		};
 

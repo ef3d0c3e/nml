@@ -25,8 +25,8 @@ impl Element for Link {
 		&'e self,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		mut output: CompilerOutput,
-	) -> Result<CompilerOutput, Vec<Report>> {
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
 				output.add_content(format!(
@@ -35,14 +35,14 @@ impl Element for Link {
 				));
 
 				for elem in &self.display {
-					output = elem.compile(compiler, document, output)?;
+					elem.compile(compiler, document, output)?;
 				}
 
 				output.add_content("</a>");
 			}
 			_ => todo!(""),
 		}
-		Ok(output)
+		Ok(())
 	}
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
