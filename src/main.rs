@@ -116,7 +116,7 @@ fn main() -> ExitCode {
 		}
 	}
 
-	let db_path = match matches.opt_str("d") {
+	let db_path = match &matches.opt_str("d") {
 		Some(db) => {
 			if std::fs::exists(&db).unwrap_or(false) {
 				match std::fs::canonicalize(&db)
@@ -215,7 +215,7 @@ fn main() -> ExitCode {
 
 	// Parse, compile using the cache
 	let processed =
-		match compiler::process::process(Target::HTML, files, &db_path, force_rebuild, &debug_opts)
+		match compiler::process::process(Target::HTML, files, db_path.as_ref().map(|s| s.as_str()), force_rebuild, &debug_opts)
 		{
 			Ok(processed) => processed,
 			Err(e) => {

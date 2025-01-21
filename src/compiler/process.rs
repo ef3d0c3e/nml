@@ -6,6 +6,7 @@ use std::time::UNIX_EPOCH;
 
 use rusqlite::Connection;
 
+use crate::cache::cache::Cache;
 use crate::document::document::Document;
 use crate::parser::langparser::LangParser;
 use crate::parser::parser::ParseMode;
@@ -70,18 +71,19 @@ fn parse(
 pub fn process(
 	target: Target,
 	files: Vec<PathBuf>,
-	db_path: &Option<String>,
+	db_path: Option<&str>,
 	force_rebuild: bool,
 	debug_opts: &Vec<String>,
 ) -> Result<Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>, String> {
 	let mut compiled = vec![];
 
-	let con = db_path
-		.as_ref()
-		.map_or(Connection::open_in_memory(), Connection::open)
-		.map_err(|err| format!("Unable to open connection to the database: {err}"))?;
-	CompiledDocument::init_cache(&con)
-		.map_err(|err| format!("Failed to initialize cached document table: {err}"))?;
+	let cache = Arc::new(Cache::new(db_path)?);
+	// Initialize compiled document database
+	{
+		let con = cache.get_connection().await;
+		CompiledDocument::init_cache(&con)
+			.map_err(|err| format!("Failed to initialize cached document table: {err}"))?;
+	}
 
 	let parser = LangParser::default();
 	for file in files {
@@ -99,7 +101,7 @@ pub fn process(
 			let doc = parse(&parser, Arc::new(source), debug_opts)?;
 
 			// Compile
-			let compiler = Compiler::new(target, Some(&con));
+			let compiler = Compiler::new(target, cache.clone());
 			let (mut compiled, postprocess) = compiler.compile(&*doc, parser.colors());
 
 			compiled.mtime = modified.duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -110,7 +112,12 @@ pub fn process(
 		let (cdoc, post) = if force_rebuild {
 			parse_and_compile()?
 		} else {
-			match CompiledDocument::from_cache(&con, file.to_str().unwrap()) {
+			let cached = {
+				let con = cache.get_connection().await;
+				CompiledDocument::from_cache(&con, file.to_str().unwrap())
+			};
+
+			match cached {
 				Some(compiled) => {
 					if compiled.mtime < modified.duration_since(UNIX_EPOCH).unwrap().as_secs() {
 						parse_and_compile()?
@@ -125,6 +132,7 @@ pub fn process(
 		compiled.push((RefCell::new(cdoc), post));
 	}
 
+	let con = cache.get_connection().await;
 	for (doc, postprocess) in &compiled {
 		if postprocess.is_none() {
 			continue;
@@ -157,6 +165,7 @@ pub fn process_from_memory(
 	sources: Vec<String>,
 ) -> Result<Vec<(RefCell<CompiledDocument>, Option<PostProcess>)>, String> {
 	let mut compiled = vec![];
+	let cache = Arc::new(Cache::new(None)?);
 
 	let parser = LangParser::default();
 	for (idx, content) in sources.iter().enumerate() {
@@ -166,8 +175,8 @@ pub fn process_from_memory(
 			let doc = parse(&parser, Arc::new(source), &vec![])?;
 
 			// Compile
-			let compiler = Compiler::new(target, None);
-			let (compiled, postprocess) = compiler.compile(&*doc);
+			let compiler = Compiler::new(target, cache.clone());
+			let (compiled, postprocess) = compiler.compile(&*doc, parser.colors());
 
 			Ok((compiled, Some(postprocess)))
 		};

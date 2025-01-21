@@ -1,10 +1,13 @@
 use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use rusqlite::types::FromSql;
 use rusqlite::Connection;
 use rusqlite::ToSql;
+use tokio::sync::Mutex;
+use tokio::sync::MutexGuard;
 
 pub enum CachedError<E> {
 	SqlErr(rusqlite::Error),
@@ -27,7 +30,7 @@ pub trait Cached {
 
 	fn key(&self) -> <Self as Cached>::Key;
 
-	fn init(con: &Connection) -> Result<(), rusqlite::Error> {
+	fn init<'con>(con: &MutexGuard<'con, Connection>) -> Result<(), rusqlite::Error> {
 		con.execute(<Self as Cached>::sql_table(), ()).map(|_| ())
 	}
 
@@ -40,9 +43,9 @@ pub trait Cached {
 	/// or if not cached, an error from the generator `f`
 	///
 	/// Note that on error, `f` may still have been called
-	fn cached<E, F>(
+	fn cached<'con, E, F>(
 		&self,
-		con: &Connection,
+		con: &MutexGuard<'con, Connection>,
 		f: F,
 	) -> Result<<Self as Cached>::Value, CachedError<E>>
 	where
@@ -88,17 +91,25 @@ pub trait Cached {
 	}
 }
 
-struct Cache<'con>
+/// Handles caching of [`Cached`] elements
+#[derive(Clone)]
+pub struct Cache
 {
-	con: &'con mut Connection,
-	tasks: HashSet<Box<dyn Future<Output = ()>>>,
+	con: Arc<Mutex<Connection>>,
 }
 
-impl<'con> Cache<'con>
+impl Cache
 {
+	pub fn new(db_path: Option<&str>) -> Result<Self, String> {
+		let con = db_path
+				.map_or(Connection::open_in_memory(), Connection::open)
+				.map_err(|err| format!("Unable to open connection to the database: {err}"))?;
+		Ok(Self {
+			con: Arc::new(Mutex::new(con))
+		})
+	}
 
-	pub fn get<C: Cached, GenFn>(&self, cached: C, f: GenFn)
-	{
-
+	pub async fn get_connection<'s>(&'s self) -> MutexGuard<'s, Connection> {
+		self.con.lock().await
 	}
 }

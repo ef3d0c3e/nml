@@ -3,18 +3,25 @@ use std::cell::Ref;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::future::Future;
+use std::future::IntoFuture;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::thread::sleep;
+use std::time::Duration;
 
 use rusqlite::Connection;
+use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
+use tokio::sync::MutexGuard;
+use tokio::task::JoinHandle;
+use crate::cache::cache::Cache;
 use crate::document::document::Document;
 use crate::document::references::CrossReference;
 use crate::document::references::ElemReference;
@@ -23,6 +30,7 @@ use crate::parser::parser::ReportColors;
 use crate::parser::reports::Report;
 
 use super::postprocess::PostProcess;
+use super::sanitize::Sanitizer;
 
 #[derive(Clone, Copy)]
 pub enum Target {
@@ -34,13 +42,11 @@ pub enum Target {
 pub struct CompilerOutput
 {
 	// Holds the content of the resulting document
-	pub(self) content: String,
+	content: String,
 	/// Holds the position of every cross-document reference
-	pub(self) references: HashMap<usize, CrossReference>,
+	references: HashMap<usize, CrossReference>,
 
-	pub(self) task_sender: UnboundedSender<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>,
-	pub(self) task_receiver: Arc<Mutex<UnboundedReceiver<(usize, Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>)>>>,
-	task_count: Arc<AtomicUsize>,
+	tasks: Vec<(usize, JoinHandle<Result<String, Vec<Report>>>)>,
 	runtime: tokio::runtime::Runtime,
 }
 
@@ -52,20 +58,15 @@ impl CompilerOutput
 	pub fn run_with_processor<F>(colors: &ReportColors, f: F) -> CompilerOutput
 		where F: FnOnce(CompilerOutput) -> CompilerOutput
 	{
-		let (sender, receiver) = mpsc::unbounded_channel();
 		let mut output = Self {
 			content: String::default(),
 			references: HashMap::default(),
-
-			task_sender: sender,
-			task_receiver: Arc::new(Mutex::new(receiver)),
-			task_count: Arc::new(AtomicUsize::new(0)),
+			tasks: vec![],
 			runtime: tokio::runtime::Runtime::new().unwrap(),
 		};
 
-		let all_tasks_posted = Arc::new(AtomicBool::new(false));
-
 		// Start processor
+		/*
 		let task_processor = output.runtime.spawn({
 			let receiver = output.task_receiver.clone();
 			let results: Arc<Mutex<Vec<(usize, Result<String, Vec<Report>>)>>> = Arc::new(Mutex::new(vec![]));
@@ -85,16 +86,48 @@ impl CompilerOutput
 				results
 			}
 		});
+		*/
 
 		output = f(output);
-		all_tasks_posted.store(true, Ordering::Release);
 		
 		
 		// Stop processor
-		let mut results = output.runtime.block_on(async {
+		/*
+		let mut results = output.runtime.spawn_blocking(async {
 			let results = task_processor.await.expect("Task processor failed");
 			let processed = std::mem::take(&mut *results.lock().await);
 			processed
+		});
+		*/
+
+
+		// Wait for all tasks to finish [TODO Status message/Lock timer for tasks that may never finish]
+		if !output.tasks.is_empty()
+		{
+			'outer: loop
+			{
+				for (_, handle) in &output.tasks
+				{
+					if !handle.is_finished()
+					{
+						break 'outer;
+					}
+				}
+				sleep(Duration::from_millis(50));
+			}
+		}
+
+		// Get values
+		let mut results =
+			output.runtime.block_on(async {
+			let mut results = vec![];
+			for (pos, handle) in output.tasks.drain(..)
+			{
+				let result = handle.into_future().await.unwrap();
+				results.push((pos, result));
+			}
+			output.tasks.clear();
+			results
 		});
 
 		// Insert tasks results
@@ -120,15 +153,8 @@ impl CompilerOutput
 		where
 			F: Future<Output = Result<String, Vec<Report>>> + Send + 'static
 	{
-        let dyn_future =
-			Box::pin(async move {
-            task.await
-        });
-		self.task_count
-			.fetch_add(1, Ordering::Release);
-		self.task_sender
-			.send((self.content.len(), dyn_future))
-			.expect("Failed to send task");
+		let handle = self.runtime.spawn(task);
+		self.tasks.push((self.content.len(), handle));
 	}
 
 	/// Inserts a new cross-reference that will be resolved during post-processing.
@@ -150,9 +176,10 @@ impl CompilerOutput
 	}
 }
 
-pub struct Compiler<'a> {
+pub struct Compiler {
 	target: Target,
-	cache: Option<&'a Connection>,
+	cache: Arc<Cache>,
+	sanitizer: Sanitizer,
 	// TODO: Move refcounting/references to the output
 	reference_count: RefCell<HashMap<String, HashMap<String, usize>>>,
 	sections_counter: RefCell<Vec<usize>>,
@@ -160,13 +187,12 @@ pub struct Compiler<'a> {
 	unresolved_references: RefCell<Vec<(usize, CrossReference)>>,
 }
 
-unsafe impl Sync for Compiler<'_> {}
-
-impl<'a> Compiler<'a> {
-	pub fn new(target: Target, con: Option<&'a Connection>) -> Self {
+impl Compiler {
+	pub fn new(target: Target, cache: Arc<Cache>) -> Self {
 		Self {
-			target,
-			cache: con,
+			target: target.clone(),
+			cache,
+			sanitizer: Sanitizer::new(target),
 			reference_count: RefCell::new(HashMap::new()),
 			sections_counter: RefCell::new(vec![]),
 			unresolved_references: RefCell::new(vec![]),
@@ -199,6 +225,7 @@ impl<'a> Compiler<'a> {
 	}
 
 	/// Sanitizes text for a [`Target`]
+	#[deprecated]
 	pub fn sanitize<S: AsRef<str>>(target: Target, str: S) -> String {
 		match target {
 			Target::HTML => str
@@ -209,6 +236,12 @@ impl<'a> Compiler<'a> {
 				.replace("\"", "&quot;"),
 			_ => todo!("Sanitize not implemented"),
 		}
+	}
+
+	/// Gets the sanitizer for this compiler
+	pub fn sanitizer(&self) -> Sanitizer
+	{
+		self.sanitizer.clone()
 	}
 
 	/// Sanitizes a format string for a [`Target`]
@@ -300,9 +333,8 @@ impl<'a> Compiler<'a> {
 
 	pub fn target(&self) -> Target { self.target }
 
-	pub fn cache(&self) -> Option<&'a Connection> {
-		self.cache
-		//self.cache.as_ref().map(RefCell::borrow_mut)
+	pub fn cache(&self) -> Arc<Cache> {
+		self.cache.clone()
 	}
 
 	pub fn header(&self, document: &dyn Document) -> String {
@@ -327,7 +359,7 @@ impl<'a> Compiler<'a> {
 				if let Some(page_title) = get_variable_or_error(document, "html.page_title") {
 					result += format!(
 						"<title>{}</title>",
-						Compiler::sanitize(self.target(), page_title.to_string())
+						self.sanitizer.sanitize(page_title.to_string())
 					)
 					.as_str();
 				}
@@ -335,7 +367,7 @@ impl<'a> Compiler<'a> {
 				if let Some(css) = document.get_variable("html.css") {
 					result += format!(
 						"<link rel=\"stylesheet\" href=\"{}\">",
-						Compiler::sanitize(self.target(), css.to_string())
+						self.sanitizer.sanitize(css.to_string())
 					)
 					.as_str();
 				}
@@ -431,6 +463,9 @@ pub struct CompiledDocument {
 	/// Input path relative to the input directory
 	pub input: String,
 	/// Modification time (i.e seconds since last epoch)
+	///
+	/// The purpose of this field is to know when to skip processing a document
+	/// I.E the file's mtime is compared with the value in database
 	pub mtime: u64,
 
 	/// All the variables defined in the document
@@ -470,11 +505,11 @@ impl CompiledDocument {
 		"INSERT OR REPLACE INTO compiled_documents (input, mtime, variables, internal_references, header, body, footer) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
 	}
 
-	pub fn init_cache(con: &Connection) -> Result<usize, rusqlite::Error> {
+	pub fn init_cache<'con>(con: &MutexGuard<'con, Connection>) -> Result<usize, rusqlite::Error> {
 		con.execute(Self::sql_table(), [])
 	}
 
-	pub fn from_cache(con: &Connection, input: &str) -> Option<Self> {
+	pub fn from_cache<'con>(con: &MutexGuard<'con, Connection>, input: &str) -> Option<Self> {
 		con.query_row(Self::sql_get_query(), [input], |row| {
 			Ok(CompiledDocument {
 				input: input.to_string(),

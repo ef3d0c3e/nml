@@ -5,11 +5,13 @@ use crate::cache::cache::CachedError;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
+use crate::compiler::sanitize::Sanitizer;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
+use compiler::compiler;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use lazy_static::lazy_static;
@@ -35,7 +37,7 @@ impl From<&CodeKind> for ElemKind {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Code {
 	pub location: Token,
 	pub block: CodeKind,
@@ -55,7 +57,7 @@ impl Code {
 		&syntax_set
 	}
 
-	fn highlight_html(&self, compiler: &Compiler) -> Result<String, String> {
+	fn highlight_html(&self, sanitizer: &Sanitizer) -> Result<String, String> {
 		lazy_static! {
 			static ref theme_set: ThemeSet = ThemeSet::load_defaults();
 		}
@@ -81,7 +83,7 @@ impl Code {
 			if let Some(name) = &self.name {
 				result += format!(
 					"<div class=\"code-block-title\">{}</div>",
-					Compiler::sanitize(compiler.target(), name.as_str())
+					sanitizer.sanitize(name.as_str())
 				)
 				.as_str();
 			}
@@ -217,30 +219,28 @@ impl Element for Code {
 		match compiler.target() {
 			HTML => {
 				static CACHE_INIT: Once = Once::new();
+				let cache = compiler.cache();
+
 				CACHE_INIT.call_once(|| {
-					if let Some(con) = compiler.cache() {
-						if let Err(e) = Code::init(con) {
-							eprintln!("Unable to create cache table: {e}");
-						}
+					let con = tokio::runtime::Handle::current().block_on(cache.get_connection());
+					if let Err(e) = Code::init(&con) {
+						eprintln!("Unable to create cache table: {e}");
 					}
 				});
 
-				/*
-				let fut = async {
-					if let Some(con) = compiler.cache() {
-						match self.cached(con, |s| s.highlight_html(compiler)) {
-							Ok(s) => Ok(s),
-							Err(e) => match e {
-								CachedError::SqlErr(e) => Err(compile_err!(self.location(), "Failed to compile code".into(), format!("Querying the cache failed: {e}"))),
-								CachedError::GenErr(e) => Err(compile_err!(self.location(), "Failed to compile code".into(), e)),
-							},
-						}
-					} else {
-						self.highlight_html(compiler).map_err(|err| compile_err!(self.location(), "Failed to compile code".into(), format!("Highlighting failed: {err}")))
+				let sanitizer = compiler.sanitizer();
+				let code = self.clone();
+				let fut = async move {
+					let con = cache.get_connection().await;
+					match code.cached(&con, |s| s.highlight_html(&sanitizer)) {
+						Ok(s) => Ok(s),
+						Err(e) => match e {
+							CachedError::SqlErr(e) => Err(compile_err!(code.location(), "Failed to compile code".into(), format!("Querying the cache failed: {e}"))),
+							CachedError::GenErr(e) => Err(compile_err!(code.location(), "Failed to compile code".into(), e)),
+						},
 					}
 				};
-				*/
-				//output.add_task(Box::pin(fut));
+				output.add_task(Box::pin(fut));
 			}
 			_ => todo!(""),
 		}

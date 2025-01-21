@@ -142,11 +142,12 @@ impl Element for Tex {
 		match compiler.target() {
 			HTML => {
 				static CACHE_INIT: Once = Once::new();
+				let cache = compiler.cache();
+
 				CACHE_INIT.call_once(|| {
-					if let Some(con) = compiler.cache() {
-						if let Err(e) = FormattedTex::init(con) {
-							eprintln!("Unable to create cache table: {e}");
-						}
+					let con = tokio::runtime::Handle::current().block_on(cache.get_connection());
+					if let Err(e) = FormattedTex::init(&con) {
+						eprintln!("Unable to create cache table: {e}");
 					}
 				});
 
@@ -174,40 +175,33 @@ impl Element for Tex {
 					Tex::format_latex(&fontsize, &preamble, &format!("{prepend}{}", self.tex))
 				};
 
-				/*
+				let sanitizer = compiler.sanitizer();
+				let location = self.location().clone();
+				let caption = self.caption.clone();
 				let fut = async move
 				{
-					let result = if let Some(con) = compiler.cache() {
-						match latex.cached(con, |s| s.latex_to_svg(&exec, &fontsize)) {
-							Ok(s) => Ok(s),
-							Err(e) => match e {
-								CachedError::SqlErr(e) => {
-									Err(format!("Querying the cache failed: {e}"))
-								}
-								CachedError::GenErr(e) => Err(e),
-							},
-						}
-					} else {
-						latex.latex_to_svg(&exec, &fontsize)
+					let con = cache.get_connection().await;
+					let mut result = match latex.cached(&con, |s| s.latex_to_svg(&exec, &fontsize)) {
+						Ok(s) => s,
+						Err(e) => match e {
+							CachedError::SqlErr(e) =>
+								return Err(compile_err!(location, "Failed to process LaTeX element".to_string(), format!("Querying the cache failed: {e}"))),
+							CachedError::GenErr(e) =>
+								return Err(compile_err!(location, "Failed to process LaTeX element".to_string(), e)),
+						},
 					};
 
-					if let Err(e) = result {
-						return Err(compile_err!(self.location(), "Failed to compile LaTeX element".into(), e));
-					}
-
 					// Caption
-					let mut result = result.unwrap();
-					if let (Some(caption), Some(start)) = (&self.caption, result.find('>')) {
+					if let (Some(caption), Some(start)) = (&caption, result.find('>')) {
 						result.insert_str(
 							start + 1,
-							format!("<title>{}</title>", Compiler::sanitize(HTML, caption))
+							format!("<title>{}</title>", sanitizer.sanitize(caption))
 							.as_str(),
 						);
 					}
 					Ok(result)
 				};
-				*/
-				//output.add_task(Box::pin(fut));
+				output.add_task(Box::pin(fut));
 			}
 			_ => todo!("Unimplemented"),
 		}

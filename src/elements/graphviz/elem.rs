@@ -21,7 +21,7 @@ use crate::document::element::Element;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Graphviz {
 	pub(crate) location: Token,
 	pub(crate) dot: String,
@@ -96,53 +96,41 @@ impl Element for Graphviz {
 		match compiler.target() {
 			HTML => {
 				static CACHE_INIT: Once = Once::new();
+				let cache = compiler.cache();
+			
 				CACHE_INIT.call_once(|| {
-					if let Some(con) = compiler.cache() {
-						if let Err(e) = Graphviz::init(con) {
-							eprintln!("Unable to create cache table: {e}");
-						}
+					let con = tokio::runtime::Handle::current().block_on(cache.get_connection());
+					if let Err(e) = Graphviz::init(&con) {
+						eprintln!("Unable to create cache table: {e}");
 					}
 				});
 
 				// TODO: Format svg in a div
-				/*
+				let value = self.clone();
 				let fut = async move {
-					if let Some(con) = compiler.cache() {
-						match self.cached(con, |s| s.dot_to_svg()) {
-							Ok(s) => Ok(s),
-							Err(e) => match e {
-								CachedError::SqlErr(e) =>
-									Err(compile_err!(
-											self.location(),
-											"Failed to compile Graphviz element".into(),
-											format!("Querying the cache failed: {e}")
-									)),
-								CachedError::GenErr(e) =>
-									Err(compile_err!(
-											self.location(),
-											"Failed to compile Graphviz element".into(),
-											e.to_string()
-									)),
-							},
-						}
-					} else {
-						match self.dot_to_svg() {
-							Ok(svg) => Ok(svg),
-							Err(e) => Err(compile_err!(
-									self.location(),
-									"Failed to compile Graphviz element".into(),
-									e.to_string()
-							)),
-						}
+					let con = cache.get_connection().await;
+					match value.cached(&con, |s| s.dot_to_svg()) {
+						Ok(s) => Ok(s),
+						Err(e) => match e {
+							CachedError::SqlErr(e) =>
+								Err(compile_err!(
+										value.location(),
+										"Failed to compile Graphviz element".into(),
+										format!("Querying the cache failed: {e}")
+								)),
+							CachedError::GenErr(e) =>
+								Err(compile_err!(
+										value.location(),
+										"Failed to compile Graphviz element".into(),
+										e.to_string()
+								)),
+						},
 					}
 				};
 				output.add_task(Box::pin(fut));
-				*/
 			}
 			_ => todo!("Unimplemented"),
 		}
 		Ok(())
 	}
 }
-
-unsafe impl Sync for Graphviz {}
