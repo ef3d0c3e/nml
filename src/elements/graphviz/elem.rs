@@ -99,7 +99,8 @@ impl Element for Graphviz {
 				let cache = compiler.cache();
 			
 				CACHE_INIT.call_once(|| {
-					let con = tokio::runtime::Handle::current().block_on(cache.get_connection());
+					let con = tokio::runtime::Runtime::new().unwrap().block_on(cache.get_connection());
+
 					if let Err(e) = Graphviz::init(&con) {
 						eprintln!("Unable to create cache table: {e}");
 					}

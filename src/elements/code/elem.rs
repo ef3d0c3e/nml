@@ -222,7 +222,8 @@ impl Element for Code {
 				let cache = compiler.cache();
 
 				CACHE_INIT.call_once(|| {
-					let con = tokio::runtime::Handle::current().block_on(cache.get_connection());
+					let con = tokio::runtime::Runtime::new().unwrap().block_on(cache.get_connection());
+
 					if let Err(e) = Code::init(&con) {
 						eprintln!("Unable to create cache table: {e}");
 					}

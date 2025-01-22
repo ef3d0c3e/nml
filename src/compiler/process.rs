@@ -80,7 +80,8 @@ pub fn process(
 	let cache = Arc::new(Cache::new(db_path)?);
 	// Initialize compiled document database
 	{
-		let con = cache.get_connection().await;
+		let con =
+			tokio::runtime::Runtime::new().unwrap().block_on(cache.get_connection());
 		CompiledDocument::init_cache(&con)
 			.map_err(|err| format!("Failed to initialize cached document table: {err}"))?;
 	}
@@ -113,7 +114,8 @@ pub fn process(
 			parse_and_compile()?
 		} else {
 			let cached = {
-				let con = cache.get_connection().await;
+				let con =
+					tokio::runtime::Runtime::new().unwrap().block_on(cache.get_connection());
 				CompiledDocument::from_cache(&con, file.to_str().unwrap())
 			};
 
@@ -132,7 +134,8 @@ pub fn process(
 		compiled.push((RefCell::new(cdoc), post));
 	}
 
-	let con = cache.get_connection().await;
+	let con =
+		tokio::runtime::Runtime::new().unwrap().block_on(cache.get_connection());
 	for (doc, postprocess) in &compiled {
 		if postprocess.is_none() {
 			continue;
