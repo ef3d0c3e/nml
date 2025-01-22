@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::CompilerOutput;
+use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ContainerElement;

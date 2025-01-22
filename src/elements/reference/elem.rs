@@ -5,7 +5,7 @@ use runtime_format::FormatKey;
 use runtime_format::FormatKeyError;
 
 use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::CompilerOutput;
+use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::compiler::sanitize::Sanitizer;
 use crate::document::document::Document;
@@ -57,12 +57,13 @@ impl Element for InternalReference {
 					))?;
 				let elem = document.get_from_reference(&elemref).unwrap();
 
+				let refid = output.reference_id(document, elemref);
 				output.add_content(
 					elem.compile_reference(
 						compiler,
 						document,
 						self,
-						compiler.reference_id(document, elemref),
+						refid
 					)
 					.map_err(|err| {
 						compile_err!(

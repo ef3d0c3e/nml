@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::CompilerOutput;
+use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
@@ -121,7 +121,7 @@ impl Element for Medium {
 			Target::HTML => {
 				// Reference
 				let elemref = document.get_reference(self.reference.as_str()).unwrap();
-				let refcount = compiler.reference_id(document, elemref);
+				let refcount = output.reference_id(document, elemref);
 
 				let width = self
 					.width

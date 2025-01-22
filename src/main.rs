@@ -34,7 +34,7 @@ under the terms of the Free Software Foundation <https://www.gnu.org/licenses/ag
 This program is free software; you may modify and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.
 
-NML version: 0.4\n"
+NML version: 0.5\n"
 	);
 }
 

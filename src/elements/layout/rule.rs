@@ -51,7 +51,7 @@ pub fn initialize_state(state: &ParserState) -> Rc<RefCell<dyn RuleState>> {
 }
 
 pub fn parse_properties<'a>(
-	mut reports: &mut Vec<Report>,
+	reports: &mut Vec<Report>,
 	state: &ParserState,
 	token: &Token,
 	layout_type: Rc<dyn LayoutType>,

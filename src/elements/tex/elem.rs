@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::sync::Once;
 
 use crate::cache::cache::Cached;
-use crate::compiler::compiler::CompilerOutput;
+use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::parser::reports::Report;
 use crypto::digest::Digest;

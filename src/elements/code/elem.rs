@@ -3,7 +3,7 @@ use std::sync::Once;
 use crate::cache::cache::Cached;
 use crate::cache::cache::CachedError;
 use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::CompilerOutput;
+use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
 use crate::compiler::sanitize::Sanitizer;
 use crate::document::document::Document;

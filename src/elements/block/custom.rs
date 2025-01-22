@@ -5,7 +5,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use compiler::compiler::CompilerOutput;
+use compiler::output::CompilerOutput;
 use runtime_format::FormatArgs;
 use runtime_format::FormatKey;
 use runtime_format::FormatKeyError;

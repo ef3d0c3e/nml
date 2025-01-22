@@ -1,5 +1,5 @@
 use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::CompilerOutput;
+use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
@@ -234,7 +234,7 @@ impl Element for Table {
 			let elemref = document
 				.get_reference(self.reference.as_ref().unwrap().as_str())
 				.unwrap();
-			let refcount = compiler.reference_id(document, elemref);
+			let refcount = output.reference_id(document, elemref);
 			output.add_content(format!(
 				r#"<div class="media"><div id="{}" class="medium">"#,
 				self.refid(compiler, refcount)
@@ -337,7 +337,7 @@ impl Element for Table {
 			let elemref = document
 				.get_reference(self.reference.as_ref().unwrap().as_str())
 				.unwrap();
-			let refcount = compiler.reference_id(document, elemref);
+			let refcount = output.reference_id(document, elemref);
 			output.add_content(format!(
 				r#"<p class="medium-refname">({refcount}) {}</p>"#,
 				self.title.as_ref().map_or("", |s| s.as_str())

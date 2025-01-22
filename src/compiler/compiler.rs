@@ -1,25 +1,16 @@
-use std::cell::Ref;
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::future::Future;
-use std::future::IntoFuture;
-use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::thread::sleep;
-use std::time::Duration;
 
 use crate::cache::cache::Cache;
 use crate::document::document::Document;
-use crate::document::references::CrossReference;
-use crate::document::references::ElemReference;
 use crate::document::variable::Variable;
 use crate::parser::parser::ReportColors;
 use crate::parser::reports::Report;
 use rusqlite::Connection;
 use tokio::sync::MutexGuard;
-use tokio::task::JoinHandle;
 
+use super::output::CompilerOutput;
 use super::postprocess::PostProcess;
 use super::sanitize::Sanitizer;
 
@@ -30,113 +21,11 @@ pub enum Target {
 	LATEX,
 }
 
-pub struct CompilerOutput {
-	// Holds the content of the resulting document
-	content: String,
-	/// Holds the position of every cross-document reference
-	references: HashMap<usize, CrossReference>,
-
-	tasks: Vec<(usize, JoinHandle<Result<String, Vec<Report>>>)>,
-	runtime: tokio::runtime::Runtime,
-}
-
-impl CompilerOutput {
-	/// Run work function `f` with the task processor running
-	///
-	/// The result of async taks will be inserted into the output
-	pub fn run_with_processor<F>(colors: &ReportColors, f: F) -> CompilerOutput
-	where
-		F: FnOnce(CompilerOutput) -> CompilerOutput,
-	{
-		// Create the output & the runtime
-		let mut output = Self {
-			content: String::default(),
-			references: HashMap::default(),
-			tasks: vec![],
-			runtime: tokio::runtime::Builder::new_multi_thread()
-				.worker_threads(8)
-				.enable_all()
-				.build()
-				.unwrap(),
-		};
-
-		// Process the document with caller work-function
-		output = f(output);
-
-		// Wait for all tasks to finish [TODO Status message/Timer for tasks that may never finish]
-		if !output.tasks.is_empty() {
-			'outer: loop {
-				for (_, handle) in &output.tasks {
-					if !handle.is_finished() {
-						break 'outer;
-					}
-				}
-				sleep(Duration::from_millis(50));
-			}
-		}
-
-		// Get results from async tasks
-		let mut results = output.runtime.block_on(async {
-			let mut results = vec![];
-			for (pos, handle) in output.tasks.drain(..) {
-				let result = handle.into_future().await.unwrap();
-				results.push((pos, result));
-			}
-			output.tasks.clear();
-			results
-		});
-
-		// Insert tasks results into output
-		for (pos, result) in results.drain(..).rev() {
-			match result {
-				Ok(content) => output.content.insert_str(pos, content.as_str()),
-				Err(err) => Report::reports_to_stdout(colors, err),
-			}
-		}
-		output
-	}
-
-	/// Appends content to the output
-	pub fn add_content<S: AsRef<str>>(&mut self, s: S) { self.content.push_str(s.as_ref()); }
-
-	/// Adds an async task to the output. The task's result will be appended at the current output position
-	///
-	/// The task is a future that returns it's result in a string, or errors as a Vec of [`Report`]s
-	pub fn add_task<F>(&mut self, task: Pin<Box<F>>)
-	where
-		F: Future<Output = Result<String, Vec<Report>>> + Send + 'static,
-	{
-		let handle = self.runtime.spawn(task);
-		self.tasks.push((self.content.len(), handle));
-	}
-
-	/// Inserts a new cross-reference that will be resolved during post-processing.
-	///
-	/// Once resolved, a link to the references element will be inserted at the current output position.
-	///
-	/// # Note
-	///
-	/// There can only be one cross-reference at a given output position.
-	/// In case another cross-reference is inserted at the same location (which should never happen),
-	/// The program will panic
-	pub fn add_external_reference(&mut self, xref: CrossReference) {
-		if self.references.get(&self.content.len()).is_some() {
-			panic!("Duplicate cross-reference in one location");
-		}
-		self.references.insert(self.content.len(), xref);
-	}
-}
-
 // TODO: Compiler should be immutable
 pub struct Compiler {
 	target: Target,
 	cache: Arc<Cache>,
 	sanitizer: Sanitizer,
-	// TODO: Move refcounting/references to the output
-	reference_count: RefCell<HashMap<String, HashMap<String, usize>>>,
-	sections_counter: RefCell<Vec<usize>>,
-
-	unresolved_references: RefCell<Vec<(usize, CrossReference)>>,
 }
 
 impl Compiler {
@@ -145,35 +34,7 @@ impl Compiler {
 			target: target,
 			cache,
 			sanitizer: Sanitizer::new(target),
-			reference_count: RefCell::new(HashMap::new()),
-			sections_counter: RefCell::new(vec![]),
-			unresolved_references: RefCell::new(vec![]),
 		}
-	}
-
-	/// Gets the section counter for a given depth
-	/// This function modifies the section counter
-	pub fn section_counter(&self, depth: usize) -> Ref<'_, Vec<usize>> {
-		// Increment current counter
-		if self.sections_counter.borrow().len() == depth {
-			self.sections_counter
-				.borrow_mut()
-				.last_mut()
-				.map(|id| *id += 1);
-			return Ref::map(self.sections_counter.borrow(), |b| b);
-		}
-
-		// Close
-		while self.sections_counter.borrow().len() > depth {
-			self.sections_counter.borrow_mut().pop();
-		}
-
-		// Open
-		while self.sections_counter.borrow().len() < depth {
-			self.sections_counter.borrow_mut().push(1);
-		}
-
-		Ref::map(self.sections_counter.borrow(), |b| b)
 	}
 
 	/// Gets the sanitizer for this compiler
@@ -195,43 +56,6 @@ impl Compiler {
 	/// Gets a reference name
 	pub fn refname<S: AsRef<str>>(&self, str: S) -> String {
 		self.sanitizer.sanitize(str).replace(' ', "_")
-	}
-
-	/// Inserts or get a reference id for the compiled document
-	///
-	/// # Parameters
-	/// - [`reference`] The reference to get or insert
-	pub fn reference_id(&self, document: &dyn Document, reference: ElemReference) -> usize {
-		let mut borrow = self.reference_count.borrow_mut();
-		let reference = document.get_from_reference(&reference).unwrap();
-		let refkey = reference.refcount_key();
-		let refname = reference.reference_name().unwrap();
-
-		let map = match borrow.get_mut(refkey) {
-			Some(map) => map,
-			None => {
-				borrow.insert(refkey.to_string(), HashMap::new());
-				borrow.get_mut(refkey).unwrap()
-			}
-		};
-
-		if let Some(elem) = map.get(refname) {
-			*elem
-		} else {
-			// Insert new ref
-			let index = map
-				.iter()
-				.fold(0, |max, (_, value)| std::cmp::max(max, *value));
-			map.insert(refname.clone(), index + 1);
-			index + 1
-		}
-	}
-
-	/// Inserts a new crossreference
-	pub fn insert_crossreference(&self, pos: usize, reference: CrossReference) {
-		self.unresolved_references
-			.borrow_mut()
-			.push((pos, reference));
 	}
 
 	pub fn target(&self) -> Target { self.target }
@@ -308,8 +132,8 @@ impl Compiler {
 				output.add_content(r#"<div class="content">"#);
 				for elem in borrow.iter() {
 					if let Err(reports) = elem.compile(self, document, &mut output) {
-     							Report::reports_to_stdout(colors, reports);
-     						};
+						Report::reports_to_stdout(colors, reports);
+					};
 				}
 				output.add_content(r#"</div>"#);
 			}
@@ -319,46 +143,7 @@ impl Compiler {
 		// Footer
 		let footer = self.footer(document);
 
-		// Variables
-		let variables = document
-			.scope()
-			.borrow_mut()
-			.variables
-			.iter()
-			.map(|(key, var)| (key.clone(), var.to_string()))
-			.collect::<HashMap<String, String>>();
-
-		// References
-		let references = document
-			.scope()
-			.borrow_mut()
-			.referenceable
-			.iter()
-			.map(|(key, reference)| {
-				let elem = document.get_from_reference(reference).unwrap();
-				let refid = self.reference_id(document, *reference);
-
-				(key.clone(), elem.refid(self, refid))
-			})
-			.collect::<HashMap<String, String>>();
-
-		let postprocess = PostProcess {
-			resolve_references: self.unresolved_references.replace(vec![]),
-		};
-
-		let cdoc = CompiledDocument {
-			input: document.source().name().clone(),
-			mtime: 0,
-			variables,
-			references,
-			header,
-			body: output.content,
-			footer,
-		};
-
-		// TODO: Process async tasks
-
-		(cdoc, postprocess)
+		output.to_compiled(self, document, header, footer)
 	}
 }
 

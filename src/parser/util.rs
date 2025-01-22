@@ -248,7 +248,6 @@ mod tests {
 	use crate::elements::text::elem::Text;
 	use crate::parser::source::SourceFile;
 	use crate::parser::source::Token;
-	use std::rc::Rc;
 
 	#[test]
 	fn process_text_tests() {

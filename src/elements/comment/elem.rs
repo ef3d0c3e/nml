@@ -1,5 +1,5 @@
 use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::CompilerOutput;
+use crate::compiler::output::CompilerOutput;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
@@ -21,7 +21,7 @@ impl Element for Comment {
 		&self,
 		_compiler: &Compiler,
 		_document: &dyn Document,
-		output: &mut CompilerOutput,
+		_output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
 		Ok(())
 	}

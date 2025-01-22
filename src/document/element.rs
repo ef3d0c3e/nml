@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::CompilerOutput;
+use crate::compiler::output::CompilerOutput;
 use crate::elements::reference::elem::InternalReference;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
@@ -110,7 +110,7 @@ impl Element for DocumentEnd {
 		&'e self,
 		_compiler: &'e Compiler,
 		_document: &'e dyn Document,
-		output: &mut CompilerOutput,
+		_output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
 		Ok(())
 	}
