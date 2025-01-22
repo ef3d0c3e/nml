@@ -9,11 +9,11 @@ use crate::parser::parser::ParserState;
 use crate::parser::source::SourceFile;
 use crate::validate_document;
 use crate::validate_semantics;
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[test]
 fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 NOT COMMENT: `std::cmp`
@@ -42,7 +42,7 @@ COMMENT ::Test
 
 #[test]
 fn semantic() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 ::Test

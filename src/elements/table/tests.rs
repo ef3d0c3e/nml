@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::table::elem::Align;
 use crate::parser::langparser::LangParser;
@@ -11,7 +11,7 @@ use super::elem::Table;
 
 #[test]
 pub fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 | :rvspan=3: 0 | :talign=right: 1 | :chspan=2: |

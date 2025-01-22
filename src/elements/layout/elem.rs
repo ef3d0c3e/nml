@@ -31,7 +31,13 @@ impl Element for Layout {
 		document: &'e dyn Document,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
-		self.layout
-			.compile(self.token, self.id, &self.properties, compiler, document, output)
+		self.layout.compile(
+			self.token,
+			self.id,
+			&self.properties,
+			compiler,
+			document,
+			output,
+		)
 	}
 }

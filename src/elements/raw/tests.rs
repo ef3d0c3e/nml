@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::document::element::ElemKind;
 use crate::elements::paragraph::elem::Paragraph;
@@ -14,7 +14,7 @@ use crate::validate_semantics;
 
 #[test]
 fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 Break{?[kind=block] Raw?}NewParagraph{?<b>?}
@@ -42,7 +42,7 @@ Break{?[kind=block] Raw?}NewParagraph{?<b>?}
 
 #[test]
 fn lua() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 Break%<nml.raw.push("block", "Raw")>%NewParagraph%<nml.raw.push("inline", "<b>")>%
@@ -70,7 +70,7 @@ Break%<nml.raw.push("block", "Raw")>%NewParagraph%<nml.raw.push("inline", "<b>")
 
 #[test]
 fn semantic() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 {?[kind=block] Raw?}

@@ -1,5 +1,4 @@
 use std::ops::Range;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use unicode_segmentation::UnicodeSegmentation;

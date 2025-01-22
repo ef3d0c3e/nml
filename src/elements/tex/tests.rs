@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::tex::elem::Tex;
@@ -12,7 +12,7 @@ use crate::validate_semantics;
 
 #[test]
 fn tex_block() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 $[kind=block, caption=Some\, text\\] 1+1=2	$
@@ -45,7 +45,7 @@ $[kind=block,env=another] e^{i\pi}=-1$
 
 #[test]
 fn tex_inline() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 $[ caption=Some\, text\\] 1+1=2	$
@@ -80,7 +80,7 @@ $[env=another] e^{i\pi}=-1$
 
 #[test]
 fn semantic() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 $[kind=inline]\LaTeX$

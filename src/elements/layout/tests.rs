@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::layout::custom::LayoutToken;
 use crate::elements::layout::elem::Layout;
@@ -15,7 +15,7 @@ use crate::validate_semantics;
 
 #[test]
 fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 #+LAYOUT_BEGIN[style=A] Split
@@ -81,7 +81,7 @@ fn parser() {
 
 #[test]
 fn lua() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 %<nml.layout.push("begin", "Split", "style=A")>%
@@ -148,7 +148,7 @@ fn lua() {
 
 #[test]
 fn semantic() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 #+LAYOUT_BEGIN Split
@@ -183,7 +183,7 @@ fn semantic() {
 
 #[test]
 fn hints() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 #+LAYOUT_BEGIN Split

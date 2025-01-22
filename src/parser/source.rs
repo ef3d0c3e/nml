@@ -392,10 +392,10 @@ impl Token {
 			.grapheme_indices(true)
 			.skip(offset - 1);
 
-		return graphemes
+		graphemes
 			.next()
 			.map(|(pos, _)| pos)
-			.unwrap_or(self.range.end);
+			.unwrap_or(self.range.end)
 	}
 
 	/// Get a byte position from a grapheme offset
@@ -418,10 +418,10 @@ impl Token {
 			.rev()
 			.skip(offset - 1);
 
-		return graphemes
+		graphemes
 			.next()
 			.map(|(pos, _)| pos)
-			.unwrap_or(self.range.end);
+			.unwrap_or(self.range.end)
 	}
 }
 

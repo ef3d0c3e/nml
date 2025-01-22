@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::elements::text::elem::Text;
@@ -154,7 +153,8 @@ impl RegexRule for ScriptRule {
 			// Exec @<>@
 			{
 				// Code Ranges
-				if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp) {
+				if let Some(coderanges) = CodeRange::from_source(token.source(), &state.shared.lsp)
+				{
 					let range = script_range;
 					coderanges.add(range.start + 1..range.end, "lua".to_string());
 				}

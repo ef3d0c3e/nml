@@ -12,6 +12,7 @@ use runtime_format::FormatKeyError;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target::HTML;
+use crate::compiler::sanitize::Sanitizer;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::parser::parser::ParserState;
@@ -60,7 +61,7 @@ impl Default for Quote {
 	}
 }
 
-struct QuoteFmtPair<'a>(crate::compiler::compiler::Target, &'a QuoteData);
+struct QuoteFmtPair<'a>(Sanitizer, &'a QuoteData);
 
 impl FormatKey for QuoteFmtPair<'_> {
 	fn fmt(&self, key: &str, f: &mut fmt::Formatter<'_>) -> Result<(), FormatKeyError> {
@@ -68,13 +69,14 @@ impl FormatKey for QuoteFmtPair<'_> {
 			"author" => write!(
 				f,
 				"{}",
-				Compiler::sanitize(self.0, self.1.author.as_ref().unwrap_or(&"".into()))
+				self.0
+					.sanitize(self.1.author.as_ref().unwrap_or(&"".into()))
 			)
 			.map_err(FormatKeyError::Fmt),
 			"cite" => write!(
 				f,
 				"{}",
-				Compiler::sanitize(self.0, self.1.cite.as_ref().unwrap_or(&"".into()))
+				self.0.sanitize(self.1.cite.as_ref().unwrap_or(&"".into()))
 			)
 			.map_err(FormatKeyError::Fmt),
 			_ => Err(FormatKeyError::UnknownKey),
@@ -144,20 +146,17 @@ impl BlockType for Quote {
 
 					if quote.cite.is_some() || quote.author.is_some() {
 						result += r#"<p class="blockquote-author">"#;
-						let fmt_pair = QuoteFmtPair(compiler.target(), quote);
+						let fmt_pair = QuoteFmtPair(compiler.sanitizer(), quote);
 						let format_string = match (quote.author.is_some(), quote.cite.is_some()) {
-							(true, true) => Compiler::sanitize_format(
-								fmt_pair.0,
-								quote.style.format[0].as_str(),
-							),
-							(true, false) => Compiler::sanitize_format(
-								fmt_pair.0,
-								quote.style.format[1].as_str(),
-							),
-							(false, false) => Compiler::sanitize_format(
-								fmt_pair.0,
-								quote.style.format[2].as_str(),
-							),
+							(true, true) => {
+								compiler.sanitize_format(quote.style.format[0].as_str())
+							}
+							(true, false) => {
+								compiler.sanitize_format(quote.style.format[1].as_str())
+							}
+							(false, false) => {
+								compiler.sanitize_format(quote.style.format[2].as_str())
+							}
 							_ => panic!(""),
 						};
 						let args = FormatArgs::new(format_string.as_str(), &fmt_pair);
@@ -172,8 +171,9 @@ impl BlockType for Quote {
 				};
 
 				if let Some(url) = &quote.url {
-					output.add_content(format!(r#"<blockquote cite="{}">"#, Compiler::sanitize(HTML, url))
-						.as_str());
+					output.add_content(
+						format!(r#"<blockquote cite="{}">"#, compiler.sanitize(url)).as_str(),
+					);
 				} else {
 					output.add_content("<blockquote>");
 				}

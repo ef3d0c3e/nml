@@ -9,17 +9,16 @@ use crate::compiler::sanitize::Sanitizer;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::macros::*;
 use crate::parser::reports::Report;
+use crate::parser::reports::*;
 use crate::parser::source::Token;
-use compiler::compiler;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use lazy_static::lazy_static;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
-use crate::parser::reports::macros::*;
-use crate::parser::reports::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CodeKind {
@@ -222,7 +221,9 @@ impl Element for Code {
 				let cache = compiler.cache();
 
 				CACHE_INIT.call_once(|| {
-					let con = tokio::runtime::Runtime::new().unwrap().block_on(cache.get_connection());
+					let con = tokio::runtime::Runtime::new()
+						.unwrap()
+						.block_on(cache.get_connection());
 
 					if let Err(e) = Code::init(&con) {
 						eprintln!("Unable to create cache table: {e}");
@@ -236,8 +237,16 @@ impl Element for Code {
 					match code.cached(&con, |s| s.highlight_html(&sanitizer)) {
 						Ok(s) => Ok(s),
 						Err(e) => match e {
-							CachedError::SqlErr(e) => Err(compile_err!(code.location(), "Failed to compile code".into(), format!("Querying the cache failed: {e}"))),
-							CachedError::GenErr(e) => Err(compile_err!(code.location(), "Failed to compile code".into(), e)),
+							CachedError::SqlErr(e) => Err(compile_err!(
+								code.location(),
+								"Failed to compile code".into(),
+								format!("Querying the cache failed: {e}")
+							)),
+							CachedError::GenErr(e) => Err(compile_err!(
+								code.location(),
+								"Failed to compile code".into(),
+								e
+							)),
 						},
 					}
 				};

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::media::elem::MediaType;
 use crate::elements::media::elem::Medium;
@@ -24,7 +24,7 @@ fn regex() {
 
 #[test]
 fn element_test() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 ![ref1](  image.png )[width = 200px, caption = Caption\,] Description

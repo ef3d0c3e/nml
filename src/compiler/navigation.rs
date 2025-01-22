@@ -1,11 +1,11 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::compiler::compiler::Compiler;
 
 use super::compiler::CompiledDocument;
 use super::compiler::Target;
 use super::postprocess::PostProcess;
+use super::sanitize::Sanitizer;
 
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct NavEntry {
@@ -22,7 +22,7 @@ pub struct NavEntries {
 
 impl NavEntries {
 	// FIXME: Sanitize
-	pub fn compile(&self, target: Target, doc: &RefCell<CompiledDocument>) -> String {
+	pub fn compile(&self, sanitizer: Sanitizer, doc: &RefCell<CompiledDocument>) -> String {
 		let doc_borrow = doc.borrow();
 		let categories = vec![
 			doc_borrow
@@ -34,12 +34,12 @@ impl NavEntries {
 		];
 
 		let mut result = String::new();
-		match target {
+		match sanitizer.target() {
 			Target::HTML => {
 				result += r#"<input id="navbar-checkbox" class="toggle" type="checkbox" style="display:none" checked><div id="navbar"><ul>"#;
 
 				fn process(
-					target: Target,
+					sanitizer: Sanitizer,
 					doc_path: &String,
 					categories: &Vec<&str>,
 					did_match: bool,
@@ -58,8 +58,8 @@ impl NavEntries {
 						result.push_str(
 							format!(
 								r#"<li {style}><a href="{}">{}</a></li>"#,
-								Compiler::sanitize(target, entry.path.as_str()),
-								Compiler::sanitize(target, entry.title.as_str())
+								sanitizer.sanitize(entry.path.as_str()),
+								sanitizer.sanitize(entry.title.as_str())
 							)
 							.as_str(),
 						);
@@ -77,13 +77,13 @@ impl NavEntries {
 							format!(
 								"<details{}><summary class=\"navbar-category\">{}</summary>",
 								["", " open"][is_match as usize],
-								Compiler::sanitize(target, name)
+								sanitizer.sanitize(name)
 							)
 							.as_str(),
 						);
 						result.push_str("<ul>");
 						process(
-							target,
+							sanitizer,
 							doc_path,
 							categories,
 							is_match,
@@ -96,7 +96,7 @@ impl NavEntries {
 				}
 
 				process(
-					target,
+					sanitizer,
 					doc_borrow
 						.get_variable("compiler.output")
 						.unwrap_or(&String::new()),

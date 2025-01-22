@@ -51,7 +51,6 @@ pub fn validate_refname<'a>(
 
 #[cfg(test)]
 pub mod tests {
-	use std::rc::Rc;
 
 	use super::*;
 	use crate::parser::langparser::LangParser;
@@ -59,10 +58,11 @@ pub mod tests {
 	use crate::parser::parser::Parser;
 	use crate::parser::parser::ParserState;
 	use crate::parser::source::SourceFile;
+	use std::sync::Arc;
 
 	#[test]
 	fn validate_refname_tests() {
-		let source = Rc::new(SourceFile::with_content(
+		let source = Arc::new(SourceFile::with_content(
 			"".to_string(),
 			"#{ref} Section".to_string(),
 			None,

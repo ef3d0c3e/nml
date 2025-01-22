@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::link::elem::Link;
 use crate::elements::paragraph::elem::Paragraph;
@@ -14,7 +14,7 @@ use crate::validate_semantics;
 
 #[test]
 fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 Some [link](url).
@@ -47,7 +47,7 @@ Some [link](url).
 
 #[test]
 fn lua() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 Some %<nml.link.push("link", "url")>%.
@@ -82,7 +82,7 @@ nml.link.push("**BOLD link**", "another url")
 
 #[test]
 fn semantics() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
  -  [la\](*testi*nk](url)

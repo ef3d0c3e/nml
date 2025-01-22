@@ -6,7 +6,7 @@ mod lsp;
 mod lua;
 mod parser;
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use dashmap::DashMap;
 use lsp::code::CodeRangeInfo;
@@ -53,7 +53,7 @@ impl Backend {
 
 		// TODO: Create a custom parser for the lsp
 		// Which will require a dyn Document to work
-		let source = Rc::new(SourceFile::with_content(
+		let source = Arc::new(SourceFile::with_content(
 			params.uri.to_string(),
 			params.text.clone(),
 			None,
@@ -82,8 +82,7 @@ impl Backend {
 			for (source, sem) in &borrow.semantic_data {
 				if let Some(path) = source
 					.clone()
-					.downcast_rc::<SourceFile>()
-					.ok()
+					.downcast_ref::<SourceFile>()
 					.map(|source| source.path().to_owned())
 				{
 					self.semantic_token_map
@@ -95,8 +94,7 @@ impl Backend {
 			for (source, hints) in &borrow.inlay_hints {
 				if let Some(path) = source
 					.clone()
-					.downcast_rc::<SourceFile>()
-					.ok()
+					.downcast_ref::<SourceFile>()
 					.map(|source| source.path().to_owned())
 				{
 					self.hints_map.insert(path, hints.hints.replace(vec![]));
@@ -107,8 +105,7 @@ impl Backend {
 			for (source, definitions) in &borrow.definitions {
 				if let Some(path) = source
 					.clone()
-					.downcast_rc::<SourceFile>()
-					.ok()
+					.downcast_ref::<SourceFile>()
 					.map(|source| source.path().to_owned())
 				{
 					self.definition_map
@@ -120,8 +117,7 @@ impl Backend {
 			for (source, conceals) in &borrow.conceals {
 				if let Some(path) = source
 					.clone()
-					.downcast_rc::<SourceFile>()
-					.ok()
+					.downcast_ref::<SourceFile>()
 					.map(|source| source.path().to_owned())
 				{
 					self.conceals_map
@@ -133,8 +129,7 @@ impl Backend {
 			for (source, styles) in &borrow.styles {
 				if let Some(path) = source
 					.clone()
-					.downcast_rc::<SourceFile>()
-					.ok()
+					.downcast_ref::<SourceFile>()
 					.map(|source| source.path().to_owned())
 				{
 					self.styles_map.insert(path, styles.styles.replace(vec![]));
@@ -145,8 +140,7 @@ impl Backend {
 			for (source, coderanges) in &borrow.coderanges {
 				if let Some(path) = source
 					.clone()
-					.downcast_rc::<SourceFile>()
-					.ok()
+					.downcast_ref::<SourceFile>()
 					.map(|source| source.path().to_owned())
 				{
 					self.coderanges_map

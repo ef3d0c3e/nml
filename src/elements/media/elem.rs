@@ -127,12 +127,10 @@ impl Element for Medium {
 					.width
 					.as_ref()
 					.map_or(String::new(), |w| format!(r#" style="width:{w};""#));
-				output.add_content(
-					format!(
-						r#"<div id="{}" class="medium"{width}>"#,
-						self.refid(compiler, refcount)
-					)
-				);
+				output.add_content(format!(
+					r#"<div id="{}" class="medium"{width}>"#,
+					self.refid(compiler, refcount)
+				));
 				output.add_content(match self.media_type {
 					MediaType::IMAGE => format!(r#"<a href="{0}"><img src="{0}"></a>"#, self.uri),
 					MediaType::VIDEO => format!(
@@ -147,12 +145,12 @@ impl Element for Medium {
 				let caption = self
 					.caption
 					.as_ref()
-					.map(|cap| format!(" {}", Compiler::sanitize(compiler.target(), cap.as_str())))
+					.map(|cap| format!(" {}", compiler.sanitize(cap.as_str())))
 					.unwrap_or_default();
 
-				output.add_content(
-					format!(r#"<p class="medium-refname">({refcount}) {caption}</p>"#),
-				);
+				output.add_content(format!(
+					r#"<p class="medium-refname">({refcount}) {caption}</p>"#
+				));
 				if let Some(paragraph) = self.description.as_ref() {
 					paragraph.compile(compiler, document, output)?;
 				}

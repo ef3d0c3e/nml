@@ -81,15 +81,13 @@ impl RegexRule for TocRule {
 			"push".to_string(),
 			lua.create_function(|_, title: Option<String>| {
 				CTX.with_borrow(|ctx| {
-					ctx.as_ref().map(|ctx| {
-						ctx.state.push(
+					if let Some(ctx) = ctx.as_ref() { ctx.state.push(
 							ctx.document,
 							Box::new(Toc {
 								location: ctx.location.clone(),
 								title,
 							}),
-						)
-					});
+						) }
 				});
 				Ok(())
 			})

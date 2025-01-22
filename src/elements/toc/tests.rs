@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::section::elem::Section;
 use crate::elements::toc::elem::Toc;
@@ -12,7 +12,7 @@ use crate::validate_semantics;
 
 #[test]
 fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 #+TABLE_OF_CONTENT TOC
@@ -39,7 +39,7 @@ fn parser() {
 
 #[test]
 fn lua() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 %<nml.toc.push("TOC")>%
@@ -64,7 +64,7 @@ fn lua() {
 
 #[test]
 fn semantic() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 #+TABLE_OF_CONTENT TOC

@@ -6,8 +6,8 @@ use runtime_format::FormatKeyError;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::CompilerOutput;
-use crate::compiler::compiler::Target;
 use crate::compiler::compiler::Target::HTML;
+use crate::compiler::sanitize::Sanitizer;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
@@ -65,7 +65,11 @@ impl Element for InternalReference {
 						compiler.reference_id(document, elemref),
 					)
 					.map_err(|err| {
-						compile_err!(self.location(), "Failed to compile internal reference".into(), err)
+						compile_err!(
+							self.location(),
+							"Failed to compile internal reference".into(),
+							err
+						)
 					})?,
 				);
 			}
@@ -87,22 +91,18 @@ impl ExternalReference {
 	pub fn style(&self) -> &Rc<ExternalReferenceStyle> { &self.style }
 }
 
-struct FmtPair<'a>(Target, &'a ExternalReference);
+struct FmtPair<'a>(Sanitizer, &'a ExternalReference);
 
 impl FormatKey for FmtPair<'_> {
 	fn fmt(&self, key: &str, f: &mut std::fmt::Formatter<'_>) -> Result<(), FormatKeyError> {
 		match &self.1.reference {
 			CrossReference::Unspecific(refname) => match key {
-				"refname" => write!(f, "{}", Compiler::sanitize(self.0, refname))
-					.map_err(FormatKeyError::Fmt),
+				"refname" => write!(f, "{}", self.0.sanitize(refname)).map_err(FormatKeyError::Fmt),
 				_ => Err(FormatKeyError::UnknownKey),
 			},
 			CrossReference::Specific(refdoc, refname) => match key {
-				"refdoc" => {
-					write!(f, "{}", Compiler::sanitize(self.0, refdoc)).map_err(FormatKeyError::Fmt)
-				}
-				"refname" => write!(f, "{}", Compiler::sanitize(self.0, refname))
-					.map_err(FormatKeyError::Fmt),
+				"refdoc" => write!(f, "{}", self.0.sanitize(refdoc)).map_err(FormatKeyError::Fmt),
+				"refname" => write!(f, "{}", self.0.sanitize(refname)).map_err(FormatKeyError::Fmt),
 				_ => Err(FormatKeyError::UnknownKey),
 			},
 		}
@@ -130,24 +130,28 @@ impl Element for ExternalReference {
 				output.add_external_reference(self.reference.clone());
 
 				if let Some(caption) = &self.caption {
-					result += format!("\">{}</a>", Compiler::sanitize(HTML, caption)).as_str();
+					result += format!("\">{}</a>", compiler.sanitize(caption)).as_str();
 				} else {
 					// Use style
-					let fmt_pair = FmtPair(compiler.target(), self);
+					let fmt_pair = FmtPair(compiler.sanitizer(), self);
 					let format_string = match &self.reference {
-						CrossReference::Unspecific(_) => Compiler::sanitize_format(
-							fmt_pair.0,
-							self.style.format_unspecific.as_str(),
-						),
-						CrossReference::Specific(_, _) => Compiler::sanitize_format(
-							fmt_pair.0,
-							self.style.format_specific.as_str(),
-						),
+						CrossReference::Unspecific(_) => {
+							compiler.sanitize_format(self.style.format_unspecific.as_str())
+						}
+						CrossReference::Specific(_, _) => {
+							compiler.sanitize_format(self.style.format_specific.as_str())
+						}
 					};
 					let args = FormatArgs::new(format_string.as_str(), &fmt_pair);
-					args.status().map_err(|err| compile_err!(self.location(), "Failed to compile external reference".into(),
-						format!("Failed to format ExternalReference style `{format_string}`: {err}")
-					))?;
+					args.status().map_err(|err| {
+						compile_err!(
+							self.location(),
+							"Failed to compile external reference".into(),
+							format!(
+								"Failed to format ExternalReference style `{format_string}`: {err}"
+							)
+						)
+					})?;
 
 					result += format!("\">{}</a>", args).as_str();
 				}

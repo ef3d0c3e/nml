@@ -30,7 +30,8 @@ impl Element for Block {
 		document: &'e dyn Document,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
-		self.block_type.compile(self, &self.block_properties, compiler, document, output)
+		self.block_type
+			.compile(self, &self.block_properties, compiler, document, output)
 	}
 
 	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }

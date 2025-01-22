@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use graphviz_rust::attributes::overlap_scaling;
 use mlua::IntoLua;
 use mlua::Lua;
 use mlua::Table;
@@ -80,12 +79,10 @@ impl Kernel {
 				"print",
 				lua.create_function(|_, msg: String| {
 					CTX.with_borrow_mut(|ctx| {
-						ctx.as_mut().map(|ctx| {
-							ctx.redirects.push(KernelRedirect {
+						if let Some(ctx) = ctx.as_mut() { ctx.redirects.push(KernelRedirect {
 								source: "print".into(),
 								content: msg,
-							});
-						});
+							}); }
 					});
 					Ok(())
 				})

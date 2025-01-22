@@ -6,7 +6,6 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::Arc;
 
 /// Trait for document variables

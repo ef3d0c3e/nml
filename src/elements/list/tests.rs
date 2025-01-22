@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::list::elem::CheckboxState;
 use crate::elements::list::elem::CustomListData;
@@ -17,7 +17,7 @@ use crate::validate_semantics;
 
 #[test]
 fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
  * 1
@@ -96,7 +96,7 @@ fn parser() {
 
 #[test]
 fn semantic() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
  *[offset=5] First **bold**

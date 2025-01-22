@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::parser::langparser::LangParser;
 use crate::parser::parser::ParseMode;
@@ -9,7 +9,7 @@ use crate::validate_semantics;
 
 #[test]
 fn semantics() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 @@style.section = {

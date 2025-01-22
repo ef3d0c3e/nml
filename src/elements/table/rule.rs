@@ -25,7 +25,6 @@ use elements::list::elem::ListMarker;
 use elements::paragraph::elem::Paragraph;
 use elements::text::elem::Text;
 use lsp::semantic::Semantics;
-use lua::kernel::CTX;
 use parser::property::PropertyMap;
 use parser::source::Token;
 use regex::Regex;
@@ -237,32 +236,29 @@ fn parse_properties(
 	}
 
 	// Table align
-	match match properties.get_opt(reports, "talign", |_, value| {
+	if let Some(align) = match properties.get_opt(reports, "talign", |_, value| {
 		Align::try_from(&value.value).map(|val| (value.value_range.clone(), val))
 	}) {
 		Some(align) => align,
 		None => return None,
 	} {
-		Some(align) => {
-			if table_state.properties.align.is_some() {
-				report_err!(
-					reports,
-					properties.token.source(),
-					"Duplicate table property".into(),
-					span(
-						align.0,
-						format!(
-							"Property {} is already specified",
-							"talign".fg(state.parser.colors().info)
-						)
-					),
-				);
-				return None;
-			}
-			table_state.properties.align.replace(align.1);
-		}
-		_ => {}
-	}
+ 			if table_state.properties.align.is_some() {
+ 				report_err!(
+ 					reports,
+ 					properties.token.source(),
+ 					"Duplicate table property".into(),
+ 					span(
+ 						align.0,
+ 						format!(
+ 							"Property {} is already specified",
+ 							"talign".fg(state.parser.colors().info)
+ 						)
+ 					),
+ 				);
+ 				return None;
+ 			}
+ 			table_state.properties.align.replace(align.1);
+ 		}
 
 	Some(cell_properties)
 }
@@ -548,7 +544,7 @@ impl Rule for TableRule {
 				"|",
 			);
 			// Check for overlaps in case the cell is not empty
-			if !prop_source.content().is_empty() || cell_source.content().trim_start().len() != 0 {
+			if !prop_source.content().is_empty() || !cell_source.content().trim_start().is_empty() {
 				if let Some((overlap_range, pos, size)) = table_state
 					.overlaps
 					.is_occupied(&cell_pos, &GridPosition(hspan, vspan))
@@ -623,7 +619,7 @@ impl Rule for TableRule {
 			}
 
 			// If empty, insert reference to owning cell, may insert multiple references
-			if prop_source.content().is_empty() && cell_source.content().trim_start().len() == 0 {
+			if prop_source.content().is_empty() && cell_source.content().trim_start().is_empty() {
 				if let Some((_overlap_range, pos, size)) = table_state
 					.overlaps
 					.is_occupied(&cell_pos, &GridPosition(1, 1))
@@ -748,7 +744,7 @@ impl Rule for TableRule {
 		}
 
 		if let Some(export_as) = export_as {
-			let mut kernels_borrow = state.shared.kernels.borrow_mut();
+			let kernels_borrow = state.shared.kernels.borrow_mut();
 			let kernel = kernels_borrow.get("main").unwrap();
 
 			let mut columns = Vec::with_capacity(dimensions.1);

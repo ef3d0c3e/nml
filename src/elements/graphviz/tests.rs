@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::graphviz::elem::Graphviz;
 use crate::parser::langparser::LangParser;
@@ -11,7 +11,7 @@ use crate::validate_semantics;
 
 #[test]
 pub fn parse() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 [graph][width=200px, layout=neato]
@@ -40,7 +40,7 @@ Another graph
 
 #[test]
 pub fn lua() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 %<nml.graphviz.push("neato", "200px", "Some graph...")>%
@@ -65,7 +65,7 @@ pub fn lua() {
 
 #[test]
 fn semantic() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 [graph][width=50%]

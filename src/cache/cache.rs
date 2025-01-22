@@ -1,6 +1,3 @@
-use std::collections::HashSet;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use rusqlite::types::FromSql;
@@ -30,7 +27,7 @@ pub trait Cached {
 
 	fn key(&self) -> <Self as Cached>::Key;
 
-	fn init<'con>(con: &MutexGuard<'con, Connection>) -> Result<(), rusqlite::Error> {
+	fn init(con: &MutexGuard<'_, Connection>) -> Result<(), rusqlite::Error> {
 		con.execute(<Self as Cached>::sql_table(), ()).map(|_| ())
 	}
 
@@ -43,9 +40,9 @@ pub trait Cached {
 	/// or if not cached, an error from the generator `f`
 	///
 	/// Note that on error, `f` may still have been called
-	fn cached<'con, E, F>(
+	fn cached<E, F>(
 		&self,
-		con: &MutexGuard<'con, Connection>,
+		con: &MutexGuard<'_, Connection>,
 		f: F,
 	) -> Result<<Self as Cached>::Value, CachedError<E>>
 	where
@@ -93,19 +90,17 @@ pub trait Cached {
 
 /// Handles caching of [`Cached`] elements
 #[derive(Clone)]
-pub struct Cache
-{
+pub struct Cache {
 	con: Arc<Mutex<Connection>>,
 }
 
-impl Cache
-{
+impl Cache {
 	pub fn new(db_path: Option<&str>) -> Result<Self, String> {
 		let con = db_path
-				.map_or(Connection::open_in_memory(), Connection::open)
-				.map_err(|err| format!("Unable to open connection to the database: {err}"))?;
+			.map_or(Connection::open_in_memory(), Connection::open)
+			.map_err(|err| format!("Unable to open connection to the database: {err}"))?;
 		Ok(Self {
-			con: Arc::new(Mutex::new(con))
+			con: Arc::new(Mutex::new(con)),
 		})
 	}
 

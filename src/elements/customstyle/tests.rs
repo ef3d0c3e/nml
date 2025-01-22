@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::raw::elem::Raw;
@@ -12,7 +12,7 @@ use crate::validate_document;
 
 #[test]
 fn toggle() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 %<[main]
@@ -61,7 +61,7 @@ pre |styled| post °Hello°.
 
 #[test]
 fn paired() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 %<[main]

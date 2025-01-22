@@ -33,7 +33,7 @@ impl Element for Style {
 						"<i>", "</i>", // Underline
 						"<u>", "</u>", // Code
 						"<em>", "</em>",
-					][self.kind * 2 + self.close as usize]
+					][self.kind * 2 + self.close as usize],
 				);
 			}
 			_ => todo!(""),

@@ -1,4 +1,3 @@
-use std::future::Future;
 use std::sync::Once;
 
 use crypto::digest::Digest;
@@ -7,8 +6,6 @@ use graphviz_rust::cmd::Format;
 use graphviz_rust::cmd::Layout;
 use graphviz_rust::exec_dot;
 
-use crate::parser::reports::macros::*;
-use crate::parser::reports::*;
 use crate::cache::cache::Cached;
 use crate::cache::cache::CachedError;
 use crate::compile_err;
@@ -18,7 +15,9 @@ use crate::compiler::compiler::Target::HTML;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
+use crate::parser::reports::macros::*;
 use crate::parser::reports::Report;
+use crate::parser::reports::*;
 use crate::parser::source::Token;
 
 #[derive(Debug, Clone)]
@@ -97,9 +96,11 @@ impl Element for Graphviz {
 			HTML => {
 				static CACHE_INIT: Once = Once::new();
 				let cache = compiler.cache();
-			
+
 				CACHE_INIT.call_once(|| {
-					let con = tokio::runtime::Runtime::new().unwrap().block_on(cache.get_connection());
+					let con = tokio::runtime::Runtime::new()
+						.unwrap()
+						.block_on(cache.get_connection());
 
 					if let Err(e) = Graphviz::init(&con) {
 						eprintln!("Unable to create cache table: {e}");
@@ -113,18 +114,16 @@ impl Element for Graphviz {
 					match value.cached(&con, |s| s.dot_to_svg()) {
 						Ok(s) => Ok(s),
 						Err(e) => match e {
-							CachedError::SqlErr(e) =>
-								Err(compile_err!(
-										value.location(),
-										"Failed to compile Graphviz element".into(),
-										format!("Querying the cache failed: {e}")
-								)),
-							CachedError::GenErr(e) =>
-								Err(compile_err!(
-										value.location(),
-										"Failed to compile Graphviz element".into(),
-										e.to_string()
-								)),
+							CachedError::SqlErr(e) => Err(compile_err!(
+								value.location(),
+								"Failed to compile Graphviz element".into(),
+								format!("Querying the cache failed: {e}")
+							)),
+							CachedError::GenErr(e) => Err(compile_err!(
+								value.location(),
+								"Failed to compile Graphviz element".into(),
+								e.to_string()
+							)),
 						},
 					}
 				};

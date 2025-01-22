@@ -1,4 +1,3 @@
-use std::borrow::BorrowMut;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -6,21 +5,10 @@ use std::future::Future;
 use std::future::IntoFuture;
 use std::pin::Pin;
 use std::rc::Rc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
-use rusqlite::Connection;
-use tokio::runtime::Runtime;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::Mutex;
-use tokio::sync::MutexGuard;
-use tokio::task::JoinHandle;
 use crate::cache::cache::Cache;
 use crate::document::document::Document;
 use crate::document::references::CrossReference;
@@ -28,6 +16,9 @@ use crate::document::references::ElemReference;
 use crate::document::variable::Variable;
 use crate::parser::parser::ReportColors;
 use crate::parser::reports::Report;
+use rusqlite::Connection;
+use tokio::sync::MutexGuard;
+use tokio::task::JoinHandle;
 
 use super::postprocess::PostProcess;
 use super::sanitize::Sanitizer;
@@ -39,8 +30,7 @@ pub enum Target {
 	LATEX,
 }
 
-pub struct CompilerOutput
-{
+pub struct CompilerOutput {
 	// Holds the content of the resulting document
 	content: String,
 	/// Holds the position of every cross-document reference
@@ -50,66 +40,34 @@ pub struct CompilerOutput
 	runtime: tokio::runtime::Runtime,
 }
 
-impl CompilerOutput
-{
+impl CompilerOutput {
 	/// Run work function `f` with the task processor running
 	///
 	/// The result of async taks will be inserted into the output
 	pub fn run_with_processor<F>(colors: &ReportColors, f: F) -> CompilerOutput
-		where F: FnOnce(CompilerOutput) -> CompilerOutput
+	where
+		F: FnOnce(CompilerOutput) -> CompilerOutput,
 	{
+		// Create the output & the runtime
 		let mut output = Self {
 			content: String::default(),
 			references: HashMap::default(),
 			tasks: vec![],
-			runtime: tokio::runtime::Runtime::new().unwrap(),
+			runtime: tokio::runtime::Builder::new_multi_thread()
+				.worker_threads(8)
+				.enable_all()
+				.build()
+				.unwrap(),
 		};
 
-		// Start processor
-		/*
-		let task_processor = output.runtime.spawn({
-			let receiver = output.task_receiver.clone();
-			let results: Arc<Mutex<Vec<(usize, Result<String, Vec<Report>>)>>> = Arc::new(Mutex::new(vec![]));
-			let all_tasks_posted = Arc::clone(&all_tasks_posted);
-			let task_count = Arc::clone(&output.task_count);
-			async move {
-				while !all_tasks_posted.load(Ordering::Acquire) || task_count.load(Ordering::Acquire) > 0 {
-					if let Some((id, task)) = receiver.lock().await.recv().await {
-						let result = task.await;
-						results.lock().await.push((id, result));
-						task_count.fetch_sub(1, Ordering::Release);
-					} else {
-						// Break if receiver is closed and no tasks remain
-						break;
-					}
-				}
-				results
-			}
-		});
-		*/
-
+		// Process the document with caller work-function
 		output = f(output);
-		
-		
-		// Stop processor
-		/*
-		let mut results = output.runtime.spawn_blocking(async {
-			let results = task_processor.await.expect("Task processor failed");
-			let processed = std::mem::take(&mut *results.lock().await);
-			processed
-		});
-		*/
 
-
-		// Wait for all tasks to finish [TODO Status message/Lock timer for tasks that may never finish]
-		if !output.tasks.is_empty()
-		{
-			'outer: loop
-			{
-				for (_, handle) in &output.tasks
-				{
-					if !handle.is_finished()
-					{
+		// Wait for all tasks to finish [TODO Status message/Timer for tasks that may never finish]
+		if !output.tasks.is_empty() {
+			'outer: loop {
+				for (_, handle) in &output.tasks {
+					if !handle.is_finished() {
 						break 'outer;
 					}
 				}
@@ -117,12 +75,10 @@ impl CompilerOutput
 			}
 		}
 
-		// Get values
-		let mut results =
-			output.runtime.block_on(async {
+		// Get results from async tasks
+		let mut results = output.runtime.block_on(async {
 			let mut results = vec![];
-			for (pos, handle) in output.tasks.drain(..)
-			{
+			for (pos, handle) in output.tasks.drain(..) {
 				let result = handle.into_future().await.unwrap();
 				results.push((pos, result));
 			}
@@ -130,28 +86,25 @@ impl CompilerOutput
 			results
 		});
 
-		// Insert tasks results
-		for (pos, result) in results.drain(..).rev()
-		{
+		// Insert tasks results into output
+		for (pos, result) in results.drain(..).rev() {
 			match result {
 				Ok(content) => output.content.insert_str(pos, content.as_str()),
-				Err(err) => { Report::reports_to_stdout(colors, err) },
+				Err(err) => Report::reports_to_stdout(colors, err),
 			}
 		}
 		output
 	}
 
 	/// Appends content to the output
-	pub fn add_content<S: AsRef<str>>(&mut self, s: S) {
-		self.content.push_str(s.as_ref());
-	}
+	pub fn add_content<S: AsRef<str>>(&mut self, s: S) { self.content.push_str(s.as_ref()); }
 
 	/// Adds an async task to the output. The task's result will be appended at the current output position
 	///
 	/// The task is a future that returns it's result in a string, or errors as a Vec of [`Report`]s
 	pub fn add_task<F>(&mut self, task: Pin<Box<F>>)
-		where
-			F: Future<Output = Result<String, Vec<Report>>> + Send + 'static
+	where
+		F: Future<Output = Result<String, Vec<Report>>> + Send + 'static,
 	{
 		let handle = self.runtime.spawn(task);
 		self.tasks.push((self.content.len(), handle));
@@ -166,16 +119,15 @@ impl CompilerOutput
 	/// There can only be one cross-reference at a given output position.
 	/// In case another cross-reference is inserted at the same location (which should never happen),
 	/// The program will panic
-	pub fn add_external_reference(&mut self, xref: CrossReference)
-	{
-		if self.references.get(&self.content.len()).is_some()
-		{
+	pub fn add_external_reference(&mut self, xref: CrossReference) {
+		if self.references.get(&self.content.len()).is_some() {
 			panic!("Duplicate cross-reference in one location");
 		}
 		self.references.insert(self.content.len(), xref);
 	}
 }
 
+// TODO: Compiler should be immutable
 pub struct Compiler {
 	target: Target,
 	cache: Arc<Cache>,
@@ -190,7 +142,7 @@ pub struct Compiler {
 impl Compiler {
 	pub fn new(target: Target, cache: Arc<Cache>) -> Self {
 		Self {
-			target: target.clone(),
+			target: target,
 			cache,
 			sanitizer: Sanitizer::new(target),
 			reference_count: RefCell::new(HashMap::new()),
@@ -224,25 +176,11 @@ impl Compiler {
 		Ref::map(self.sections_counter.borrow(), |b| b)
 	}
 
-	/// Sanitizes text for a [`Target`]
-	#[deprecated]
-	pub fn sanitize<S: AsRef<str>>(target: Target, str: S) -> String {
-		match target {
-			Target::HTML => str
-				.as_ref()
-				.replace("&", "&amp;")
-				.replace("<", "&lt;")
-				.replace(">", "&gt;")
-				.replace("\"", "&quot;"),
-			_ => todo!("Sanitize not implemented"),
-		}
-	}
-
 	/// Gets the sanitizer for this compiler
-	pub fn sanitizer(&self) -> Sanitizer
-	{
-		self.sanitizer.clone()
-	}
+	pub fn sanitizer(&self) -> Sanitizer { self.sanitizer }
+
+	/// Sanitizes text using this compiler's [`sanitizer`]
+	pub fn sanitize<S: AsRef<str>>(&self, str: S) -> String { self.sanitizer.sanitize(str) }
 
 	/// Sanitizes a format string for a [`Target`]
 	///
@@ -250,48 +188,13 @@ impl Compiler {
 	///
 	/// This function may process invalid format string, which will be caught later
 	/// by runtime_format.
-	pub fn sanitize_format<S: AsRef<str>>(target: Target, str: S) -> String {
-		match target {
-			Target::HTML => {
-				let mut out = String::new();
-
-				let mut braces = 0;
-				for c in str.as_ref().chars() {
-					if c == '{' {
-						out.push(c);
-						braces += 1;
-						continue;
-					} else if c == '}' {
-						out.push(c);
-						if braces != 0 {
-							braces -= 1;
-						}
-						continue;
-					}
-					// Inside format args
-					if braces % 2 == 1 {
-						out.push(c);
-						continue;
-					}
-
-					match c {
-						'&' => out += "&amp;",
-						'<' => out += "&lt;",
-						'>' => out += "&gt;",
-						'"' => out += "&quot;",
-						_ => out.push(c),
-					}
-				}
-
-				out
-			}
-			_ => todo!("Sanitize not implemented"),
-		}
+	pub fn sanitize_format<S: AsRef<str>>(&self, str: S) -> String {
+		self.sanitizer.sanitize_format(str)
 	}
 
 	/// Gets a reference name
-	pub fn refname<S: AsRef<str>>(target: Target, str: S) -> String {
-		Self::sanitize(target, str).replace(' ', "_")
+	pub fn refname<S: AsRef<str>>(&self, str: S) -> String {
+		self.sanitizer.sanitize(str).replace(' ', "_")
 	}
 
 	/// Inserts or get a reference id for the compiled document
@@ -333,9 +236,7 @@ impl Compiler {
 
 	pub fn target(&self) -> Target { self.target }
 
-	pub fn cache(&self) -> Arc<Cache> {
-		self.cache.clone()
-	}
+	pub fn cache(&self) -> Arc<Cache> { self.cache.clone() }
 
 	pub fn header(&self, document: &dyn Document) -> String {
 		pub fn get_variable_or_error(
@@ -391,21 +292,24 @@ impl Compiler {
 		result
 	}
 
-	pub fn compile(&self, document: &dyn Document, colors: &ReportColors) -> (CompiledDocument, PostProcess) {
+	pub fn compile(
+		&self,
+		document: &dyn Document,
+		colors: &ReportColors,
+	) -> (CompiledDocument, PostProcess) {
 		let borrow = document.content().borrow();
 
 		// Header
 		let header = self.header(document);
 
 		// Body
-		let mut output = CompilerOutput::run_with_processor(colors, |mut output| {
+		let output = CompilerOutput::run_with_processor(colors, |mut output| {
 			{
 				output.add_content(r#"<div class="content">"#);
 				for elem in borrow.iter() {
-					match elem.compile(self, document, &mut output) {
-						Err(reports) => { Report::reports_to_stdout(colors, reports); }
-						_ => {},
-					};
+					if let Err(reports) = elem.compile(self, document, &mut output) {
+     							Report::reports_to_stdout(colors, reports);
+     						};
 				}
 				output.add_content(r#"</div>"#);
 			}
@@ -505,11 +409,11 @@ impl CompiledDocument {
 		"INSERT OR REPLACE INTO compiled_documents (input, mtime, variables, internal_references, header, body, footer) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
 	}
 
-	pub fn init_cache<'con>(con: &MutexGuard<'con, Connection>) -> Result<usize, rusqlite::Error> {
+	pub fn init_cache(con: &MutexGuard<'_, Connection>) -> Result<usize, rusqlite::Error> {
 		con.execute(Self::sql_table(), [])
 	}
 
-	pub fn from_cache<'con>(con: &MutexGuard<'con, Connection>, input: &str) -> Option<Self> {
+	pub fn from_cache(con: &MutexGuard<'_, Connection>, input: &str) -> Option<Self> {
 		con.query_row(Self::sql_get_query(), [input], |row| {
 			Ok(CompiledDocument {
 				input: input.to_string(),
@@ -547,18 +451,14 @@ mod tests {
 
 	#[test]
 	fn sanitize_test() {
-		assert_eq!(Compiler::sanitize(Target::HTML, "<a>"), "&lt;a&gt;");
-		assert_eq!(Compiler::sanitize(Target::HTML, "&lt;"), "&amp;lt;");
-		assert_eq!(Compiler::sanitize(Target::HTML, "\""), "&quot;");
+		let sanitizer = Sanitizer::new(Target::HTML);
 
-		assert_eq!(
-			Compiler::sanitize_format(Target::HTML, "{<>&\"}"),
-			"{<>&\"}"
-		);
-		assert_eq!(
-			Compiler::sanitize_format(Target::HTML, "{{<>}}"),
-			"{{&lt;&gt;}}"
-		);
-		assert_eq!(Compiler::sanitize_format(Target::HTML, "{{<"), "{{&lt;");
+		assert_eq!(sanitizer.sanitize("<a>"), "&lt;a&gt;");
+		assert_eq!(sanitizer.sanitize("&lt;"), "&amp;lt;");
+		assert_eq!(sanitizer.sanitize("\""), "&quot;");
+
+		assert_eq!(sanitizer.sanitize_format("{<>&\"}"), "{<>&\"}");
+		assert_eq!(sanitizer.sanitize_format("{{<>}}"), "{{&lt;&gt;}}");
+		assert_eq!(sanitizer.sanitize_format("{{<"), "{{&lt;");
 	}
 }

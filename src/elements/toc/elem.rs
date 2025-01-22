@@ -77,10 +77,7 @@ impl Element for Toc {
 				result += "<div class=\"toc\">";
 				result += format!(
 					"<span>{}</span>",
-					Compiler::sanitize(
-						compiler.target(),
-						self.title.as_ref().unwrap_or(&String::new())
-					)
+					compiler.sanitize(self.title.as_ref().unwrap_or(&String::new()))
 				)
 				.as_str();
 				let mut current_depth = 0;
@@ -89,15 +86,15 @@ impl Element for Toc {
 					if section.kind & section_kind::NO_NUMBER != 0 {
 						result += format!(
 							"<li style=\"list-style-type:none\"><a href=\"#{}\">{}</a></li>",
-							Compiler::refname(compiler.target(), section.title.as_str()),
-							Compiler::sanitize(compiler.target(), section.title.as_str())
+							compiler.refname(section.title.as_str()),
+							compiler.sanitize(section.title.as_str())
 						)
 						.as_str();
 					} else {
 						result += format!(
 							"<li value=\"{number}\"><a href=\"#{}\">{}</a></li>",
-							Compiler::refname(compiler.target(), section.title.as_str()),
-							Compiler::sanitize(compiler.target(), section.title.as_str())
+							compiler.refname(section.title.as_str()),
+							compiler.sanitize(section.title.as_str())
 						)
 						.as_str();
 					}

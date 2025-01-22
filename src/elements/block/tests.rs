@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::block::elem::Block;
 use crate::elements::block::style::AuthorPos;
@@ -15,7 +15,7 @@ use crate::validate_document;
 
 #[test]
 pub fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 BEFORE
@@ -90,7 +90,7 @@ END
 
 #[test]
 pub fn style() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 @@style.block.quote = {

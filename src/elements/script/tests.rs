@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::link::elem::Link;
 use crate::elements::list::elem::ListEntry;
@@ -16,7 +16,7 @@ use crate::validate_semantics;
 
 #[test]
 fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 Simple evals:
@@ -66,7 +66,7 @@ Evaluation: %<! make_ref("hello", "id")>%
 
 #[test]
 fn semantic() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 %<[test]! "Hello World">%
@@ -92,14 +92,10 @@ end
 		script_kernel { delta_line == 0, delta_start == 1, length == 4 };
 		script_kernel_sep { delta_line == 0, delta_start == 4, length == 1 };
 		script_kind { delta_line == 0, delta_start == 1, length == 1 };
-		script_content { delta_line == 0, delta_start == 1, length == 14 };
-		script_sep { delta_line == 0, delta_start == 14, length == 2 };
+		script_sep { delta_line == 0, delta_start == 15, length == 2 };
 
 		script_sep { delta_line == 1, delta_start == 0, length == 2 };
 		script_kernel { delta_line == 0, delta_start == 2, length == 4 };
-		script_content { delta_line == 1, delta_start == 0, length == 19 };
-		script_content { delta_line == 1, delta_start == 0, length == 14 };
-		script_content { delta_line == 1, delta_start == 0, length == 3 };
-		script_sep { delta_line == 1, delta_start == 0, length == 2 };
+		script_sep { delta_line == 4, delta_start == 0, length == 2 };
 	);
 }

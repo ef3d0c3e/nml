@@ -216,7 +216,7 @@ pub mod macros {
 			};
 			report_label!(r, span($token.range.clone(), $explanation));
 			vec![r]
-		}}
+		}};
 	}
 
 	#[macro_export]

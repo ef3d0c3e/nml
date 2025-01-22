@@ -49,7 +49,7 @@ fn from_source_impl(
 		.map(|parent| parent.location())
 		.unwrap_or(None)
 	{
-		return from_source_impl(location.source(), target, lsp, original);
+		from_source_impl(location.source(), target, lsp, original)
 	} else if source.downcast_ref::<SourceFile>().is_some() {
 		let borrow = lsp.as_ref().unwrap().borrow();
 		if let Some(def_data) = borrow.definitions.get(&original.source()) {

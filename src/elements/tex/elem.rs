@@ -17,9 +17,9 @@ use crate::compiler::compiler::Compiler;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
-use crate::parser::source::Token;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use crate::parser::source::Token;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TexKind {
@@ -145,7 +145,9 @@ impl Element for Tex {
 				let cache = compiler.cache();
 
 				CACHE_INIT.call_once(|| {
-					let con = tokio::runtime::Runtime::new().unwrap().block_on(cache.get_connection());
+					let con = tokio::runtime::Runtime::new()
+						.unwrap()
+						.block_on(cache.get_connection());
 
 					if let Err(e) = FormattedTex::init(&con) {
 						eprintln!("Unable to create cache table: {e}");
@@ -179,16 +181,26 @@ impl Element for Tex {
 				let sanitizer = compiler.sanitizer();
 				let location = self.location().clone();
 				let caption = self.caption.clone();
-				let fut = async move
-				{
+				let fut = async move {
 					let con = cache.get_connection().await;
-					let mut result = match latex.cached(&con, |s| s.latex_to_svg(&exec, &fontsize)) {
+					let mut result = match latex.cached(&con, |s| s.latex_to_svg(&exec, &fontsize))
+					{
 						Ok(s) => s,
 						Err(e) => match e {
-							CachedError::SqlErr(e) =>
-								return Err(compile_err!(location, "Failed to process LaTeX element".to_string(), format!("Querying the cache failed: {e}"))),
-							CachedError::GenErr(e) =>
-								return Err(compile_err!(location, "Failed to process LaTeX element".to_string(), e)),
+							CachedError::SqlErr(e) => {
+								return Err(compile_err!(
+									location,
+									"Failed to process LaTeX element".to_string(),
+									format!("Querying the cache failed: {e}")
+								))
+							}
+							CachedError::GenErr(e) => {
+								return Err(compile_err!(
+									location,
+									"Failed to process LaTeX element".to_string(),
+									e
+								))
+							}
 						},
 					};
 
@@ -196,8 +208,7 @@ impl Element for Tex {
 					if let (Some(caption), Some(start)) = (&caption, result.find('>')) {
 						result.insert_str(
 							start + 1,
-							format!("<title>{}</title>", sanitizer.sanitize(caption))
-							.as_str(),
+							format!("<title>{}</title>", sanitizer.sanitize(caption)).as_str(),
 						);
 					}
 					Ok(result)

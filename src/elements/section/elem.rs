@@ -61,26 +61,26 @@ impl Element for Section {
 					output.add_content(format!(
 						r#"<h{0} id="{1}">{number}{2}</h{0}>"#,
 						self.depth,
-						Compiler::refname(compiler.target(), self.title.as_str()),
-						Compiler::sanitize(compiler.target(), self.title.as_str())
+						compiler.refname(self.title.as_str()),
+						compiler.sanitize(self.title.as_str())
 					));
 					return Ok(());
 				}
 
-				let refname = Compiler::refname(compiler.target(), self.title.as_str());
+				let refname = compiler.refname(self.title.as_str());
 				let link = format!(
 					"{}<a class=\"section-link\" href=\"#{refname}\">{}</a>{}",
-					Compiler::sanitize(compiler.target(), self.style.link[0].as_str()),
-					Compiler::sanitize(compiler.target(), self.style.link[1].as_str()),
-					Compiler::sanitize(compiler.target(), self.style.link[2].as_str())
+					compiler.sanitize(self.style.link[0].as_str()),
+					compiler.sanitize(self.style.link[1].as_str()),
+					compiler.sanitize(self.style.link[2].as_str())
 				);
 
 				if self.style.link_pos == SectionLinkPos::After {
 					output.add_content(format!(
 						r#"<h{0} id="{1}">{number}{2}{link}</h{0}>"#,
 						self.depth,
-						Compiler::refname(compiler.target(), self.title.as_str()),
-						Compiler::sanitize(compiler.target(), self.title.as_str())
+						compiler.refname(self.title.as_str()),
+						compiler.sanitize(self.title.as_str())
 					));
 				} else
 				// Before
@@ -88,8 +88,8 @@ impl Element for Section {
 					output.add_content(format!(
 						r#"<h{0} id="{1}">{link}{number}{2}</h{0}>"#,
 						self.depth,
-						Compiler::refname(compiler.target(), self.title.as_str()),
-						Compiler::sanitize(compiler.target(), self.title.as_str())
+						compiler.refname(self.title.as_str()),
+						compiler.sanitize(self.title.as_str())
 					))
 				}
 			}
@@ -116,16 +116,13 @@ impl ReferenceableElement for Section {
 		match compiler.target() {
 			HTML => {
 				let caption = reference.caption().map_or(
-					format!(
-						"({})",
-						Compiler::sanitize(compiler.target(), self.title.as_str())
-					),
+					format!("({})", compiler.sanitize(self.title.as_str())),
 					|cap| cap.clone(),
 				);
 
 				Ok(format!(
 					"<a class=\"section-reference\" href=\"#{}\">{caption}</a>",
-					Compiler::refname(compiler.target(), self.title.as_str())
+					compiler.refname(self.title.as_str())
 				))
 			}
 			_ => todo!(""),
@@ -133,6 +130,6 @@ impl ReferenceableElement for Section {
 	}
 
 	fn refid(&self, compiler: &Compiler, _refid: usize) -> String {
-		Compiler::refname(compiler.target(), self.title.as_str())
+		compiler.refname(self.title.as_str())
 	}
 }

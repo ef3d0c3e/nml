@@ -27,7 +27,7 @@ impl Element for Text {
 		_document: &dyn Document,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
-		output.add_content(Compiler::sanitize(compiler.target(), self.content.as_str()));
+		output.add_content(compiler.sanitize(self.content.as_str()));
 		Ok(())
 	}
 }

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::style::elem::Style;
@@ -13,7 +13,7 @@ use crate::validate_semantics;
 
 #[test]
 fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 Some *style
@@ -59,7 +59,7 @@ __`UNDERLINE+EM`__
 
 #[test]
 fn lua() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 			"".to_string(),
 			r#"
 Some %<nml.style.toggle("italic")>%style
@@ -105,7 +105,7 @@ terminated here%<nml.style.toggle("Italic")>%
 
 #[test]
 fn semantic() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 **te📫st** `another`

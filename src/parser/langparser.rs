@@ -72,7 +72,7 @@ impl<'a> LangParser<'a> {
 	}
 }
 
-impl<'b> Parser for LangParser<'b> {
+impl Parser for LangParser<'_> {
 	fn colors(&self) -> &ReportColors { &self.colors }
 
 	fn rules(&self) -> &Vec<Box<dyn Rule>> { &self.rules }
@@ -125,7 +125,7 @@ impl<'b> Parser for LangParser<'b> {
 			})
 			.unwrap();
 		if let Some(path) = &path {
-			if let Err(err) = std::env::set_current_dir(&path) {
+			if let Err(err) = std::env::set_current_dir(path) {
 				eprintln!(
 					"Failed to set working directory to `{}`: {err}",
 					path.to_str().unwrap_or("")

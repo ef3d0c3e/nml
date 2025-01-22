@@ -310,7 +310,7 @@ impl PropertyParser {
 			true
 		};
 
-		if token.range.len() != 0 {
+		if !token.range.is_empty() {
 			let mut in_name = true;
 			let mut name = String::new();
 			let mut name_range = token.start()..token.start();
@@ -390,7 +390,7 @@ impl PropertyParser {
 		}
 
 		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
-			for (_, (_, value)) in &pm.properties {
+			for (_, value) in pm.properties.values() {
 				if value.name_range.start != 0 {
 					sems.add_to_queue(
 						value.name_range.start - 1..value.name_range.start,
@@ -437,11 +437,10 @@ impl PropertyParser {
 
 #[cfg(test)]
 mod tests {
-	use std::rc::Rc;
-
 	use parser::langparser::LangParser;
 	use parser::source::Source;
 	use parser::source::SourceFile;
+	use std::sync::Arc;
 
 	use super::*;
 
@@ -470,7 +469,7 @@ mod tests {
 		let mut reports = vec![];
 
 		let parser = PropertyParser { properties };
-		let source = Rc::new(SourceFile::with_content(
+		let source = Arc::new(SourceFile::with_content(
 			"".into(),
 			"width=15,length=-10".into(),
 			None,

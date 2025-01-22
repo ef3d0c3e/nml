@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::text::elem::Text;
@@ -11,7 +11,7 @@ use crate::validate_document;
 
 #[test]
 fn parse() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 First paragraph

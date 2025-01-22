@@ -92,12 +92,14 @@ impl LayoutType for Centered {
 			HTML => {
 				let style = match properties.downcast_ref::<String>().unwrap().as_str() {
 					"" => "".to_string(),
-					str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
+					str => format!(r#" style={}"#, compiler.sanitize(str)),
 				};
 				match token {
-					LayoutToken::Begin => output.add_content(format!(r#"<div class="centered"{style}>"#)),
+					LayoutToken::Begin => {
+						output.add_content(format!(r#"<div class="centered"{style}>"#))
+					}
 					LayoutToken::Next => panic!(),
-					LayoutToken::End => output.add_content(r#"</div>"#.to_string()),
+					LayoutToken::End => output.add_content(r#"</div>"#),
 				}
 			}
 			_ => todo!(""),
@@ -164,14 +166,16 @@ impl LayoutType for Split {
 			HTML => {
 				let style = match properties.downcast_ref::<String>().unwrap().as_str() {
 					"" => "".to_string(),
-					str => format!(r#" style={}"#, Compiler::sanitize(compiler.target(), str)),
+					str => format!(r#" style={}"#, compiler.sanitize(str)),
 				};
 				match token {
 					LayoutToken::Begin => output.add_content(format!(
 						r#"<div class="split-container"><div class="split"{style}>"#
 					)),
-					LayoutToken::Next => output.add_content(format!(r#"</div><div class="split"{style}>"#)),
-					LayoutToken::End => output.add_content(r#"</div></div>"#.to_string()),
+					LayoutToken::Next => {
+						output.add_content(format!(r#"</div><div class="split"{style}>"#))
+					}
+					LayoutToken::End => output.add_content(r#"</div></div>"#),
 				}
 			}
 			_ => todo!(""),
@@ -237,9 +241,9 @@ impl LayoutType for Spoiler {
 				match token {
 					LayoutToken::Begin => output.add_content(format!(
 						r#"<details class="spoiler"><summary>{}</summary>"#,
-						Compiler::sanitize(compiler.target(), title)
+						compiler.sanitize(title)
 					)),
-					LayoutToken::End => output.add_content(r#"</details>"#.to_string()),
+					LayoutToken::End => output.add_content(r#"</details>"#),
 					_ => panic!(),
 				}
 			}

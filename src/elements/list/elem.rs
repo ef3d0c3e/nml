@@ -94,20 +94,23 @@ impl Element for ListEntry {
 						output.add_content("<li>");
 					}
 				}
-				match &self.custom {
-					Some(CustomListData::Checkbox(checkbox_state)) => match checkbox_state {
-						CheckboxState::Unchecked => {
-							output.add_content(r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#);
-						}
-						CheckboxState::Partial => {
-							output.add_content(r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#);
-						}
-						CheckboxState::Checked => {
-							output.add_content(r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#);
-						}
-					},
-					_ => {}
-				}
+				if let Some(CustomListData::Checkbox(checkbox_state)) = &self.custom { match checkbox_state {
+    						CheckboxState::Unchecked => {
+    							output.add_content(
+    								r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#,
+    							);
+    						}
+    						CheckboxState::Partial => {
+    							output.add_content(
+    								r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#,
+    							);
+    						}
+    						CheckboxState::Checked => {
+    							output.add_content(
+    								r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#,
+    							);
+    						}
+    					} }
 				for elem in &self.content {
 					elem.compile(compiler, document, output)?;
 				}

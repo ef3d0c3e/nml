@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::section::elem::Section;
 use crate::elements::section::rule::section_kind;
@@ -14,7 +14,7 @@ use crate::validate_semantics;
 
 #[test]
 fn parser() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 # 1
@@ -47,7 +47,7 @@ fn parser() {
 
 #[test]
 fn lua() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 %<
@@ -82,7 +82,7 @@ nml.section.push("6", 6, "", "refname")
 
 #[test]
 fn style() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 @@style.section = {
@@ -114,7 +114,7 @@ fn style() {
 
 #[test]
 fn semantics() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 # First section

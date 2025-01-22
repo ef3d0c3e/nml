@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::compiler::compiler::Target;
 use crate::compiler::process::process_from_memory;
@@ -16,7 +16,7 @@ use crate::validate_document;
 
 #[test]
 pub fn parse_internal() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 #{ref} Referenceable section
@@ -52,7 +52,7 @@ pub fn parse_internal() {
 
 #[test]
 pub fn parse_external() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 &{DocA#ref}[caption=Section]

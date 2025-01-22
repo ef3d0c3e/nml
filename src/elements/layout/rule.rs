@@ -65,7 +65,7 @@ pub fn parse_properties<'a>(
 		"]",
 	);
 	layout_type.parse_properties(
-		&mut reports,
+		reports,
 		state,
 		Token::new(0..prop_source.content().len(), prop_source),
 	)

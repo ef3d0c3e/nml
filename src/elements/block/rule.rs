@@ -1,7 +1,6 @@
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use std::any::Any;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::elements::text::elem::Text;

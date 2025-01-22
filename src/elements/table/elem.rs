@@ -103,7 +103,7 @@ impl ToStyle for CellProperties {
 		for border in &self.borders {
 			style += border.to_style(target).as_str();
 		}
-		return style;
+		style
 	}
 }
 
@@ -127,7 +127,7 @@ impl ToStyle for Option<ColumnProperties> {
 		for border in &props.borders {
 			style += border.to_style(target).as_str();
 		}
-		return style;
+		style
 	}
 }
 
@@ -154,7 +154,7 @@ impl ToStyle for Option<RowProperties> {
 		for border in &props.borders {
 			style += border.to_style(target).as_str();
 		}
-		return style;
+		style
 	}
 }
 
@@ -174,7 +174,7 @@ impl ToStyle for TableProperties {
 		for border in &self.borders {
 			style += border.to_style(target).as_str();
 		}
-		return style;
+		style
 	}
 }
 
@@ -236,17 +236,17 @@ impl Element for Table {
 				.unwrap();
 			let refcount = compiler.reference_id(document, elemref);
 			output.add_content(format!(
-					r#"<div class="media"><div id="{}" class="medium">"#,
-					self.refid(compiler, refcount)
-				));
+				r#"<div class="media"><div id="{}" class="medium">"#,
+				self.refid(compiler, refcount)
+			));
 		} else if self.title.is_some() {
-			output.add_content(format!(r#"<div class="media"><div class="medium">"#));
+			output.add_content(r#"<div class="media"><div class="medium">"#.to_string());
 		}
 
 		let table_style = self.properties.to_style(compiler.target());
 
 		// Colgroup styling
-		let colgroup = if self.columns.iter().fold(false, |v, col| v || col.is_some()) {
+		let colgroup = if self.columns.iter().any(|col| col.is_some()) {
 			let mut result = "<colgroup>".to_string();
 			for col in &self.columns {
 				let style = col.to_style(compiler.target());
@@ -312,7 +312,8 @@ impl Element for Table {
 						(1, 1) => output.add_content(format!("<td{style}>")),
 						(1, v) => output.add_content(format!("<td rowspan=\"{v}\"{style}>")),
 						(h, 1) => output.add_content(format!("<td colspan=\"{h}\"{style}>")),
-						(h, v) => output.add_content(format!("<td rowspan=\"{v}\" colspan=\"{h}\"{style}>")),
+						(h, v) => output
+							.add_content(format!("<td rowspan=\"{v}\" colspan=\"{h}\"{style}>")),
 					}
 					for elem in &cell_data.content {
 						elem.compile(compiler, document, output)?;
@@ -338,9 +339,9 @@ impl Element for Table {
 				.unwrap();
 			let refcount = compiler.reference_id(document, elemref);
 			output.add_content(format!(
-					r#"<p class="medium-refname">({refcount}) {}</p>"#,
-					self.title.as_ref().map_or("", |s| s.as_str())
-				));
+				r#"<p class="medium-refname">({refcount}) {}</p>"#,
+				self.title.as_ref().map_or("", |s| s.as_str())
+			));
 			output.add_content("</div></div>");
 		} else if self.title.is_some() {
 			output.add_content(

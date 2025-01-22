@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
-use crate::compiler::compiler::{Compiler, CompilerOutput};
+use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::CompilerOutput;
 use crate::document::document::Document;
 use crate::parser::parser::ParserState;
 use crate::parser::reports::Report;
@@ -35,7 +36,7 @@ pub trait LayoutType: core::fmt::Debug {
 		properties: &'e Box<dyn Any>,
 		compiler: &'e Compiler,
 		document: &'e dyn Document,
-		output: &mut CompilerOutput
+		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>>;
 }
 

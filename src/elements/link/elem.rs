@@ -31,7 +31,7 @@ impl Element for Link {
 			HTML => {
 				output.add_content(format!(
 					"<a href=\"{}\">",
-					Compiler::sanitize(compiler.target(), self.url.as_str())
+					compiler.sanitize(self.url.as_str())
 				));
 
 				for elem in &self.display {

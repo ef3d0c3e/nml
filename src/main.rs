@@ -13,6 +13,7 @@ use std::process::ExitCode;
 
 use compiler::compiler::Target;
 use compiler::navigation::create_navigation;
+use compiler::sanitize::Sanitizer;
 use getopts::Options;
 use walkdir::WalkDir;
 
@@ -118,8 +119,8 @@ fn main() -> ExitCode {
 
 	let db_path = match &matches.opt_str("d") {
 		Some(db) => {
-			if std::fs::exists(&db).unwrap_or(false) {
-				match std::fs::canonicalize(&db)
+			if std::fs::exists(db).unwrap_or(false) {
+				match std::fs::canonicalize(db)
 					.map_err(|err| format!("Failed to cannonicalize database path `{db}`: {err}"))
 					.as_ref()
 					.map(|path| path.to_str())
@@ -141,7 +142,7 @@ fn main() -> ExitCode {
 					.map_err(|err| {
 						format!("Failed to cannonicalize database parent path `{db}`: {err}")
 					})
-					.map(|path| path.join(&db))
+					.map(|path| path.join(db))
 					.as_ref()
 					.map(|path| path.to_str())
 				{
@@ -214,15 +215,19 @@ fn main() -> ExitCode {
 	}
 
 	// Parse, compile using the cache
-	let processed =
-		match compiler::process::process(Target::HTML, files, db_path.as_ref().map(|s| s.as_str()), force_rebuild, &debug_opts)
-		{
-			Ok(processed) => processed,
-			Err(e) => {
-				eprintln!("{e}");
-				return ExitCode::FAILURE;
-			}
-		};
+	let processed = match compiler::process::process(
+		Target::HTML,
+		files,
+		db_path.as_deref(),
+		force_rebuild,
+		&debug_opts,
+	) {
+		Ok(processed) => processed,
+		Err(e) => {
+			eprintln!("{e}");
+			return ExitCode::FAILURE;
+		}
+	};
 
 	if input_meta.is_dir()
 	// Batch mode
@@ -250,7 +255,7 @@ fn main() -> ExitCode {
 				}
 			};
 
-			let nav = navigation.compile(Target::HTML, doc);
+			let nav = navigation.compile(Sanitizer::new(Target::HTML), doc);
 			let file = std::fs::File::create(output.clone() + "/" + out_path.as_str()).unwrap();
 
 			let mut writer = BufWriter::new(file);

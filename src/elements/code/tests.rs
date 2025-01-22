@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::elements::code::elem::Code;
 use crate::elements::code::elem::CodeKind;
@@ -11,7 +11,7 @@ use crate::validate_semantics;
 
 #[test]
 fn code_block() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 ```[line_offset=32] C, Some Code...
@@ -74,7 +74,7 @@ fn fact(n: usize) -> usize
 
 #[test]
 fn code_inline() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 ``C, int fact(int n)``
@@ -124,7 +124,7 @@ fn code_inline() {
 
 #[test]
 fn semantic() {
-	let source = Rc::new(SourceFile::with_content(
+	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
 		r#"
 ```[line_offset=15] C, Title
