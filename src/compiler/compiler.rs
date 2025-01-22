@@ -58,11 +58,14 @@ impl Compiler {
 		self.sanitizer.sanitize(str).replace(' ', "_")
 	}
 
+	/// Gets the output target of this compiler
 	pub fn target(&self) -> Target { self.target }
 
+	/// Gets the cache (a sqlite database) of this compiler
 	pub fn cache(&self) -> Arc<Cache> { self.cache.clone() }
 
-	pub fn header(&self, document: &dyn Document) -> String {
+	/// Produces the header for a given document
+	fn header(&self, document: &dyn Document) -> String {
 		pub fn get_variable_or_error(
 			document: &dyn Document,
 			var_name: &'static str,
@@ -105,7 +108,8 @@ impl Compiler {
 		result
 	}
 
-	pub fn footer(&self, _document: &dyn Document) -> String {
+	/// Produces the footer for a given document
+	fn footer(&self, _document: &dyn Document) -> String {
 		let mut result = String::new();
 		match self.target() {
 			Target::HTML => {
@@ -116,6 +120,7 @@ impl Compiler {
 		result
 	}
 
+	/// Compiles a document to it's output
 	pub fn compile(
 		&self,
 		document: &dyn Document,

@@ -8,13 +8,22 @@ use crate::parser::source::VirtualSource;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct VariableName(String);
+
+impl core::fmt::Display for VariableName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 /// Trait for document variables
 pub trait Variable {
 	/// Gets the definition location of the variable
 	fn location(&self) -> &Token;
 
 	/// Gets the name of the variable
-	fn name(&self) -> &str;
+	fn name(&self) -> &VariableName;
 
 	/// Converts variable to a string
 	fn to_string(&self) -> String;
@@ -28,7 +37,7 @@ pub trait Variable {
 
 impl core::fmt::Debug for dyn Variable {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}{{{}}}", self.name(), self.to_string())
+		write!(f, "{:#?}{{{}}}", self.name(), self.to_string())
 	}
 }
 
@@ -36,13 +45,13 @@ impl core::fmt::Debug for dyn Variable {
 #[derive(Debug)]
 pub struct BaseVariable {
 	location: Token,
-	name: String,
+	name: VariableName,
 	value_token: Token,
 	value: String,
 }
 
 impl BaseVariable {
-	pub fn new(location: Token, name: String, value_token: Token, value: String) -> Self {
+	pub fn new(location: Token, name: VariableName, value_token: Token, value: String) -> Self {
 		Self {
 			location,
 			name,
@@ -55,7 +64,7 @@ impl BaseVariable {
 impl Variable for BaseVariable {
 	fn location(&self) -> &Token { &self.location }
 
-	fn name(&self) -> &str { self.name.as_str() }
+	fn name(&self) -> &VariableName { &self.name }
 
 	fn to_string(&self) -> String { self.value.clone() }
 
@@ -80,13 +89,13 @@ impl Variable for BaseVariable {
 #[derive(Debug)]
 pub struct PathVariable {
 	location: Token,
-	name: String,
+	name: VariableName,
 	value_token: Token,
 	path: PathBuf,
 }
 
 impl PathVariable {
-	pub fn new(location: Token, name: String, value_token: Token, path: PathBuf) -> Self {
+	pub fn new(location: Token, name: VariableName, value_token: Token, path: PathBuf) -> Self {
 		Self {
 			location,
 			name,
@@ -99,7 +108,7 @@ impl PathVariable {
 impl Variable for PathVariable {
 	fn location(&self) -> &Token { &self.location }
 
-	fn name(&self) -> &str { self.name.as_str() }
+	fn name(&self) -> &VariableName { &self.name }
 
 	fn to_string(&self) -> String { self.path.to_str().unwrap().to_string() }
 

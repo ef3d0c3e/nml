@@ -1,11 +1,29 @@
 use core::fmt::Debug;
 use std::fs;
 use std::ops::Range;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 use unicode_segmentation::UnicodeSegmentation;
+
+/// Unique identifier for sources
+pub enum SourceIdentifier<'s> {
+	/// The identifier represent a file. The first parameter is the path to that specific file.
+	/// The second parameter is the number of times this source has been imported by the current translation unit.
+	File(String, usize),
+	/// The identifier represent a virtual source created from another source.
+	Virtual(&'s SourceIdentifier<'s>, String, usize)
+}
+
+impl<'s> FromStr for SourceIdentifier<'s>
+{
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    }
+}
 
 /// Trait for source content
 pub trait Source: Downcast + Send + Sync {

@@ -21,14 +21,14 @@ pub struct CompilerOutput {
 	// Holds the content of the resulting document
 	pub(crate) content: String,
 	/// Holds the position of every cross-document reference
-	references: HashMap<usize, CrossReference>,
+	references: Vec<(usize, CrossReference)>,
 	/// Holds the current id used for special references that have a `refcount_key`
 	special_references: HashMap<&'static str, HashMap<String, usize>>,
 	/// Holds the id of each sections until a certain depth
 	/// It works similarly as a stack where only the last value can be incremented, or the entire stack can be popped/pushed into
 	sections_counter: Vec<usize>,
 
-	/// Holds the spawned async tasks. After the work function has completed these tasks will be waited on in order to insert their result in the compiled document
+	/// Holds the spawned async tasks. After the work function has completed, these tasks will be waited on in order to insert their result in the compiled document
 	tasks: Vec<(usize, JoinHandle<Result<String, Vec<Report>>>)>,
 	/// The tasks runtime
 	runtime: tokio::runtime::Runtime,
@@ -45,7 +45,7 @@ impl CompilerOutput {
 		// Create the output & the runtime
 		let mut output = Self {
 			content: String::default(),
-			references: HashMap::default(),
+			references: Vec::default(),
 			special_references: HashMap::default(),
 			sections_counter: Vec::default(),
 
@@ -83,10 +83,16 @@ impl CompilerOutput {
 			results
 		});
 
-		// Insert tasks results into output
+		// Insert tasks results into output & offset references positions
 		for (pos, result) in results.drain(..).rev() {
 			match result {
-				Ok(content) => output.content.insert_str(pos, content.as_str()),
+				Ok(content) => {
+					// Offset references positions
+					output.references
+						.iter_mut()
+						.for_each(|(rpos, _)| if *rpos >= pos { *rpos += content.len() });
+					output.content.insert_str(pos, content.as_str()) 
+				},
 				Err(err) => Report::reports_to_stdout(colors, err),
 			}
 		}
@@ -117,10 +123,10 @@ impl CompilerOutput {
 	/// In case another cross-reference is inserted at the same location (which should never happen),
 	/// The program will panic
 	pub fn add_external_reference(&mut self, xref: CrossReference) {
-		if self.references.get(&self.content.len()).is_some() {
+		if self.references.get(self.content.len()).is_some() {
 			panic!("Duplicate cross-reference in one location");
 		}
-		self.references.insert(self.content.len(), xref);
+		self.references.push((self.content.len(), xref));
 	}
 
 	/// Inserts or get a reference id for the compiled document
@@ -194,18 +200,18 @@ impl CompilerOutput {
 			.collect::<HashMap<String, String>>();
 
 		// References
-		let references = document
-			.scope()
-			.borrow_mut()
-			.referenceable
-			.iter()
-			.map(|(key, reference)| {
-				let elem = document.get_from_reference(reference).unwrap();
-				let refid = self.reference_id(document, *reference);
+		//let references = document
+		//	.scope()
+		//	.borrow_mut()
+		//	.referenceable
+		//	.iter()
+		//	.map(|(key, reference)| {
+		//		let elem = document.get_from_reference(reference).unwrap();
+		//		let refid = self.reference_id(document, *reference);
 
-				(key.clone(), elem.refid(compiler, refid))
-			})
-			.collect::<HashMap<String, String>>();
+		//		(key.clone(), elem.refid(compiler, refid))
+		//	})
+		//	.collect::<HashMap<String, String>>();
 
 		let postprocess = PostProcess {
 			resolve_references: vec![], //self.unresolved_references.replace(vec![]),
@@ -215,7 +221,7 @@ impl CompilerOutput {
 			input: document.source().name().clone(),
 			mtime: 0,
 			variables,
-			references,
+			references: HashMap::default(),
 			header,
 			body: self.content,
 			footer,

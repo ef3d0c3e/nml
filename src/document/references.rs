@@ -1,51 +1,101 @@
+use std::rc::Rc;
+
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::parser::source::Source;
+use crate::parser::translation::Scope;
+
 use super::document::Document;
 
-/// Validates the name of a reference, returning an error message in case the name is invalid
-///
-/// # Notes
-///
-/// A valid reference name must not be empty and cannot contain the following:
-///  - Ascii punctuation outside of `.` and `_`. This is imposed in order to avoid confusion when
-///  passing a reference as a property, as properties are often delimited by `[]` or `:`
-///  - white spaces, e.g spaces, tabs or `\n`
-///  - no special ascii characters (no control sequences)
-pub fn validate_refname<'a>(
-	document: &dyn Document,
-	name: &'a str,
-	check_duplicate: bool,
-) -> Result<&'a str, String> {
-	let trimmed = name.trim_start().trim_end();
-	if trimmed.is_empty() {
-		return Err("Refname cannot be empty".to_string());
+/// A reference inside a document
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Refname(String);
+
+impl core::fmt::Display for Refname {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl Refname {
+	pub fn from_str<S: AsRef<str>>(str: S) -> Result<Self, String> {
+		let trimmed = str.as_ref().trim_start().trim_end();
+		if trimmed.is_empty() {
+			return Err("Refname cannot be empty".to_string());
+		}
+
+		trimmed
+			.chars()
+			.try_for_each(|c| {
+				if c.is_ascii_punctuation() && !(c == '.' || c == '_') {
+					return Err(format!(
+							"Refname `{trimmed}` cannot contain punctuation codepoint: `{c}`"
+					));
+				}
+				if c.is_whitespace() {
+					return Err(format!(
+							"Refname `{trimmed}` cannot contain whitespaces: `{c}`"
+					));
+				}
+				if c.is_control() {
+					return Err(format!(
+							"Refname `{trimmed}` cannot contain control codepoint: `{c}`"
+					));
+				}
+
+				Ok(())
+			})?;
+
+		Ok(Self(trimmed.to_string()))
 	}
+}
 
-	for c in trimmed.chars() {
-		if c.is_ascii_punctuation() && !(c == '.' || c == '_') {
-			return Err(format!(
-				"Refname `{trimmed}` cannot contain punctuation codepoint: `{c}`"
-			));
+#[derive(Debug)]
+pub struct Reference {
+	refname: Refname,
+	/// Internal path to the reffered element
+	internal_path: Vec<usize>,
+	/// External path to the reffered element
+	external_path: String,
+}
+
+impl Reference {
+	pub fn name(&self) -> &Refname { &self.refname }
+}
+
+/// References inside the current document
+///
+/// # Note
+///
+/// It is only possible to reference an element nested by at most 1 level.
+/// For instance, it is possible to reference an element inside a `Block`. But not if the block is
+/// inside another `Block`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum ElemReference {
+	Direct(usize),
+
+	// Reference nested inside another element, e.g [`Paragraph`] or [`Media`]
+	Nested(usize, usize),
+}
+
+/// A reference that points to another document. Either the other document is specified by name or
+/// unspecified -- in which case all documents are searched for the reference.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CrossReference {
+	/// When the referenced document is unspecified
+	Unspecific(String),
+
+	/// When the referenced document is specified
+	Specific(String, String),
+}
+
+impl core::fmt::Display for CrossReference {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			CrossReference::Unspecific(name) => write!(f, "#{name}"),
+			CrossReference::Specific(doc_name, name) => write!(f, "{doc_name}#{name}"),
 		}
-
-		if c.is_whitespace() {
-			return Err(format!(
-				"Refname `{trimmed}` cannot contain whitespaces: `{c}`"
-			));
-		}
-
-		if c.is_control() {
-			return Err(format!(
-				"Refname `{trimmed}` cannot contain control codepoint: `{c}`"
-			));
-		}
-	}
-
-	if check_duplicate && document.get_reference(trimmed).is_some() {
-		Err(format!("Refname `{trimmed}` is already in use!"))
-	} else {
-		Ok(trimmed)
 	}
 }
 
@@ -87,40 +137,5 @@ pub mod tests {
 
 		// Duplicate
 		assert!(validate_refname(&*doc, "ref", true).is_err());
-	}
-}
-
-/// References inside the current document
-///
-/// # Note
-///
-/// It is only possible to reference an element nested by at most 1 level.
-/// For instance, it is possible to reference an element inside a `Block`. But not if the block is
-/// inside another `Block`.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum ElemReference {
-	Direct(usize),
-
-	// Reference nested inside another element, e.g [`Paragraph`] or [`Media`]
-	Nested(usize, usize),
-}
-
-/// A reference that points to another document. Either the other document is specified by name or
-/// unspecified -- in which case all documents are searched for the reference.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CrossReference {
-	/// When the referenced document is unspecified
-	Unspecific(String),
-
-	/// When the referenced document is specified
-	Specific(String, String),
-}
-
-impl core::fmt::Display for CrossReference {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			CrossReference::Unspecific(name) => write!(f, "#{name}"),
-			CrossReference::Specific(doc_name, name) => write!(f, "{doc_name}#{name}"),
-		}
 	}
 }
