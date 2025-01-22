@@ -1,0 +1,16 @@
+@import template.nml
+@nav.previous = Imports
+%<make_doc({}, "Changelog", "Changelog")>%
+
+# beta-0.5
+ * Added tables into the language
+ * Added `textDocument/definition` support in nmlls
+ * Added off-spec LSP extensions: `textDocument/conceal`, `textDocument/style` and `textDocument/codeRange`
+ * Added text blocks into the language
+ * Merged quotes with blocks
+ * Added async processing for certain compilation tasks: LaTeX, Graphviz and Code highlighting
+ * More precise tokenization for the language server
+
+# beta-0.4
+
+Initial public release
