@@ -19,7 +19,7 @@ impl core::fmt::Display for VariableName {
 }
 
 /// Trait for document variables
-pub trait Variable : Serialize {
+pub trait Variable {
 	/// Gets the definition location of the variable
 	fn location(&self) -> &Token;
 

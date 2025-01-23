@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::ops::Range;
 use std::rc::Rc;
+use std::slice::Iter;
 use std::sync::Arc;
 
 use crate::elements::text::elem::Text;
@@ -119,7 +120,7 @@ impl Parser {
 		}
 	}
 
-	pub fn add_text<'u>(&'u self, unit: &mut TranslationUnit<'u>, range: Range<Cursor>) {
+	fn add_text<'u>(&'u self, unit: &mut TranslationUnit<'u>, range: Range<Cursor>) {
 		let token: Token = range.into();
 		let content = token.content().chars().fold(String::default(), {
 			let mut escaped = false;
@@ -155,6 +156,7 @@ impl Parser {
 		unit.add_content(Arc::new(Text::new(token, content.into())));
 	}
 
+	/// Parses the current scope in the translation unit
 	pub fn parse<'u>(&'u self, unit: &mut TranslationUnit<'u>) -> Vec<Report> {
 		let mut cursor: Cursor = unit.scope().source().into();
 		let mut reports = Vec::default();
@@ -173,4 +175,14 @@ impl Parser {
 
 		reports
 	}
+}
+
+pub trait ParserRuleAccessor {
+	fn iter_rules(&self) -> Iter<Box<dyn Rule>>;
+}
+
+impl ParserRuleAccessor for Parser {
+    fn iter_rules(&self) -> Iter<Box<dyn Rule>> {
+        self.rules.iter()
+    }
 }

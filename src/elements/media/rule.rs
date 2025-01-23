@@ -4,7 +4,6 @@ use ariadne::Fmt;
 use document::document::Document;
 use document::document::DocumentAccessors;
 use document::element::ContainerElement;
-use document::references::validate_refname;
 use lsp::semantic::Semantics;
 use parser::parser::ParseMode;
 use parser::parser::ParserState;

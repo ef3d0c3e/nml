@@ -9,7 +9,6 @@ use regex::Regex;
 use std::collections::HashMap;
 
 use crate::document::document::Document;
-use crate::document::references::validate_refname;
 use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::property::Property;

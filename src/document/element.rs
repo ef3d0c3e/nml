@@ -58,15 +58,12 @@ pub trait Element: Downcast + core::fmt::Debug {
 	fn as_container(&self) -> Option<&dyn ContainerElement> { None }
 
 	/// Compiles element
-	fn compile<'e>(
-		&'e self,
-		compiler: &'e Compiler,
-		document: &'e dyn Document,
+	fn compile(
+		&self,
+		scope: Rc<RefCell<Scope>>,
+		compiler: &Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>>;
-
-	/// Method called when the element is inserted to a scope
-	fn scoped(&self, _scope: Rc<RefCell<Scope>>) -> Result<(), Report> { Ok(()) }
 }
 impl_downcast!(Element);
 

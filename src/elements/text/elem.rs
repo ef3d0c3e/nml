@@ -1,9 +1,13 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::document::document::Document;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::reports::Report;
+use crate::parser::scope::Scope;
 use crate::parser::source::Token;
 
 #[derive(Debug)]
@@ -23,8 +27,8 @@ impl Element for Text {
 
 	fn compile<'e>(
 		&self,
+		_scope: Rc<RefCell<Scope>>,
 		compiler: &Compiler,
-		_document: &dyn Document,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
 		output.add_content(compiler.sanitize(self.content.as_str()));

@@ -79,7 +79,7 @@ pub trait Rule: Downcast {
 	///
 	/// # Parameters
 	///
-	/// `mode` Speficies the current parser mode. Some elements react differently to different
+	/// `mode` Speficies the current parser mode. Some elements should behave differently for different
 	/// modes. For instance mode `paragraph_only` makes the rule for `Section`s to be ignored.
 	fn next_match(
 		&self,
@@ -135,13 +135,18 @@ pub trait RegexRule {
 	fn enabled(&self, mode: &ParseMode, index: usize) -> bool;
 
 	/// Method called when the rule is chosen by the parser
-	fn on_regex_match<'a>(
+	///
+	/// # Parameters
+	///  * `index` Index of the matching rule in the table returned by [`Self::regexes`]
+	///  * `unit` The translation unit
+	///  * `token` Token formed by this match
+	///  * `captures` Regex captures data
+	fn on_regex_match<'u>(
 		&self,
 		index: usize,
-		state: &ParserState,
-		document: &'a (dyn Document<'a> + 'a),
+		unit: &mut TranslationUnit<'u>,
 		token: Token,
-		matches: regex::Captures,
+		captures: regex::Captures,
 	) -> Vec<Report>;
 
 	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
@@ -156,7 +161,6 @@ impl<T: RegexRule + 'static> Rule for T {
 	fn next_match(
 		&self,
 		mode: &ParseMode,
-		_state: &ParserState,
 		cursor: &Cursor,
 	) -> Option<(usize, Box<dyn Any>)> {
 		let content = cursor.source.content();
@@ -181,11 +185,10 @@ impl<T: RegexRule + 'static> Rule for T {
 		found.map(|(pos, id)| (pos, Box::new(id) as Box<dyn Any>))
 	}
 
-	fn on_match<'a>(
+	fn on_match<'u>(
 		&self,
-		state: &ParserState,
-		document: &'a (dyn Document<'a> + 'a),
-		cursor: Cursor,
+		unit: &mut TranslationUnit<'u>,
+		cursor: &Cursor,
 		match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report>) {
 		let content = cursor.source.content();
@@ -198,7 +201,7 @@ impl<T: RegexRule + 'static> Rule for T {
 		let token_end = token.end();
 		(
 			cursor.at(token_end),
-			self.on_regex_match(*index, state, document, token, captures),
+			self.on_regex_match(*index, unit, token, captures),
 		)
 	}
 

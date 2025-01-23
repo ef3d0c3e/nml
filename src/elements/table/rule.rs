@@ -18,7 +18,6 @@ use crate::report_err;
 use ariadne::Fmt;
 use document::element::ElemKind;
 use document::element::Element;
-use document::references::validate_refname;
 use elements::block::elem::Block;
 use elements::list::elem::ListEntry;
 use elements::list::elem::ListMarker;

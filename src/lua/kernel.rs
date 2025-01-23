@@ -1,15 +1,18 @@
 use std::cell::RefCell;
+use std::cell::RefMut;
 use std::collections::HashMap;
 
 use mlua::IntoLua;
 use mlua::Lua;
 use mlua::Table;
+use mlua::UserData;
 
 use crate::document::document::Document;
-use crate::parser::parser::Parser;
-use crate::parser::parser::ParserState;
+use crate::parser::new::Parser;
+use crate::parser::new::ParserRuleAccessor;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
+use crate::parser::translation::TranslationUnit;
 
 /// Redirected data from lua execution
 pub struct KernelRedirect {
@@ -19,41 +22,53 @@ pub struct KernelRedirect {
 	pub content: String,
 }
 
-pub struct KernelContext<'a, 'b, 'c> {
+pub struct KernelContext<'u> {
 	pub location: Token,
-	pub state: &'a ParserState<'a, 'b>,
-	pub document: &'c dyn Document<'c>,
+	pub unit: &'u mut TranslationUnit<'u>,
 	pub redirects: Vec<KernelRedirect>,
 	pub reports: Vec<Report>,
 }
 
-impl<'a, 'b, 'c> KernelContext<'a, 'b, 'c> {
+impl<'u> KernelContext<'u> {
 	pub fn new(
 		location: Token,
-		state: &'a ParserState<'a, 'b>,
-		document: &'c dyn Document<'c>,
+		unit: &'u TranslationUnit<'u>,
 	) -> Self {
 		Self {
 			location,
-			state,
-			document,
+			unit,
 			redirects: vec![],
 			reports: vec![],
 		}
 	}
 }
 
+impl<'u> UserData for KernelContext<'u> {
+    fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(fields: &mut F) {
+
+	}
+
+    fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+		methods.add_method("get_location", |_, ctx, ()| {
+			Ok(ctx.location.clone())
+		});
+		methods.add_method("get_unit", |_, ctx, ()| {
+			Ok(ctx.unit)
+		});
+	}
+}
+
 thread_local! {
-	pub static CTX: RefCell<Option<&'static mut KernelContext<'static, 'static, 'static>>> = const { RefCell::new(None) };
+	pub static CTX: RefCell<Option<&'static mut KernelContext<'static>>> = const { RefCell::new(None) };
 }
 
 #[derive(Debug)]
 pub struct Kernel {
-	lua: Lua,
+	pub lua: Lua,
 }
 
 impl Kernel {
-	pub fn new(parser: &dyn Parser) -> Self {
+	pub fn new(parser: &Parser) -> Self {
 		let lua = Lua::new();
 
 		{
@@ -62,7 +77,7 @@ impl Kernel {
 				.set("tables", lua.create_table().unwrap())
 				.unwrap();
 
-			for rule in parser.rules() {
+			parser.iter_rules().for_each(|rule| {
 				let table = lua.create_table().unwrap();
 				// TODO: Export this so we can check for duplicate rules based on this name
 				let name = rule.name().to_lowercase().replace(' ', "_");
@@ -70,7 +85,7 @@ impl Kernel {
 					table.set(fun_name, fun).unwrap();
 				}
 				nml_table.set(name, table).unwrap();
-			}
+			});
 			lua.globals().set("nml", nml_table).unwrap();
 		}
 
@@ -97,16 +112,16 @@ impl Kernel {
 	///
 	/// This is the only way lua code shoule be ran, because exported
 	/// functions may require the context in order to operate
-	pub fn run_with_context<T, F>(&self, context: &mut KernelContext, f: F) -> T
+	pub fn run_with_context<T, F>(&self, context: &mut KernelContext, f: F) -> Result<T, mlua::Error>
 	where
 		F: FnOnce(&Lua) -> T,
 	{
-		// Redirects
-		CTX.set(Some(unsafe { std::mem::transmute(context) }));
-		let ret = f(&self.lua);
-		CTX.set(None);
+		let data = self.lua.create_userdata(context)?;
+		self.lua.globals().set("nml.ctx", data);
 
-		ret
+		let ret = f(&self.lua);
+
+		Ok(ret)
 	}
 
 	/// Exports a table to lua
@@ -123,9 +138,22 @@ impl Kernel {
 
 		Ok(())
 	}
+
+	pub fn with_context<'lua, 'ctx: 'lua, F>(&'lua self, f: F) -> Result<(), mlua::Error>
+		where F: FnOnce(RefMut<'ctx, KernelContext<'ctx>>) -> RefMut<'ctx, KernelContext<'ctx>>
+	{
+        // Retrieve the user data stored in `globals()`.
+        let mut ctx_userdata: mlua::AnyUserData = self.lua.globals().get("nml.context")?;
+        // Borrow it as &ContextType or &mut ContextType
+		{
+			let borrow = ctx_userdata.borrow_mut::<KernelContext>()?;
+			f(borrow);
+		};
+		return Ok(());
+	}
 }
 
-#[derive(Default)]
+/// Holds all the lua kernels
 pub struct KernelHolder {
 	kernels: HashMap<String, Kernel>,
 }

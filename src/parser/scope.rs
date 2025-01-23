@@ -11,11 +11,11 @@ pub struct Scope {
 	/// Parent scope
 	parent: Option<Rc<RefCell<Scope>>>,
 
-	/// State of the parser
-	parser_state: super::state::ParserState,
-
 	/// Children of this scope
 	children: Vec<Rc<RefCell<Scope>>>,
+
+	/// State of the parser
+	parser_state: super::state::ParserState,
 
 	/// Source of this scope
 	source: Arc<dyn Source>,
@@ -31,8 +31,8 @@ impl Scope {
 	pub fn new(parent: Option<Rc<RefCell<Scope>>>, source: Arc<dyn Source>, parse_mode: ParseMode) -> Self {
 		Self {
 			parent,
-			parser_state: ParserState::new(parse_mode),
 			children: Vec::default(),
+			parser_state: ParserState::new(parse_mode),
 			source,
 			references: HashMap::default(),
 			variables: HashMap::default(),
