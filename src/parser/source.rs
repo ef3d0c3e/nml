@@ -385,6 +385,10 @@ impl Token {
 	/// Retrieve the source of the token
 	pub fn source(&self) -> Arc<dyn Source> { self.source.clone() }
 
+	pub fn content(&self) -> &str {
+		&self.source.content().as_str()[&self.range]
+	}
+
 	/// Get the start byte position of the token
 	pub fn start(&self) -> usize { self.range.start }
 
@@ -450,4 +454,14 @@ impl From<Arc<dyn Source>> for Token {
 			source,
 		}
 	}
+}
+
+impl From<&Range<Cursor>> for Token {
+    fn from(range: &Range<Cursor>) -> Self {
+		assert_eq!(range.start.source, range.end.source);
+        Self {
+			range: range.start.pos..range.end.pos,
+			source: range.start.source.clone(),
+		}
+    }
 }

@@ -3,12 +3,7 @@ use std::rc::Rc;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::parser::source::Source;
-use crate::parser::translation::Scope;
-
-use super::document::Document;
-
-/// A reference inside a document
+/// Internal name for references
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Refname(String);
 

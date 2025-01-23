@@ -1,9 +1,12 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::elements::reference::elem::InternalReference;
 use crate::parser::reports::Report;
+use crate::parser::scope::Scope;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
@@ -61,6 +64,9 @@ pub trait Element: Downcast + core::fmt::Debug {
 		document: &'e dyn Document,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>>;
+
+	/// Method called when the element is inserted to a scope
+	fn scoped(&self, _scope: Rc<RefCell<Scope>>) -> Result<(), Report> { Ok(()) }
 }
 impl_downcast!(Element);
 

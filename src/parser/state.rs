@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -7,8 +8,43 @@ use downcast_rs::Downcast;
 
 use crate::document::document::Document;
 
-use super::parser::ParserState;
+use super::parser::Parser;
 use super::reports::Report;
+
+/// Modifies the parser's behaviour
+///
+/// This is useful when the parser is invoked recursively as it can modify how the parser
+/// processes text.
+#[derive(Default)]
+pub struct ParseMode {
+	/// Sets the parser to only parse elements compatible with paragraphs.
+	pub paragraph_only: bool,
+}
+
+/// State for the parser that needs to hold data to parse the current scope
+#[derive(Debug)]
+pub struct ParserState {
+	/// Stores the match data, with the next match position and the data to pass to the processing function
+	pub matches: Vec<(usize, Option<Box<dyn Any>>)>,
+	/// Current mode for the parser
+	pub mode: ParseMode,
+}
+
+impl ParserState {
+	pub fn new(mode: ParseMode) -> Self {
+		Self {
+			matches: Vec::default(),
+			mode,
+		}
+	}
+
+	pub fn new_child(&self, mode: ParseMode) -> Self {
+		Self::new(mode)
+	}
+}
+
+
+// ----------- REFACTOR BELOW ------------
 
 /// Scope for state objects
 #[derive(PartialEq, PartialOrd, Debug)]
@@ -28,7 +64,7 @@ pub trait RuleState: Downcast {
 	fn scope(&self) -> Scope;
 
 	/// Callback called when state goes out of scope
-	fn on_remove(&self, state: &ParserState, document: &dyn Document) -> Vec<Report>;
+	fn on_remove(&self, state: &super::parser::ParserState, document: &dyn Document) -> Vec<Report>;
 }
 impl_downcast!(RuleState);
 
@@ -63,7 +99,7 @@ impl RuleStateHolder {
 
 	pub fn on_scope_end(
 		&mut self,
-		state: &ParserState,
+		state: &super::parser::ParserState,
 		document: &dyn Document,
 		scope: Scope,
 	) -> Vec<Report> {

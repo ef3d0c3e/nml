@@ -1,14 +1,21 @@
-use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
+use std::{borrow::{Borrow, BorrowMut}, cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use crate::document::{references::{Reference, Refname}, variable::{Variable, VariableName}};
 
-use super::source::Source;
+use super::{parser::Parser, source::Source, state::{ParseMode, ParserState}};
 
 /// The scope from a translation unit
+/// Each scope is tied to a unique [`Source`]
 #[derive(Debug)]
 pub struct Scope {
-	/// Scope shadowed by this scope
-	shadowed: Option<Rc<RefCell<Scope>>>,
+	/// Parent scope
+	parent: Option<Rc<RefCell<Scope>>>,
+
+	/// State of the parser
+	parser_state: super::state::ParserState,
+
+	/// Children of this scope
+	children: Vec<Rc<RefCell<Scope>>>,
 
 	/// Source of this scope
 	source: Arc<dyn Source>,
@@ -21,9 +28,11 @@ pub struct Scope {
 }
 
 impl Scope {
-	pub fn new(source: Arc<dyn Source>) -> Self {
+	pub fn new(parent: Option<Rc<RefCell<Scope>>>, source: Arc<dyn Source>, parse_mode: ParseMode) -> Self {
 		Self {
-			shadowed: None,
+			parent,
+			parser_state: ParserState::new(parse_mode),
+			children: Vec::default(),
 			source,
 			references: HashMap::default(),
 			variables: HashMap::default(),
@@ -31,9 +40,27 @@ impl Scope {
 	}
 	
 	pub fn name(&self) -> &String { self.source.name() }
+
+	pub fn source(&self) -> Arc<dyn Source> {
+		self.source.clone()
+	}
+
+
+	pub fn parser_state(&self) -> &ParserState
+	{
+		&self.parser_state
+	}
+
+	pub fn parser_state_mut(&mut self) -> &mut ParserState
+	{
+		&mut self.parser_state
+	}
 }
 
 pub trait ScopeAccessor {
+	/// Creates a new child from this scope
+	fn new_child(&self, source: Arc<dyn Source>, parse_mode: ParseMode) -> Rc<RefCell<Scope>>;
+
 	/// Returns a reference as well as it's declaring scope
 	fn get_reference(&self, name: &Refname) -> Option<(Rc<Reference>, Rc<RefCell<Scope>>)>;
 
@@ -52,19 +79,24 @@ pub trait ScopeAccessor {
 	///
 	/// On conflict, returns the conflicting variable.
 	fn insert_variable(&self, variable: Rc<dyn Variable>) -> Option<Rc<dyn Variable>>;
-
-	/// Creates a new scope that shadows the current scope
-	fn shadows(self, source: Arc<dyn Source>) -> Rc<RefCell<Scope>>;
 }
 
 impl ScopeAccessor for Rc<RefCell<Scope>> {
+	fn new_child(&self, source: Arc<dyn Source>, parse_mode: ParseMode) -> Rc<RefCell<Scope>>
+	{
+		let child = Rc::new(RefCell::new(Scope::new(Some(self.clone()), source, parse_mode)));
+
+		(*self.clone()).borrow_mut().children.push(child.clone());
+		child
+	}
+
 	fn get_reference(&self, name: &Refname) -> Option<(Rc<Reference>, Rc<RefCell<Scope>>)> {
 		if let Some(reference) = (*self.clone()).borrow().references.get(name) {
 			return Some((reference.clone(), self.clone()));
 		}
 
-		if let Some(shadowed) = &(*self.clone()).borrow().shadowed {
-			return shadowed.get_reference(name);
+		if let Some(parent) = &(*self.clone()).borrow().parent {
+			return parent.get_reference(name);
 		}
 
 		return None;
@@ -84,8 +116,8 @@ impl ScopeAccessor for Rc<RefCell<Scope>> {
 			return Some((variable.clone(), self.clone()));
 		}
 
-		if let Some(shadowed) = &(*self.clone()).borrow().shadowed {
-			return shadowed.get_variable(name);
+		if let Some(parent) = &(*self.clone()).borrow().parent {
+			return parent.get_variable(name);
 		}
 
 		return None;
@@ -95,11 +127,5 @@ impl ScopeAccessor for Rc<RefCell<Scope>> {
 	{
 		(*self.clone()).borrow_mut()
 			.variables.insert(variable.name().to_owned(), variable)
-	}
-
-	fn shadows(self, source: Arc<dyn Source>) -> Rc<RefCell<Scope>> {
-		let scope = Rc::new(RefCell::new(Scope::new(source)));
-		(*self.clone()).borrow_mut().shadowed = Some(scope.clone());
-		scope
 	}
 }

@@ -15,7 +15,7 @@ use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
 use crate::parser::source::VirtualSource;
 
-use super::data::LSPData;
+use super::data::LangServerData;
 
 pub const TOKEN_TYPE: &[SemanticTokenType] = &[
 	SemanticTokenType::NAMESPACE,
@@ -331,7 +331,7 @@ pub struct Semantics<'a> {
 impl<'a> Semantics<'a> {
 	fn from_source_impl(
 		source: Arc<dyn Source>,
-		lsp: &'a Option<RefCell<LSPData>>,
+		lsp: &'a Option<RefCell<LangServerData>>,
 		original_source: Arc<dyn Source>,
 	) -> Option<(Self, Ref<'a, Tokens>)> {
 		if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
@@ -348,7 +348,7 @@ impl<'a> Semantics<'a> {
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if source.downcast_ref::<SourceFile>().is_some() {
-			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
+			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LangServerData| {
 				lsp.semantic_data.get(&(source.clone()))
 			})
 			.ok()
@@ -359,7 +359,7 @@ impl<'a> Semantics<'a> {
 						source,
 						original_source,
 					},
-					Ref::map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
+					Ref::map(lsp.as_ref().unwrap().borrow(), |lsp: &LangServerData| {
 						&lsp.semantic_tokens
 					}),
 				)
@@ -370,7 +370,7 @@ impl<'a> Semantics<'a> {
 
 	pub fn from_source(
 		source: Arc<dyn Source>,
-		lsp: &'a Option<RefCell<LSPData>>,
+		lsp: &'a Option<RefCell<LangServerData>>,
 	) -> Option<(Self, Ref<'a, Tokens>)> {
 		if lsp.is_none() {
 			return None;
@@ -381,7 +381,7 @@ impl<'a> Semantics<'a> {
 	/// Method that should be called at the end of parsing
 	///
 	/// This function will process the end of the semantic queue
-	pub fn on_document_end(lsp: &'a Option<RefCell<LSPData>>, source: Arc<dyn Source>) {
+	pub fn on_document_end(lsp: &'a Option<RefCell<LangServerData>>, source: Arc<dyn Source>) {
 		if source.content().is_empty() {
 			return;
 		}

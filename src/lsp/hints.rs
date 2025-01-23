@@ -11,7 +11,7 @@ use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
 use crate::parser::source::VirtualSource;
 
-use super::data::LSPData;
+use super::data::LangServerData;
 
 /// Per file hints
 #[derive(Debug)]
@@ -45,7 +45,7 @@ pub struct Hints<'a> {
 impl<'a> Hints<'a> {
 	fn from_source_impl(
 		source: Arc<dyn Source>,
-		lsp: &'a Option<RefCell<LSPData>>,
+		lsp: &'a Option<RefCell<LangServerData>>,
 		original_source: Arc<dyn Source>,
 	) -> Option<Self> {
 		if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
@@ -62,7 +62,7 @@ impl<'a> Hints<'a> {
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if source.downcast_ref::<SourceFile>().is_some() {
-			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
+			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LangServerData| {
 				lsp.inlay_hints.get(&(source.clone()))
 			})
 			.ok()
@@ -75,7 +75,7 @@ impl<'a> Hints<'a> {
 		None
 	}
 
-	pub fn from_source(source: Arc<dyn Source>, lsp: &'a Option<RefCell<LSPData>>) -> Option<Self> {
+	pub fn from_source(source: Arc<dyn Source>, lsp: &'a Option<RefCell<LangServerData>>) -> Option<Self> {
 		if lsp.is_none() {
 			return None;
 		}

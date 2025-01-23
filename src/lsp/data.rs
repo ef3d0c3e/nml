@@ -11,8 +11,8 @@ use super::semantic::SemanticsData;
 use super::semantic::Tokens;
 use super::styles::StylesData;
 
-#[derive(Debug)]
-pub struct LSPData {
+#[derive(Debug, Default)]
+pub struct LangServerData {
 	pub semantic_tokens: Tokens,
 	pub semantic_data: HashMap<Arc<dyn Source>, SemanticsData>,
 	pub inlay_hints: HashMap<Arc<dyn Source>, HintsData>,
@@ -22,19 +22,7 @@ pub struct LSPData {
 	pub coderanges: HashMap<Arc<dyn Source>, CodeRangeData>,
 }
 
-impl LSPData {
-	pub fn new() -> Self {
-		Self {
-			semantic_tokens: Tokens::new(),
-			semantic_data: HashMap::new(),
-			inlay_hints: HashMap::new(),
-			definitions: HashMap::new(),
-			conceals: HashMap::new(),
-			styles: HashMap::new(),
-			coderanges: HashMap::new(),
-		}
-	}
-
+impl LangServerData {
 	/// Method that must be called when a source is added
 	pub fn new_source(&mut self, source: Arc<dyn Source>) {
 		if !self.semantic_data.contains_key(&source) {

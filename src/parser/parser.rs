@@ -19,7 +19,7 @@ use crate::elements::block::data::BlockHolder;
 use crate::elements::customstyle::custom::CustomStyleHolder;
 use crate::elements::layout::data::LayoutHolder;
 use crate::elements::paragraph::elem::Paragraph;
-use crate::lsp::data::LSPData;
+use crate::lsp::data::LangServerData;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
 use ariadne::Color;
@@ -74,7 +74,7 @@ pub struct SharedState {
 	pub custom_styles: RefCell<CustomStyleHolder>,
 
 	/// The lsp data
-	pub lsp: Option<RefCell<LSPData>>,
+	pub lsp: Option<RefCell<LangServerData>>,
 }
 
 impl SharedState {
@@ -87,7 +87,7 @@ impl SharedState {
 			layouts: RefCell::new(LayoutHolder::default()),
 			blocks: RefCell::new(BlockHolder::default()),
 			custom_styles: RefCell::new(CustomStyleHolder::default()),
-			lsp: enable_semantics.then_some(RefCell::new(LSPData::new())),
+			lsp: enable_semantics.then_some(RefCell::new(LangServerData::new())),
 		};
 
 		// Register default kernel

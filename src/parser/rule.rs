@@ -1,8 +1,9 @@
-use super::parser::ParseMode;
-use super::parser::ParserState;
 use super::reports::Report;
 use super::source::Cursor;
 use super::source::Token;
+use super::state::ParseMode;
+use super::state::ParserState;
+use super::translation::TranslationUnit;
 use crate::document::document::Document;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
@@ -83,7 +84,6 @@ pub trait Rule: Downcast {
 	fn next_match(
 		&self,
 		mode: &ParseMode,
-		state: &ParserState,
 		cursor: &Cursor,
 	) -> Option<(usize, Box<dyn Any>)>;
 
@@ -98,11 +98,10 @@ pub trait Rule: Downcast {
 	/// # Parameters
 	///
 	/// `match_data` is the temporary returned by [`Self::on_match`].
-	fn on_match<'a>(
+	fn on_match<'u>(
 		&self,
-		state: &ParserState,
-		document: &'a (dyn Document<'a> + 'a),
-		cursor: Cursor,
+		unit: &mut TranslationUnit<'u>,
+		cursor: &Cursor,
 		match_data: Box<dyn Any>,
 	) -> (Cursor, Vec<Report>);
 

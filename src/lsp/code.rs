@@ -14,7 +14,7 @@ use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
 use crate::parser::source::VirtualSource;
 
-use super::data::LSPData;
+use super::data::LangServerData;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,7 +57,7 @@ pub struct CodeRange<'a> {
 impl<'a> CodeRange<'a> {
 	fn from_source_impl(
 		source: Arc<dyn Source>,
-		lsp: &'a Option<RefCell<LSPData>>,
+		lsp: &'a Option<RefCell<LangServerData>>,
 		original_source: Arc<dyn Source>,
 	) -> Option<Self> {
 		if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
@@ -74,7 +74,7 @@ impl<'a> CodeRange<'a> {
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if source.downcast_ref::<SourceFile>().is_some() {
-			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LSPData| {
+			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LangServerData| {
 				lsp.coderanges.get(&(source.clone()))
 			})
 			.ok()
@@ -87,7 +87,7 @@ impl<'a> CodeRange<'a> {
 		None
 	}
 
-	pub fn from_source(source: Arc<dyn Source>, lsp: &'a Option<RefCell<LSPData>>) -> Option<Self> {
+	pub fn from_source(source: Arc<dyn Source>, lsp: &'a Option<RefCell<LangServerData>>) -> Option<Self> {
 		if lsp.is_none() {
 			return None;
 		}

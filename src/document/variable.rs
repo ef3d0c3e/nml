@@ -8,6 +8,7 @@ use crate::parser::source::VirtualSource;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// Internal name for variables
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableName(String);
 
@@ -18,7 +19,7 @@ impl core::fmt::Display for VariableName {
 }
 
 /// Trait for document variables
-pub trait Variable {
+pub trait Variable : Serialize {
 	/// Gets the definition location of the variable
 	fn location(&self) -> &Token;
 

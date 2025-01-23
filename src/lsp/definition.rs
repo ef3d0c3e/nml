@@ -14,7 +14,7 @@ use crate::parser::source::SourcePosition;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 
-use super::data::LSPData;
+use super::data::LangServerData;
 
 /// Per file definitions
 #[derive(Debug)]
@@ -34,7 +34,7 @@ impl DefinitionData {
 fn from_source_impl(
 	source: Arc<dyn Source>,
 	target: &Token,
-	lsp: &Option<RefCell<LSPData>>,
+	lsp: &Option<RefCell<LangServerData>>,
 	original: Token,
 ) {
 	if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
@@ -107,7 +107,7 @@ fn from_source_impl(
 	}
 }
 
-pub fn from_source(source: Token, target: &Token, lsp: &Option<RefCell<LSPData>>) {
+pub fn from_source(source: Token, target: &Token, lsp: &Option<RefCell<LangServerData>>) {
 	if lsp.is_none() {
 		return;
 	}
