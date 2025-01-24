@@ -1,26 +1,22 @@
 use std::any::Any;
 use std::ops::Range;
-use std::rc::Rc;
 use std::slice::Iter;
 use std::sync::Arc;
 
 use crate::elements::text::elem::Text;
 
-use super::reports::Report;
 use super::rule::Rule;
-use super::scope::ScopeAccessor;
 use super::source::Cursor;
 use super::source::Token;
-use super::state::ParserState;
 use super::translation::TranslationAccessors;
 use super::translation::TranslationUnit;
-use super::util;
 
 pub struct Parser {
 	rules: Vec<Box<dyn Rule>>,
 }
 
 impl Parser {
+	/// Constructs a new parser that will automatically fetch all exported rules
 	pub fn new() -> Self {
 		Self {
 			rules: super::rule::get_rule_registry().iter().collect::<Vec<_>>(),
@@ -56,7 +52,8 @@ impl Parser {
 		unit: &mut TranslationUnit,
 		cursor: &Cursor,
 	) -> Option<(Cursor, &Box<dyn Rule>, Box<dyn Any>)> {
-		let state = unit.scope().parser_state_mut();
+		let mut scope = unit.scope_mut();
+		let state = scope.parser_state_mut();
 		while state.matches.len() < self.rules.len() {
 			state.matches.push((0, None));
 		}
@@ -66,7 +63,7 @@ impl Parser {
 			.zip(state.matches.iter_mut())
 			.for_each(|(rule, (pos, data))| {
 				// Don't upate if not stepped over yet
-				if *pos > cursor.pos {
+				if *pos > cursor.pos() {
 					return;
 				}
 
@@ -75,13 +72,16 @@ impl Parser {
 					None => (usize::MAX, None),
 					Some((mut new_pos, mut new_data)) => {
 						// Check if escaped
-						while pos != usize::MAX {
-							let content = cursor.source.content().as_str();
+						while *pos != usize::MAX {
+							let source = cursor.source();
+							let content = source.content().as_str();
+
 							let mut codepoints = content[0..new_pos].chars();
 							let mut escaped = false;
+
 							'inner: loop {
 								let g = codepoints.next_back();
-								if g.is_none() || g.unwrap() != "\\" {
+								if g.is_none() || g.unwrap() != '\\' {
 									break 'inner;
 								}
 
@@ -121,31 +121,21 @@ impl Parser {
 	}
 
 	fn add_text<'u>(&'u self, unit: &mut TranslationUnit<'u>, range: Range<Cursor>) {
-		let token: Token = range.into();
+		let token: Token = (&range).into();
 		let content = token.content().chars().fold(String::default(), {
 			let mut escaped = false;
-			|| {
-				|mut s, c|
-				{
-					if c == '\\'
-					{
-						escaped = !escaped;
-					}
-					else if escaped
-					{
-						s.push(c);
-						escaped = false;
-					}
-					else if c == '\n'
-					{
-						s.push(' ');
-					}
-					else
-					{
-						s.push(c);
-					}
-					s
-				}()
+			move |mut s, c| {
+				if c == '\\' {
+					escaped = !escaped;
+				} else if escaped {
+					s.push(c);
+					escaped = false;
+				} else if c == '\n' {
+					s.push(' ');
+				} else {
+					s.push(c);
+				}
+				s
 			}
 		});
 
@@ -157,23 +147,19 @@ impl Parser {
 	}
 
 	/// Parses the current scope in the translation unit
-	pub fn parse<'u>(&'u self, unit: &mut TranslationUnit<'u>) -> Vec<Report> {
-		let mut cursor: Cursor = unit.scope().source().into();
-		let mut reports = Vec::default();
+	pub fn parse<'u>(&'u self, unit: &mut TranslationUnit<'u>) {
+		let mut cursor = Cursor::new(0, unit.scope().source().into());
 
 		while let Some((next_cursor, rule, rule_data)) = self.next_match(unit, &cursor) {
 			// Unmatched content added as text
-			self.add_text(unit, cursor..next_cursor);
+			self.add_text(unit, cursor..next_cursor.clone());
 
-			let (next_cursor, rule_reports) = rule.on_match(unit, &next_cursor, rule_data);
-			
-			cursor = next_cursor;
-			reports.extend(rule_reports);
+			// Trigger rule
+			cursor = rule.on_match(unit, &next_cursor, rule_data);
 		}
 		// Add leftover as text
-		self.add_text(unit, cursor..cursor.at(cursor.source.content().len()));
-
-		reports
+		let end_cursor = cursor.at(cursor.source().content().len());
+		self.add_text(unit, cursor..end_cursor);
 	}
 }
 
@@ -182,7 +168,5 @@ pub trait ParserRuleAccessor {
 }
 
 impl ParserRuleAccessor for Parser {
-    fn iter_rules(&self) -> Iter<Box<dyn Rule>> {
-        self.rules.iter()
-    }
+	fn iter_rules(&self) -> Iter<Box<dyn Rule>> { self.rules.iter() }
 }

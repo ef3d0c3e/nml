@@ -259,12 +259,21 @@ impl SourcePosition for Arc<dyn Source> {
 /// Represents a position in a specific file.
 #[derive(Debug, Clone)]
 pub struct Cursor {
-	pub pos: usize,
-	pub source: Arc<dyn Source>,
+	pos: usize,
+	source: Arc<dyn Source>,
 }
 
 impl Cursor {
 	pub fn new(pos: usize, source: Arc<dyn Source>) -> Self { Self { pos, source } }
+
+	pub fn pos(&self) -> usize {
+		self.pos
+	}
+
+	pub fn source(&self) -> Arc<dyn Source>
+	{
+		self.source.clone()
+	}
 
 	/// Creates [`Cursor`] at `new_pos` in the same [`Source`]
 	pub fn at(&self, new_pos: usize) -> Self {
@@ -273,6 +282,7 @@ impl Cursor {
 			source: self.source.clone(),
 		}
 	}
+
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -368,7 +378,7 @@ impl Token {
 	pub fn source(&self) -> Arc<dyn Source> { self.source.clone() }
 
 	pub fn content(&self) -> &str {
-		&self.source.content().as_str()[&self.range]
+		&self.source.content().as_str()
 	}
 
 	/// Get the start byte position of the token

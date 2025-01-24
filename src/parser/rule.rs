@@ -79,7 +79,7 @@ pub trait Rule: Downcast {
 	///
 	/// # Parameters
 	///
-	/// `mode` Speficies the current parser mode. Some elements should behave differently for different
+	/// `mode` Specifies the current parser mode. Some elements should behave differently for different
 	/// modes. For instance mode `paragraph_only` makes the rule for `Section`s to be ignored.
 	fn next_match(
 		&self,
@@ -103,7 +103,7 @@ pub trait Rule: Downcast {
 		unit: &mut TranslationUnit<'u>,
 		cursor: &Cursor,
 		match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report>);
+	) -> Cursor;
 
 	/// Registers lua bindings for this rule
 	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
@@ -147,7 +147,7 @@ pub trait RegexRule {
 		unit: &mut TranslationUnit<'u>,
 		token: Token,
 		captures: regex::Captures,
-	) -> Vec<Report>;
+	);
 
 	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
 }
@@ -190,7 +190,7 @@ impl<T: RegexRule + 'static> Rule for T {
 		unit: &mut TranslationUnit<'u>,
 		cursor: &Cursor,
 		match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report>) {
+	) -> Cursor {
 		let content = cursor.source.content();
 		let index = match_data.downcast::<usize>().unwrap();
 		let re = &self.regexes()[*index];
@@ -199,10 +199,8 @@ impl<T: RegexRule + 'static> Rule for T {
 		let token = Token::new(captures.get(0).unwrap().range(), cursor.source.clone());
 
 		let token_end = token.end();
-		(
-			cursor.at(token_end),
-			self.on_regex_match(*index, unit, token, captures),
-		)
+		self.on_regex_match(*index, unit, token, captures);
+		cursor.at(token_end)
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {

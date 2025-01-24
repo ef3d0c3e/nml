@@ -7,11 +7,11 @@ use mlua::Lua;
 use crate::document::document::Document;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::CTX;
-use crate::parser::parser::ParseMode;
 use crate::parser::parser::ParserState;
 use crate::parser::reports::Report;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
+use crate::parser::state::ParseMode;
 use crate::parser::translation::TranslationAccessors;
 use crate::parser::translation::TranslationUnit;
 
@@ -39,7 +39,7 @@ impl Rule for TextRule {
 		_unit: &mut TranslationUnit,
 		_cursor: &Cursor,
 		_match_data: Box<dyn Any>,
-	) -> (Cursor, Vec<Report>) {
+	) -> Cursor {
 		panic!("Text cannot match");
 	}
 

@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use mlua::IntoLua;
 use mlua::Lua;
@@ -32,7 +33,7 @@ pub struct KernelContext<'u> {
 impl<'u> KernelContext<'u> {
 	pub fn new(
 		location: Token,
-		unit: &'u TranslationUnit<'u>,
+		unit: &'u mut TranslationUnit<'u>,
 	) -> Self {
 		Self {
 			location,
@@ -43,20 +44,11 @@ impl<'u> KernelContext<'u> {
 	}
 }
 
-impl<'u> UserData for KernelContext<'u> {
-    fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(fields: &mut F) {
-
-	}
-
-    fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-		methods.add_method("get_location", |_, ctx, ()| {
-			Ok(ctx.location.clone())
-		});
-		methods.add_method("get_unit", |_, ctx, ()| {
-			Ok(ctx.unit)
-		});
-	}
+pub struct ContextWrapper<'u> {
+	context: KernelContext<'u>,
 }
+
+impl<'u> UserData for ContextWrapper<'u> {}
 
 thread_local! {
 	pub static CTX: RefCell<Option<&'static mut KernelContext<'static>>> = const { RefCell::new(None) };
@@ -110,21 +102,23 @@ impl Kernel {
 
 	/// Runs a procedure with a context
 	///
-	/// This is the only way lua code shoule be ran, because exported
+	/// This is the only way lua code should be ran, because exported
 	/// functions may require the context in order to operate
-	pub fn run_with_context<T, F>(&self, context: &mut KernelContext, f: F) -> Result<T, mlua::Error>
-	where
-		F: FnOnce(&Lua) -> T,
+	pub fn run_with_context<'lua, F, R>(&'lua self, ctx: KernelContext<'lua>, f: F) -> Result<R, mlua::Error>
+		where F: FnOnce(&'lua Lua) -> R
 	{
-		let data = self.lua.create_userdata(context)?;
-		self.lua.globals().set("nml.ctx", data);
+		let ctx_wrapper = ContextWrapper { context: unsafe { std::mem::transmute(ctx) } };
+		self.lua.globals().set("nml.ctx", ctx_wrapper)?;
+		
+		let val = f(&self.lua);
 
-		let ret = f(&self.lua);
-
-		Ok(ret)
+		return Ok(val);
 	}
 
 	/// Exports a table to lua
+	///
+	/// This function exports a table to lua. The exported table is available under `nml.tables.{name}`.
+	/// This function will overwrite any previously defined table using the same name.
 	pub fn export_table<'lua, K: IntoLua<'lua>>(
 		&'lua self,
 		name: &str,
@@ -138,19 +132,6 @@ impl Kernel {
 
 		Ok(())
 	}
-
-	pub fn with_context<'lua, 'ctx: 'lua, F>(&'lua self, f: F) -> Result<(), mlua::Error>
-		where F: FnOnce(RefMut<'ctx, KernelContext<'ctx>>) -> RefMut<'ctx, KernelContext<'ctx>>
-	{
-        // Retrieve the user data stored in `globals()`.
-        let mut ctx_userdata: mlua::AnyUserData = self.lua.globals().get("nml.context")?;
-        // Borrow it as &ContextType or &mut ContextType
-		{
-			let borrow = ctx_userdata.borrow_mut::<KernelContext>()?;
-			f(borrow);
-		};
-		return Ok(());
-	}
 }
 
 /// Holds all the lua kernels
@@ -159,6 +140,14 @@ pub struct KernelHolder {
 }
 
 impl KernelHolder {
+	pub fn new(parser: &Parser) -> Self {
+		let mut kernels = HashMap::default();
+		// Add default kernel
+		kernels.insert("main", Kernel::new(parser));
+		Self {
+			kernels
+		}
+	}
 	pub fn get(&self, kernel_name: &str) -> Option<&Kernel> { self.kernels.get(kernel_name) }
 
 	pub fn insert(&mut self, kernel_name: String, kernel: Kernel) {

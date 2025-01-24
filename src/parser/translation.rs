@@ -1,3 +1,4 @@
+use std::borrow::BorrowMut;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
@@ -49,8 +50,22 @@ pub struct TranslationUnit<'u> {
 	elem_styles: StyleHolder,
 	/// User-defined styles
 	custom_styles: CustomStyleHolder,
+
+	reports: Vec<Report>,
 }
 
+///
+/// # Scope
+///
+/// The translation unit will manage scope accordingly to specific objects
+///
+/// ## References and Variables
+///
+/// The lifetime and scoping of variables and references follow the same set of rules:
+///  * When defined, they will overwrite any previously defined variable or reference (in the same scope) using the same key.
+///  * Calling a variable or reference will result in a recursive search in the current scope and all parent of that scope.
+/// Whenever a variable is defined, it will overwrite the previously defined variable, if they have the same key in the current scope.
+///
 impl<'u> TranslationUnit<'u> {
 	/// Creates a new translation unit
 	///
@@ -61,10 +76,14 @@ impl<'u> TranslationUnit<'u> {
 		with_lsp: bool,
 		with_colors: bool,
 	) -> Self {
-		let scope = Rc::new(RefCell::new(Scope::new(None, source, ParseMode::default())));
+		let scope = Rc::new(RefCell::new(Scope::new(
+			None,
+			source.clone(),
+			ParseMode::default(),
+		)));
 		let mut s = Self {
 			parser,
-			source: source.clone(),
+			source: source,
 			colors: with_colors
 				.then(ReportColors::with_colors)
 				.unwrap_or(ReportColors::without_colors()),
@@ -73,11 +92,13 @@ impl<'u> TranslationUnit<'u> {
 			current_scope: scope,
 			lsp: with_lsp.then(|| RefCell::new(LangServerData::default())),
 
-			lua_kernels: KernelHolder::default(),
+			lua_kernels: KernelHolder::new(parser),
 			layouts: LayoutHolder::default(),
 			blocks: BlockHolder::default(),
 			elem_styles: StyleHolder::default(),
 			custom_styles: CustomStyleHolder::default(),
+
+			reports: Vec::default(),
 		};
 
 		s.lua_kernels
@@ -85,7 +106,9 @@ impl<'u> TranslationUnit<'u> {
 		s
 	}
 
-	pub fn scope(&self) -> Rc<RefCell<Scope>> { self.current_scope.clone() }
+	pub fn scope<'s>(&'s self) -> Ref<'s, Scope> { (*self.current_scope).borrow() }
+
+	pub fn scope_mut<'s>(&'s self) -> RefMut<'s, Scope> { (*self.current_scope).borrow_mut() }
 
 	/// Runs procedure with a newly created scope from a source file
 	pub fn with_child<F, R>(&mut self, source: Arc<dyn Source>, parse_mode: ParseMode, f: F) -> R
@@ -111,11 +134,11 @@ impl<'u> TranslationUnit<'u> {
 
 	/// Consumes the translation unit with it's current scope
 	pub fn consume(mut self) -> Self {
-		let reports = self.parser.parse(&mut self);
+		self.parser.parse(&mut self);
 		if let Some(lsp) = &mut self.lsp {
 			// TODO: send to lsp
 		} else {
-			Report::reports_to_stdout(&self.colors, reports);
+			Report::reports_to_stdout(&self.colors, std::mem::replace(&mut self.reports, vec![]));
 		}
 
 		self
@@ -124,14 +147,16 @@ impl<'u> TranslationUnit<'u> {
 
 pub trait TranslationAccessors {
 	/// Adds content to the translation unit
-	///
-	/// Method [`Element::scoped`] is called to inform the element that it can be added to a scope
-	fn add_content(&mut self, elem: Arc<dyn Element>) -> Result<(), Report>;
+	fn add_content(&mut self, elem: Arc<dyn Element>);
+
+	/// Adds a new report to this translation unit
+	fn report(&mut self, report: Report);
 }
 
 impl TranslationAccessors for TranslationUnit<'_> {
-	fn add_content(&mut self, elem: Arc<dyn Element>) -> Result<(), Report> {
+	fn add_content(&mut self, elem: Arc<dyn Element>) {
 		self.content.push((self.current_scope.clone(), elem));
-		Ok(())
 	}
+
+	fn report(&mut self, report: Report) { self.reports.push(report); }
 }
