@@ -143,7 +143,7 @@ impl KernelHolder {
 	pub fn new(parser: &Parser) -> Self {
 		let mut kernels = HashMap::default();
 		// Add default kernel
-		kernels.insert("main", Kernel::new(parser));
+		kernels.insert("main".into(), Kernel::new(parser));
 		Self {
 			kernels
 		}

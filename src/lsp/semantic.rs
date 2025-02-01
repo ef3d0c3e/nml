@@ -1,5 +1,6 @@
 use std::cell::Ref;
 use std::cell::RefCell;
+use std::cell::RefMut;
 use std::collections::VecDeque;
 use std::ops::Range;
 use std::sync::Arc;
@@ -191,8 +192,8 @@ pub struct Tokens {
 	pub media_props_sep: (u32, u32),
 }
 
-impl Tokens {
-	pub fn new() -> Self {
+impl Default for Tokens {
+	fn default() -> Self {
 		Self {
 			section_heading: token!("number"),
 			section_reference: token!("enum", "async"),
@@ -320,20 +321,20 @@ impl SemanticsData {
 
 /// Temporary data returned by [`Self::from_source_impl`]
 #[derive(Debug)]
-pub struct Semantics<'a> {
-	pub(self) sems: Ref<'a, SemanticsData>,
+pub struct Semantics<'lsp> {
+	pub(self) sems: &'lsp SemanticsData,
 	// The source used when resolving the parent source
 	pub(self) original_source: Arc<dyn Source>,
 	/// The resolved parent source
 	pub(self) source: Arc<dyn Source>,
 }
 
-impl<'a> Semantics<'a> {
+impl<'lsp> Semantics<'lsp> {
 	fn from_source_impl(
 		source: Arc<dyn Source>,
-		lsp: &'a Option<RefCell<LangServerData>>,
+		lsp: &'lsp LangServerData,
 		original_source: Arc<dyn Source>,
-	) -> Option<(Self, Ref<'a, Tokens>)> {
+	) -> Option<Self> {
 		if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
 			&& source.downcast_ref::<VirtualSource>().is_some()
 		{
@@ -348,21 +349,13 @@ impl<'a> Semantics<'a> {
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if source.downcast_ref::<SourceFile>().is_some() {
-			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LangServerData| {
-				lsp.semantic_data.get(&(source.clone()))
-			})
-			.ok()
+			return lsp.semantic_data.get(&(source.clone()))
 			.map(|sems| {
-				(
 					Self {
 						sems,
 						source,
 						original_source,
-					},
-					Ref::map(lsp.as_ref().unwrap().borrow(), |lsp: &LangServerData| {
-						&lsp.semantic_tokens
-					}),
-				)
+					}
 			});
 		}
 		None
@@ -370,23 +363,20 @@ impl<'a> Semantics<'a> {
 
 	pub fn from_source(
 		source: Arc<dyn Source>,
-		lsp: &'a Option<RefCell<LangServerData>>,
-	) -> Option<(Self, Ref<'a, Tokens>)> {
-		if lsp.is_none() {
-			return None;
-		}
+		lsp: &'lsp LangServerData,
+	) -> Option<Semantics> {
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
 	/// Method that should be called at the end of parsing
 	///
 	/// This function will process the end of the semantic queue
-	pub fn on_document_end(lsp: &'a Option<RefCell<LangServerData>>, source: Arc<dyn Source>) {
+	pub fn on_document_end(lsp: &'lsp LangServerData, source: Arc<dyn Source>) {
 		if source.content().is_empty() {
 			return;
 		}
 		let pos = source.original_position(source.content().len() - 1).1;
-		if let Some((sems, _)) = Self::from_source(source, lsp) {
+		if let Some(sems) = Self::from_source(source, lsp) {
 			sems.process_queue(pos);
 		}
 	}
@@ -444,7 +434,10 @@ impl<'a> Semantics<'a> {
 		}
 	}
 
-	/// Add a semantic token to be processed instantly
+	/// Add a semantic token to be processed immediately
+	///
+	/// Note that this will move the cursor to the start of the range, thus making it impossible to add another token before this one.
+	/// Use the [`Self::add_to_queue`] if you need to be able to add other tokens before a new token.
 	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
 		let range = self.original_source.original_range(range).1;
 		self.process_queue(range.start);

@@ -163,13 +163,15 @@ impl<T: RegexRule + 'static> Rule for T {
 		mode: &ParseMode,
 		cursor: &Cursor,
 	) -> Option<(usize, Box<dyn Any>)> {
-		let content = cursor.source.content();
+		let source = cursor.source();
+		let content = source.content();
+
 		let mut found: Option<(usize, usize)> = None;
 		self.regexes().iter().enumerate().for_each(|(id, re)| {
 			if !RegexRule::enabled(self, mode, id) {
 				return;
 			}
-			if let Some(m) = re.find_at(content.as_str(), cursor.pos) {
+			if let Some(m) = re.find_at(content.as_str(), cursor.pos()) {
 				found = found
 					.map(|(f_pos, f_id)| {
 						if f_pos > m.start() {
@@ -191,12 +193,14 @@ impl<T: RegexRule + 'static> Rule for T {
 		cursor: &Cursor,
 		match_data: Box<dyn Any>,
 	) -> Cursor {
-		let content = cursor.source.content();
+		let source = cursor.source();
+		let content = source.content();
+
 		let index = match_data.downcast::<usize>().unwrap();
 		let re = &self.regexes()[*index];
 
-		let captures = re.captures_at(content.as_str(), cursor.pos).unwrap();
-		let token = Token::new(captures.get(0).unwrap().range(), cursor.source.clone());
+		let captures = re.captures_at(content.as_str(), cursor.pos()).unwrap();
+		let token = Token::new(captures.get(0).unwrap().range(), cursor.source());
 
 		let token_end = token.end();
 		self.on_regex_match(*index, unit, token, captures);

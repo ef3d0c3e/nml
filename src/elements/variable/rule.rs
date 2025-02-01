@@ -8,6 +8,7 @@ use lua::kernel::CTX;
 use mlua::Function;
 use mlua::Lua;
 use parser::parser::ParseMode;
+use parser::translation::TranslationUnit;
 use regex::Regex;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -132,15 +133,14 @@ impl RegexRule for VariableRule {
 
 	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
 
-	fn on_regex_match(
+	fn on_regex_match<'u>(
 		&self,
 		_: usize,
-		state: &ParserState,
-		document: &dyn Document,
+		unit: &mut TranslationUnit<'u>,
 		token: Token,
 		matches: regex::Captures,
-	) -> Vec<Report> {
-		let mut reports = vec![];
+	)
+	{
 		// [Optional] variable kind
 		let var_kind = match matches.get(1) {
 			Some(kind) => {
@@ -179,7 +179,7 @@ impl RegexRule for VariableRule {
 								})
 						))
 					);
-					return reports;
+					return;
 				}
 
 				r.unwrap().0
@@ -204,7 +204,7 @@ impl RegexRule for VariableRule {
 						),
 					);
 
-					return reports;
+					return;
 				}
 			},
 			_ => panic!("Unknown variable name"),
@@ -227,7 +227,7 @@ impl RegexRule for VariableRule {
 						),
 					);
 
-					return reports;
+					return;
 				}
 			},
 			_ => panic!("Invalid variable value"),
@@ -258,7 +258,7 @@ impl RegexRule for VariableRule {
 					),
 				);
 
-				return reports;
+				return;
 			}
 		}
 

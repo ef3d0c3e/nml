@@ -19,7 +19,7 @@ impl Parser {
 	/// Constructs a new parser that will automatically fetch all exported rules
 	pub fn new() -> Self {
 		Self {
-			rules: super::rule::get_rule_registry().iter().collect::<Vec<_>>(),
+			rules: super::rule::get_rule_registry(),
 		}
 	}
 
@@ -41,7 +41,7 @@ impl Parser {
 	/// returns it. If `next_match` starts on an escaped character i.e `\\`,
 	/// then it starts over to find another match for that rule.
 	/// In case multiple rules have the same `next_match`, the rules that are
-	/// defined first in the parser are prioritized. See [Parser::add_rule] for
+	/// defined first in the parser are prioritized. See [`Rule::previous`] for
 	/// information on how to prioritize rules.
 	///
 	/// Notes that the result of every call to [`Rule::next_match`] gets stored
@@ -160,6 +160,11 @@ impl Parser {
 		// Add leftover as text
 		let end_cursor = cursor.at(cursor.source().content().len());
 		self.add_text(unit, cursor..end_cursor);
+
+		// Trigger the end of document for the semantics
+		//unit.with_lsp(|lsp| {
+		//	lsp.
+		//});
 	}
 }
 

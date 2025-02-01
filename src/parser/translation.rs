@@ -37,7 +37,7 @@ pub struct TranslationUnit<'u> {
 	entry_scope: Rc<RefCell<Scope>>,
 	/// Current scope of the translation unit
 	current_scope: Rc<RefCell<Scope>>,
-	/// Lsp data for this unit
+	/// Lsp data for this unit (shared with children scopes)
 	lsp: Option<RefCell<LangServerData>>,
 
 	/// Available kernels for this translation unit
