@@ -221,7 +221,7 @@ pub mod macros {
 
 	#[macro_export]
 	macro_rules! report_err {
-		($reports:expr, $source:expr, $message:expr, $($tail:tt)*) => {{
+		($unit:expr, $source:expr, $message:expr, $($tail:tt)*) => {{
 			let mut r = Report {
 				kind: ReportKind::Error,
 				source: $source,
@@ -231,13 +231,13 @@ pub mod macros {
 				spans: vec![],
 			};
 			report_label!(r, $($tail)*);
-			$reports.push(r);
+			$unit.add_report(r);
 		}}
 	}
 
 	#[macro_export]
 	macro_rules! report_warn {
-		($reports:expr, $source:expr, $message:expr, $($tail:tt)*) => {{
+		($unit:expr, $source:expr, $message:expr, $($tail:tt)*) => {{
 			let mut r = Report {
 				kind: ReportKind::Warning,
 				source: $source,
@@ -247,7 +247,7 @@ pub mod macros {
 				spans: vec![],
 			};
 			report_label!(r, $($tail)*);
-			$reports.push(r);
+			$unit.add_report(r);
 		}}
 	}
 

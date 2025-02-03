@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 /// Internal name for variables
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct VariableName(String);
+pub struct VariableName(pub String);
 
 impl core::fmt::Display for VariableName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

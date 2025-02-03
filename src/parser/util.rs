@@ -8,11 +8,11 @@ use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::elements::paragraph::elem::Paragraph;
 
-use super::parser::ParseMode;
-use super::parser::ParserState;
 use super::source::Source;
 use super::source::Token;
 use super::source::VirtualSource;
+use super::state::ParseMode;
+use super::translation::TranslationUnit;
 
 /// Processes text for escape characters and paragraphing
 pub fn process_text(document: &dyn Document, content: &str) -> String {
@@ -201,6 +201,15 @@ pub fn escape_text<S: AsRef<str>>(
 	(0..escaped / 2).for_each(|_| processed.push('\\'));
 
 	processed
+}
+
+pub fn parse_paragraph<'u>(unit: &mut TranslationUnit<'u>, source: Arc<dyn Source>) -> Result<(), String> {
+
+	unit.with_child(source, ParseMode { paragraph_only: true }, |child| {
+
+	});
+
+	Ok(())
 }
 
 /// Parses source into a single paragraph

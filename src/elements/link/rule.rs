@@ -9,15 +9,14 @@ use lua::kernel::CTX;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
-use parser::parser::ParseMode;
-use parser::parser::ParserState;
 use parser::rule::RegexRule;
 use parser::source::Token;
 use parser::source::VirtualSource;
+use parser::state::ParseMode;
+use parser::translation::TranslationUnit;
 use parser::util::escape_source;
 use parser::util::parse_paragraph;
 use parser::util::process_text;
-use regex::Captures;
 use regex::Regex;
 
 use super::elem::Link;
@@ -44,26 +43,25 @@ impl RegexRule for LinkRule {
 
 	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
-	fn on_regex_match<'a>(
+	fn on_regex_match<'u>(
 		&self,
 		_: usize,
-		state: &ParserState,
-		document: &'a (dyn Document<'a> + 'a),
+		unit: &mut TranslationUnit<'u>,
 		token: Token,
-		matches: Captures,
-	) -> Vec<Report> {
+		matches: regex::Captures,
+	) {
 		let mut reports = vec![];
 
 		let link_display = match matches.get(1) {
 			Some(display) => {
 				if display.as_str().is_empty() {
 					report_err!(
-						&mut reports,
+						unit,
 						token.source(),
 						"Empty Link Display".into(),
 						span(display.range(), "Link display is empty".into())
 					);
-					return reports;
+					return;
 				}
 				let display_source = escape_source(
 					token.source(),
@@ -74,29 +72,33 @@ impl RegexRule for LinkRule {
 				);
 				if display_source.content().is_empty() {
 					report_err!(
-						&mut reports,
+						unit,
 						token.source(),
 						"Empty Link Display".into(),
 						span(
 							display.range(),
 							format!(
 								"Link name is empty. Once processed, `{}` yields `{}`",
-								display.as_str().fg(state.parser.colors().highlight),
-								display_source.fg(state.parser.colors().highlight),
+								display.as_str().fg(unit.colors().highlight),
+								display_source.fg(unit.colors().highlight),
 							)
 						)
 					);
-					return reports;
+					return;
 				}
 
-				if let Some((sems, tokens)) =
-					Semantics::from_source(token.source(), &state.shared.lsp)
-				{
-					sems.add(
-						display.range().start - 1..display.range().start,
-						tokens.link_display_sep,
-					);
-				}
+
+				unit.with_lsp(|lsp|
+					lsp.with_semantics(token.source(), |sems, tokens| {
+						sems.add(
+							display.range().start - 1..display.range().start,
+							tokens.link_display_sep,
+						);
+					}));
+
+				unit.with_child(display_source, ParseMode { paragraph_only: true }, |s| {
+					unit.parser.parse(unit);
+				});
 				match parse_paragraph(state, display_source, document) {
 					Err(err) => {
 						report_err!(

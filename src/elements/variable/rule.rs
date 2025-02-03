@@ -1,13 +1,14 @@
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use ariadne::Fmt;
+use document::variable::VariableName;
 use lsp::definition;
 use lsp::hints::Hints;
 use lsp::semantic::Semantics;
 use lua::kernel::CTX;
 use mlua::Function;
 use mlua::Lua;
-use parser::parser::ParseMode;
+use parser::state::ParseMode;
 use parser::translation::TranslationUnit;
 use regex::Regex;
 use std::rc::Rc;
@@ -40,6 +41,12 @@ impl FromStr for VariableKind {
 	}
 }
 
+//#[object]
+struct /* trait object */ Source
+{
+	parent: Option<Arc<Source>>
+}
+
 #[auto_registry::auto_registry(registry = "rules")]
 pub struct VariableRule {
 	re: [Regex; 1],
@@ -59,14 +66,14 @@ impl VariableRule {
 		match self.kinds[kind].0.as_str() {
 			"" => Ok(Rc::new(BaseVariable::new(
 				location,
-				name,
+				VariableName(name),
 				value_token,
 				value,
 			))),
 			"'" => {
 				match std::fs::canonicalize(value.as_str()) // TODO: not canonicalize
 				{
-					Ok(path) => Ok(Rc::new(PathVariable::new(location, name, value_token, path))),
+					Ok(path) => Ok(Rc::new(PathVariable::new(location, VariableName(name), value_token, path))),
 					Err(e) => Err(format!("Unable to canonicalize path `{}`: {}",
 							value.fg(colors.highlight),
 							e))
@@ -154,14 +161,14 @@ impl RegexRule for VariableRule {
 				// Unknown kind specified
 				if r.is_none() {
 					report_err!(
-						&mut reports,
+						unit,
 						token.source(),
 						"Unknowm Variable Kind".into(),
 						span(
 							kind.range(),
 							format!(
 								"Variable kind `{}` is unknown",
-								kind.as_str().fg(state.parser.colors().highlight)
+								kind.as_str().fg(unit.colors().highlight)
 							)
 						),
 						help(format!(
@@ -172,8 +179,8 @@ impl RegexRule for VariableRule {
 								.fold("".to_string(), |acc, (char, name)| {
 									acc + format!(
 										"\n - `{}` : {}",
-										char.fg(state.parser.colors().highlight),
-										name.fg(state.parser.colors().info)
+										char.fg(unit.colors().highlight),
+										name.fg(unit.colors().info)
 									)
 									.as_str()
 								})
@@ -188,18 +195,18 @@ impl RegexRule for VariableRule {
 		};
 
 		let var_name = match matches.get(2) {
-			Some(name) => match validate_name(state.parser.colors(), name.as_str()) {
+			Some(name) => match validate_name(unit.colors(), name.as_str()) {
 				Ok(var_name) => var_name,
 				Err(msg) => {
 					report_err!(
-						&mut reports,
+						unit,
 						token.source(),
 						"Invalid Variable Name".into(),
 						span(
 							name.range(),
 							format!(
 								"Variable name `{}` is not allowed. {msg}",
-								name.as_str().fg(state.parser.colors().highlight)
+								name.as_str().fg(unit.colors().highlight)
 							)
 						),
 					);
@@ -215,14 +222,14 @@ impl RegexRule for VariableRule {
 				Ok(var_value) => (Token::new(value.range(), token.source()), var_value),
 				Err(msg) => {
 					report_err!(
-						&mut reports,
+						unit,
 						token.source(),
 						"Invalid Variable Value".into(),
 						span(
 							value.range(),
 							format!(
 								"Variable value `{}` is not allowed. {msg}",
-								value.as_str().fg(state.parser.colors().highlight)
+								value.as_str().fg(unit.colors().highlight)
 							)
 						),
 					);
@@ -234,7 +241,7 @@ impl RegexRule for VariableRule {
 		};
 
 		match self.make_variable(
-			state.parser.colors(),
+			unit.colors(),
 			token.clone(),
 			var_kind,
 			var_name.to_string(),
@@ -343,14 +350,13 @@ impl RegexRule for VariableSubstitutionRule {
 
 	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
 
-	fn on_regex_match<'a>(
+	fn on_regex_match<'u>(
 		&self,
 		_index: usize,
-		state: &ParserState,
-		document: &'a dyn Document<'a>,
+		unit: &'u mut TranslationUnit,
 		token: Token,
 		matches: regex::Captures,
-	) -> Vec<Report> {
+	) {
 		let mut reports = vec![];
 
 		let variable = match matches.get(1) {

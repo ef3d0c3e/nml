@@ -1,3 +1,4 @@
+use core::slice::SlicePattern;
 use std::borrow::BorrowMut;
 use std::cell::Ref;
 use std::cell::RefCell;
@@ -25,7 +26,7 @@ use super::style::StyleHolder;
 /// Stores the data required by the parser
 pub struct TranslationUnit<'u> {
 	/// Parser for this translation unit
-	parser: &'u Parser,
+	pub parser: &'u Parser,
 	/// Entry point of this translation unit
 	source: Arc<dyn Source>,
 	/// Reporting colors defined for this translation unit
@@ -80,6 +81,7 @@ impl<'u> TranslationUnit<'u> {
 			None,
 			source.clone(),
 			ParseMode::default(),
+			0,
 		)));
 		let mut s = Self {
 			parser,
@@ -115,21 +117,21 @@ impl<'u> TranslationUnit<'u> {
 	where
 		F: FnOnce(Rc<RefCell<Scope>>) -> R,
 	{
-		self.current_scope = self.current_scope.new_child(source, parse_mode);
+		let prev_scope = self.current_scope.clone();
 
-		f(self.current_scope.clone())
+		self.current_scope = prev_scope.new_child(source, parse_mode);
+		let ret = f(self.current_scope.clone());
+		self.current_scope = prev_scope;
+
+		ret
 	}
 
-	/// Runs procedure with the language server's if language server processing is enabled
+	/// Runs procedure with the language server, if language server processing is enabled
 	pub fn with_lsp<F, R>(&self, f: F) -> Option<R>
 	where
 		F: FnOnce(RefMut<'_, LangServerData>) -> R,
 	{
-		let Some(data) = &self.lsp else {
-			return None;
-		};
-
-		Some(f(data.borrow_mut()))
+		self.lsp.as_ref().map(|data| f(data.borrow_mut()))
 	}
 
 	/// Consumes the translation unit with it's current scope
@@ -143,6 +145,14 @@ impl<'u> TranslationUnit<'u> {
 
 		self
 	}
+
+	pub fn add_report(&mut self, report: Report) {
+		self.reports.push(report);
+	}
+
+	pub fn colors(&self) -> &ReportColors {
+		&self.colors
+	}
 }
 
 pub trait TranslationAccessors {
@@ -151,12 +161,22 @@ pub trait TranslationAccessors {
 
 	/// Adds a new report to this translation unit
 	fn report(&mut self, report: Report);
+
+	/// Gets the content associated with a scope
+	fn content(&self, scope: Rc<RefCell<Scope>>) -> &[(Rc<RefCell<Scope>>, Arc<dyn Element>)];
 }
 
 impl TranslationAccessors for TranslationUnit<'_> {
 	fn add_content(&mut self, elem: Arc<dyn Element>) {
+		self.current_scope.add_content();
 		self.content.push((self.current_scope.clone(), elem));
 	}
 
 	fn report(&mut self, report: Report) { self.reports.push(report); }
+
+	fn content(&self, scope: Rc<RefCell<Scope>>) -> &[(Rc<RefCell<Scope>>, Arc<dyn Element>)]
+	{
+		let range = scope.borrow().range.clone();
+		&(self.content).as_slice()[range]
+	}
 }
