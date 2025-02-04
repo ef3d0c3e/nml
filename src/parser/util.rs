@@ -12,6 +12,8 @@ use super::source::Source;
 use super::source::Token;
 use super::source::VirtualSource;
 use super::state::ParseMode;
+use super::state::ParserState;
+use super::translation::TranslationAccessors;
 use super::translation::TranslationUnit;
 
 /// Processes text for escape characters and paragraphing
@@ -205,7 +207,13 @@ pub fn escape_text<S: AsRef<str>>(
 
 pub fn parse_paragraph<'u>(unit: &mut TranslationUnit<'u>, source: Arc<dyn Source>) -> Result<(), String> {
 
-	unit.with_child(source, ParseMode { paragraph_only: true }, |child| {
+	unit.with_child(source, ParseMode { paragraph_only: true }, |unit, scope| {
+		// Parse into scope
+		unit.parser.parse(unit);
+
+		// Get parsed content
+		let parsed_content = unit.content(scope);
+
 
 	});
 
@@ -214,6 +222,7 @@ pub fn parse_paragraph<'u>(unit: &mut TranslationUnit<'u>, source: Arc<dyn Sourc
 
 /// Parses source into a single paragraph
 /// If source contains anything but a single paragraph, an error is returned
+/*
 pub fn parse_paragraph<'a>(
 	state: &ParserState,
 	source: Arc<dyn Source>,
@@ -246,6 +255,7 @@ pub fn parse_paragraph<'a>(
 	let paragraph = parsed.content().borrow_mut().pop().unwrap();
 	Ok(paragraph.downcast::<Paragraph>().unwrap())
 }
+*/
 
 #[cfg(test)]
 mod tests {

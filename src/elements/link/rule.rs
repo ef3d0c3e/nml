@@ -88,13 +88,14 @@ impl RegexRule for LinkRule {
 				}
 
 
-				unit.with_lsp(|lsp|
+				unit.with_lsp(|lsp| {
 					lsp.with_semantics(token.source(), |sems, tokens| {
 						sems.add(
 							display.range().start - 1..display.range().start,
 							tokens.link_display_sep,
 						);
-					}));
+					});
+				});
 
 				unit.with_child(display_source, ParseMode { paragraph_only: true }, |s| {
 					unit.parser.parse(unit);

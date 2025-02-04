@@ -4,7 +4,6 @@ use std::sync::Arc;
 use regex::Regex;
 
 use crate::document::document::Document;
-use crate::parser::parser::ParserState;
 use crate::parser::reports::Report;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
@@ -40,7 +39,7 @@ impl Rule for ParagraphRule {
 	) -> Option<(usize, Box<dyn Any>)>
 	{
 		self.re
-			.find_at(cursor.source.content(), cursor.pos)
+			.find_at(cursor.source().content(), cursor.pos())
 			.map(|m| (m.start(), Box::new(()) as Box<dyn Any>))
 	}
 
@@ -50,13 +49,13 @@ impl Rule for ParagraphRule {
 		cursor: &Cursor,
 		_match_data: Box<dyn Any>,
 	) -> Cursor {
-		let end_cursor = match self.re.captures_at(cursor.source.content(), cursor.pos) {
+		let end_cursor = match self.re.captures_at(cursor.source().content(), cursor.pos()) {
 			None => panic!("Unknown error"),
 			Some(capture) => cursor.at(capture.get(0).unwrap().end() - 1),
 		};
 
 		unit.add_content(Arc::new(Paragraph {
-			location: Token::new(cursor.pos..end_cursor.pos, cursor.source.clone()),
+			location: Token::new(cursor.pos()..end_cursor.pos(), cursor.source().clone()),
 			content: Vec::new(),
 		}));
 

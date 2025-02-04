@@ -115,12 +115,12 @@ impl<'u> TranslationUnit<'u> {
 	/// Runs procedure with a newly created scope from a source file
 	pub fn with_child<F, R>(&mut self, source: Arc<dyn Source>, parse_mode: ParseMode, f: F) -> R
 	where
-		F: FnOnce(Rc<RefCell<Scope>>) -> R,
+		F: FnOnce(&mut Self, Rc<RefCell<Scope>>) -> R,
 	{
 		let prev_scope = self.current_scope.clone();
 
 		self.current_scope = prev_scope.new_child(source, parse_mode);
-		let ret = f(self.current_scope.clone());
+		let ret = f(self, self.current_scope.clone());
 		self.current_scope = prev_scope;
 
 		ret
