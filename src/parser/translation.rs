@@ -6,6 +6,7 @@ use std::cell::RefMut;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::document::element::ContainerElement;
 use crate::document::element::Element;
 use crate::elements::block::data::BlockHolder;
 use crate::elements::customstyle::custom::CustomStyleHolder;
@@ -31,9 +32,6 @@ pub struct TranslationUnit<'u> {
 	source: Arc<dyn Source>,
 	/// Reporting colors defined for this translation unit
 	colors: ReportColors,
-	/// Resulting AST
-	/// Elements are stored using Arc so they can be passed to an async task
-	content: Vec<(Rc<RefCell<Scope>>, Arc<dyn Element>)>,
 	/// Entry scope of the translation unit
 	entry_scope: Rc<RefCell<Scope>>,
 	/// Current scope of the translation unit
@@ -113,13 +111,13 @@ impl<'u> TranslationUnit<'u> {
 	pub fn scope_mut<'s>(&'s self) -> RefMut<'s, Scope> { (*self.current_scope).borrow_mut() }
 
 	/// Runs procedure with a newly created scope from a source file
-	pub fn with_child<F, R>(&mut self, source: Arc<dyn Source>, parse_mode: ParseMode, f: F) -> R
+	pub fn with_child<F, R>(&mut self, source: Arc<dyn Source>, parse_mode: ParseMode, append_scope: bool, f: F) -> R
 	where
-		F: FnOnce(&mut Self, Rc<RefCell<Scope>>) -> R,
+		F: FnOnce(&mut TranslationUnit<'u>, Rc<RefCell<Scope>>) -> R,
 	{
 		let prev_scope = self.current_scope.clone();
 
-		self.current_scope = prev_scope.new_child(source, parse_mode);
+		self.current_scope = prev_scope.new_child(source, parse_mode, append_scope);
 		let ret = f(self, self.current_scope.clone());
 		self.current_scope = prev_scope;
 

@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -8,6 +10,8 @@ use crate::document::document::DocumentAccessors;
 use crate::document::element::ElemKind;
 use crate::elements::paragraph::elem::Paragraph;
 
+use super::scope::Scope;
+use super::scope::ScopeAccessor;
 use super::source::Source;
 use super::source::Token;
 use super::source::VirtualSource;
@@ -205,19 +209,21 @@ pub fn escape_text<S: AsRef<str>>(
 	processed
 }
 
-pub fn parse_paragraph<'u>(unit: &mut TranslationUnit<'u>, source: Arc<dyn Source>) -> Result<(), String> {
+pub fn parse_paragraph<'u>(unit: &mut TranslationUnit<'u>, source: Arc<dyn Source>) -> Result<Rc<RefCell<Scope>>, String> {
 
-	unit.with_child(source, ParseMode { paragraph_only: true }, |unit, scope| {
+	unit.with_child(source, ParseMode { paragraph_only: true }, false, |unit, scope| {
 		// Parse into scope
 		unit.parser.parse(unit);
 
-		// Get parsed content
-		let parsed_content = unit.content(scope);
+		// Iterate over parsed content
+		let mut iter = scope.element_iter();
+		while let Some(elem) = iter.next()
+		{
+			// TODO
+		}
 
-
-	});
-
-	Ok(())
+		Ok(scope)
+	})
 }
 
 /// Parses source into a single paragraph

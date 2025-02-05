@@ -1,6 +1,6 @@
-use std::{borrow::{Borrow, BorrowMut}, cell::{RefCell, RefMut}, collections::HashMap, ops::{Deref, Range}, rc::Rc, sync::Arc};
+use std::{borrow::{Borrow, BorrowMut}, cell::{RefCell, RefMut}, collections::{HashMap, VecDeque}, ops::{Deref, Range}, rc::Rc, sync::Arc};
 
-use crate::document::{references::{Reference, Refname}, variable::{Variable, VariableName}};
+use crate::document::{element::{ContainerElement, Element}, references::{Reference, Refname}, variable::{Variable, VariableName}};
 
 use super::{parser::Parser, source::Source, state::{ParseMode, ParserState}};
 
@@ -14,8 +14,8 @@ pub struct Scope {
 	/// Parent scope
 	parent: Option<Rc<RefCell<Scope>>>,
 
-	/// Children of this scope
-	children: Vec<Rc<RefCell<Scope>>>,
+	/// Content of this scope
+	content: Vec<Arc<dyn Element>>,
 
 	/// State of the parser
 	parser_state: super::state::ParserState,
@@ -28,6 +28,9 @@ pub struct Scope {
 
 	/// Variables declared within the scope
 	variables: HashMap<VariableName, Rc<dyn Variable>>,
+
+	/// Controls the visibility of the scope. True means that the scope is part of the regular syntax tree
+	visible: bool,
 }
 
 impl Scope {
@@ -35,11 +38,12 @@ impl Scope {
 		Self {
 			range: start..start,
 			parent,
-			children: Vec::default(),
+			content: vec![],
 			parser_state: ParserState::new(parse_mode),
 			source,
 			references: HashMap::default(),
 			variables: HashMap::default(),
+			visible: true,
 		}
 	}
 	
@@ -85,7 +89,7 @@ impl Scope {
 
 pub trait ScopeAccessor {
 	/// Creates a new child from this scope
-	fn new_child(&self, source: Arc<dyn Source>, parse_mode: ParseMode) -> Rc<RefCell<Scope>>;
+	fn new_child(&self, source: Arc<dyn Source>, parse_mode: ParseMode, visible: bool) -> Rc<RefCell<Scope>>;
 
 	/// Returns a reference as well as it's declaring scope
 	fn get_reference(&self, name: &Refname) -> Option<(Rc<Reference>, Rc<RefCell<Scope>>)>;
@@ -97,17 +101,22 @@ pub trait ScopeAccessor {
 	) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)>;
 
 	/// Should be called by the owning [`TranslationUnit`] to acknowledge an element being added
-	fn add_content(&self);
+	fn add_element(&self, elem: Arc<dyn Element>);
+
+	// Get an element from an id
+	fn get_element(&self, id: usize) -> Option<Arc<dyn Element>>;
+
+	fn element_iter(&self) -> ScopeIterator;
 }
 
 impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
-	fn new_child(&self, source: Arc<dyn Source>, parse_mode: ParseMode) -> Rc<RefCell<Scope>>
+	fn new_child(&self, source: Arc<dyn Source>, parse_mode: ParseMode, visible: bool) -> Rc<RefCell<Scope>>
 	{
 		let range = (*self.clone()).borrow().range.clone();
-		let child = Rc::new(RefCell::new(Scope::new(Some(self.clone()), source, parse_mode, range.end)));
+		let mut child = Scope::new(Some(self.clone()), source, parse_mode, range.end);
+		child.visible = visible;
 
-		(*self.clone()).borrow_mut().children.push(child.clone());
-		child
+		Rc::new(RefCell::new(child))
 	}
 
 	fn get_variable(
@@ -137,16 +146,88 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		return None;
 	}
 
-	fn add_content(&self) {
-		let scope = self.clone();
-		let mut borrow = (*scope).borrow_mut();
-		borrow.range.end += 1;
+	fn add_element(&self, elem: Arc<dyn Element>) {
+		let mut scope = (*self.clone()).borrow_mut();
 
-		// Propagate to parent
-		if let Some(parent) = &borrow.parent
+		scope.content.push(elem);
+	}
+
+	fn get_element(&self, id: usize) -> Option<Arc<dyn Element>>
+	{
+		let scope = (*self.clone()).borrow();
+
+		if scope.content.len() <= id
 		{
-			parent.add_content();
+			return None
+		}
+		return Some(scope.content[id].clone())
+	}
+
+	fn element_iter(&self) -> ScopeIterator {
+		ScopeIterator::new(self.clone())
+	}
+}
+
+struct ScopeIterator {
+	scope: Rc<RefCell<Scope>>,
+	position: Vec<(usize, usize)>,
+	depth: Vec<Arc<dyn ContainerElement>>,
+}
+
+impl ScopeIterator {
+	pub fn new(scope: Rc<RefCell<Scope>>) -> Self {
+		Self {
+			scope,
+			position: vec![(0usize, 0usize); 1],
+			depth: vec![],
 		}
 	}
+}
+
+impl Iterator for ScopeIterator {
+    type Item = (Rc<RefCell<Scope>>, Arc<dyn Element>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+		while let (Some(last_depth), Some((scope_id, last_idx))) = (self.depth.last(), self.position.last_mut())
+		{
+			let scope = last_depth.contained()[*scope_id].clone();
+			let scope_len = (*scope.clone()).borrow().content.len();
+
+			if *last_idx < scope_len
+			{
+				let elem = (*scope.clone()).borrow().content[*last_idx].clone();
+				*last_idx += 1;
+				return Some((scope.clone(), elem))
+			}
+
+			if *scope_id < last_depth.contained().len()
+			{
+				*last_idx = 0;
+				*scope_id += 1;
+			}
+			else
+			{
+				self.depth.pop();
+				self.position.pop();
+			}
+		}
+
+		let scope_len = (*self.scope.clone()).borrow().content.len();
+		if self.position[0].1 < scope_len
+		{
+			let elem = (*self.scope.clone()).borrow().content[self.position[0].1].clone();
+			self.position[0].1 += 1;
+
+			if let Some(_container) = elem.as_container()
+			{
+				self.position.push((0, 0));
+				self.depth.push(unsafe { std::mem::transmute(elem.clone()) });
+			}
+
+			return Some((self.scope.clone(), elem))
+		}
+
+		return None
+    }
 }
 

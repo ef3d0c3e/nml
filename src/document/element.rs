@@ -93,10 +93,7 @@ pub trait ReferenceableElement: Element {
 
 pub trait ContainerElement: Element {
 	/// Gets the contained elements
-	fn contained(&self) -> &Vec<Box<dyn Element>>;
-
-	/// Adds an element to the container
-	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String>;
+	fn contained(&self) -> &[Rc<RefCell<Scope>>];
 }
 
 #[derive(Debug)]
