@@ -1,4 +1,3 @@
-use core::slice::SlicePattern;
 use std::borrow::BorrowMut;
 use std::cell::Ref;
 use std::cell::RefCell;
@@ -50,7 +49,7 @@ pub struct TranslationUnit<'u> {
 	/// User-defined styles
 	custom_styles: CustomStyleHolder,
 
-	reports: Vec<Report>,
+	reports: Vec<(Rc<RefCell<Scope>>, Report)>,
 }
 
 ///
@@ -138,43 +137,26 @@ impl<'u> TranslationUnit<'u> {
 		if let Some(lsp) = &mut self.lsp {
 			// TODO: send to lsp
 		} else {
-			Report::reports_to_stdout(&self.colors, std::mem::replace(&mut self.reports, vec![]));
+			// TODO:
+			//Report::reports_to_stdout(&self.colors, std::mem::replace(&mut self.reports, vec![]));
 		}
 
 		self
 	}
-
-	pub fn add_report(&mut self, report: Report) {
-		self.reports.push(report);
-	}
-
 	pub fn colors(&self) -> &ReportColors {
 		&self.colors
 	}
+
+	pub fn report(&mut self, report: Report) { self.reports.push((self.current_scope.clone(), report)); }
 }
 
 pub trait TranslationAccessors {
-	/// Adds content to the translation unit
+	/// Adds content to the translation unit's scope
 	fn add_content(&mut self, elem: Arc<dyn Element>);
-
-	/// Adds a new report to this translation unit
-	fn report(&mut self, report: Report);
-
-	/// Gets the content associated with a scope
-	fn content(&self, scope: Rc<RefCell<Scope>>) -> &[(Rc<RefCell<Scope>>, Arc<dyn Element>)];
 }
 
 impl TranslationAccessors for TranslationUnit<'_> {
 	fn add_content(&mut self, elem: Arc<dyn Element>) {
-		self.current_scope.add_content();
-		self.content.push((self.current_scope.clone(), elem));
-	}
-
-	fn report(&mut self, report: Report) { self.reports.push(report); }
-
-	fn content(&self, scope: Rc<RefCell<Scope>>) -> &[(Rc<RefCell<Scope>>, Arc<dyn Element>)]
-	{
-		let range = scope.borrow().range.clone();
-		&(self.content).as_slice()[range]
+		self.current_scope.add_content(elem);
 	}
 }

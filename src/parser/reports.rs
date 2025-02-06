@@ -231,7 +231,7 @@ pub mod macros {
 				spans: vec![],
 			};
 			report_label!(r, $($tail)*);
-			$unit.add_report(r);
+			$unit.report(r);
 		}}
 	}
 
@@ -247,7 +247,7 @@ pub mod macros {
 				spans: vec![],
 			};
 			report_label!(r, $($tail)*);
-			$unit.add_report(r);
+			$unit.report(r);
 		}}
 	}
 

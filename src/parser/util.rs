@@ -16,12 +16,10 @@ use super::source::Source;
 use super::source::Token;
 use super::source::VirtualSource;
 use super::state::ParseMode;
-use super::state::ParserState;
-use super::translation::TranslationAccessors;
 use super::translation::TranslationUnit;
 
 /// Processes text for escape characters and paragraphing
-pub fn process_text(document: &dyn Document, content: &str) -> String {
+pub fn process_text(scope: Rc<RefCell<Scope>>, content: &str) -> String {
 	let mut escaped = false;
 	let mut newlines = 0usize; // Consecutive newlines
 							//println!("Processing: [{content}]");
@@ -41,9 +39,10 @@ pub fn process_text(document: &dyn Document, content: &str) -> String {
 						}
 					}
 					None => {
-						if document
-							.last_element::<Paragraph>()
-							.and_then(|par| {
+						if scope.content_last()
+							.and_then(|elem| {
+								let Some(par) = elem.downcast_ref::<Paragraph>()
+									else { return Some(false) };
 								par.find_back(|e| e.kind() != ElemKind::Invisible)
 									.map(|e| e.kind() == ElemKind::Inline)
 							})
@@ -216,7 +215,7 @@ pub fn parse_paragraph<'u>(unit: &mut TranslationUnit<'u>, source: Arc<dyn Sourc
 		unit.parser.parse(unit);
 
 		// Iterate over parsed content
-		let mut iter = scope.element_iter();
+		let mut iter = scope.content_iter();
 		while let Some(elem) = iter.next()
 		{
 			// TODO

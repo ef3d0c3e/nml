@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
@@ -6,13 +9,15 @@ use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::reports::Report;
+use crate::parser::scope::Scope;
+use crate::parser::scope::ScopeAccessor;
 use crate::parser::source::Token;
 
 #[derive(Debug)]
 pub struct Link {
 	pub(crate) location: Token,
-	/// Display content of link
-	pub(crate) display: Vec<Box<dyn Element>>,
+	/// Link display content
+	pub(crate) contained: Vec<Rc<RefCell<Scope>>>,
 	/// Url of link
 	pub(crate) url: String,
 }
@@ -23,8 +28,8 @@ impl Element for Link {
 	fn element_name(&self) -> &'static str { "Link" }
 	fn compile<'e>(
 		&'e self,
+		scope: Rc<RefCell<Scope>>,
 		compiler: &'e Compiler,
-		document: &'e dyn Document,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
@@ -34,8 +39,9 @@ impl Element for Link {
 					compiler.sanitize(self.url.as_str())
 				));
 
-				for elem in &self.display {
-					elem.compile(compiler, document, output)?;
+				let display = &self.contained[0];
+				for (scope, elem) in display.content_iter() {
+					elem.compile(scope, compiler, output)?;
 				}
 
 				output.add_content("</a>");
@@ -49,13 +55,7 @@ impl Element for Link {
 }
 
 impl ContainerElement for Link {
-	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.display }
-
-	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
-		if elem.downcast_ref::<Link>().is_some() {
-			return Err("Tried to push a link inside of a link".to_string());
-		}
-		self.display.push(elem);
-		Ok(())
-	}
+    fn contained(&self) -> &[Rc<RefCell<Scope>>] {
+		self.contained.as_slice()
+    }
 }

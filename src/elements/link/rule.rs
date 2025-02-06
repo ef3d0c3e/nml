@@ -50,8 +50,6 @@ impl RegexRule for LinkRule {
 		token: Token,
 		matches: regex::Captures,
 	) {
-		let mut reports = vec![];
-
 		let link_display = match matches.get(1) {
 			Some(display) => {
 				if display.as_str().is_empty() {
@@ -97,13 +95,10 @@ impl RegexRule for LinkRule {
 					});
 				});
 
-				unit.with_child(display_source, ParseMode { paragraph_only: true }, |s| {
-					unit.parser.parse(unit);
-				});
-				match parse_paragraph(state, display_source, document) {
+				match parse_paragraph(unit, display_source) {
 					Err(err) => {
 						report_err!(
-							&mut reports,
+							unit,
 							token.source(),
 							"Invalid Link Display".into(),
 							span(
@@ -111,9 +106,9 @@ impl RegexRule for LinkRule {
 								format!("Failed to parse link display:\n{err}")
 							)
 						);
-						return reports;
+						return;
 					}
-					Ok(mut paragraph) => std::mem::take(&mut paragraph.content),
+					Ok(paragraph) => paragraph,
 				}
 			}
 			_ => panic!("Empty link name"),
@@ -123,30 +118,30 @@ impl RegexRule for LinkRule {
 			Some(url) => {
 				if url.as_str().is_empty() {
 					report_err!(
-						&mut reports,
+						unit,
 						token.source(),
 						"Empty Link URL".into(),
 						span(url.range(), "Link url is empty".into())
 					);
-					return reports;
+					return;
 				}
 				let text_content = process_text(document, url.as_str());
 
 				if text_content.is_empty() {
 					report_err!(
-						&mut reports,
+						unit,
 						token.source(),
 						"Empty Link URL".into(),
 						span(
 							url.range(),
 							format!(
 								"Link url is empty. Once processed, `{}` yields `{}`",
-								url.as_str().fg(state.parser.colors().highlight),
-								text_content.as_str().fg(state.parser.colors().highlight),
+								url.as_str().fg(unit.colors().highlight),
+								text_content.as_str().fg(unit.colors().highlight),
 							)
 						)
 					);
-					return reports;
+					return;
 				}
 				text_content
 			}
@@ -162,7 +157,7 @@ impl RegexRule for LinkRule {
 			}),
 		);
 
-		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
+		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
 			sems.add(
 				matches.get(1).unwrap().end()..matches.get(1).unwrap().end() + 1,
 				tokens.link_display_sep,
@@ -171,9 +166,7 @@ impl RegexRule for LinkRule {
 			sems.add(url.start - 1..url.start, tokens.link_url_sep);
 			sems.add(url.clone(), tokens.link_url);
 			sems.add(url.end..url.end + 1, tokens.link_url_sep);
-		}
-
-		reports
+		}));
 	}
 
 	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
@@ -210,7 +203,7 @@ impl RegexRule for LinkRule {
 							ctx.document,
 							Box::new(Link {
 								location: ctx.location.clone(),
-								display: display_content,
+								contained: vec![display_content],
 								url,
 							}),
 						);

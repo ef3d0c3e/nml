@@ -3,15 +3,15 @@ use std::fmt::Display;
 use std::ops::Range;
 
 use ariadne::Fmt;
-use lsp::semantic::Semantics;
+use parser::translation::TranslationUnit;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 
-use super::parser::ParserState;
 use super::reports::Report;
 use super::source::Token;
 
+/// Represents an individual property, with an optional default value
 #[derive(Debug)]
 pub struct Property {
 	description: String,
@@ -50,16 +50,16 @@ pub struct PropertyValue {
 pub struct PropertyMap<'a> {
 	pub token: Token,
 	pub rule_name: &'a str,
-	pub state: &'a ParserState<'a, 'a>,
+	pub colors: &'a ReportColors,
 	pub properties: HashMap<String, (&'a Property, PropertyValue)>,
 }
 
 impl<'a> PropertyMap<'a> {
-	pub fn new(token: Token, rule_name: &'a str, state: &'a ParserState<'a, 'a>) -> Self {
+	pub fn new(token: Token, rule_name: &'a str, colors: &'a ReportColors) -> Self {
 		Self {
 			token,
 			rule_name,
-			state,
+			colors,
 			properties: HashMap::new(),
 		}
 	}
@@ -71,34 +71,34 @@ impl<'a> PropertyMap<'a> {
 	///  * `Some(T)` on success
 	///  * `None` if the key is not found or the parsing function `f` fails
 	/// 	(Note) In this case, reports should have been set
-	pub fn get<T, E, F>(&self, mut reports: &mut Vec<Report>, key: &str, f: F) -> Option<T>
+	pub fn get<T, E, F>(&self, unit: &mut TranslationUnit, key: &str, f: F) -> Option<T>
 	where
 		F: FnOnce(&Property, &PropertyValue) -> Result<T, E>,
 		E: Display,
 	{
 		match self.properties.get(key) {
 			None => report_err!(
-				&mut reports,
+				unit,
 				self.token.source(),
 				format!("Failed to parse {} properties", self.rule_name),
 				span(
 					self.token.range.clone(),
 					format!(
 						"Missing property {}",
-						key.fg(self.state.parser.colors().info),
+						key.fg(self.colors.info),
 					)
 				),
 			),
 			Some((prop, val)) => match f(prop, val) {
 				Err(err) => report_err!(
-					&mut reports,
+					unit,
 					self.token.source(),
 					format!("Failed to parse {} properties", self.rule_name),
 					span(
 						val.value_range.clone(),
 						format!(
 							"Unable to parse property {}: {err}",
-							key.fg(self.state.parser.colors().info),
+							key.fg(self.colors.info),
 						)
 					),
 				),
@@ -117,7 +117,7 @@ impl<'a> PropertyMap<'a> {
 	/// 	(Note) In this case, reports should have been set
 	pub fn get_or<T, E, F>(
 		&self,
-		mut reports: &mut Vec<Report>,
+		unit: &mut TranslationUnit,
 		key: &str,
 		default: T,
 		f: F,
@@ -130,14 +130,14 @@ impl<'a> PropertyMap<'a> {
 			None => return Some(default),
 			Some((prop, val)) => match f(prop, val) {
 				Err(err) => report_err!(
-					&mut reports,
+					unit,
 					self.token.source(),
 					format!("Failed to parse {} properties", self.rule_name),
 					span(
 						val.value_range.clone(),
 						format!(
 							"Unable to parse property {}: {err}",
-							key.fg(self.state.parser.colors().info),
+							key.fg(self.colors.info),
 						)
 					),
 				),
@@ -156,7 +156,7 @@ impl<'a> PropertyMap<'a> {
 	/// 	(Note) In this case, reports should have been set
 	pub fn get_opt<T, E, F>(
 		&self,
-		mut reports: &mut Vec<Report>,
+		unit: &mut TranslationUnit,
 		key: &str,
 		f: F,
 	) -> Option<Option<T>>
@@ -168,14 +168,14 @@ impl<'a> PropertyMap<'a> {
 			None => return Some(None),
 			Some((prop, val)) => match f(prop, val) {
 				Err(err) => report_err!(
-					&mut reports,
+					unit,
 					self.token.source(),
 					format!("Failed to parse {} properties", self.rule_name),
 					span(
 						val.value_range.clone(),
 						format!(
 							"Unable to parse property {}: {err}",
-							key.fg(self.state.parser.colors().info),
+							key.fg(self.colors.info),
 						)
 					),
 				),
@@ -186,19 +186,21 @@ impl<'a> PropertyMap<'a> {
 	}
 }
 
+/// Parser for properties
 #[derive(Debug)]
 pub struct PropertyParser {
 	pub properties: HashMap<String, Property>,
 }
 
 impl PropertyParser {
-	fn allowed_properties(&self, state: &ParserState) -> String {
+	/// Gets the list of all properties as a string for displaying
+	fn allowed_properties(&self, colors: &ReportColors) -> String {
 		self.properties
 			.iter()
 			.fold(String::new(), |out, (name, prop)| {
 				out + format!(
 					"\n - {} : {}",
-					name.fg(state.parser.colors().info),
+					name.fg(colors.info),
 					prop.description
 				)
 				.as_str()
@@ -239,14 +241,14 @@ impl PropertyParser {
 	/// `Some(properties)` is returned on success. On failure, `None` is returned and the reports will have been populated.
 	///
 	/// Note: Only ',' inside values can be escaped, other '\' are treated literally
-	pub fn parse<'a>(
-		&'a self,
-		rule_name: &'a str,
+	pub fn parse<'s, 'u>(
+		&self,
+		rule_name: &'s str,
 		mut reports: &mut Vec<Report>,
-		state: &'a ParserState<'a, 'a>,
+		unit: &mut TranslationUnit<'u>,
 		token: Token,
-	) -> Option<PropertyMap<'a>> {
-		let mut pm = PropertyMap::new(token.clone(), rule_name, state);
+	) -> Option<PropertyMap<'s>> {
+		let mut pm = PropertyMap::new(token.clone(), rule_name, unit.colors());
 		let mut try_insert = |name: &String,
 		                      name_range: Range<usize>,
 		                      value: &String,
@@ -257,15 +259,15 @@ impl PropertyParser {
 			let prop = match self.properties.get(trimmed_name) {
 				None => {
 					report_err!(
-						&mut reports,
+						unit,
 						token.source(),
 						format!("Failed to parse {rule_name} properties"),
 						span(
 							name_range,
 							format!(
 								"Unknown property {}, allowed properties:{}",
-								name.fg(state.parser.colors().info),
-								self.allowed_properties(state)
+								name.fg(unit.colors().info),
+								self.allowed_properties(unit.colors())
 							)
 						),
 					);
@@ -286,22 +288,22 @@ impl PropertyParser {
 				),
 			) {
 				report_err!(
-					&mut reports,
+					unit,
 					token.source(),
 					format!("Failed to parse {rule_name} properties"),
 					span(
 						name_range.start..value_range.end,
 						format!(
 							"Duplicate property {}, current value: {}",
-							name.fg(state.parser.colors().info),
-							trimmed_value.fg(state.parser.colors().info),
+							name.fg(unit.colors().info),
+							trimmed_value.fg(unit.colors().info),
 						)
 					),
 					span(
 						previous.value_range.clone(),
 						format!(
 							"Previous value: {}",
-							previous.value.fg(state.parser.colors().info),
+							previous.value.fg(unit.colors().info),
 						)
 					)
 				);
@@ -361,7 +363,7 @@ impl PropertyParser {
 			(0..escaped).for_each(|_| value.push('\\'));
 			if !in_name && value.trim_end().trim_start().is_empty() {
 				report_err!(
-					&mut reports,
+					unit,
 					token.source(),
 					format!("Failed to parse {rule_name} properties"),
 					span(
@@ -372,7 +374,7 @@ impl PropertyParser {
 				return None;
 			} else if name.is_empty() || value.is_empty() {
 				report_err!(
-					&mut reports,
+					unit,
 					token.source(),
 					format!("Failed to parse {rule_name} properties"),
 					span(
@@ -389,7 +391,7 @@ impl PropertyParser {
 			}
 		}
 
-		if let Some((sems, tokens)) = Semantics::from_source(token.source(), &state.shared.lsp) {
+		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
 			for (_, value) in pm.properties.values() {
 				if value.name_range.start != 0 {
 					sems.add_to_queue(
@@ -404,12 +406,7 @@ impl PropertyParser {
 				);
 				sems.add_to_queue(value.value_range.clone(), tokens.prop_value);
 			}
-			//sems.add(matches.get(0).unwrap().start()..matches.get(0).unwrap().start()+1, tokens.media_sep);
-			// Refname
-			//sems.add(matches.get(0).unwrap().start()+1..matches.get(0).unwrap().start()+2, tokens.media_refname_sep);
-			//sems.add(matches.get(1).unwrap().range(), tokens.media_refname);
-			//sems.add(matches.get(1).unwrap().end()..matches.get(1).unwrap().end()+1, tokens.media_refname_sep);
-		}
+		}));
 
 		// Insert missing properties with a default
 		for (name, prop) in &self.properties {
@@ -437,7 +434,6 @@ impl PropertyParser {
 
 #[cfg(test)]
 mod tests {
-	use parser::langparser::LangParser;
 	use parser::source::Source;
 	use parser::source::SourceFile;
 	use std::sync::Arc;

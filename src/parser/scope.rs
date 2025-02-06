@@ -1,4 +1,4 @@
-use std::{borrow::{Borrow, BorrowMut}, cell::{RefCell, RefMut}, collections::{HashMap, VecDeque}, ops::{Deref, Range}, rc::Rc, sync::Arc};
+use std::{borrow::{Borrow, BorrowMut}, cell::{Ref, RefCell, RefMut}, collections::{HashMap, VecDeque}, ops::{Deref, Range}, rc::Rc, sync::Arc};
 
 use crate::document::{element::{ContainerElement, Element}, references::{Reference, Refname}, variable::{Variable, VariableName}};
 
@@ -101,12 +101,16 @@ pub trait ScopeAccessor {
 	) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)>;
 
 	/// Should be called by the owning [`TranslationUnit`] to acknowledge an element being added
-	fn add_element(&self, elem: Arc<dyn Element>);
+	fn add_content(&self, elem: Arc<dyn Element>);
 
-	// Get an element from an id
-	fn get_element(&self, id: usize) -> Option<Arc<dyn Element>>;
+	/// Get an element from an id
+	fn get_content(&self, id: usize) -> Option<Arc<dyn Element>>;
 
-	fn element_iter(&self) -> ScopeIterator;
+	/// Gets the last element of this scope
+	fn content_last(&self) -> Option<Arc<dyn Element>>;
+
+	/// Gets an iterator over scope elements
+	fn content_iter(&self) -> ScopeIterator;
 }
 
 impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
@@ -146,24 +150,25 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		return None;
 	}
 
-	fn add_element(&self, elem: Arc<dyn Element>) {
-		let mut scope = (*self.clone()).borrow_mut();
-
-		scope.content.push(elem);
+	fn add_content(&self, elem: Arc<dyn Element>) {
+		(*self.to_owned()).borrow_mut().content.push(elem);
 	}
 
-	fn get_element(&self, id: usize) -> Option<Arc<dyn Element>>
+	fn get_content(&self, id: usize) -> Option<Arc<dyn Element>>
 	{
-		let scope = (*self.clone()).borrow();
-
-		if scope.content.len() <= id
+		if (*self.clone()).borrow().content.len() <= id
 		{
 			return None
 		}
-		return Some(scope.content[id].clone())
+		return Some((*self.clone()).borrow().content[id].clone())
 	}
 
-	fn element_iter(&self) -> ScopeIterator {
+	fn content_last(&self) -> Option<Arc<dyn Element>>
+	{
+		return (*self.clone()).borrow().content.last().cloned()
+	}
+
+	fn content_iter(&self) -> ScopeIterator {
 		ScopeIterator::new(self.clone())
 	}
 }
