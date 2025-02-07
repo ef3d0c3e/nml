@@ -2,16 +2,46 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
+use ariadne::Color;
 use dashmap::DashMap;
 use tower_lsp::lsp_types::Diagnostic;
 
 use crate::parser::source::LineCursor;
 
-use super::parser::ReportColors;
 use super::source::OffsetEncoding;
 use super::source::Source;
 use super::source::SourcePosition;
 use super::source::Token;
+
+/// Store the different colors used for diagnostics.
+/// Colors have to be set to `None` for the language server.
+#[derive(Debug, Clone)]
+pub struct ReportColors {
+	pub error: Option<Color>,
+	pub warning: Option<Color>,
+	pub info: Option<Color>,
+	pub highlight: Option<Color>,
+}
+
+impl ReportColors {
+	pub fn with_colors() -> Self {
+		Self {
+			error: Some(Color::Red),
+			warning: Some(Color::Yellow),
+			info: Some(Color::BrightBlue),
+			highlight: Some(Color::BrightMagenta),
+		}
+	}
+
+	pub fn without_colors() -> Self {
+		Self {
+			error: None,
+			warning: None,
+			info: None,
+			highlight: None,
+		}
+	}
+}
 
 #[derive(Debug)]
 pub enum ReportKind {

@@ -169,9 +169,9 @@ impl Parser {
 }
 
 pub trait ParserRuleAccessor {
-	fn iter_rules(&self) -> Iter<Box<dyn Rule>>;
+	fn rules_iter(&self) -> Iter<Box<dyn Rule>>;
 }
 
 impl ParserRuleAccessor for Parser {
-	fn iter_rules(&self) -> Iter<Box<dyn Rule>> { self.rules.iter() }
+	fn rules_iter(&self) -> Iter<Box<dyn Rule>> { self.rules.iter() }
 }

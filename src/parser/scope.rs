@@ -31,6 +31,9 @@ pub struct Scope {
 
 	/// Controls the visibility of the scope. True means that the scope is part of the regular syntax tree
 	visible: bool,
+
+	/// Currently active paragraph
+	active_paragraph: Option<Arc<dyn Element>>,
 }
 
 impl Scope {
@@ -44,6 +47,7 @@ impl Scope {
 			references: HashMap::default(),
 			variables: HashMap::default(),
 			visible: true,
+			active_paragraph: None,
 		}
 	}
 	
@@ -151,6 +155,7 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	}
 
 	fn add_content(&self, elem: Arc<dyn Element>) {
+		if let Some()
 		(*self.to_owned()).borrow_mut().content.push(elem);
 	}
 

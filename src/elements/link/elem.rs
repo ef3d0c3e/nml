@@ -4,7 +4,6 @@ use std::rc::Rc;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
-use crate::document::document::Document;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
@@ -17,9 +16,9 @@ use crate::parser::source::Token;
 pub struct Link {
 	pub(crate) location: Token,
 	/// Link display content
-	pub(crate) contained: Vec<Rc<RefCell<Scope>>>,
+	pub(crate) display: Vec<Rc<RefCell<Scope>>>,
 	/// Url of link
-	pub(crate) url: String,
+	pub(crate) url: url::Url,
 }
 
 impl Element for Link {
@@ -39,7 +38,7 @@ impl Element for Link {
 					compiler.sanitize(self.url.as_str())
 				));
 
-				let display = &self.contained[0];
+				let display = &self.display[0];
 				for (scope, elem) in display.content_iter() {
 					elem.compile(scope, compiler, output)?;
 				}
@@ -56,6 +55,6 @@ impl Element for Link {
 
 impl ContainerElement for Link {
     fn contained(&self) -> &[Rc<RefCell<Scope>>] {
-		self.contained.as_slice()
+		self.display.as_slice()
     }
 }

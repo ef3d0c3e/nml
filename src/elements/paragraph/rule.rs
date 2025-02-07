@@ -3,8 +3,6 @@ use std::sync::Arc;
 
 use regex::Regex;
 
-use crate::document::document::Document;
-use crate::parser::reports::Report;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::source::Token;

@@ -13,11 +13,14 @@ use parser::rule::RegexRule;
 use parser::source::Token;
 use parser::source::VirtualSource;
 use parser::state::ParseMode;
+use parser::translation::TranslationAccessors;
 use parser::translation::TranslationUnit;
+use parser::util;
 use parser::util::escape_source;
 use parser::util::parse_paragraph;
 use parser::util::process_text;
 use regex::Regex;
+use url::Url;
 
 use super::elem::Link;
 
@@ -50,6 +53,7 @@ impl RegexRule for LinkRule {
 		token: Token,
 		matches: regex::Captures,
 	) {
+		// Parse display
 		let link_display = match matches.get(1) {
 			Some(display) => {
 				if display.as_str().is_empty() {
@@ -114,49 +118,29 @@ impl RegexRule for LinkRule {
 			_ => panic!("Empty link name"),
 		};
 
-		let link_url = match matches.get(2) {
-			Some(url) => {
-				if url.as_str().is_empty() {
-					report_err!(
-						unit,
-						token.source(),
-						"Empty Link URL".into(),
-						span(url.range(), "Link url is empty".into())
-					);
-					return;
-				}
-				let text_content = process_text(document, url.as_str());
-
-				if text_content.is_empty() {
-					report_err!(
-						unit,
-						token.source(),
-						"Empty Link URL".into(),
-						span(
-							url.range(),
-							format!(
-								"Link url is empty. Once processed, `{}` yields `{}`",
-								url.as_str().fg(unit.colors().highlight),
-								text_content.as_str().fg(unit.colors().highlight),
-							)
-						)
-					);
-					return;
-				}
-				text_content
-			}
-			_ => panic!("Empty link url"),
+		// Parse url
+		let url_text = matches.get(2).unwrap();
+		let url = match Url::parse(util::transform_text(url_text.as_str()).as_str()) {
+			Ok(url) => url,
+			Err(err) => {
+				report_err!(
+					unit,
+					token.source(),
+					"Invalid Link URL".into(),
+					span(url_text.range(), err.to_string())
+				);
+				return;
+			},
 		};
 
-		state.push(
-			document,
-			Box::new(Link {
-				location: token.clone(),
-				display: link_display,
-				url: link_url,
-			}),
-		);
+		// Add element
+		unit.add_content(Arc::new(Link {
+			location: token.clone(),
+			display: vec![link_display],
+			url,
+		}));
 
+		// Add semantics
 		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
 			sems.add(
 				matches.get(1).unwrap().end()..matches.get(1).unwrap().end() + 1,
@@ -203,7 +187,7 @@ impl RegexRule for LinkRule {
 							ctx.document,
 							Box::new(Link {
 								location: ctx.location.clone(),
-								contained: vec![display_content],
+								display: vec![display_content],
 								url,
 							}),
 						);

@@ -2,13 +2,9 @@ use std::any::Any;
 use std::sync::Arc;
 
 use mlua::Function;
-use mlua::Lua;
 
-use crate::document::document::Document;
+use crate::lua::kernel::ContextAccessor;
 use crate::lua::kernel::Kernel;
-use crate::lua::kernel::CTX;
-use crate::parser::parser::ParserState;
-use crate::parser::reports::Report;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::state::ParseMode;
@@ -43,22 +39,16 @@ impl Rule for TextRule {
 		panic!("Text cannot match");
 	}
 
-	fn register_bindings<'lua>(&self, kernel: &'lua Kernel) -> Vec<(String, Function<'lua>)> {
-		let mut bindings = vec![];
-		bindings.push((
-			"push".to_string(),
-			kernel.lua.create_function(|_, content: String| {
-				kernel.with_context(|mut ctx| {
-					ctx.unit.add_content(Arc::new(Text {
-						location: ctx.location.clone(),
-						content
-					}));
-					ctx
-				})
-			})
-			.unwrap(),
-		));
-
-		bindings
+	fn register_bindings(&self, kernel: &Kernel, table: mlua::Table) {
+		kernel.create_function(table.clone(), "push", |ctx, _, content: String| {
+			ctx.with_context_mut(|mut ctx| {
+				let location = ctx.location.clone();
+				ctx.unit.add_content(Arc::new(Text {
+					location,
+					content
+				}));
+			});
+			Ok(())
+		});
 	}
 }

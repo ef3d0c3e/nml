@@ -11,7 +11,7 @@ use crate::parser::source::Token;
 #[derive(Debug)]
 pub struct Paragraph {
 	pub(crate) location: Token,
-	pub(crate) content: Vec<Box<dyn Element>>,
+	pub(crate) content: Vec<Arc<dyn Element>>,
 }
 
 impl Paragraph {
@@ -33,7 +33,6 @@ impl Element for Paragraph {
 	fn compile<'e>(
 		&'e self,
 		compiler: &'e Compiler,
-		document: &'e dyn Document,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
 		if self.content.is_empty() {

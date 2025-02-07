@@ -5,6 +5,7 @@ use super::state::ParseMode;
 use super::state::ParserState;
 use super::translation::TranslationUnit;
 use crate::document::document::Document;
+use crate::lua::kernel::Kernel;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 use mlua::Function;
@@ -105,8 +106,9 @@ pub trait Rule: Downcast {
 		match_data: Box<dyn Any>,
 	) -> Cursor;
 
-	/// Registers lua bindings for this rule
-	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
+	/// Registers lua bindings for this rule on the given kernel
+	#[allow(unused_variables)]
+	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) { }
 }
 impl_downcast!(Rule);
 
@@ -149,7 +151,8 @@ pub trait RegexRule {
 		captures: regex::Captures,
 	);
 
-	fn register_bindings<'lua>(&self, _lua: &'lua Lua) -> Vec<(String, Function<'lua>)> { vec![] }
+	#[allow(unused_variables)]
+	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) { }
 }
 
 impl<T: RegexRule + 'static> Rule for T {
@@ -207,8 +210,8 @@ impl<T: RegexRule + 'static> Rule for T {
 		cursor.at(token_end)
 	}
 
-	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
-		self.register_bindings(lua)
+	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) {
+		self.register_bindings(kernel, table)
 	}
 }
 

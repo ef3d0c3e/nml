@@ -19,6 +19,7 @@ use super::state::ParseMode;
 use super::translation::TranslationUnit;
 
 /// Processes text for escape characters and paragraphing
+/*
 pub fn process_text(scope: Rc<RefCell<Scope>>, content: &str) -> String {
 	let mut escaped = false;
 	let mut newlines = 0usize; // Consecutive newlines
@@ -93,6 +94,50 @@ pub fn process_text(scope: Rc<RefCell<Scope>>, content: &str) -> String {
 		.to_string();
 
 	processed
+}
+*/
+
+/// Transforms raw text content.
+///
+/// - Replaces all ascii whitespaces with SPACES
+/// - Transforms consecutive whitespaces into a single whitespaces
+/// - Escapes characters according to `\` usage
+///
+pub fn transform_text<S: AsRef<str>>(text: S) -> String {
+	let mut escaped = false;
+	text.as_ref()
+		.chars()
+		.skip_while(char::is_ascii_whitespace)
+		.fold(
+			(String::new(), Option::<char>::None),
+			|(mut s, prev), ch| {
+				if ch == '\\' {
+					if escaped {
+						escaped = false;
+						return (s + "\\", Some(ch));
+					}
+					escaped = true;
+				}
+
+				if escaped {
+					escaped = false;
+					s.push(ch);
+					return (s, Some(ch));
+				}
+
+				if ch.is_ascii_whitespace() {
+					// Skip if previous is whitespace
+					if prev.as_ref().is_some_and(char::is_ascii_whitespace) {
+						return (s, Some(ch));
+					}
+					return (s + " ", Some(ch));
+				}
+				s.push(ch);
+				(s, Some(ch))
+			},
+		)
+		.0
+	// TODO: Trailing spaces
 }
 
 /// Transforms source into a new [`VirtualSource`] using a `range`.
@@ -208,21 +253,29 @@ pub fn escape_text<S: AsRef<str>>(
 	processed
 }
 
-pub fn parse_paragraph<'u>(unit: &mut TranslationUnit<'u>, source: Arc<dyn Source>) -> Result<Rc<RefCell<Scope>>, String> {
+pub fn parse_paragraph<'u>(
+	unit: &mut TranslationUnit<'u>,
+	source: Arc<dyn Source>,
+) -> Result<Rc<RefCell<Scope>>, String> {
+	unit.with_child(
+		source,
+		ParseMode {
+			paragraph_only: true,
+		},
+		false,
+		|unit, scope| {
+			// Parse into scope
+			unit.parser.parse(unit);
 
-	unit.with_child(source, ParseMode { paragraph_only: true }, false, |unit, scope| {
-		// Parse into scope
-		unit.parser.parse(unit);
+			// Iterate over parsed content
+			let mut iter = scope.content_iter();
+			while let Some(elem) = iter.next() {
+				// TODO
+			}
 
-		// Iterate over parsed content
-		let mut iter = scope.content_iter();
-		while let Some(elem) = iter.next()
-		{
-			// TODO
-		}
-
-		Ok(scope)
-	})
+			Ok(scope)
+		},
+	)
 }
 
 /// Parses source into a single paragraph

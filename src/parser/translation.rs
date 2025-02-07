@@ -5,18 +5,14 @@ use std::cell::RefMut;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::document::element::ContainerElement;
 use crate::document::element::Element;
-use crate::elements::block::data::BlockHolder;
-use crate::elements::customstyle::custom::CustomStyleHolder;
-use crate::elements::layout::data::LayoutHolder;
 use crate::lsp::data::LangServerData;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
 
-use super::new::Parser;
-use super::parser::ReportColors;
+use super::parser::Parser;
 use super::reports::Report;
+use super::reports::ReportColors;
 use super::scope::Scope;
 use super::scope::ScopeAccessor;
 use super::source::Source;
@@ -41,13 +37,13 @@ pub struct TranslationUnit<'u> {
 	/// Available kernels for this translation unit
 	lua_kernels: KernelHolder,
 	/// Available layouts
-	layouts: LayoutHolder,
+	//layouts: LayoutHolder,
 	/// Available blocks
-	blocks: BlockHolder,
+	//blocks: BlockHolder,
 	/// Custom element styles
-	elem_styles: StyleHolder,
+	//elem_styles: StyleHolder,
 	/// User-defined styles
-	custom_styles: CustomStyleHolder,
+	//custom_styles: CustomStyleHolder,
 
 	reports: Vec<(Rc<RefCell<Scope>>, Report)>,
 }
@@ -86,16 +82,15 @@ impl<'u> TranslationUnit<'u> {
 			colors: with_colors
 				.then(ReportColors::with_colors)
 				.unwrap_or(ReportColors::without_colors()),
-			content: vec![],
 			entry_scope: scope.clone(),
 			current_scope: scope,
 			lsp: with_lsp.then(|| RefCell::new(LangServerData::default())),
 
-			lua_kernels: KernelHolder::new(parser),
-			layouts: LayoutHolder::default(),
-			blocks: BlockHolder::default(),
-			elem_styles: StyleHolder::default(),
-			custom_styles: CustomStyleHolder::default(),
+			lua_kernels: KernelHolder::default(),
+			//layouts: LayoutHolder::default(),
+			//blocks: BlockHolder::default(),
+			//elem_styles: StyleHolder::default(),
+			//custom_styles: CustomStyleHolder::default(),
 
 			reports: Vec::default(),
 		};
@@ -104,6 +99,8 @@ impl<'u> TranslationUnit<'u> {
 			.insert("main".to_string(), Kernel::new(parser));
 		s
 	}
+
+	pub fn parser(&self) -> &'u Parser { &self.parser }
 
 	pub fn scope<'s>(&'s self) -> Ref<'s, Scope> { (*self.current_scope).borrow() }
 
@@ -143,7 +140,7 @@ impl<'u> TranslationUnit<'u> {
 
 		self
 	}
-	pub fn colors(&self) -> &ReportColors {
+	pub fn colors<'s>(&'s self) -> &'s ReportColors {
 		&self.colors
 	}
 
@@ -151,6 +148,7 @@ impl<'u> TranslationUnit<'u> {
 }
 
 pub trait TranslationAccessors {
+
 	/// Adds content to the translation unit's scope
 	fn add_content(&mut self, elem: Arc<dyn Element>);
 }

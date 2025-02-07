@@ -47,15 +47,15 @@ pub struct PropertyValue {
 	pub value: String,
 }
 
-pub struct PropertyMap<'a> {
+pub struct PropertyMap<'s> {
 	pub token: Token,
-	pub rule_name: &'a str,
-	pub colors: &'a ReportColors,
-	pub properties: HashMap<String, (&'a Property, PropertyValue)>,
+	pub rule_name: &'s str,
+	pub colors: ReportColors,
+	pub properties: HashMap<String, (&'s Property, PropertyValue)>,
 }
 
-impl<'a> PropertyMap<'a> {
-	pub fn new(token: Token, rule_name: &'a str, colors: &'a ReportColors) -> Self {
+impl<'s> PropertyMap<'s> {
+	pub fn new(token: Token, rule_name: &'s str, colors: ReportColors) -> Self {
 		Self {
 			token,
 			rule_name,
@@ -242,13 +242,12 @@ impl PropertyParser {
 	///
 	/// Note: Only ',' inside values can be escaped, other '\' are treated literally
 	pub fn parse<'s, 'u>(
-		&self,
+		&'s self,
 		rule_name: &'s str,
-		mut reports: &mut Vec<Report>,
 		unit: &mut TranslationUnit<'u>,
 		token: Token,
 	) -> Option<PropertyMap<'s>> {
-		let mut pm = PropertyMap::new(token.clone(), rule_name, unit.colors());
+		let mut pm = PropertyMap::new(token.clone(), rule_name, unit.colors().to_owned());
 		let mut try_insert = |name: &String,
 		                      name_range: Range<usize>,
 		                      value: &String,
