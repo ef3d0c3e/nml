@@ -1,5 +1,4 @@
 use std::borrow::BorrowMut;
-use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::rc::Rc;
@@ -17,7 +16,6 @@ use super::scope::Scope;
 use super::scope::ScopeAccessor;
 use super::source::Source;
 use super::state::ParseMode;
-use super::style::StyleHolder;
 
 /// Stores the data required by the parser
 pub struct TranslationUnit<'u> {
@@ -95,25 +93,34 @@ impl<'u> TranslationUnit<'u> {
 			reports: Vec::default(),
 		};
 
-		s.lua_kernels
-			.insert("main".to_string(), Kernel::new(parser));
+		let main_kernel = Kernel::new(&s);
+		s.lua_kernels.insert("main".into(), main_kernel);
 		s
 	}
 
 	pub fn parser(&self) -> &'u Parser { &self.parser }
 
-	pub fn scope<'s>(&'s self) -> Ref<'s, Scope> { (*self.current_scope).borrow() }
+	/// Gets the current scope
+	pub fn get_scope(&self) -> Rc<RefCell<Scope>> { self.current_scope.clone() }
 
-	pub fn scope_mut<'s>(&'s self) -> RefMut<'s, Scope> { (*self.current_scope).borrow_mut() }
+	//pub fn scope<'s>(&'s self) -> Ref<'s, Scope> { (*self.current_scope).borrow() }
+
+	//pub fn scope_mut<'s>(&'s self) -> RefMut<'s, Scope> { (*self.current_scope).borrow_mut() }
 
 	/// Runs procedure with a newly created scope from a source file
-	pub fn with_child<F, R>(&mut self, source: Arc<dyn Source>, parse_mode: ParseMode, append_scope: bool, f: F) -> R
+	///
+	/// # Parameters
+	///
+	/// - `source` is the source (usually a [`VirtualSource`]) that holds the content
+	/// - `parse_mode` is used to specify a custom parsing mode for the children scope
+	/// - `paragraphing` controls whether paragraphing is enabled for the child scope
+	pub fn with_child<F, R>(&mut self, source: Arc<dyn Source>, parse_mode: ParseMode, paragraphing: bool, f: F) -> R
 	where
 		F: FnOnce(&mut TranslationUnit<'u>, Rc<RefCell<Scope>>) -> R,
 	{
 		let prev_scope = self.current_scope.clone();
 
-		self.current_scope = prev_scope.new_child(source, parse_mode, append_scope);
+		self.current_scope = prev_scope.new_child(source, parse_mode, paragraphing);
 		let ret = f(self, self.current_scope.clone());
 		self.current_scope = prev_scope;
 
@@ -148,8 +155,7 @@ impl<'u> TranslationUnit<'u> {
 }
 
 pub trait TranslationAccessors {
-
-	/// Adds content to the translation unit's scope
+	/// Adds content to the translation unit's current scope
 	fn add_content(&mut self, elem: Arc<dyn Element>);
 }
 

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use regex::Regex;
 
 use crate::parser::rule::Rule;
+use crate::parser::scope::ScopeAccessor;
 use crate::parser::source::Cursor;
 use crate::parser::source::Token;
 use crate::parser::state::ParseMode;
@@ -11,6 +12,7 @@ use crate::parser::translation::TranslationAccessors;
 use crate::parser::translation::TranslationUnit;
 
 use super::elem::Paragraph;
+use super::elem::ParagraphToken;
 
 #[auto_registry::auto_registry(registry = "rules")]
 pub struct ParagraphRule {
@@ -32,10 +34,15 @@ impl Rule for ParagraphRule {
 
 	fn next_match(
 		&self,
-		_mode: &ParseMode,
+		mode: &ParseMode,
 		cursor: &Cursor,
 	) -> Option<(usize, Box<dyn Any>)>
 	{
+		if mode.paragraph_only
+		{
+			return None;
+		}
+
 		self.re
 			.find_at(cursor.source().content(), cursor.pos())
 			.map(|m| (m.start(), Box::new(()) as Box<dyn Any>))
@@ -52,11 +59,14 @@ impl Rule for ParagraphRule {
 			Some(capture) => cursor.at(capture.get(0).unwrap().end() - 1),
 		};
 
-		unit.add_content(Arc::new(Paragraph {
-			location: Token::new(cursor.pos()..end_cursor.pos(), cursor.source().clone()),
-			content: Vec::new(),
-		}));
-
+		// Terminate paragraph
+		if let Some(paragraph) = unit.get_scope().current_paragraph() {
+			unit.add_content(Arc::new(Paragraph {
+				location: Token::new(cursor.pos()..end_cursor.pos(), cursor.source().clone()),
+				token: ParagraphToken::End
+			}));
+		}
+		
 		end_cursor
 	}
 }

@@ -45,33 +45,21 @@ impl<'u> KernelContext<'u> {
 }
 
 pub trait ContextAccessor {
-	fn with_context<F, R>(&self, f: F) -> R
-	where
-		F: FnOnce(Ref<'_, KernelContext<'static>>) -> R;
-
 	fn with_context_mut<F, R>(&self, f: F) -> R
 	where
 		F: FnOnce(RefMut<'_, KernelContext<'static>>) -> R;
 }
 
-impl ContextAccessor for Rc<RefCell<Option<KernelContext<'static>>>>
-{
-    fn with_context<F, R>(&self, f: F) -> R
-	    where
-		    F: FnOnce(Ref<'_, KernelContext<'static>>) -> R {
-
-		f(Ref::map((*self.clone()).borrow(), |context| {
-			unsafe { std::mem::transmute( context.as_ref().unwrap() ) }
-		}))
-    }
-
-    fn with_context_mut<F, R>(&self, f: F) -> R
-	    where
-		    F: FnOnce(RefMut<'_, KernelContext<'static>>) -> R {
-		f(RefMut::map((*self.clone()).borrow_mut(), |context| {
-			unsafe { std::mem::transmute( context.as_ref().unwrap() ) }
-		}))
-    }
+impl ContextAccessor for Rc<RefCell<Option<KernelContext<'static>>>> {
+	fn with_context_mut<F, R>(&self, f: F) -> R
+	where
+		F: FnOnce(RefMut<'_, KernelContext<'static>>) -> R,
+	{
+		f(RefMut::map(
+			(*self.clone()).borrow_mut(),
+			|context| unsafe { std::mem::transmute(context.as_ref().unwrap()) },
+		))
+	}
 }
 
 /// Stores lua related informations for a translation unit
@@ -82,23 +70,33 @@ pub struct Kernel {
 
 impl Kernel {
 	pub fn new(unit: &TranslationUnit) -> Self {
-		let kernel = Self { lua: Lua::new(), context: Rc::new(RefCell::default()) };
+		let kernel = Self {
+			lua: Lua::new(),
+			context: Rc::new(RefCell::default()),
+		};
 
 		// Export modified print function to redirect it's output
-		
-		kernel.lua.globals()
+
+		kernel
+			.lua
+			.globals()
 			.set(
 				"print",
-				kernel.lua.create_function({ let ctx = kernel.context.clone(); move |lua, msg: String| {
-					//kernel.with_context_mut(|mut ctx| {
-					//	ctx.redirects.push(KernelRedirect {
-					//		source: "print".into(),
-					//		content: msg,
-					//	});
-					//});
-					Ok(())
-				} })
-				.unwrap(),
+				kernel
+					.lua
+					.create_function({
+						let ctx = kernel.context.clone();
+						move |lua, msg: String| {
+							//kernel.with_context_mut(|mut ctx| {
+							//	ctx.redirects.push(KernelRedirect {
+							//		source: "print".into(),
+							//		content: msg,
+							//	});
+							//});
+							Ok(())
+						}
+					})
+					.unwrap(),
 			)
 			.unwrap();
 
@@ -138,7 +136,8 @@ impl Kernel {
 	where
 		F: FnOnce(&'lua Lua) -> R,
 	{
-		self.context.replace(unsafe { std::mem::transmute(Some(ctx)) });
+		self.context
+			.replace(unsafe { std::mem::transmute(Some(ctx)) });
 
 		let val = f(&self.lua);
 
@@ -167,12 +166,15 @@ impl Kernel {
 	/// Creates a function and inserts it into a table
 	pub fn create_function<'lua, A, R, F>(&'lua self, table: mlua::Table, name: &str, f: F)
 	where
-        A: mlua::FromLuaMulti<'lua>,
-        R: mlua::IntoLuaMulti<'lua>,
-        F: Fn(Rc<RefCell<Option<KernelContext<'static>>>>, &'lua Lua, A) -> mlua::Result<R> + 'static,
+		A: mlua::FromLuaMulti<'lua>,
+		R: mlua::IntoLuaMulti<'lua>,
+		F: Fn(RefMut<'_, KernelContext<'static>>, &'lua Lua, A) -> mlua::Result<R> + 'static,
 	{
 		let ctx = self.context.clone();
-		let fun = self.lua.create_function(move |lua: &'lua Lua, a: A| f(ctx.clone(), lua, a)).unwrap();
+		let fun = self
+			.lua
+			.create_function(move |lua: &'lua Lua, a: A| ctx.with_context_mut(|ctx| f(ctx, lua, a)))
+			.unwrap();
 		table.set(name, fun);
 	}
 }
@@ -189,11 +191,7 @@ impl KernelHolder {
 		self.kernels.insert("main".into(), Kernel::new(unit));
 	}
 
-	pub fn get<S: AsRef<str>>(&self, name: S) -> Option<&Kernel> {
-		self.kernels.get(name.as_ref())
-	}
+	pub fn get<S: AsRef<str>>(&self, name: S) -> Option<&Kernel> { self.kernels.get(name.as_ref()) }
 
-	pub fn insert(&mut self, name: String, kernel: Kernel) {
-		self.kernels.insert(name, kernel);
-	}
+	pub fn insert(&mut self, name: String, kernel: Kernel) { self.kernels.insert(name, kernel); }
 }

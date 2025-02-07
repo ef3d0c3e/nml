@@ -5,7 +5,8 @@ use crate::parser::reports::*;
 use ariadne::Fmt;
 use document::document::Document;
 use lsp::semantic::Semantics;
-use lua::kernel::CTX;
+use lua::kernel::ContextAccessor;
+use lua::kernel::Kernel;
 use mlua::Error::BadArgument;
 use mlua::Function;
 use mlua::Lua;
@@ -18,7 +19,6 @@ use parser::translation::TranslationUnit;
 use parser::util;
 use parser::util::escape_source;
 use parser::util::parse_paragraph;
-use parser::util::process_text;
 use regex::Regex;
 use url::Url;
 
@@ -89,7 +89,6 @@ impl RegexRule for LinkRule {
 					return;
 				}
 
-
 				unit.with_lsp(|lsp| {
 					lsp.with_semantics(token.source(), |sems, tokens| {
 						sems.add(
@@ -153,52 +152,50 @@ impl RegexRule for LinkRule {
 		}));
 	}
 
-	fn register_bindings<'lua>(&self, lua: &'lua Lua) -> Vec<(String, Function<'lua>)> {
-		let mut bindings = vec![];
+	fn register_bindings(&self, kernel: &Kernel, table: mlua::Table) {
+		kernel.create_function(table, "push", |mut ctx, _, (display, url): (String, String)|  {
+			// Parse display
+			let source = Arc::new(VirtualSource::new(
+					ctx.location.clone(),
+					":LUA:Link Display".to_string(),
+					display,
+			));
+			let display_content = match parse_paragraph(ctx.unit, source)
+			{
+				Err(err) => {
+					return Err(BadArgument {
+						to: Some("push".to_string()),
+						pos: 1,
+						name: Some("display".to_string()),
+						cause: Arc::new(mlua::Error::external(format!(
+									"Failed to parse link display: {err}"
+						))),
+					});
+				}
+				Ok(scope) => scope,
+			};
 
-		bindings.push((
-			"push".to_string(),
-			lua.create_function(|_, (display, url): (String, String)| {
-				let mut result = Ok(());
-				CTX.with_borrow(|ctx| {
-					ctx.as_ref().map(|ctx| {
-						let source = Arc::new(VirtualSource::new(
-							ctx.location.clone(),
-							"Link Display".to_string(),
-							display,
-						));
-						let display_content = match parse_paragraph(ctx.state, source, ctx.document)
-						{
-							Err(err) => {
-								result = Err(BadArgument {
-									to: Some("push".to_string()),
-									pos: 1,
-									name: Some("display".to_string()),
-									cause: Arc::new(mlua::Error::external(format!(
-										"Failed to parse link display: {err}"
-									))),
-								});
-								return;
-							}
-							Ok(mut paragraph) => std::mem::take(&mut paragraph.content),
-						};
+			// Parse url
+			let url = url::Url::parse(&url).map_err(|err| {
+				BadArgument {
+					to: Some("push".to_string()),
+					pos: 2,
+					name: Some("url".to_string()),
+					cause: Arc::new(mlua::Error::external(format!(
+								"Failed to url: {err}"
+					))),
+				}
+			})?;
 
-						ctx.state.push(
-							ctx.document,
-							Box::new(Link {
-								location: ctx.location.clone(),
-								display: vec![display_content],
-								url,
-							}),
-						);
-					})
-				});
+			// Add element
+			let location = ctx.location.clone();
+			ctx.unit.add_content(Arc::new(Link {
+				location,
+				display: vec![display_content],
+				url,
+			}));
 
-				result
-			})
-			.unwrap(),
-		));
-
-		bindings
+			Ok(())
+		});
 	}
 }

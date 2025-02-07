@@ -1,27 +1,37 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
-use crate::document::document::Document;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::reports::Report;
+use crate::parser::scope::Scope;
+use crate::parser::scope::ScopeAccessor;
 use crate::parser::source::Token;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParagraphToken {
+	Start,
+	End,
+}
 
 #[derive(Debug)]
 pub struct Paragraph {
 	pub(crate) location: Token,
-	pub(crate) content: Vec<Arc<dyn Element>>,
+	pub(crate) token: ParagraphToken,
 }
 
-impl Paragraph {
+/*impl Paragraph {
 	pub fn find_back<P: FnMut(&&Box<dyn Element + 'static>) -> bool>(
 		&self,
 		predicate: P,
 	) -> Option<&Box<dyn Element>> {
 		self.content.iter().rev().find(predicate)
 	}
-}
+}*/
 
 impl Element for Paragraph {
 	fn location(&self) -> &Token { &self.location }
@@ -32,6 +42,7 @@ impl Element for Paragraph {
 
 	fn compile<'e>(
 		&'e self,
+		_scope: Rc<RefCell<Scope>>,
 		compiler: &'e Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
@@ -42,8 +53,8 @@ impl Element for Paragraph {
 		match compiler.target() {
 			HTML => {
 				output.add_content("<p>");
-				for elem in &self.content {
-					elem.compile(compiler, document, output)?;
+				for (scope, elem) in self.content[0].content_iter() {
+					elem.compile(scope, compiler, output)?;
 				}
 				output.add_content("</p>");
 			}
@@ -56,16 +67,5 @@ impl Element for Paragraph {
 }
 
 impl ContainerElement for Paragraph {
-	fn contained(&self) -> &Vec<Box<dyn Element>> { &self.content }
-
-	fn push(&mut self, elem: Box<dyn Element>) -> Result<(), String> {
-		if elem.location().source() == self.location().source() {
-			self.location.range = self.location.start()..elem.location().end();
-		}
-		if elem.kind() == ElemKind::Block {
-			return Err("Attempted to push block element inside a paragraph".to_string());
-		}
-		self.content.push(elem);
-		Ok(())
-	}
+	fn contained(&self) -> &[Rc<RefCell<Scope>>] { &self.content.as_slice() }
 }

@@ -1,12 +1,20 @@
-use super::document::Document;
+use crate::document::element::ElemKind;
 use crate::elements::text::elem::Text;
-use crate::parser::parser::ParseMode;
-use crate::parser::parser::ParserState;
+use crate::parser::scope::Scope;
+use crate::parser::scope::ScopeAccessor;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
+use crate::parser::state::ParseMode;
+use crate::parser::translation::TranslationAccessors;
+use crate::parser::translation::TranslationUnit;
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
+
+use super::element::ContainerElement;
+use super::element::Element;
 
 /// Internal name for variables
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -15,6 +23,47 @@ pub struct VariableName(pub String);
 impl core::fmt::Display for VariableName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+/// Holds the generated ast from a variable
+#[derive(Debug)]
+pub struct VariableExpansion
+{
+	location: Token,
+	content: Vec<Rc<RefCell<Scope>>>,
+}
+
+impl Element for VariableExpansion {
+    fn location(&self) -> &Token {
+        &self.location()
+    }
+
+    fn kind(&self) -> super::element::ElemKind {
+		ElemKind::Special
+    }
+
+    fn element_name(&self) -> &'static str {
+        "Variable Expansion"
+    }
+
+    fn compile(
+		    &self,
+		    _scope: Rc<RefCell<Scope>>,
+		    compiler: &crate::compiler::compiler::Compiler,
+		    output: &mut crate::compiler::output::CompilerOutput,
+	    ) -> Result<(), Vec<crate::parser::reports::Report>> {
+		for (scope, elem) in self.content[0].content_iter()
+		{
+			elem.compile(scope, compiler, output)?;
+		}
+		Ok(())
+    }
+}
+
+impl ContainerElement for VariableExpansion {
+    fn contained(&self) -> &[Rc<RefCell<Scope>>] {
+        self.content.as_slice()
     }
 }
 
@@ -33,7 +82,7 @@ pub trait Variable {
 	fn value_token(&self) -> &Token;
 
 	/// Expands the variable when it is requested
-	fn parse<'a>(&self, state: &ParserState, location: Token, document: &'a dyn Document<'a>);
+	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token);
 }
 
 impl core::fmt::Debug for dyn Variable {
@@ -71,18 +120,28 @@ impl Variable for BaseVariable {
 
 	fn value_token(&self) -> &Token { &self.value_token }
 
-	fn parse<'a>(&self, state: &ParserState, _location: Token, document: &'a dyn Document<'a>) {
+	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token) {
+		// Create variable content
 		let source = Arc::new(VirtualSource::new(
 			self.location().clone(),
 			format!(":VAR:{}", self.name()),
 			self.to_string(),
 		));
 
-		state.with_state(|new_state| {
-			let _ = new_state
-				.parser
-				.parse_into(new_state, source, document, ParseMode::default());
+		// Expand & parse variable content
+		let scope = unit.with_child(source, ParseMode::default(), false, |unit, scope| {
+			unit.parser().parse(unit);
+
+			scope
 		});
+
+		// Store expanded variable to a new element
+		let expanded = Arc::new(VariableExpansion {
+			location,
+			content: vec![scope],
+		});
+		
+		unit.add_content(expanded);
 	}
 }
 
@@ -115,19 +174,27 @@ impl Variable for PathVariable {
 
 	fn value_token(&self) -> &Token { &self.value_token }
 
-	fn parse(&self, state: &ParserState, location: Token, document: &dyn Document) {
+	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token) {
 		let source = Arc::new(VirtualSource::new(
 			location,
 			self.name().to_string(),
 			self.to_string(),
 		));
 
-		state.push(
-			document,
-			Box::new(Text::new(
-				Token::new(0..source.content().len(), source),
-				self.to_string(),
-			)),
-		);
+		// Expand variable as [`Text`]
+		let scope = unit.with_child(source, ParseMode::default(), false, |_, scope| {
+			scope.add_content(Arc::new(Text {
+				location: source.into(),
+				// FIXME this should depend of the current work dir
+				content: self.to_string(),
+			}));
+			scope
+		});
+
+		// Add expanded variable
+		unit.add_content(Arc::new(VariableExpansion {
+			location,
+			content: vec![scope],
+		}));
 	}
 }

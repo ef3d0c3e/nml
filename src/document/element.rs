@@ -4,14 +4,12 @@ use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
-use crate::elements::reference::elem::InternalReference;
 use crate::parser::reports::Report;
 use crate::parser::scope::Scope;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
-use super::document::Document;
 
 /// The kind for an element
 ///

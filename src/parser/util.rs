@@ -3,13 +3,6 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use unicode_segmentation::UnicodeSegmentation;
-
-use crate::document::document::Document;
-use crate::document::document::DocumentAccessors;
-use crate::document::element::ElemKind;
-use crate::elements::paragraph::elem::Paragraph;
-
 use super::scope::Scope;
 use super::scope::ScopeAccessor;
 use super::source::Source;

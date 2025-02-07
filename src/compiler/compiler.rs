@@ -3,10 +3,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::cache::cache::Cache;
-use crate::document::document::Document;
 use crate::document::variable::Variable;
-use crate::parser::parser::ReportColors;
 use crate::parser::reports::Report;
+use crate::parser::translation::TranslationUnit;
 use rusqlite::Connection;
 use tokio::sync::MutexGuard;
 
@@ -123,8 +122,7 @@ impl Compiler {
 	/// Compiles a document to it's output
 	pub fn compile(
 		&self,
-		document: &dyn Document,
-		colors: &ReportColors,
+		unit: &TranslationUnit,
 	) -> (CompiledDocument, PostProcess) {
 		let borrow = document.content().borrow();
 

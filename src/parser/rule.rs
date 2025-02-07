@@ -1,15 +1,10 @@
-use super::reports::Report;
 use super::source::Cursor;
 use super::source::Token;
 use super::state::ParseMode;
-use super::state::ParserState;
 use super::translation::TranslationUnit;
-use crate::document::document::Document;
 use crate::lua::kernel::Kernel;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
-use mlua::Function;
-use mlua::Lua;
 
 use std::any::Any;
 use std::collections::HashMap;
