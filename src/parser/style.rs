@@ -43,11 +43,11 @@ macro_rules! create_styles {
 	}};
 }
 
-#[auto_registry::generate_registry(registry = "elem_styles", target = make_styles, return_type = HashMap<String, Rc<dyn ElementStyle>>, maker = create_styles)]
+//#[auto_registry::generate_registry(registry = "elem_styles", target = make_styles, return_type = HashMap<String, Rc<dyn ElementStyle>>, maker = create_styles)]
 impl Default for StyleHolder {
 	fn default() -> Self {
 		Self {
-			styles: make_styles(),
+			styles: HashMap::default(), //make_styles(),
 		}
 	}
 }
