@@ -3,12 +3,14 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::Report;
 use crate::parser::scope::Scope;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use url::Url;
 
 
 /// The kind for an element
@@ -87,6 +89,9 @@ pub trait ReferenceableElement: Element {
 	/// Gets the refid for a compiler. The refid is some key that can be used from an external
 	/// document to reference this element.
 	fn refid(&self, compiler: &Compiler, refid: usize) -> String;
+
+	/// Gets an url to the reference, based on the compiler's target
+	//fn get_url(&self, target: Target) -> Url;
 }
 
 pub trait ContainerElement: Element {

@@ -166,7 +166,8 @@ impl<'u> TranslationUnit<'u> {
 		let output = UnitOutput {
 			input_file,
 			output_file: output_file.map(|(var, _)| var.to_string()),
-		}
+		};
+		self.output.set(output).unwrap();
 
 		self
 	}
