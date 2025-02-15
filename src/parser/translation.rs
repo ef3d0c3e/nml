@@ -1,10 +1,13 @@
+use std::borrow::Borrow;
 use std::borrow::BorrowMut;
+use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::document::element::Element;
+use crate::document::variable::VariableName;
 use crate::lsp::data::LangServerData;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
@@ -16,6 +19,13 @@ use super::scope::Scope;
 use super::scope::ScopeAccessor;
 use super::source::Source;
 use super::state::ParseMode;
+
+/// Stores output data for [`TranslationUnit`]
+pub struct UnitOutput
+{
+	pub input_file: String,
+	pub output_file: Option<String>,
+}
 
 /// Stores the data required by the parser
 pub struct TranslationUnit<'u> {
@@ -44,6 +54,8 @@ pub struct TranslationUnit<'u> {
 	//custom_styles: CustomStyleHolder,
 
 	reports: Vec<(Rc<RefCell<Scope>>, Report)>,
+	/// Output data extracted from parsing
+	output: OnceCell<UnitOutput>,
 }
 
 ///
@@ -91,6 +103,7 @@ impl<'u> TranslationUnit<'u> {
 			//custom_styles: CustomStyleHolder::default(),
 
 			reports: Vec::default(),
+			output: OnceCell::default(),
 		};
 
 		let main_kernel = Kernel::new(&s);
@@ -102,6 +115,9 @@ impl<'u> TranslationUnit<'u> {
 
 	/// Gets the current scope
 	pub fn get_scope(&self) -> Rc<RefCell<Scope>> { self.current_scope.clone() }
+
+	/// Gets the entry scope
+	pub fn get_entry_scope(&self) -> Rc<RefCell<Scope>> { self.entry_scope.clone() }
 
 	//pub fn scope<'s>(&'s self) -> Ref<'s, Scope> { (*self.current_scope).borrow() }
 
@@ -143,6 +159,13 @@ impl<'u> TranslationUnit<'u> {
 		} else {
 			// TODO:
 			//Report::reports_to_stdout(&self.colors, std::mem::replace(&mut self.reports, vec![]));
+		}
+
+		let input_file = self.get_entry_scope().borrow().source();
+		let output_file = self.get_scope().get_variable(&VariableName("compiler.output".into()));
+		let output = UnitOutput {
+			input_file,
+			output_file: output_file.map(|(var, _)| var.to_string()),
 		}
 
 		self

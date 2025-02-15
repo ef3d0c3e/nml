@@ -17,7 +17,6 @@ use crate::document::references::Reference;
 use crate::document::references::Refname;
 use crate::document::variable::Variable;
 use crate::document::variable::VariableName;
-use crate::elements::paragraph;
 use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::paragraph::elem::ParagraphToken;
 

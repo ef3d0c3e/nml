@@ -5,11 +5,6 @@ use std::time::UNIX_EPOCH;
 
 
 use crate::cache::cache::Cache;
-use crate::document::document::Document;
-use crate::parser::langparser::LangParser;
-use crate::parser::parser::ParseMode;
-use crate::parser::parser::Parser;
-use crate::parser::parser::ParserState;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
 

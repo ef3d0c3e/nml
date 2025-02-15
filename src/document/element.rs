@@ -106,8 +106,8 @@ impl Element for DocumentEnd {
 
 	fn compile<'e>(
 		&'e self,
+		_scope: Rc<RefCell<Scope>>,
 		_compiler: &'e Compiler,
-		_document: &'e dyn Document,
 		_output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
 		Ok(())

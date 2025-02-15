@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::document::element::ElemKind;
 use crate::elements::text::elem::Text;
 use crate::parser::scope::Scope;
@@ -72,6 +74,11 @@ pub trait Variable {
 	/// Gets the definition location of the variable
 	fn location(&self) -> &Token;
 
+	/// Gets the variable typename for serialization
+	fn variable_typename(&self) -> &'static str;
+
+	fn serialize_inner(&self) -> ();
+
 	/// Gets the name of the variable
 	fn name(&self) -> &VariableName;
 
@@ -113,6 +120,10 @@ impl BaseVariable {
 
 impl Variable for BaseVariable {
 	fn location(&self) -> &Token { &self.location }
+
+	fn variable_typename(&self) -> &'static str {
+	    "base_variable"
+	}
 
 	fn name(&self) -> &VariableName { &self.name }
 
@@ -167,6 +178,10 @@ impl PathVariable {
 
 impl Variable for PathVariable {
 	fn location(&self) -> &Token { &self.location }
+
+	fn variable_typename(&self) -> &'static str {
+	    "path_variable"
+	}
 
 	fn name(&self) -> &VariableName { &self.name }
 

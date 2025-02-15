@@ -3,6 +3,8 @@ use std::rc::Rc;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::compiler::resolver::ErasedReference;
+
 /// Internal name for references
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Refname(String);

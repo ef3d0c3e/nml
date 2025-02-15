@@ -3,7 +3,15 @@ use std::sync::MutexGuard;
 
 use rusqlite::Connection;
 
+use crate::document::references::Refname;
+use crate::document::variable::VariableName;
+
 use super::output::CompilerOutput;
+
+pub enum UnitQuery {
+	Reference(Refname, String),
+	Variable(VariableName, String),
+}
 
 /// Stores the extracted data from the compilation unit after calling the compiler on them
 ///
@@ -17,10 +25,9 @@ pub struct CompiledUnit {
 	compiled_time: u64,
 
 	/// Exported variables (serialized)
-	variables: HashMap<String, String>,
-
+	variables: HashMap<VariableName, String>,
 	/// Exported referenceable objects (serialized)
-	references: HashMap<String, String>,
+	references: HashMap<Refname, String>,
 
 	/// Lists of other units this units depends on
 	depends_on: Vec<String>,
@@ -64,18 +71,15 @@ impl CompiledUnit {
 		);
 	}
 
-	pub fn new(output: CompilerOutput) -> Self
-	{
-		todo!()
-	}
+	pub fn new(output: CompilerOutput) -> Self { todo!() }
 
 	/// Get dependencies of this unit
 	pub fn get_dependent<'con>(&self, con: MutexGuard<'con, Connection>) -> Vec<String> {
 		let stmt = con
 			.prepare("SELECT (input_file) FROM units_depends WHERE depends_file = (?1)")
 			.unwrap();
-		let mut result = vec![];
 
+		let mut result = vec![];
 		stmt.query_and_then(&self.input_file, |row| {
 			let input_file = row.get(0).unwrap();
 			result.push(input_file);
@@ -102,7 +106,7 @@ impl CompiledUnit {
 		// Store unit
 		con.execute("INSERT OR REPLACE INTO compiled_units (input_file, output_file, compiled_tile, data) VALUES (?1, ?2, ?3, ?4);", 
 			(&self.input_file,
-			 &self.output_file,
+			 &self.output_file
 			 &self.compiled_time,
 			 &self.output)
 			).unwrap();
@@ -110,20 +114,17 @@ impl CompiledUnit {
 		let tr = con.transaction().unwrap();
 
 		// Store variables
-		for (name, data) in &self.variables
-		{
+		for (name, data) in &self.variables {
 			tr.execute("INSERT OR REPLACE INTO units_variables (input_file, name, data) VALUES (?1, ?2, ?3)", (&self.input_file, name, data));
 		}
 
 		// Store references
-		for (name, data) in &self.references
-		{
+		for (name, data) in &self.references {
 			tr.execute("INSERT OR REPLACE INTO units_references (input_file, name, data) VALUES (?1, ?2, ?3)", (&self.input_file, name, data));
 		}
 
 		// Store dependencies
-		for depends_on in &self.depends_on
-		{
+		for depends_on in &self.depends_on {
 			tr.execute("INSERT OR REPLACE INTO units_references (depends_file, input_file) VALUES (?1, ?2)", (depends_on, &self.input_file));
 		}
 

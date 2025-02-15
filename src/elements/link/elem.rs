@@ -27,7 +27,7 @@ impl Element for Link {
 	fn element_name(&self) -> &'static str { "Link" }
 	fn compile<'e>(
 		&'e self,
-		scope: Rc<RefCell<Scope>>,
+		_scope: Rc<RefCell<Scope>>,
 		compiler: &'e Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {

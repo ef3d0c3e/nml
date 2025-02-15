@@ -5,3 +5,4 @@ pub mod process;
 pub mod sanitize;
 pub mod output;
 pub mod compiled;
+pub mod resolver;
