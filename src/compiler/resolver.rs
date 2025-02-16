@@ -1,11 +1,13 @@
-use std::{borrow::Borrow, collections::HashMap, sync::{Arc, MutexGuard}};
+use std::collections::HashMap;
+use std::marker::PhantomData;
+use std::sync::MutexGuard;
 
 use rusqlite::Connection;
 use url::Url;
 
-use crate::{document::references::Refname, parser::{scope::ScopeAccessor, source::Source, translation::TranslationUnit}};
+use crate::document::references::Refname;
 
-use super::compiler::Target;
+use super::compiled::CompiledUnit;
 
 pub struct ErasedReference {
 	/// Reference source file (e.g input file)
@@ -18,28 +20,22 @@ pub struct ErasedReference {
 
 #[derive(Default)]
 pub struct Resolver<'u> {
+	_pd: PhantomData<&'u i32>,
+}
+
+/// Stores the result of resolved data
+/// Every reference asked by an element should be present in this structure
+#[derive(Default)]
+pub struct ResolveData {
 	references: HashMap<Refname, Vec<ErasedReference>>,
 }
 
 impl<'u> Resolver<'u> {
-	pub fn add_unit(&mut self, unit: &'u TranslationUnit<'u>, target: Target) {
-		todo!();
-		for (_, elem) in unit.get_entry_scope().content_iter()
-		{
-			let source : Arc<dyn Source> = unit.get_entry_scope().borrow().source();
-			if let Some(referenceable) = elem.as_referenceable()
-			{
-				//let erased = ErasedReference {
-				//	source: source.name().into(),
-				//	name: referenceable.reference_name().cloned(),
-				//	url: referenceable.get_url(target),
-				//};
-				//referenceable.reference_name(target);
-			}
-		}
-	}
-
-	pub fn import_from_cache<'con>(&mut self, mut con: MutexGuard<'con, Connection>) {
-		todo!();
+	pub fn resolve<'con>(
+		&self,
+		units: Vec<CompiledUnit>,
+		mut con: MutexGuard<'con, Connection>,
+	) -> ResolveData {
+		ResolveData::default()
 	}
 }

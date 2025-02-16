@@ -7,7 +7,7 @@ use crate::compiler::resolver::ErasedReference;
 
 /// Internal name for references
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Refname(String);
+pub struct Refname(pub String);
 
 impl core::fmt::Display for Refname {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

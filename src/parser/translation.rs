@@ -18,9 +18,11 @@ use super::reports::ReportColors;
 use super::scope::Scope;
 use super::scope::ScopeAccessor;
 use super::source::Source;
+use super::source::SourceFile;
 use super::state::ParseMode;
 
 /// Stores output data for [`TranslationUnit`]
+#[derive(Debug)]
 pub struct UnitOutput
 {
 	pub input_file: String,
@@ -114,10 +116,10 @@ impl<'u> TranslationUnit<'u> {
 	pub fn parser(&self) -> &'u Parser { &self.parser }
 
 	/// Gets the current scope
-	pub fn get_scope(&self) -> Rc<RefCell<Scope>> { self.current_scope.clone() }
+	pub fn get_scope(&self) -> &Rc<RefCell<Scope>> { &self.current_scope }
 
 	/// Gets the entry scope
-	pub fn get_entry_scope(&self) -> Rc<RefCell<Scope>> { self.entry_scope.clone() }
+	pub fn get_entry_scope(&self) -> &Rc<RefCell<Scope>> { &self.entry_scope }
 
 	//pub fn scope<'s>(&'s self) -> Ref<'s, Scope> { (*self.current_scope).borrow() }
 
@@ -161,10 +163,11 @@ impl<'u> TranslationUnit<'u> {
 			//Report::reports_to_stdout(&self.colors, std::mem::replace(&mut self.reports, vec![]));
 		}
 
-		let input_file = self.get_entry_scope().borrow().source();
+		let input_file = Rc::as_ref(self.get_entry_scope()).borrow().source();
+
 		let output_file = self.get_scope().get_variable(&VariableName("compiler.output".into()));
 		let output = UnitOutput {
-			input_file,
+			input_file: input_file.downcast_ref::<SourceFile>().unwrap().name().to_string(),
 			output_file: output_file.map(|(var, _)| var.to_string()),
 		};
 		self.output.set(output).unwrap();

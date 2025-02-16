@@ -9,8 +9,8 @@ use crate::parser::translation::TranslationUnit;
 use rusqlite::Connection;
 use tokio::sync::MutexGuard;
 
+use super::compiled::CompiledUnit;
 use super::output::CompilerOutput;
-use super::postprocess::PostProcess;
 use super::sanitize::Sanitizer;
 
 #[derive(Clone, Copy)]
@@ -63,6 +63,7 @@ impl Compiler {
 	/// Gets the cache (a sqlite database) of this compiler
 	pub fn cache(&self) -> Arc<Cache> { self.cache.clone() }
 
+	/* FIXME
 	/// Produces the header for a given document
 	fn header(&self, document: &dyn Document) -> String {
 		pub fn get_variable_or_error(
@@ -118,12 +119,14 @@ impl Compiler {
 		}
 		result
 	}
+	*/
 
 	/// Compiles a document to it's output
 	pub fn compile(
 		&self,
 		unit: &TranslationUnit,
-	) -> (CompiledDocument, PostProcess) {
+	) -> CompiledUnit {
+		/*
 		let borrow = document.content().borrow();
 
 		// Header
@@ -147,6 +150,8 @@ impl Compiler {
 		let footer = self.footer(document);
 
 		output.to_compiled(self, document, header, footer)
+		*/
+		todo!();
 	}
 }
 

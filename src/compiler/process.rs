@@ -4,17 +4,6 @@ use crate::{cache::cache::Cache, parser::{parser::Parser, source::SourceFile, tr
 
 use super::{compiled::CompiledUnit, compiler::{Compiler, Target}};
 
-/// Processqueue for inputs
-pub struct ProcessQueue
-{
-	inputs: Vec<PathBuf>,
-	outputs: Vec<CompiledUnit>,
-	cache: Arc<Cache>,
-
-	parser: Parser,
-	compiler: Compiler,
-}
-
 pub enum ProcessError
 {
 	GeneralError(String),
@@ -26,10 +15,21 @@ pub enum ProcessOutputOptions {
 	File(String),
 }
 
+/// Processqueue for inputs
+pub struct ProcessQueue
+{
+	inputs: Vec<PathBuf>,
+	outputs: Vec<CompiledUnit>,
+	cache: Arc<Cache>,
+
+	parser: Parser,
+	compiler: Compiler,
+}
+
 impl ProcessQueue {
 	pub fn new(target: Target, db: Option<&str>, inputs: Vec<PathBuf>) -> Self
 	{
-		let cache = Arc::new(Cache::new(db)?);
+		let cache = Arc::new(Cache::new(db).unwrap());
 
 		let parser = Parser::new();
 		let compiler = Compiler::new(target, cache.clone());
@@ -69,15 +69,15 @@ impl ProcessQueue {
 
 			// Get mtime
 			let meta = std::fs::metadata(input)
-				.map_err(|err| ProcessError::InputError(input_string, format!("Failed to get metadata for `{input_string}`: {err}")))?;
+				.map_err(|err| ProcessError::InputError(input_string.clone(), format!("Failed to get metadata for `{input_string}`: {err}")))?;
 
 			let modified = meta
 				.modified()
-				.map_err(|err| ProcessError::InputError(input_string, format!("Unable to query modification time for `{input_string}`: {err}")))?;
+				.map_err(|err| ProcessError::InputError(input_string.clone(), format!("Unable to query modification time for `{input_string}`: {err}")))?;
 
 			// Create unit
-			let source = Arc::new(SourceFile::new(input_string, None)?);
-			let unit = TranslationUnit::new(&self.parser, source, false, true);
+			let source = Arc::new(SourceFile::new(input_string, None).unwrap());
+			let mut unit = TranslationUnit::new(&self.parser, source, false, true);
 
 			// TODO: Check if necessary to compile
 			unit = unit.consume();

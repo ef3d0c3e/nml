@@ -77,7 +77,7 @@ pub trait Variable {
 	/// Gets the variable typename for serialization
 	fn variable_typename(&self) -> &'static str;
 
-	fn serialize_inner(&self) -> ();
+	//fn serialize_inner(&self) -> ();
 
 	/// Gets the name of the variable
 	fn name(&self) -> &VariableName;
@@ -191,15 +191,15 @@ impl Variable for PathVariable {
 
 	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token) {
 		let source = Arc::new(VirtualSource::new(
-			location,
+			location.clone(),
 			self.name().to_string(),
 			self.to_string(),
 		));
 
 		// Expand variable as [`Text`]
-		let scope = unit.with_child(source, ParseMode::default(), false, |_, scope| {
+		let scope = unit.with_child(source.clone(), ParseMode::default(), false, |_, scope| {
 			scope.add_content(Arc::new(Text {
-				location: source.into(),
+				location: (source as Arc<dyn Source>).into(),
 				// FIXME this should depend of the current work dir
 				content: self.to_string(),
 			}));

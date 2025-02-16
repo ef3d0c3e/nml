@@ -1,5 +1,7 @@
 use std::any::Any;
+use std::borrow::Borrow;
 use std::ops::Range;
+use std::rc::Rc;
 use std::slice::Iter;
 use std::sync::Arc;
 
@@ -52,7 +54,7 @@ impl Parser {
 		unit: &mut TranslationUnit,
 		cursor: &Cursor,
 	) -> Option<(Cursor, &Box<dyn Rule>, Box<dyn Any>)> {
-		let mut scope = unit.scope_mut();
+		let mut scope = unit.get_scope().borrow_mut();
 		let state = scope.parser_state_mut();
 		while state.matches.len() < self.rules.len() {
 			state.matches.push((0, None));
@@ -148,7 +150,7 @@ impl Parser {
 
 	/// Parses the current scope in the translation unit
 	pub fn parse<'u>(&'u self, unit: &mut TranslationUnit<'u>) {
-		let mut cursor = Cursor::new(0, unit.scope().source().into());
+		let mut cursor = Cursor::new(0, Rc::as_ref(unit.get_scope()).borrow().source().into());
 
 		while let Some((next_cursor, rule, rule_data)) = self.next_match(unit, &cursor) {
 			// Unmatched content added as text

@@ -78,6 +78,7 @@ pub trait ReferenceableElement: Element {
 	fn refcount_key(&self) -> &'static str;
 
 	/// Creates the reference element
+	/*
 	fn compile_reference(
 		&self,
 		compiler: &Compiler,
@@ -85,12 +86,13 @@ pub trait ReferenceableElement: Element {
 		reference: &InternalReference,
 		refid: usize,
 	) -> Result<String, String>;
+	*/
 
 	/// Gets the refid for a compiler. The refid is some key that can be used from an external
 	/// document to reference this element.
 	fn refid(&self, compiler: &Compiler, refid: usize) -> String;
 
-	/// Gets an url to the reference, based on the compiler's target
+	// Gets an url to the reference, based on the compiler's target
 	//fn get_url(&self, target: Target) -> Url;
 }
 

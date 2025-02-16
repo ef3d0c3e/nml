@@ -75,18 +75,18 @@ impl CompiledUnit {
 
 	/// Get dependencies of this unit
 	pub fn get_dependent<'con>(&self, con: MutexGuard<'con, Connection>) -> Vec<String> {
-		let stmt = con
-			.prepare("SELECT (input_file) FROM units_depends WHERE depends_file = (?1)")
+		let mut stmt = con
+			.prepare("SELECT input_file FROM units_depends WHERE depends_file = (?1)")
+			.unwrap();
+    	let rows = stmt
+			.query_and_then([&self.input_file], |row| row.get::<_, String>(0))
 			.unwrap();
 
-		let mut result = vec![];
-		stmt.query_and_then(&self.input_file, |row| {
-			let input_file = row.get(0).unwrap();
-			result.push(input_file);
-
-			Ok(())
-		})
-		.unwrap();
+		let mut result : Vec<String> = vec![];
+		for row in rows
+		{
+			result.push(row.unwrap());
+		}
 
 		result
 	}
@@ -99,15 +99,15 @@ impl CompiledUnit {
 		DELETE FROM units_variables WHERE input_file = (?1);
 		DELETE FROM units_references WHERE input_file = (?1);
 		DELETE FROM units_depends WHERE input_file = (?1);",
-			&self.input_file,
+		[&self.input_file],
 		)
 		.unwrap();
 
 		// Store unit
 		con.execute("INSERT OR REPLACE INTO compiled_units (input_file, output_file, compiled_tile, data) VALUES (?1, ?2, ?3, ?4);", 
 			(&self.input_file,
-			 &self.output_file
-			 &self.compiled_time,
+			 &self.output_file,
+			 self.compiled_time,
 			 &self.output)
 			).unwrap();
 
@@ -115,12 +115,12 @@ impl CompiledUnit {
 
 		// Store variables
 		for (name, data) in &self.variables {
-			tr.execute("INSERT OR REPLACE INTO units_variables (input_file, name, data) VALUES (?1, ?2, ?3)", (&self.input_file, name, data));
+			tr.execute("INSERT OR REPLACE INTO units_variables (input_file, name, data) VALUES (?1, ?2, ?3)", (&self.input_file, &name.0, data));
 		}
 
 		// Store references
 		for (name, data) in &self.references {
-			tr.execute("INSERT OR REPLACE INTO units_references (input_file, name, data) VALUES (?1, ?2, ?3)", (&self.input_file, name, data));
+			tr.execute("INSERT OR REPLACE INTO units_references (input_file, name, data) VALUES (?1, ?2, ?3)", (&self.input_file, &name.0, data));
 		}
 
 		// Store dependencies

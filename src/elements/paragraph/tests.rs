@@ -2,12 +2,8 @@ use std::sync::Arc;
 
 use crate::elements::paragraph::elem::Paragraph;
 use crate::elements::text::elem::Text;
-use crate::parser::langparser::LangParser;
-use crate::parser::parser::ParseMode;
 use crate::parser::parser::Parser;
-use crate::parser::parser::ParserState;
 use crate::parser::source::SourceFile;
-use crate::validate_document;
 
 #[test]
 fn parse() {

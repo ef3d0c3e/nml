@@ -2,9 +2,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 
-use super::compiler::CompiledDocument;
+/*
 use super::compiler::Target;
-use super::postprocess::PostProcess;
 use super::sanitize::Sanitizer;
 
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
@@ -261,6 +260,7 @@ pub fn create_navigation(
 
 	Ok(nav)
 }
+*/
 
 #[cfg(test)]
 mod tests {

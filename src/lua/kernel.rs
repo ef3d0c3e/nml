@@ -1,6 +1,4 @@
-use std::borrow::Borrow;
 use std::borrow::BorrowMut;
-use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::collections::HashMap;
@@ -9,9 +7,7 @@ use std::rc::Rc;
 use mlua::IntoLua;
 use mlua::Lua;
 use mlua::Table;
-use mlua::UserData;
 
-use crate::document::document::Document;
 use crate::parser::parser::ParserRuleAccessor;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;

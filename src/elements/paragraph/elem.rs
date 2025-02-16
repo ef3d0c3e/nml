@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::compiler::compiler::Compiler;
-use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
+use crate::compiler::output::CompilerOutput;
 use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
@@ -46,26 +46,13 @@ impl Element for Paragraph {
 		compiler: &'e Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
-		if self.content.is_empty() {
-			return Ok(());
-		}
-
 		match compiler.target() {
-			HTML => {
-				output.add_content("<p>");
-				for (scope, elem) in self.content[0].content_iter() {
-					elem.compile(scope, compiler, output)?;
-				}
-				output.add_content("</p>");
-			}
+			HTML => match self.token {
+				ParagraphToken::Start => output.add_content("<p>"),
+				ParagraphToken::End => output.add_content("</p>"),
+			},
 			_ => todo!("Unimplemented compiler"),
 		}
 		Ok(())
 	}
-
-	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
-}
-
-impl ContainerElement for Paragraph {
-	fn contained(&self) -> &[Rc<RefCell<Scope>>] { &self.content.as_slice() }
 }

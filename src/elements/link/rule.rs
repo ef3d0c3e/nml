@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use ariadne::Fmt;
-use document::document::Document;
 use lsp::semantic::Semantics;
 use lua::kernel::ContextAccessor;
 use lua::kernel::Kernel;

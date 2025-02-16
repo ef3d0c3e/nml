@@ -170,7 +170,8 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	}
 
 	fn add_content(&self, elem: Arc<dyn Element>) {
-		let mut scope = (*self.to_owned()).borrow_mut();
+		
+		let mut scope = Rc::as_ref(self).borrow_mut();
 		if !scope.paragraphing
 		{
 			scope.content.push(elem);
@@ -202,8 +203,8 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 					location: elem.location().clone(),
 					token: ParagraphToken::Start,
 				});
-				scope.content.push(paragraph);
-				scope.active_paragraph = Some(paragraph.clone());
+				scope.content.push(paragraph.clone());
+				scope.active_paragraph = Some(paragraph);
 			}
 		} else if elem.kind() == ElemKind::Block {
 			// Close paragraph
