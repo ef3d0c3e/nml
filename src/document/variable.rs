@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::compiler::compiler::Compiler;
+use crate::compiler::output::CompilerOutput;
 use crate::document::element::ElemKind;
 use crate::elements::text::elem::Text;
 use crate::parser::scope::Scope;
@@ -52,8 +54,8 @@ impl Element for VariableExpansion {
     fn compile(
 		    &self,
 		    _scope: Rc<RefCell<Scope>>,
-		    compiler: &crate::compiler::compiler::Compiler,
-		    output: &mut crate::compiler::output::CompilerOutput,
+		    compiler: &Compiler,
+		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<crate::parser::reports::Report>> {
 		for (scope, elem) in self.content[0].content_iter()
 		{

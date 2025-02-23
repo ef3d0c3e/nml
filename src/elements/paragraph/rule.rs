@@ -30,7 +30,8 @@ impl Default for ParagraphRule {
 impl Rule for ParagraphRule {
 	fn name(&self) -> &'static str { "Paragraph" }
 
-	fn previous(&self) -> Option<&'static str> { Some("Comment") }
+	//FIXME: fn previous(&self) -> Option<&'static str> { Some("Comment") }
+	fn previous(&self) -> Option<&'static str> { Some("Text") }
 
 	fn next_match(
 		&self,

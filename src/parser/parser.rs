@@ -124,7 +124,7 @@ impl Parser {
 
 	fn add_text<'u>(&'u self, unit: &mut TranslationUnit<'u>, range: Range<Cursor>) {
 		let token: Token = (&range).into();
-		let content = token.content().chars().fold(String::default(), {
+		let mut content = token.content().chars().fold(String::default(), {
 			let mut escaped = false;
 			move |mut s, c| {
 				if c == '\\' {
@@ -140,6 +140,7 @@ impl Parser {
 				s
 			}
 		});
+		content = content.as_str().trim_end().trim_start().to_string();
 
 		if content.is_empty() {
 			return;

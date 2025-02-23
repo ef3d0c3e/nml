@@ -12,7 +12,7 @@ use std::io::Write;
 use std::process::ExitCode;
 
 use compiler::compiler::Target;
-use compiler::navigation::create_navigation;
+use compiler::process::ProcessQueue;
 use compiler::sanitize::Sanitizer;
 use getopts::Options;
 use walkdir::WalkDir;
@@ -163,6 +163,7 @@ fn main() -> ExitCode {
 	let force_rebuild = matches.opt_present("force-rebuild");
 	let debug_opts = matches.opt_strs("z");
 
+	// TODO:
 	let mut files = vec![];
 	if input_meta.is_dir() {
 		if db_path.is_none() {
@@ -214,6 +215,10 @@ fn main() -> ExitCode {
 		}
 	}
 
+	let mut queue = ProcessQueue::new(Target::HTML, Some("debug.db"), files);
+	queue.process(compiler::process::ProcessOutputOptions::File("out.html".into()));
+
+	/*
 	// Parse, compile using the cache
 	let processed = match compiler::process::process(
 		Target::HTML,
@@ -290,6 +295,7 @@ fn main() -> ExitCode {
 			writer.flush().unwrap();
 		}
 	}
+*/
 
 	ExitCode::SUCCESS
 }

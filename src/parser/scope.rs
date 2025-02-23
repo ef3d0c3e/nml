@@ -7,6 +7,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use super::source::Source;
+use super::source::Token;
 use super::state::ParseMode;
 use super::state::ParserState;
 
@@ -22,7 +23,6 @@ use crate::elements::paragraph::elem::ParagraphToken;
 
 /// The scope from a translation unit
 /// Each scope is tied to a unique [`Source`]
-#[derive(Debug)]
 pub struct Scope {
 	/// Stores the element range in the unit's ast
 	pub(crate) range: Range<usize>,
@@ -52,6 +52,14 @@ pub struct Scope {
 
 	/// Currently active paragraph
 	active_paragraph: Option<Arc<dyn Element>>,
+}
+
+impl core::fmt::Debug for Scope
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+        write!(f, "Scope{{\n\tcontent {:#?}\nrange {:#?}\nsource: {:#?}}}", self.content, self.range, self.source)
+    }
 }
 
 impl Scope {
@@ -138,6 +146,20 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		parse_mode: ParseMode,
 		paragraphing: bool,
 	) -> Rc<RefCell<Scope>> {
+		// Close active paragraph
+		//if (*self.clone()).borrow().active_paragraph.is_some()
+		//{
+		//	let elem = {
+		//		let rc_ref : Rc<RefCell<Scope>> = self.to_owned();
+		//		let scope : std::cell::Ref<Scope> = (*rc_ref).borrow();
+		//		Arc::new(Paragraph {
+		//			location: Token::new(scope.range.end..scope.range.end, scope.source.clone()),
+		//			token: ParagraphToken::End,
+		//		})
+		//	};
+		//	self.add_content(elem)
+		//}
+
 		let range = (*self.clone()).borrow().range.clone();
 		let mut child = Scope::new(Some(self.clone()), source, parse_mode, range.end);
 		child.paragraphing = paragraphing;
@@ -170,8 +192,9 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	}
 
 	fn add_content(&self, elem: Arc<dyn Element>) {
-		
 		let mut scope = Rc::as_ref(self).borrow_mut();
+		assert_eq!(*elem.location().source(), *scope.source);
+		scope.range.end = elem.location().range.end;
 		if !scope.paragraphing
 		{
 			scope.content.push(elem);
@@ -200,7 +223,7 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 			if scope.active_paragraph.is_none()
 			{
 				let paragraph = Arc::new(Paragraph {
-					location: elem.location().clone(),
+					location: Token::new(elem.location().range.start..elem.location().range.start, elem.location().source().clone()),
 					token: ParagraphToken::Start,
 				});
 				scope.content.push(paragraph.clone());
@@ -240,7 +263,7 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	}
 }
 
-struct ScopeIterator {
+pub struct ScopeIterator {
 	scope: Rc<RefCell<Scope>>,
 	position: Vec<(usize, usize)>,
 	depth: Vec<Arc<dyn ContainerElement>>,

@@ -74,7 +74,7 @@ impl CompilerOutput {
 				Ok(content) => {
 					output.content.insert_str(pos, content.as_str()) 
 				},
-				Err(err) => Report::reports_to_stdout(colors, err),
+				Err(err) => todo!()/*Report::reports_to_stdout(colors, err)*/,
 			}
 		}
 		output

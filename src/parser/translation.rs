@@ -159,8 +159,7 @@ impl<'u> TranslationUnit<'u> {
 		if let Some(lsp) = &mut self.lsp {
 			// TODO: send to lsp
 		} else {
-			// TODO:
-			//Report::reports_to_stdout(&self.colors, std::mem::replace(&mut self.reports, vec![]));
+			Report::reports_to_stdout(&self.colors, std::mem::replace(&mut self.reports, vec![]));
 		}
 
 		let input_file = Rc::as_ref(self.get_entry_scope()).borrow().source();

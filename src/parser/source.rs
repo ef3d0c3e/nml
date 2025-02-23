@@ -378,7 +378,7 @@ impl Token {
 	pub fn source(&self) -> Arc<dyn Source> { self.source.clone() }
 
 	pub fn content(&self) -> &str {
-		&self.source.content().as_str()
+		&self.source.content().as_str()[self.range.clone()]
 	}
 
 	/// Get the start byte position of the token

@@ -1,5 +1,7 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Color;
@@ -8,6 +10,7 @@ use tower_lsp::lsp_types::Diagnostic;
 
 use crate::parser::source::LineCursor;
 
+use super::scope::Scope;
 use super::source::OffsetEncoding;
 use super::source::Source;
 use super::source::SourcePosition;
@@ -133,8 +136,8 @@ impl Report {
 		(builder.finish(), ariadne::sources(cache))
 	}
 
-	pub fn reports_to_stdout(colors: &ReportColors, mut reports: Vec<Report>) {
-		reports.drain(..).for_each(|report| {
+	pub fn reports_to_stdout(colors: &ReportColors, mut reports: Vec<(Rc<RefCell<Scope>>, Report)>) {
+		reports.drain(..).for_each(|(_scope, report)| {
 			let (report, cache) = report.to_ariadne(colors);
 			report.eprint(cache).unwrap();
 		});

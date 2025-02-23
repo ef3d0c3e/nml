@@ -51,10 +51,7 @@ impl ContextAccessor for Rc<RefCell<Option<KernelContext<'static>>>> {
 	where
 		F: FnOnce(RefMut<'_, KernelContext<'static>>) -> R,
 	{
-		f(RefMut::map(
-			(*self.clone()).borrow_mut(),
-			|context| unsafe { std::mem::transmute(context.as_ref().unwrap()) },
-		))
+		todo!();
 	}
 }
 

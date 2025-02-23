@@ -79,8 +79,10 @@ impl ProcessQueue {
 			let source = Arc::new(SourceFile::new(input_string, None).unwrap());
 			let mut unit = TranslationUnit::new(&self.parser, source, false, true);
 
-			// TODO: Check if necessary to compile
+			// TODO: Check if necessary to compile using mtime
 			unit = unit.consume();
+			println!("{:#?}", unit.get_scope());
+			todo!();
 			compiled.push(self.compiler.compile(&unit));
 		}
 		Ok(compiled)
