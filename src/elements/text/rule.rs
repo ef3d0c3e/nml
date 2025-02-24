@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use mlua::Function;
@@ -42,7 +43,7 @@ impl Rule for TextRule {
 	fn register_bindings(&self, kernel: &Kernel, table: mlua::Table) {
 		kernel.create_function(table.clone(), "push", |mut ctx, _, content: String| {
 			let location = ctx.location.clone();
-			ctx.unit.add_content(Arc::new(Text {
+			ctx.unit.add_content(Rc::new(Text {
 				location,
 				content
 			}));

@@ -50,7 +50,7 @@ impl Element for Link {
 		Ok(())
 	}
 
-	fn as_container(&self) -> Option<&dyn ContainerElement> { Some(self) }
+	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { Some(self) }
 }
 
 impl ContainerElement for Link {

@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::parser::reports::macros::*;
@@ -69,7 +70,7 @@ impl RegexRule for LinkRule {
 					display.range(),
 					"Link Display".into(),
 					'\\',
-					"](",
+					"]",
 				);
 				if display_source.content().is_empty() {
 					report_err!(
@@ -132,7 +133,7 @@ impl RegexRule for LinkRule {
 		};
 
 		// Add element
-		unit.add_content(Arc::new(Link {
+		unit.add_content(Rc::new(Link {
 			location: token.clone(),
 			display: vec![link_display],
 			url,
@@ -181,14 +182,14 @@ impl RegexRule for LinkRule {
 					pos: 2,
 					name: Some("url".to_string()),
 					cause: Arc::new(mlua::Error::external(format!(
-								"Failed to url: {err}"
+								"Failed to parse url: {err}"
 					))),
 				}
 			})?;
 
 			// Add element
 			let location = ctx.location.clone();
-			ctx.unit.add_content(Arc::new(Link {
+			ctx.unit.add_content(Rc::new(Link {
 				location,
 				display: vec![display_content],
 				url,

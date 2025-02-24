@@ -31,7 +31,7 @@ pub struct Scope {
 	parent: Option<Rc<RefCell<Scope>>>,
 
 	/// Content of this scope
-	content: Vec<Arc<dyn Element>>,
+	content: Vec<Rc<dyn Element>>,
 
 	/// State of the parser
 	parser_state: super::state::ParserState,
@@ -51,7 +51,7 @@ pub struct Scope {
 	paragraphing: bool,
 
 	/// Currently active paragraph
-	active_paragraph: Option<Arc<dyn Element>>,
+	active_paragraph: Option<Rc<dyn Element>>,
 }
 
 impl core::fmt::Debug for Scope
@@ -111,7 +111,7 @@ impl Scope {
 }
 
 pub trait ScopeAccessor {
-	fn current_paragraph(&self) -> Option<Arc<dyn Element>>;
+	fn current_paragraph(&self) -> Option<Rc<dyn Element>>;
 	/// Creates a new child from this scope
 	fn new_child(
 		&self,
@@ -127,13 +127,13 @@ pub trait ScopeAccessor {
 	fn get_variable(&self, name: &VariableName) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)>;
 
 	/// Should be called by the owning [`TranslationUnit`] to acknowledge an element being added
-	fn add_content(&self, elem: Arc<dyn Element>);
+	fn add_content(&self, elem: Rc<dyn Element>);
 
 	/// Get an element from an id
-	fn get_content(&self, id: usize) -> Option<Arc<dyn Element>>;
+	fn get_content(&self, id: usize) -> Option<Rc<dyn Element>>;
 
 	/// Gets the last element of this scope
-	fn content_last(&self) -> Option<Arc<dyn Element>>;
+	fn content_last(&self) -> Option<Rc<dyn Element>>;
 
 	/// Gets an iterator over scope elements
 	fn content_iter(&self) -> ScopeIterator;
@@ -191,7 +191,7 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		return None;
 	}
 
-	fn add_content(&self, elem: Arc<dyn Element>) {
+	fn add_content(&self, elem: Rc<dyn Element>) {
 		let mut scope = Rc::as_ref(self).borrow_mut();
 		assert_eq!(*elem.location().source(), *scope.source);
 		scope.range.end = elem.location().range.end;
@@ -202,7 +202,8 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		}
 
 		// Push paragraph & update state
-		if let Some(paragraph) = elem.downcast_ref::<Paragraph>()
+		if let Some(paragraph) = elem
+				.downcast_ref::<Paragraph>()
 		{
 			if paragraph.token == ParagraphToken::End
 			{
@@ -222,7 +223,7 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 			// Add new paragraph
 			if scope.active_paragraph.is_none()
 			{
-				let paragraph = Arc::new(Paragraph {
+				let paragraph = Rc::new(Paragraph {
 					location: Token::new(elem.location().range.start..elem.location().range.start, elem.location().source().clone()),
 					token: ParagraphToken::Start,
 				});
@@ -233,7 +234,7 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 			// Close paragraph
 			if scope.active_paragraph.is_some()
 			{
-				let paragraph = Arc::new(Paragraph {
+				let paragraph = Rc::new(Paragraph {
 					location: elem.location().clone(),
 					token: ParagraphToken::End,
 				});
@@ -245,28 +246,29 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		scope.content.push(elem);
 	}
 
-	fn get_content(&self, id: usize) -> Option<Arc<dyn Element>> {
+	fn get_content(&self, id: usize) -> Option<Rc<dyn Element>> {
 		if (*self.clone()).borrow().content.len() <= id {
 			return None;
 		}
 		return Some((*self.clone()).borrow().content[id].clone());
 	}
 
-	fn content_last(&self) -> Option<Arc<dyn Element>> {
+	fn content_last(&self) -> Option<Rc<dyn Element>> {
 		return (*self.clone()).borrow().content.last().cloned();
 	}
 
 	fn content_iter(&self) -> ScopeIterator { ScopeIterator::new(self.clone()) }
 
-	fn current_paragraph(&self) -> Option<Arc<dyn Element>> {
+	fn current_paragraph(&self) -> Option<Rc<dyn Element>> {
 		return (*self.clone()).borrow().active_paragraph.clone();
 	}
 }
 
+/// DFS iterator for the syntax tree
 pub struct ScopeIterator {
 	scope: Rc<RefCell<Scope>>,
 	position: Vec<(usize, usize)>,
-	depth: Vec<Arc<dyn ContainerElement>>,
+	depth: Vec<Rc<dyn ContainerElement>>,
 }
 
 impl ScopeIterator {
@@ -280,9 +282,10 @@ impl ScopeIterator {
 }
 
 impl Iterator for ScopeIterator {
-	type Item = (Rc<RefCell<Scope>>, Arc<dyn Element>);
+	type Item = (Rc<RefCell<Scope>>, Rc<dyn Element>);
 
 	fn next(&mut self) -> Option<Self::Item> {
+		// Pop at the end of scope
 		while let (Some(last_depth), Some((scope_id, last_idx))) =
 			(self.depth.last(), self.position.last_mut())
 		{
@@ -295,7 +298,7 @@ impl Iterator for ScopeIterator {
 				return Some((scope.clone(), elem));
 			}
 
-			if *scope_id < last_depth.contained().len() {
+			if *scope_id + 1 < last_depth.contained().len() {
 				*last_idx = 0;
 				*scope_id += 1;
 			} else {
@@ -309,10 +312,11 @@ impl Iterator for ScopeIterator {
 			let elem = (*self.scope.clone()).borrow().content[self.position[0].1].clone();
 			self.position[0].1 += 1;
 
-			if let Some(_container) = elem.as_container() {
+			if let Some(container) = elem.clone().as_container() {
+
 				self.position.push((0, 0));
 				self.depth
-					.push(unsafe { std::mem::transmute(elem.clone()) });
+					.push(container);
 			}
 
 			return Some((self.scope.clone(), elem));

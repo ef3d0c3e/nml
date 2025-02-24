@@ -182,11 +182,11 @@ impl<'u> TranslationUnit<'u> {
 
 pub trait TranslationAccessors {
 	/// Adds content to the translation unit's current scope
-	fn add_content(&mut self, elem: Arc<dyn Element>);
+	fn add_content(&mut self, elem: Rc<dyn Element>);
 }
 
 impl TranslationAccessors for TranslationUnit<'_> {
-	fn add_content(&mut self, elem: Arc<dyn Element>) {
+	fn add_content(&mut self, elem: Rc<dyn Element>) {
 		self.current_scope.add_content(elem);
 	}
 }

@@ -150,16 +150,16 @@ pub fn escape_source(
 	token: &'static str,
 ) -> Arc<dyn Source> {
 	let content = &source.content()[range.clone()];
-
+ 
 	let mut processed = String::new();
 	let mut escaped = 0;
 	let mut token_it = token.chars().peekable();
 	let mut offset = 0isize;
 	let mut offsets: Vec<(usize, isize)> = vec![];
-	for (pos, c) in content.chars().enumerate() {
+	for (pos, (idx, c)) in content.char_indices().enumerate() {
 		if c == escape {
 			escaped += 1;
-		} else if escaped % 2 == 1 && token_it.peek().map_or(false, |p| *p == c) {
+		} else if escaped % 2 == 1 && content.as_bytes()[idx..].starts_with(token.as_bytes()) {
 			let _ = token_it.next();
 			if token_it.peek().is_none() {
 				(0..(escaped / 2)).for_each(|_| processed.push(escape));

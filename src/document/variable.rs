@@ -40,7 +40,7 @@ pub struct VariableExpansion
 
 impl Element for VariableExpansion {
     fn location(&self) -> &Token {
-        &self.location()
+        &self.location
     }
 
     fn kind(&self) -> super::element::ElemKind {
@@ -63,6 +63,10 @@ impl Element for VariableExpansion {
 		}
 		Ok(())
     }
+
+	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> {
+		return Some(self)
+	}
 }
 
 impl ContainerElement for VariableExpansion {
@@ -149,7 +153,7 @@ impl Variable for BaseVariable {
 		});
 
 		// Store expanded variable to a new element
-		let expanded = Arc::new(VariableExpansion {
+		let expanded = Rc::new(VariableExpansion {
 			location,
 			content: vec![scope],
 		});
@@ -200,7 +204,7 @@ impl Variable for PathVariable {
 
 		// Expand variable as [`Text`]
 		let scope = unit.with_child(source.clone(), ParseMode::default(), false, |_, scope| {
-			scope.add_content(Arc::new(Text {
+			scope.add_content(Rc::new(Text {
 				location: (source as Arc<dyn Source>).into(),
 				// FIXME this should depend of the current work dir
 				content: self.to_string(),
@@ -209,7 +213,7 @@ impl Variable for PathVariable {
 		});
 
 		// Add expanded variable
-		unit.add_content(Arc::new(VariableExpansion {
+		unit.add_content(Rc::new(VariableExpansion {
 			location,
 			content: vec![scope],
 		}));

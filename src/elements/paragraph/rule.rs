@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use regex::Regex;
@@ -62,7 +63,7 @@ impl Rule for ParagraphRule {
 
 		// Terminate paragraph
 		if let Some(paragraph) = unit.get_scope().current_paragraph() {
-			unit.add_content(Arc::new(Paragraph {
+			unit.add_content(Rc::new(Paragraph {
 				location: Token::new(cursor.pos()..end_cursor.pos(), cursor.source().clone()),
 				token: ParagraphToken::End
 			}));

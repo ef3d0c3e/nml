@@ -3,7 +3,6 @@ use std::borrow::Borrow;
 use std::ops::Range;
 use std::rc::Rc;
 use std::slice::Iter;
-use std::sync::Arc;
 
 use crate::elements::text::elem::Text;
 
@@ -56,6 +55,7 @@ impl Parser {
 	) -> Option<(Cursor, &Box<dyn Rule>, Box<dyn Any>)> {
 		let mut scope = unit.get_scope().borrow_mut();
 		let state = scope.parser_state_mut();
+		// Initialize state if required
 		while state.matches.len() < self.rules.len() {
 			state.matches.push((0, None));
 		}
@@ -68,13 +68,13 @@ impl Parser {
 				if *pos > cursor.pos() {
 					return;
 				}
-
 				// Update next match position
 				(*pos, *data) = match rule.next_match(&state.mode, cursor) {
 					None => (usize::MAX, None),
 					Some((mut new_pos, mut new_data)) => {
+						let mut local_cursor = cursor.to_owned();
 						// Check if escaped
-						while *pos != usize::MAX {
+						while local_cursor.pos() != usize::MAX {
 							let source = cursor.source();
 							let content = source.content().as_str();
 
@@ -86,19 +86,23 @@ impl Parser {
 								if g.is_none() || g.unwrap() != '\\' {
 									break 'inner;
 								}
-
 								escaped = !escaped;
 							}
-
-							// Find next potential match
-							(new_pos, new_data) = match rule.next_match(&state.mode, cursor) {
-								None => (usize::MAX, new_data), // Stop iterating
-								Some((new_pos, new_data)) => (new_pos, new_data),
-							};
-
 							if !escaped {
 								break;
 							}
+							// Advance by 1 codepoint if escaped
+							match content[new_pos..].chars().next()
+							{
+								Some(ch) => local_cursor = local_cursor.at(local_cursor.pos() + ch.len_utf8()),
+								None => panic!(),
+							};
+							// Find next potential match
+							(new_pos, new_data) = match rule.next_match(&state.mode, &local_cursor) {
+								None => (usize::MAX, new_data), // Stop iterating
+								Some((new_pos, new_data)) => (new_pos, new_data),
+							};
+							local_cursor = local_cursor.at(new_pos);
 						}
 						(new_pos, Some(new_data))
 					}
@@ -146,11 +150,16 @@ impl Parser {
 			return;
 		}
 
-		unit.add_content(Arc::new(Text::new(token, content.into())));
+		unit.add_content(Rc::new(Text::new(token, content.into())));
 	}
 
 	/// Parses the current scope in the translation unit
 	pub fn parse<'u>(&'u self, unit: &mut TranslationUnit<'u>) {
+		{
+			let scope = Rc::as_ref(unit.get_scope()).borrow();
+			println!("PARSING={:#?}", scope.source());
+			println!("STATE={:#?}", scope.parser_state());
+		}
 		let mut cursor = Cursor::new(0, Rc::as_ref(unit.get_scope()).borrow().source().into());
 
 		while let Some((next_cursor, rule, rule_data)) = self.next_match(unit, &cursor) {
@@ -160,6 +169,7 @@ impl Parser {
 			// Trigger rule
 			cursor = rule.on_match(unit, &next_cursor, rule_data);
 		}
+		println!("done");
 		// Add leftover as text
 		let end_cursor = cursor.at(cursor.source().content().len());
 		self.add_text(unit, cursor..end_cursor);

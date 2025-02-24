@@ -10,6 +10,7 @@ use crate::parser::scope::Scope;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use downcast_rs::DowncastSync;
 use url::Url;
 
 
@@ -51,12 +52,6 @@ pub trait Element: Downcast + core::fmt::Debug {
 	/// Get the element's name
 	fn element_name(&self) -> &'static str;
 
-	/// Gets the element as a referenceable i.e an element that can be referenced
-	fn as_referenceable(&self) -> Option<&dyn ReferenceableElement> { None }
-
-	/// Gets the element as a container containing other elements
-	fn as_container(&self) -> Option<&dyn ContainerElement> { None }
-
 	/// Compiles element
 	fn compile(
 		&self,
@@ -64,6 +59,12 @@ pub trait Element: Downcast + core::fmt::Debug {
 		compiler: &Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>>;
+
+	/// Gets the element as a referenceable i.e an element that can be referenced
+	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
+
+	/// Gets the element as a container containing other elements
+	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { None }
 }
 impl_downcast!(Element);
 
