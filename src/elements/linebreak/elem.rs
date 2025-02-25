@@ -4,24 +4,16 @@ use std::rc::Rc;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target::HTML;
 use crate::compiler::output::CompilerOutput;
-use crate::document::element::ContainerElement;
 use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::parser::reports::Report;
 use crate::parser::scope::Scope;
-use crate::parser::scope::ScopeAccessor;
 use crate::parser::source::Token;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ParagraphToken {
-	Start,
-	End,
-}
-
 #[derive(Debug)]
-pub struct Paragraph {
+pub struct LineBreak {
 	pub(crate) location: Token,
-	pub(crate) token: ParagraphToken,
+	pub(crate) length: usize,
 }
 
 /*impl Paragraph {
@@ -33,26 +25,23 @@ pub struct Paragraph {
 	}
 }*/
 
-impl Element for Paragraph {
+impl Element for LineBreak {
 	fn location(&self) -> &Token { &self.location }
 
 	fn kind(&self) -> ElemKind { ElemKind::Special }
 
-	fn element_name(&self) -> &'static str { "Paragraph" }
+	fn element_name(&self) -> &'static str { "Break" }
 
 	fn compile<'e>(
 		&'e self,
 		_scope: Rc<RefCell<Scope>>,
 		compiler: &'e Compiler,
-		output: &mut CompilerOutput,
+		_output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
-			HTML => match self.token {
-				ParagraphToken::Start => output.add_content("<p>"),
-				ParagraphToken::End => output.add_content("</p>"),
-			},
+			HTML => todo!(),
 			_ => todo!("Unimplemented compiler"),
 		}
-		Ok(())
+		//Ok(())
 	}
 }

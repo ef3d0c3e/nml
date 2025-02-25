@@ -1,0 +1,55 @@
+use std::rc::Rc;
+
+use regex::Captures;
+use regex::Regex;
+
+use crate::parser::rule::RegexRule;
+use crate::parser::source::Token;
+use crate::parser::state::ParseMode;
+use crate::parser::translation::TranslationAccessors;
+use crate::parser::translation::TranslationUnit;
+
+use super::elem::LineBreak;
+
+#[auto_registry::auto_registry(registry = "rules")]
+pub struct BreakRule {
+	re: [Regex; 1],
+}
+
+impl Default for BreakRule {
+	fn default() -> Self {
+		Self {
+			re: [Regex::new(r"(\n\s*\n\s*)").unwrap()],
+		}
+	}
+}
+
+impl RegexRule for BreakRule {
+	fn name(&self) -> &'static str { "Break" }
+
+	//FIXME: fn previous(&self) -> Option<&'static str> { Some("Comment") }
+	fn previous(&self) -> Option<&'static str> { Some("Text") }
+
+	fn regexes(&self) -> &[regex::Regex] {
+		&self.re
+	}
+
+	fn enabled(&self, mode: &ParseMode, _index: usize) -> bool {
+		return !mode.paragraph_only
+	}
+
+	fn on_regex_match<'u>(
+		&self,
+		_index: usize,
+		unit: &mut TranslationUnit<'u>,
+		token: Token,
+		captures: Captures,
+	) {
+		let length = captures.get(1).unwrap().as_str().chars().fold(0usize, |count, c| count + (c == '\n') as usize);
+
+		unit.add_content(Rc::new(LineBreak {
+			location: token.clone(),
+			length,
+		}))
+	}
+}

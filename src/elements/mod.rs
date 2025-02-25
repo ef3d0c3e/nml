@@ -9,7 +9,7 @@
 pub mod link;
 //pub mod list;
 //pub mod media;
-pub mod paragraph;
+pub mod linebreak;
 //pub mod raw;
 //pub mod reference;
 //pub mod script;

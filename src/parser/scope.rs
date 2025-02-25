@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Range;
@@ -7,19 +5,15 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use super::source::Source;
-use super::source::Token;
 use super::state::ParseMode;
 use super::state::ParserState;
 
 use crate::document::element::ContainerElement;
-use crate::document::element::ElemKind;
 use crate::document::element::Element;
 use crate::document::references::Reference;
 use crate::document::references::Refname;
 use crate::document::variable::Variable;
 use crate::document::variable::VariableName;
-use crate::elements::paragraph::elem::Paragraph;
-use crate::elements::paragraph::elem::ParagraphToken;
 
 /// The scope from a translation unit
 /// Each scope is tied to a unique [`Source`]
@@ -49,9 +43,6 @@ pub struct Scope {
 	///
 	/// Paragraphing should be enabled for default content scopes
 	paragraphing: bool,
-
-	/// Currently active paragraph
-	active_paragraph: Option<Rc<dyn Element>>,
 }
 
 impl core::fmt::Debug for Scope
@@ -78,7 +69,6 @@ impl Scope {
 			references: HashMap::default(),
 			variables: HashMap::default(),
 			paragraphing: true,
-			active_paragraph: None,
 		}
 	}
 
@@ -111,7 +101,6 @@ impl Scope {
 }
 
 pub trait ScopeAccessor {
-	fn current_paragraph(&self) -> Option<Rc<dyn Element>>;
 	/// Creates a new child from this scope
 	fn new_child(
 		&self,
@@ -203,56 +192,6 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	fn add_content(&self, elem: Rc<dyn Element>) {
 		let mut scope = Rc::as_ref(self).borrow_mut();
 		assert_eq!(*elem.location().source(), *scope.source);
-		scope.range.end = elem.location().range.end;
-		if !scope.paragraphing
-		{
-			scope.content.push(elem);
-			return;
-		}
-
-		// Push paragraph & update state
-		if let Some(paragraph) = elem
-				.downcast_ref::<Paragraph>()
-		{
-			if paragraph.token == ParagraphToken::End
-			{
-				scope.active_paragraph = None;
-			}
-			else
-			{
-				scope.active_paragraph = Some(elem.clone());
-			}
-
-			scope.content.push(elem);
-			return;
-		}
-
-
-		if elem.kind() == ElemKind::Inline {
-			// Add new paragraph
-			if scope.active_paragraph.is_none()
-			{
-				let paragraph = Rc::new(Paragraph {
-					location: Token::new(elem.location().range.start..elem.location().range.start, elem.location().source().clone()),
-					token: ParagraphToken::Start,
-				});
-				scope.content.push(paragraph.clone());
-				scope.active_paragraph = Some(paragraph);
-			}
-		} else if elem.kind() == ElemKind::Block {
-			// Close paragraph
-			if scope.active_paragraph.is_some()
-			{
-				let paragraph = Rc::new(Paragraph {
-					location: elem.location().clone(),
-					token: ParagraphToken::End,
-				});
-				scope.content.push(paragraph);
-				scope.active_paragraph = None;
-			}
-		}
-		// FIXME Replace paragraph system with breaks, when the document is fully built create paragraph from these breaks.
-
 		scope.content.push(elem);
 	}
 
@@ -268,10 +207,6 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	}
 
 	fn content_iter(&self) -> ScopeIterator { ScopeIterator::new(self.clone()) }
-
-	fn current_paragraph(&self) -> Option<Rc<dyn Element>> {
-		return (*self.clone()).borrow().active_paragraph.clone();
-	}
 }
 
 /// DFS iterator for the syntax tree
