@@ -126,6 +126,9 @@ pub trait ScopeAccessor {
 	/// Returns a variable as well as it's declaring scope
 	fn get_variable(&self, name: &VariableName) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)>;
 
+	/// Inserts a variable
+	fn insert_variable(&self, name: VariableName, var: Rc<dyn Variable>) -> Option<Rc<dyn Variable>>;
+
 	/// Should be called by the owning [`TranslationUnit`] to acknowledge an element being added
 	fn add_content(&self, elem: Rc<dyn Element>);
 
@@ -177,6 +180,12 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		}
 
 		return None;
+	}
+
+	fn insert_variable(&self, name: VariableName, var: Rc<dyn Variable>) -> Option<Rc<dyn Variable>>
+	{
+		let mut scope = Rc::as_ref(self).borrow_mut();
+		scope.variables.insert(name, var)
 	}
 
 	fn get_reference(&self, name: &Refname) -> Option<(Rc<Reference>, Rc<RefCell<Scope>>)> {
@@ -242,6 +251,7 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 				scope.active_paragraph = None;
 			}
 		}
+		// FIXME Replace paragraph system with breaks, when the document is fully built create paragraph from these breaks.
 
 		scope.content.push(elem);
 	}

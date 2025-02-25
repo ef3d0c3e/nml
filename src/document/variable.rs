@@ -10,10 +10,8 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::state::ParseMode;
-use crate::parser::translation::TranslationAccessors;
 use crate::parser::translation::TranslationUnit;
 use std::cell::RefCell;
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -30,11 +28,40 @@ impl core::fmt::Display for VariableName {
     }
 }
 
-/// Holds the generated ast from a variable
+impl TryFrom<&str> for VariableName
+{
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+		let mut it = value.chars();
+		while let Some(c) = it.next()
+		{
+			if c.is_ascii_punctuation() && !(c == '.' || c == '_') {
+				return Err(format!(
+						"Variable name `{value}` cannot contain punctuation codepoint: `{c}`"
+				));
+			}
+			if c.is_whitespace() {
+				return Err(format!(
+						"Variable name `{value}` cannot contain whitespaces: `{c}`"
+				));
+			}
+			if c.is_control() {
+				return Err(format!(
+						"Variable name `{value}` cannot contain control codepoint: `{c}`"
+				));
+			}
+		}
+		Ok(VariableName(value.into()))
+    }
+}
+
+/// Holds the generated ast from a variable invocation
 #[derive(Debug)]
 pub struct VariableExpansion
 {
 	location: Token,
+	variable_name: VariableName,
 	content: Vec<Rc<RefCell<Scope>>>,
 }
 
@@ -75,21 +102,31 @@ impl ContainerElement for VariableExpansion {
     }
 }
 
+/// Visibility attributes for variables
+/// Variables tagged `Internal` may only be accessed from the scope and its children.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum VariableVisibility
+{
+	/// Available from parent scope
+	Exported,
+	/// Internal to scope
+	Internal,
+}
+
 /// Trait for document variables
-pub trait Variable {
+pub trait Variable : core::fmt::Debug {
 	/// Gets the definition location of the variable
 	fn location(&self) -> &Token;
 
 	/// Gets the variable typename for serialization
+	/// This name must remain unique to a variable
 	fn variable_typename(&self) -> &'static str;
-
-	//fn serialize_inner(&self) -> ();
 
 	/// Gets the name of the variable
 	fn name(&self) -> &VariableName;
 
-	/// Converts variable to a string
-	fn to_string(&self) -> String;
+	/// Gets the visibility of the variable
+	fn visility(&self) -> &VariableVisibility;
 
 	/// The token when the variable value was defined from
 	fn value_token(&self) -> &Token;
@@ -98,124 +135,122 @@ pub trait Variable {
 	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token);
 }
 
-impl core::fmt::Debug for dyn Variable {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{:#?}{{{}}}", self.name(), self.to_string())
-	}
-}
-
-/// Base variables, a variable that is parsed when invoked
+/// Variable that can be expanded to content
 #[derive(Debug)]
-pub struct BaseVariable {
-	location: Token,
-	name: VariableName,
-	value_token: Token,
-	value: String,
+pub struct ContentVariable {
+	pub location: Token,
+	pub name: VariableName,
+	pub visibility: VariableVisibility,
+	pub content: Arc<dyn Source>,
 }
 
-impl BaseVariable {
-	pub fn new(location: Token, name: VariableName, value_token: Token, value: String) -> Self {
-		Self {
-			location,
-			name,
-			value_token,
-			value,
-		}
-	}
-}
+impl Variable for ContentVariable {
+    fn location(&self) -> &Token {
+        &self.location
+    }
 
-impl Variable for BaseVariable {
-	fn location(&self) -> &Token { &self.location }
+    fn variable_typename(&self) -> &'static str {
+		"content"
+    }
 
-	fn variable_typename(&self) -> &'static str {
-	    "base_variable"
-	}
+    fn name(&self) -> &VariableName {
+		&self.name
+    }
 
-	fn name(&self) -> &VariableName { &self.name }
+    fn visility(&self) -> &VariableVisibility {
+		&self.visibility
+    }
 
-	fn to_string(&self) -> String { self.value.clone() }
+    fn value_token(&self) -> &Token {
+		self.content.location()
+			.map_or(&self.location, |loc| &loc)
+    }
 
-	fn value_token(&self) -> &Token { &self.value_token }
-
-	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token) {
-		// Create variable content
-		let source = Arc::new(VirtualSource::new(
-			self.location().clone(),
-			format!(":VAR:{}", self.name()),
-			self.to_string(),
-		));
-
-		// Expand & parse variable content
-		let scope = unit.with_child(source, ParseMode::default(), false, |unit, scope| {
-			unit.parser().parse(unit);
-
+    fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token) {
+		// Parse content
+		let content = unit.with_child(self.content.clone(), ParseMode::default(), true, |unit, scope| {
+			unit.parser.parse(unit);
 			scope
 		});
-
-		// Store expanded variable to a new element
-		let expanded = Rc::new(VariableExpansion {
+		let expansion = VariableExpansion {
 			location,
-			content: vec![scope],
-		});
-		
-		unit.add_content(expanded);
-	}
+			variable_name: self.name.to_owned(),
+			content: vec![content],
+		};
+		unit.get_scope()
+			.add_content(Rc::new(expansion));
+    }
 }
 
-/// A path-aware variable, expanded as text when processed
+/// Values for property variables
 #[derive(Debug)]
-pub struct PathVariable {
-	location: Token,
-	name: VariableName,
-	value_token: Token,
-	path: PathBuf,
+pub enum PropertyValue
+{
+	Integer(i64),
+	String(String),
 }
 
-impl PathVariable {
-	pub fn new(location: Token, name: VariableName, value_token: Token, path: PathBuf) -> Self {
-		Self {
-			location,
-			name,
-			value_token,
-			path,
+impl ToString for PropertyValue
+{
+    fn to_string(&self) -> String {
+		match self {
+			PropertyValue::Integer(i) => i.to_string(),
+			PropertyValue::String(s) => s.clone(),
 		}
-	}
+    }
 }
 
-impl Variable for PathVariable {
-	fn location(&self) -> &Token { &self.location }
+/// Variable representing a property
+#[derive(Debug)]
+pub struct PropertyVariable {
+	pub location: Token,
+	pub name: VariableName,
+	pub visibility: VariableVisibility,
+	pub value: PropertyValue,
+	pub value_token: Token,
+}
 
-	fn variable_typename(&self) -> &'static str {
-	    "path_variable"
-	}
+impl Variable for PropertyVariable {
+    fn location(&self) -> &Token {
+        &self.location
+    }
 
-	fn name(&self) -> &VariableName { &self.name }
+    fn variable_typename(&self) -> &'static str {
+        "property"
+    }
 
-	fn to_string(&self) -> String { self.path.to_str().unwrap().to_string() }
+    fn name(&self) -> &VariableName {
+		&self.name
+    }
 
-	fn value_token(&self) -> &Token { &self.value_token }
+    fn visility(&self) -> &VariableVisibility {
+        &self.visibility
+    }
 
-	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token) {
-		let source = Arc::new(VirtualSource::new(
-			location.clone(),
-			self.name().to_string(),
-			self.to_string(),
-		));
+    fn value_token(&self) -> &Token {
+        &self.value_token
+    }
 
-		// Expand variable as [`Text`]
-		let scope = unit.with_child(source.clone(), ParseMode::default(), false, |_, scope| {
-			scope.add_content(Rc::new(Text {
-				location: (source as Arc<dyn Source>).into(),
-				// FIXME this should depend of the current work dir
-				content: self.to_string(),
+    fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token) {
+		// Generate source for scope
+		let definition_source = Arc::new(VirtualSource::new(self.location.clone(),
+			format!(":VAR:Definition for `{}`", &self.name.0),
+			self.value_token.content().into()
+			)) as Arc<dyn Source>;
+		// Add content to scope
+		let content = unit.with_child(definition_source.clone(), ParseMode::default(), true, |unit, scope| {
+			scope.add_content(Rc::new(Text{
+				location: definition_source.into(),
+				content: self.value.to_string(),
 			}));
 			scope
 		});
-
-		// Add expanded variable
-		unit.add_content(Rc::new(VariableExpansion {
+		let expansion = VariableExpansion {
 			location,
-			content: vec![scope],
-		}));
-	}
+			variable_name: self.name.to_owned(),
+			content: vec![content],
+		};
+		unit.get_scope()
+			.add_content(Rc::new(expansion));
+    }
 }

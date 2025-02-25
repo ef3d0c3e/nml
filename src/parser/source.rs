@@ -123,7 +123,7 @@ impl SourceOffset {
 }
 
 /// [`VirtualSource`] is a type of [`Source`] that represents a virtual file. [`VirtualSource`]s
-/// can be created from other [`VirtualSource`]s but it must always come from a [`SourceFile`].
+/// can be created from other [`VirtualSource`]s but it must always have a [`SourceFile`] ancestor.
 ///
 ///	# Offsets
 ///

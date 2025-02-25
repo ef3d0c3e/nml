@@ -19,4 +19,4 @@ pub mod paragraph;
 //pub mod tex;
 pub mod text;
 //pub mod toc;
-//pub mod variable;
+pub mod variable;

@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-use std::borrow::BorrowMut;
 use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::cell::RefMut;
@@ -167,7 +165,7 @@ impl<'u> TranslationUnit<'u> {
 		let output_file = self.get_scope().get_variable(&VariableName("compiler.output".into()));
 		let output = UnitOutput {
 			input_file: input_file.downcast_ref::<SourceFile>().unwrap().name().to_string(),
-			output_file: output_file.map(|(var, _)| var.to_string()),
+			output_file: output_file.map(|(var, _)| "TODO".to_string()),
 		};
 		self.output.set(output).unwrap();
 

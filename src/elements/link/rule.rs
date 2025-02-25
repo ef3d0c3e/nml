@@ -32,7 +32,9 @@ pub struct LinkRule {
 impl Default for LinkRule {
 	fn default() -> Self {
 		Self {
-			re: [Regex::new(r"\[((?:\\.|[^\\\\])*?)\]\(((?:\\.|[^\\\\])*?)\)").unwrap()],
+			re: [
+				Regex::new(r"\[((?:\\.|[^\\\\])*?)\]\(((?:\\.|[^\\\\])*?)\)").unwrap()
+			],
 		}
 	}
 }
