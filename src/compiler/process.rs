@@ -11,7 +11,9 @@ pub enum ProcessError
 }
 
 pub enum ProcessOutputOptions {
+	/// Path to the directory
 	Directory(String),
+	/// Path to the output file
 	File(String),
 }
 
@@ -45,7 +47,7 @@ impl ProcessQueue {
 
 	pub fn process(&mut self, options: ProcessOutputOptions) -> Result<Vec<CompiledUnit>, ProcessError>
 	{
-		match options
+		match &options
 		{
 			ProcessOutputOptions::Directory(dir) => {
 
@@ -76,11 +78,29 @@ impl ProcessQueue {
 				.map_err(|err| ProcessError::InputError(input_string.clone(), format!("Unable to query modification time for `{input_string}`: {err}")))?;
 
 			// Create unit
-			let source = Arc::new(SourceFile::new(input_string, None).unwrap());
+			let source = Arc::new(SourceFile::new(input_string.clone(), None).unwrap());
 			let mut unit = TranslationUnit::new(&self.parser, source, false, true);
 
 			// TODO: Check if necessary to compile using mtime
-			unit = unit.consume();
+			let output_file = match &options {
+				ProcessOutputOptions::Directory(dir) => {
+					let basename = match input_string.find(|c| c == '.')
+					{
+						Some(pos) => &input_string[0..pos],
+						None => &input_string,
+					};
+					format!("{dir}/{basename}.html")
+				},
+				ProcessOutputOptions::File(file) => {
+					let basename = match input_string.find(|c| c == '.')
+					{
+						Some(pos) => &input_string[0..pos],
+						None => &input_string,
+					};
+					format!("{basename}.html")
+				},
+			};
+			unit = unit.consume(output_file);
 			println!("{:#?}", unit.get_scope());
 			todo!();
 			//compiled.push(self.compiler.compile(&unit));

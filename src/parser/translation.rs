@@ -5,7 +5,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::document::element::Element;
+use crate::document::variable::PropertyValue;
+use crate::document::variable::PropertyVariable;
 use crate::document::variable::VariableName;
+use crate::document::variable::VariableVisibility;
 use crate::lsp::data::LangServerData;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
@@ -17,6 +20,7 @@ use super::scope::Scope;
 use super::scope::ScopeAccessor;
 use super::source::Source;
 use super::source::SourceFile;
+use super::source::Token;
 use super::state::ParseMode;
 
 /// Stores output data for [`TranslationUnit`]
@@ -152,7 +156,28 @@ impl<'u> TranslationUnit<'u> {
 	}
 
 	/// Consumes the translation unit with it's current scope
-	pub fn consume(mut self) -> Self {
+	pub fn consume(mut self, output_file: String) -> Self {
+		// Insert default variables
+		let token = Token::new(0..0, self.source.clone());
+		self.get_entry_scope()
+			.insert_variable(VariableName::try_from("nml.input_file").unwrap(), Rc::new(
+				PropertyVariable {
+					location: token.clone(),
+					name: VariableName::try_from("nml.input_file").unwrap(),
+					visibility: VariableVisibility::Internal,
+					value: PropertyValue::String(self.source.name().into()),
+					value_token: token.clone(),
+				}));
+		self.get_entry_scope()
+			.insert_variable(VariableName::try_from("nml.output_file").unwrap(), Rc::new(
+				PropertyVariable {
+					location: token.clone(),
+					name: VariableName::try_from("nml.output_file").unwrap(),
+					visibility: VariableVisibility::Internal,
+					value: PropertyValue::String(output_file),
+					value_token: token.clone(),
+				}));
+
 		self.parser.parse(&mut self);
 		if let Some(lsp) = &mut self.lsp {
 			// TODO: send to lsp

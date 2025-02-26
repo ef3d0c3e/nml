@@ -195,13 +195,14 @@ impl Rule for VariableRule
 				}
 			};
 
-			Rc::new(PropertyVariable {
-				location: Token::new(captures.get(0).unwrap().start()..val_captures.get(0).unwrap().end() - 1, cursor.source()),
-				name,
-				visibility,
-				value: PropertyValue::Integer(val),
-				value_token: Token::new(value.range(), cursor.source()),
-			});
+			unit.get_scope()
+				.insert_variable(name.clone(), Rc::new(PropertyVariable {
+					location: Token::new(captures.get(0).unwrap().start()..val_captures.get(0).unwrap().end() - 1, cursor.source()),
+					name,
+					visibility,
+					value: PropertyValue::Integer(val),
+					value_token: Token::new(value.range(), cursor.source()),
+				}));
 			return cursor.at(val_captures.get(0).unwrap().end() - 1);
 		};
 
@@ -295,7 +296,7 @@ impl RegexRule for VariableSubstitutionRule {
 				token.source(),
 				"Unterminated variable substitution".into(),
 				span(
-					variable_name.end()-1..closing_token.start(),
+					variable_name.start()-1..closing_token.start(),
 					format!("Missing terminating '{0}' after initial '{0}'", "%".fg(unit.colors().info))
 				)
 			);
@@ -326,9 +327,9 @@ impl RegexRule for VariableSubstitutionRule {
 				token.source(),
 				"Unknown variable".into(),
 				span(
-					variable_name.end()-1..closing_token.start(),
+					variable_name.start()..closing_token.start(),
 					format!("Unable to find a variable with name `{}`", &varname.0.fg(unit.colors().highlight))
-				)
+				),
 			);
 			return
 		};
