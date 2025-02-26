@@ -120,7 +120,8 @@ impl CompiledUnit {
 
 		// Store references
 		for (name, data) in &self.references {
-			tr.execute("INSERT OR REPLACE INTO units_references (input_file, name, data) VALUES (?1, ?2, ?3)", (&self.input_file, &name.0, data));
+			let Refname::Internal(name) = &name else { continue };
+			tr.execute("INSERT OR REPLACE INTO units_references (input_file, name, data) VALUES (?1, ?2, ?3)", (&self.input_file, name, data));
 		}
 
 		// Store dependencies

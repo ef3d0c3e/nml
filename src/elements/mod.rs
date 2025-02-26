@@ -11,7 +11,7 @@ pub mod link;
 //pub mod media;
 pub mod linebreak;
 //pub mod raw;
-//pub mod reference;
+pub mod internal_link;
 //pub mod script;
 //pub mod section;
 //pub mod style;

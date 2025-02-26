@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Color;
+use ariadne::IndexType;
 use dashmap::DashMap;
 use tower_lsp::lsp_types::Diagnostic;
 
@@ -31,8 +32,8 @@ impl ReportColors {
 		Self {
 			error: Some(Color::Red),
 			warning: Some(Color::Yellow),
-			info: Some(Color::BrightBlue),
-			highlight: Some(Color::BrightMagenta),
+			info: Some(Color::Magenta),
+			highlight: Some(Color::BrightBlue),
 		}
 	}
 
@@ -70,10 +71,20 @@ impl From<&ReportKind> for tower_lsp::lsp_types::DiagnosticSeverity {
 	}
 }
 
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpanColor
+{
+	Error,
+	Info,
+	Highlight,
+}
+
 #[derive(Debug)]
 pub struct ReportSpan {
 	pub token: Token,
 	pub message: String,
+	pub color: SpanColor,
 }
 
 #[derive(Debug)]
@@ -87,11 +98,12 @@ pub struct Report {
 }
 
 impl Report {
-	fn ariadne_color(kind: &ReportKind, colors: &ReportColors) -> ariadne::Color {
-		match kind {
-			ReportKind::Error => colors.error.unwrap_or(ariadne::Color::Primary),
-			ReportKind::Warning => colors.warning.unwrap_or(ariadne::Color::Primary),
-		}
+	fn ariadne_color(color: SpanColor, colors: &ReportColors) -> ariadne::Color {
+		match color {
+			SpanColor::Error => colors.error,
+			SpanColor::Info => colors.info,
+			SpanColor::Highlight => colors.highlight,
+		}.unwrap_or(ariadne::Color::Primary)
 	}
 
 	fn to_ariadne(
@@ -115,15 +127,22 @@ impl Report {
 			start = 0;
 		}
 		cache.insert(source.clone(), source.content().clone());
+
+		let cfg = ariadne::Config::default()
+			.with_cross_gap(true)
+			.with_multiline_arrows(false)
+			.with_index_type(IndexType::Byte)
+			.with_compact(false);
 		let mut builder = ariadne::Report::build((&self.kind).into(), self.source, start)
-			.with_message(self.message);
+			.with_message(self.message)
+			.with_config(cfg);
 
 		for span in self.spans {
 			cache.insert(span.token.source(), span.token.source().content().clone());
 			builder = builder.with_label(
 				ariadne::Label::new(span.token.source().original_range(span.token.range))
 					.with_message(span.message)
-					.with_color(Self::ariadne_color(&self.kind, colors)),
+					.with_color(Self::ariadne_color(span.color, colors)),
 			)
 		}
 		if let Some(help) = &self.help {
@@ -200,6 +219,7 @@ pub mod macros {
 			$r.spans.push(ReportSpan {
 				token: $crate::parser::source::Token::new($range, $source),
 				message: $message,
+				color: SpanColor::Error,
 			});
 			report_label!($r, $($($tail)*)?);
 		}};
@@ -207,6 +227,39 @@ pub mod macros {
 			$r.spans.push(ReportSpan {
 				token: $crate::parser::source::Token::new($range, $r.source.clone()),
 				message: $message,
+				color: SpanColor::Error,
+			});
+			report_label!($r, $($($tail)*)?);
+		}};
+		($r:expr, span_info($source:expr, $range:expr, $message:expr) $(, $($tail:tt)*)?) => {{
+			$r.spans.push(ReportSpan {
+				token: $crate::parser::source::Token::new($range, $source),
+				message: $message,
+				color: SpanColor::Info,
+			});
+			report_label!($r, $($($tail)*)?);
+		}};
+		($r:expr, span_info($range:expr, $message:expr) $(, $($tail:tt)*)?) => {{
+			$r.spans.push(ReportSpan {
+				token: $crate::parser::source::Token::new($range, $r.source.clone()),
+				message: $message,
+				color: SpanColor::Info,
+			});
+			report_label!($r, $($($tail)*)?);
+		}};
+		($r:expr, span_highlight($source:expr, $range:expr, $message:expr) $(, $($tail:tt)*)?) => {{
+			$r.spans.push(ReportSpan {
+				token: $crate::parser::source::Token::new($range, $source),
+				message: $message,
+				color: SpanColor::Highlight,
+			});
+			report_label!($r, $($($tail)*)?);
+		}};
+		($r:expr, span_highlight($range:expr, $message:expr) $(, $($tail:tt)*)?) => {{
+			$r.spans.push(ReportSpan {
+				token: $crate::parser::source::Token::new($range, $r.source.clone()),
+				message: $message,
+				color: SpanColor::Highlight,
 			});
 			report_label!($r, $($($tail)*)?);
 		}};

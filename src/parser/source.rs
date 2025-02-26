@@ -437,6 +437,17 @@ impl Token {
 			.map(|(pos, _)| pos)
 			.unwrap_or(self.range.end)
 	}
+
+	/// Creates a virtual source from the token
+	pub fn to_source(&self, name: String) -> Arc<dyn Source>
+	{
+		Arc::new(VirtualSource {
+			location: self.clone(),
+			name,
+			content: self.content().into(),
+			offsets: None,
+		})
+	}
 }
 
 impl From<Arc<dyn Source>> for Token {
