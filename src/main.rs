@@ -7,13 +7,10 @@ mod lua;
 mod parser;
 
 use std::env;
-use std::io::BufWriter;
-use std::io::Write;
 use std::process::ExitCode;
 
 use compiler::compiler::Target;
 use compiler::process::ProcessQueue;
-use compiler::sanitize::Sanitizer;
 use getopts::Options;
 use walkdir::WalkDir;
 

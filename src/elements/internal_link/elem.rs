@@ -1,12 +1,14 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, document::{element::{ElemKind, Element}, references::{Reference, Refname}}, parser::{reports::Report, scope::Scope, source::Token}};
+use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, document::{element::{ElemKind, Element}, references::{InternalReference, Refname}}, parser::{reports::Report, scope::Scope, source::Token}};
 
 #[derive(Debug)]
 pub struct InternalLink {
 	pub(crate) location: Token,
 	pub(crate) refname: Refname,
 	pub(crate) display: Vec<Rc<RefCell<Scope>>>,
+	/// Data resolved at parse time for internal reference
+	pub(crate) resolved: Option<Rc<InternalReference>>,
 }
 
 impl Element for InternalLink {
@@ -31,168 +33,3 @@ impl Element for InternalLink {
         todo!()
     }
 }
-
-/*
-use runtime_format::FormatArgs;
-use runtime_format::FormatKey;
-use runtime_format::FormatKeyError;
-
-use crate::compiler::compiler::Compiler;
-use crate::compiler::output::CompilerOutput;
-use crate::compiler::compiler::Target::HTML;
-use crate::compiler::sanitize::Sanitizer;
-use crate::document::document::Document;
-use crate::document::element::ElemKind;
-use crate::document::element::Element;
-use crate::document::references::CrossReference;
-use crate::parser::reports::macros::*;
-use crate::parser::reports::Report;
-use crate::parser::reports::*;
-use crate::parser::source::Token;
-
-use super::style::ExternalReferenceStyle;
-
-#[derive(Debug)]
-pub struct InternalReference {
-	pub(crate) location: Token,
-	pub(crate) refname: String,
-	pub(crate) caption: Option<String>,
-}
-
-impl InternalReference {
-	pub fn caption(&self) -> Option<&String> { self.caption.as_ref() }
-}
-
-impl Element for InternalReference {
-	fn location(&self) -> &Token { &self.location }
-
-	fn kind(&self) -> ElemKind { ElemKind::Inline }
-
-	fn element_name(&self) -> &'static str { "Reference" }
-
-	fn compile<'e>(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
-		match compiler.target() {
-			HTML => {
-				let elemref = document
-					.get_reference(self.refname.as_str())
-					.ok_or(compile_err!(
-						self.location(),
-						"Failed to compile internal reference".into(),
-						format!(
-							"Unable to find reference `{}` in current document",
-							self.refname
-						)
-					))?;
-				let elem = document.get_from_reference(&elemref).unwrap();
-
-				let refid = output.reference_id(document, elemref);
-				output.add_content(
-					elem.compile_reference(
-						compiler,
-						document,
-						self,
-						refid
-					)
-					.map_err(|err| {
-						compile_err!(
-							self.location(),
-							"Failed to compile internal reference".into(),
-							err
-						)
-					})?,
-				);
-			}
-			_ => todo!(""),
-		}
-		Ok(())
-	}
-}
-
-#[derive(Debug)]
-pub struct ExternalReference {
-	pub(crate) location: Token,
-	pub(crate) reference: CrossReference,
-	pub(crate) caption: Option<String>,
-	pub(crate) style: Rc<ExternalReferenceStyle>,
-}
-
-impl ExternalReference {
-	pub fn style(&self) -> &Rc<ExternalReferenceStyle> { &self.style }
-}
-
-struct FmtPair<'a>(Sanitizer, &'a ExternalReference);
-
-impl FormatKey for FmtPair<'_> {
-	fn fmt(&self, key: &str, f: &mut std::fmt::Formatter<'_>) -> Result<(), FormatKeyError> {
-		match &self.1.reference {
-			CrossReference::Unspecific(refname) => match key {
-				"refname" => write!(f, "{}", self.0.sanitize(refname)).map_err(FormatKeyError::Fmt),
-				_ => Err(FormatKeyError::UnknownKey),
-			},
-			CrossReference::Specific(refdoc, refname) => match key {
-				"refdoc" => write!(f, "{}", self.0.sanitize(refdoc)).map_err(FormatKeyError::Fmt),
-				"refname" => write!(f, "{}", self.0.sanitize(refname)).map_err(FormatKeyError::Fmt),
-				_ => Err(FormatKeyError::UnknownKey),
-			},
-		}
-	}
-}
-
-impl Element for ExternalReference {
-	fn location(&self) -> &Token { &self.location }
-
-	fn kind(&self) -> ElemKind { ElemKind::Inline }
-
-	fn element_name(&self) -> &'static str { "Reference" }
-
-	fn compile<'e>(
-		&self,
-		compiler: &Compiler,
-		_document: &dyn Document,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
-		match compiler.target() {
-			HTML => {
-				let mut result = "<a href=\"".to_string();
-
-				// Add crossreference
-				output.add_external_reference(self.reference.clone());
-
-				if let Some(caption) = &self.caption {
-					result += format!("\">{}</a>", compiler.sanitize(caption)).as_str();
-				} else {
-					// Use style
-					let fmt_pair = FmtPair(compiler.sanitizer(), self);
-					let format_string = match &self.reference {
-						CrossReference::Unspecific(_) => {
-							compiler.sanitize_format(self.style.format_unspecific.as_str())
-						}
-						CrossReference::Specific(_, _) => {
-							compiler.sanitize_format(self.style.format_specific.as_str())
-						}
-					};
-					let args = FormatArgs::new(format_string.as_str(), &fmt_pair);
-					args.status().map_err(|err| {
-						compile_err!(
-							self.location(),
-							"Failed to compile external reference".into(),
-							format!(
-								"Failed to format ExternalReference style `{format_string}`: {err}"
-							)
-						)
-					})?;
-
-					result += format!("\">{}</a>", args).as_str();
-				}
-			}
-			_ => todo!(""),
-		}
-		Ok(())
-	}
-}
-*/

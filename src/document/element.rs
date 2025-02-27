@@ -3,15 +3,14 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::Report;
 use crate::parser::scope::Scope;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
-use downcast_rs::DowncastSync;
-use url::Url;
+
+use super::references::InternalReference;
 
 
 /// The kind for an element
@@ -72,29 +71,18 @@ pub trait ReferenceableElement: Element {
 	/// Reference name
 	fn reference_name(&self) -> Option<&String>;
 
+	/// Returns the internal reference
+	fn reference(&self) -> Rc<InternalReference>;
+
 	/// Key for refcounting
 	///
 	/// Each unique key will have a unique associated counter.
 	/// This is used to have different counters when referencing tables, sections or media.
 	fn refcount_key(&self) -> &'static str;
 
-	/// Creates the reference element
-	/*
-	fn compile_reference(
-		&self,
-		compiler: &Compiler,
-		document: &dyn Document,
-		reference: &InternalReference,
-		refid: usize,
-	) -> Result<String, String>;
-	*/
-
 	/// Gets the refid for a compiler. The refid is some key that can be used from an external
 	/// document to reference this element.
 	fn refid(&self, compiler: &Compiler, refid: usize) -> String;
-
-	// Gets an url to the reference, based on the compiler's target
-	//fn get_url(&self, target: Target) -> Url;
 }
 
 pub trait ContainerElement: Element {

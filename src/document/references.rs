@@ -1,12 +1,11 @@
 use std::rc::Rc;
 
-use serde::Deserialize;
-use serde::Serialize;
 
-use crate::compiler::resolver::ErasedReference;
 use crate::parser::source::Token;
 
-/// Internal name for references
+use super::element::Element;
+
+/// Name for references
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Refname
 {
@@ -30,15 +29,14 @@ impl TryFrom<&str> for Refname
 {
     type Error = String;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-		let trimmed = value.trim_start().trim_end();
-		if trimmed.is_empty() {
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+		if s.is_empty() {
 			return Err("Refname cannot be empty".to_string());
 		}
 
 		// Validate
 		let mut kind = None;
-		trimmed
+		s
 			.chars()
 			.try_for_each(|c| {
 				if c == '#' || c == '@'
@@ -46,24 +44,24 @@ impl TryFrom<&str> for Refname
 					if kind.is_some()
 					{
 						return Err(format!(
-								"Refname `{trimmed}` cannot contain `{c}` after previous specifier"
+								"Refname `{s}` cannot contain `{c}` after previous specifier"
 						));
 					}
 					kind = Some(c);
 				}
 				else if c.is_ascii_punctuation() && !(c == '.' || c == '_') {
 					return Err(format!(
-							"Refname `{trimmed}` cannot contain punctuation codepoint: `{c}`"
+							"Refname `{s}` cannot contain punctuation codepoint: `{c}`"
 					));
 				}
 				else if c.is_whitespace() {
 					return Err(format!(
-							"Refname `{trimmed}` cannot contain whitespaces: `{c}`"
+							"Refname `{s}` cannot contain whitespaces: `{c}`"
 					));
 				}
 				else if c.is_control() {
 					return Err(format!(
-							"Refname `{trimmed}` cannot contain control codepoint: `{c}`"
+							"Refname `{s}` cannot contain control codepoint: `{c}`"
 					));
 				}
 
@@ -71,32 +69,31 @@ impl TryFrom<&str> for Refname
 			})?;
 		match kind {
 			Some('#') => {
-				let p = trimmed.split_once('#')
+				let p = s.split_once('#')
 					.map(|(a, b)| (a.to_string(), b.to_string()))
 					.unwrap();
 				Ok(Self::External(p.0, p.1))
 			},
 			Some('@') => {
-				let p = trimmed.split_once('@')
+				let p = s.split_once('@')
 					.map(|(a, b)| (a.to_string(), b.to_string()))
 					.unwrap();
 				Ok(Self::Bibliography(p.0, p.1))
 			},
-			_ => Ok(Self::Internal(trimmed.to_string())),
+			_ => Ok(Self::Internal(s.to_string())),
 		}
     }
 }
 
-// Declared reference
+/// References available inside a document
 #[derive(Debug)]
-pub struct Reference {
-	location: Token,
+pub struct InternalReference {
+	// Declaration 
+	pub location: Token,
 	/// Name of the reference
-	refname: Refname,
-	/// Internal path to the reffered element
-	internal_path: Vec<usize>,
+	pub refname: Refname,
 }
 
-impl Reference {
+impl InternalReference {
 	pub fn name(&self) -> &Refname { &self.refname }
 }

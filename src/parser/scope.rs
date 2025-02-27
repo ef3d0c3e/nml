@@ -10,7 +10,7 @@ use super::state::ParserState;
 
 use crate::document::element::ContainerElement;
 use crate::document::element::Element;
-use crate::document::references::Reference;
+use crate::document::references::InternalReference;
 use crate::document::references::Refname;
 use crate::document::variable::Variable;
 use crate::document::variable::VariableName;
@@ -34,7 +34,7 @@ pub struct Scope {
 	source: Arc<dyn Source>,
 
 	/// Declared references in this scope
-	references: HashMap<Refname, Rc<Reference>>,
+	references: HashMap<Refname, Rc<InternalReference>>,
 
 	/// Variables declared within the scope
 	variables: HashMap<VariableName, Rc<dyn Variable>>,
@@ -83,21 +83,6 @@ impl Scope {
 
 	/// Returns a mutable parser state
 	pub fn parser_state_mut(&mut self) -> &mut ParserState { &mut self.parser_state }
-
-	/// Inserts a reference in the current scope.
-	///
-	/// On conflict, returns the conflicting reference.
-	pub fn insert_reference(&mut self, reference: Rc<Reference>) -> Option<Rc<Reference>> {
-		self.references
-			.insert(reference.name().to_owned(), reference)
-	}
-
-	/// Inserts a variable in the current scope.
-	///
-	/// On conflict, returns the conflicting variable.
-	pub fn insert_variable(&mut self, variable: Rc<dyn Variable>) -> Option<Rc<dyn Variable>> {
-		self.variables.insert(variable.name().to_owned(), variable)
-	}
 }
 
 pub trait ScopeAccessor {
@@ -109,14 +94,17 @@ pub trait ScopeAccessor {
 		visible: bool,
 	) -> Rc<RefCell<Scope>>;
 
-	/// Returns a reference as well as it's declaring scope
-	fn get_reference(&self, name: &Refname) -> Option<(Rc<Reference>, Rc<RefCell<Scope>>)>;
+	/// Returns an internal reference as well as it's declaring scope
+	fn get_reference(&self, name: &Refname) -> Option<(Rc<InternalReference>, Rc<RefCell<Scope>>)>;
+
+	/// Inserts an internal reference
+	fn insert_reference(&self, reference: Rc<InternalReference>) -> Option<Rc<InternalReference>>;
 
 	/// Returns a variable as well as it's declaring scope
 	fn get_variable(&self, name: &VariableName) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)>;
 
 	/// Inserts a variable
-	fn insert_variable(&self, name: VariableName, var: Rc<dyn Variable>) -> Option<Rc<dyn Variable>>;
+	fn insert_variable(&self, var: Rc<dyn Variable>) -> Option<Rc<dyn Variable>>;
 
 	/// Should be called by the owning [`TranslationUnit`] to acknowledge an element being added
 	fn add_content(&self, elem: Rc<dyn Element>);
@@ -159,6 +147,12 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		Rc::new(RefCell::new(child))
 	}
 
+	fn insert_reference(&self, reference: Rc<InternalReference>) -> Option<Rc<InternalReference>>
+	{
+		let mut scope = Rc::as_ref(self).borrow_mut();
+		scope.references.insert(reference.name().to_owned(), reference)
+	}
+
 	fn get_variable(&self, name: &VariableName) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)> {
 		if let Some(variable) = (*self.clone()).borrow().variables.get(name) {
 			return Some((variable.clone(), self.clone()));
@@ -171,13 +165,13 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		return None;
 	}
 
-	fn insert_variable(&self, name: VariableName, var: Rc<dyn Variable>) -> Option<Rc<dyn Variable>>
+	fn insert_variable(&self, var: Rc<dyn Variable>) -> Option<Rc<dyn Variable>>
 	{
 		let mut scope = Rc::as_ref(self).borrow_mut();
-		scope.variables.insert(name, var)
+		scope.variables.insert(var.name().to_owned(), var)
 	}
 
-	fn get_reference(&self, name: &Refname) -> Option<(Rc<Reference>, Rc<RefCell<Scope>>)> {
+	fn get_reference(&self, name: &Refname) -> Option<(Rc<InternalReference>, Rc<RefCell<Scope>>)> {
 		if let Some(reference) = (*self.clone()).borrow().references.get(name) {
 			return Some((reference.clone(), self.clone()));
 		}

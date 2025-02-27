@@ -160,7 +160,7 @@ impl<'u> TranslationUnit<'u> {
 		// Insert default variables
 		let token = Token::new(0..0, self.source.clone());
 		self.get_entry_scope()
-			.insert_variable(VariableName::try_from("nml.input_file").unwrap(), Rc::new(
+			.insert_variable(Rc::new(
 				PropertyVariable {
 					location: token.clone(),
 					name: VariableName::try_from("nml.input_file").unwrap(),
@@ -169,7 +169,7 @@ impl<'u> TranslationUnit<'u> {
 					value_token: token.clone(),
 				}));
 		self.get_entry_scope()
-			.insert_variable(VariableName::try_from("nml.output_file").unwrap(), Rc::new(
+			.insert_variable(Rc::new(
 				PropertyVariable {
 					location: token.clone(),
 					name: VariableName::try_from("nml.output_file").unwrap(),

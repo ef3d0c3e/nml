@@ -196,7 +196,7 @@ impl Rule for VariableRule
 			};
 
 			unit.get_scope()
-				.insert_variable(name.clone(), Rc::new(PropertyVariable {
+				.insert_variable(Rc::new(PropertyVariable {
 					location: Token::new(captures.get(0).unwrap().start()..val_captures.get(0).unwrap().end() - 1, cursor.source()),
 					name,
 					visibility,
@@ -234,7 +234,7 @@ impl Rule for VariableRule
 				delim
 				);
 			unit.get_scope()
-				.insert_variable(name.clone(), Rc::new(ContentVariable {
+				.insert_variable(Rc::new(ContentVariable {
 					location: Token::new(keyword.start()-1..content_range.end, cursor.source()),
 					name,
 					visibility,
@@ -246,7 +246,7 @@ impl Rule for VariableRule
 		{
 			let value = escape_text('\\', delim, content[content_range.clone()].to_string(), false);
 			unit.get_scope()
-				.insert_variable(name.clone(), Rc::new(PropertyVariable {
+				.insert_variable(Rc::new(PropertyVariable {
 				location: Token::new(keyword.start()-1..content_range.end, cursor.source()),
 				name,
 				visibility,

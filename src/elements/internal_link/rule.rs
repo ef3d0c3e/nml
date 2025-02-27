@@ -104,6 +104,13 @@ impl RegexRule for InternalLinkRule {
 			}
 		};
 
+		let resolved = if let Refname::Internal(_) = &link_refname
+		{
+			unit.get_scope()
+				.get_reference(&link_refname)
+				.map(|(reference, _)| reference)
+		} else { None };
+
 		// Custom display, if '[' present
 		let display = if captures.get(3).is_some()
 		{
@@ -168,6 +175,7 @@ impl RegexRule for InternalLinkRule {
 			location: token.clone(),
 			refname: link_refname,
 			display: vec![display],
+			resolved,
 		}));
 	}
 }
