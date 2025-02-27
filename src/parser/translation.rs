@@ -1,10 +1,14 @@
 use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::cell::RefMut;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::document::element::Element;
+use crate::document::element::ReferenceableElement;
+use crate::document::references::Refname;
 use crate::document::variable::PropertyValue;
 use crate::document::variable::PropertyVariable;
 use crate::document::variable::VariableName;
@@ -37,6 +41,8 @@ pub struct TranslationUnit<'u> {
 	pub parser: &'u Parser,
 	/// Entry point of this translation unit
 	source: Arc<dyn Source>,
+	/// Absolute path correspondig to the `source`
+	path: PathBuf,
 	/// Reporting colors defined for this translation unit
 	colors: ReportColors,
 	/// Entry scope of the translation unit
@@ -57,7 +63,11 @@ pub struct TranslationUnit<'u> {
 	/// User-defined styles
 	//custom_styles: CustomStyleHolder,
 
+	/// Error reports
 	reports: Vec<(Rc<RefCell<Scope>>, Report)>,
+	
+	/// Exported (internal) references
+	references: HashMap<String, Rc<dyn ReferenceableElement>>,
 	/// Output data extracted from parsing
 	output: OnceCell<UnitOutput>,
 }
@@ -90,9 +100,11 @@ impl<'u> TranslationUnit<'u> {
 			ParseMode::default(),
 			0,
 		)));
+		let path = std::fs::canonicalize(source.name()).unwrap();
 		let mut s = Self {
 			parser,
-			source: source,
+			source,
+			path,
 			colors: with_colors
 				.then(ReportColors::with_colors)
 				.unwrap_or(ReportColors::without_colors()),
@@ -107,6 +119,7 @@ impl<'u> TranslationUnit<'u> {
 			//custom_styles: CustomStyleHolder::default(),
 
 			reports: Vec::default(),
+			references: HashMap::default(),
 			output: OnceCell::default(),
 		};
 
@@ -122,10 +135,6 @@ impl<'u> TranslationUnit<'u> {
 
 	/// Gets the entry scope
 	pub fn get_entry_scope(&self) -> &Rc<RefCell<Scope>> { &self.entry_scope }
-
-	//pub fn scope<'s>(&'s self) -> Ref<'s, Scope> { (*self.current_scope).borrow() }
-
-	//pub fn scope_mut<'s>(&'s self) -> RefMut<'s, Scope> { (*self.current_scope).borrow_mut() }
 
 	/// Runs procedure with a newly created scope from a source file
 	///
@@ -201,15 +210,41 @@ impl<'u> TranslationUnit<'u> {
 	}
 
 	pub fn report(&mut self, report: Report) { self.reports.push((self.current_scope.clone(), report)); }
+
+	pub fn get_path(&self) -> &PathBuf {
+		&self.path
+	}
 }
 
 pub trait TranslationAccessors {
 	/// Adds content to the translation unit's current scope
 	fn add_content(&mut self, elem: Rc<dyn Element>);
+
+	/// Adds a reference, note that this is not necessary to call
+	fn add_reference(&mut self, elem: Rc<dyn ReferenceableElement>);
+
+	fn get_reference(&self, refname: &Refname) -> Option<Rc<dyn ReferenceableElement>>;
 }
 
 impl TranslationAccessors for TranslationUnit<'_> {
 	fn add_content(&mut self, elem: Rc<dyn Element>) {
+		if let Some(reference) = elem.clone().as_referenceable()
+		{
+			self.add_reference(reference);
+		}
 		self.current_scope.add_content(elem);
+	}
+
+	fn add_reference(&mut self, elem: Rc<dyn ReferenceableElement>)
+	{
+		self.references.insert(elem.reference().refname.to_string(), elem);
+	}
+
+	fn get_reference(&self, refname: &Refname) -> Option<Rc<dyn ReferenceableElement>>
+	{
+		match refname {
+			Refname::Internal(name) => self.references.get(name).cloned(),
+			_ => None
+		}
 	}
 }

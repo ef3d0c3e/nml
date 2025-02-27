@@ -9,3 +9,4 @@ pub mod util;
 pub mod translation;
 pub mod scope;
 pub mod processor;
+pub mod resolver;

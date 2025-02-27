@@ -4,6 +4,7 @@ use crate::{cache::cache::Cache, parser::{parser::Parser, source::SourceFile, tr
 
 use super::{compiled::CompiledUnit, compiler::{Compiler, Target}};
 
+#[derive(Debug)]
 pub enum ProcessError
 {
 	GeneralError(String),
@@ -60,7 +61,9 @@ impl ProcessQueue {
 			},
 		};
 
-		let mut compiled = vec![];
+		// TODO: Check input files & options
+
+		let mut processed = vec![];
 		for input in &self.inputs {
 			let input_string = input
 				.to_str()
@@ -68,6 +71,8 @@ impl ProcessQueue {
 				.ok_or(
 					ProcessError::GeneralError(format!("Failed to convert {input:#?} to string"))
 					)?;
+
+			println!("Processing: {input_string}");
 
 			// Get mtime
 			let meta = std::fs::metadata(input)
@@ -102,9 +107,10 @@ impl ProcessQueue {
 			};
 			unit = unit.consume(output_file);
 			println!("{:#?}", unit.get_scope());
-			todo!();
+			processed.push(unit);
+			//todo!();
 			//compiled.push(self.compiler.compile(&unit));
 		}
-		Ok(compiled)
+		Ok(vec![])
 	}
 }

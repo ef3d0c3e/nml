@@ -11,6 +11,7 @@ use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
 use super::references::InternalReference;
+use super::references::Refname;
 
 
 /// The kind for an element
@@ -68,9 +69,6 @@ pub trait Element: Downcast + core::fmt::Debug {
 impl_downcast!(Element);
 
 pub trait ReferenceableElement: Element {
-	/// Reference name
-	fn reference_name(&self) -> Option<&String>;
-
 	/// Returns the internal reference
 	fn reference(&self) -> Rc<InternalReference>;
 

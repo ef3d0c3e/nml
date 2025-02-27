@@ -33,9 +33,6 @@ pub struct Scope {
 	/// Source of this scope
 	source: Arc<dyn Source>,
 
-	/// Declared references in this scope
-	references: HashMap<Refname, Rc<InternalReference>>,
-
 	/// Variables declared within the scope
 	variables: HashMap<VariableName, Rc<dyn Variable>>,
 
@@ -66,7 +63,6 @@ impl Scope {
 			content: vec![],
 			parser_state: ParserState::new(parse_mode),
 			source,
-			references: HashMap::default(),
 			variables: HashMap::default(),
 			paragraphing: true,
 		}
@@ -93,12 +89,6 @@ pub trait ScopeAccessor {
 		parse_mode: ParseMode,
 		visible: bool,
 	) -> Rc<RefCell<Scope>>;
-
-	/// Returns an internal reference as well as it's declaring scope
-	fn get_reference(&self, name: &Refname) -> Option<(Rc<InternalReference>, Rc<RefCell<Scope>>)>;
-
-	/// Inserts an internal reference
-	fn insert_reference(&self, reference: Rc<InternalReference>) -> Option<Rc<InternalReference>>;
 
 	/// Returns a variable as well as it's declaring scope
 	fn get_variable(&self, name: &VariableName) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)>;
@@ -147,12 +137,6 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		Rc::new(RefCell::new(child))
 	}
 
-	fn insert_reference(&self, reference: Rc<InternalReference>) -> Option<Rc<InternalReference>>
-	{
-		let mut scope = Rc::as_ref(self).borrow_mut();
-		scope.references.insert(reference.name().to_owned(), reference)
-	}
-
 	fn get_variable(&self, name: &VariableName) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)> {
 		if let Some(variable) = (*self.clone()).borrow().variables.get(name) {
 			return Some((variable.clone(), self.clone()));
@@ -169,18 +153,6 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	{
 		let mut scope = Rc::as_ref(self).borrow_mut();
 		scope.variables.insert(var.name().to_owned(), var)
-	}
-
-	fn get_reference(&self, name: &Refname) -> Option<(Rc<InternalReference>, Rc<RefCell<Scope>>)> {
-		if let Some(reference) = (*self.clone()).borrow().references.get(name) {
-			return Some((reference.clone(), self.clone()));
-		}
-
-		if let Some(parent) = &(*self.clone()).borrow().parent {
-			return parent.get_reference(name);
-		}
-
-		return None;
 	}
 
 	fn add_content(&self, elem: Rc<dyn Element>) {

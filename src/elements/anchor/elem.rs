@@ -35,13 +35,6 @@ impl Element for Anchor {
 
 impl ReferenceableElement for Anchor
 {
-    fn reference_name(&self) -> Option<&String> {
-		match &self.refname {
-			Refname::Internal(name) => Some(name),
-			_ => { panic!() },
-		}
-    }
-
     fn reference(&self) -> Rc<InternalReference> {
         self.reference.clone()
     }

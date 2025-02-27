@@ -1,19 +1,14 @@
 use crate::document::references::InternalReference;
 use crate::document::references::Refname;
-use crate::elements::text::elem::Text;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-use crate::parser::scope::ScopeAccessor;
 use crate::parser::state::ParseMode;
 use crate::parser::translation::TranslationAccessors;
 use crate::parser::translation::TranslationUnit;
-use crate::parser::util::escape_source;
-use crate::parser::util::parse_paragraph;
 use ariadne::Fmt;
 use regex::Captures;
 use regex::Regex;
 use std::rc::Rc;
-use std::rc::Weak;
 
 use crate::parser::reports::Report;
 use crate::parser::rule::RegexRule;
@@ -118,7 +113,5 @@ impl RegexRule for AnchorRule {
 			reference: reference.clone(),
 		});
 		unit.add_content(elem);
-		unit.get_scope()
-			.insert_reference(reference);
 	}
 }

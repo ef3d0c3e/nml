@@ -213,7 +213,10 @@ fn main() -> ExitCode {
 	}
 
 	let mut queue = ProcessQueue::new(Target::HTML, Some("debug.db"), files);
-	queue.process(compiler::process::ProcessOutputOptions::File("out.html".into()));
+	if let Err(err) = queue.process(compiler::process::ProcessOutputOptions::Directory("out".into()))
+	{
+		println!("{err:#?}");
+	}
 
 	/*
 	// Parse, compile using the cache

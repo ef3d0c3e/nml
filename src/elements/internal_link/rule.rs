@@ -106,9 +106,8 @@ impl RegexRule for InternalLinkRule {
 
 		let resolved = if let Refname::Internal(_) = &link_refname
 		{
-			unit.get_scope()
-				.get_reference(&link_refname)
-				.map(|(reference, _)| reference)
+			unit.get_reference(&link_refname)
+				.map(|reference| reference.reference())
 		} else { None };
 
 		// Custom display, if '[' present
