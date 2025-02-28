@@ -1,12 +1,14 @@
 use std::rc::Rc;
 
 
+use serde::{Deserialize, Serialize};
+
 use crate::parser::source::Token;
 
 use super::element::Element;
 
 /// Name for references
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Refname
 {
 	Internal(String),
@@ -88,7 +90,7 @@ impl TryFrom<&str> for Refname
 /// References available inside a document
 #[derive(Debug)]
 pub struct InternalReference {
-	// Declaration 
+	// Declaration
 	pub location: Token,
 	/// Name of the reference
 	pub refname: Refname,

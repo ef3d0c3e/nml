@@ -1,6 +1,8 @@
 use core::fmt::Debug;
 use std::fs;
 use std::ops::Range;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use downcast_rs::impl_downcast;
@@ -51,7 +53,7 @@ pub struct SourceFile {
 	/// The token that created this [`SourceFile`], empty if file comes from the executable's
 	/// options.
 	location: Option<Token>,
-	/// Path to the file, used for the [`Self::name()`] method
+	/// Path relative to the compilation databse / current directory
 	path: String,
 	/// Content of the file
 	content: String,
@@ -63,10 +65,10 @@ impl SourceFile {
 	/// `path`. In case the file is not accessible or reading fails, an error is returned.
 	pub fn new(path: String, location: Option<Token>) -> Result<Self, String> {
 		match fs::read_to_string(&path) {
-			Err(_) => Err(format!("Unable to read file content: `{}`", path)),
+			Err(_) => Err(format!("Unable to read file content: `{path}`")),
 			Ok(content) => Ok(Self {
 				location,
-				path,
+				path: path,
 				content,
 			}),
 		}

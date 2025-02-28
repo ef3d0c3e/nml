@@ -1,6 +1,6 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::{Path, PathBuf}, sync::Arc};
 
-use crate::{cache::cache::Cache, parser::{parser::Parser, source::SourceFile, translation::TranslationUnit}};
+use crate::{cache::cache::Cache, document::references::Refname, parser::{parser::Parser, resolver::Resolver, source::SourceFile, translation::TranslationUnit}};
 
 use super::{compiled::CompiledUnit, compiler::{Compiler, Target}};
 
@@ -19,20 +19,24 @@ pub enum ProcessOutputOptions {
 }
 
 /// Processqueue for inputs
-pub struct ProcessQueue
+pub struct ProcessQueue<'s>
 {
 	inputs: Vec<PathBuf>,
 	outputs: Vec<CompiledUnit>,
-	cache: Arc<Cache>,
 
+	cache: Arc<Cache>,
+	project_path: &'s Path,
 	parser: Parser,
 	compiler: Compiler,
 }
 
-impl ProcessQueue {
-	pub fn new(target: Target, db: Option<&str>, inputs: Vec<PathBuf>) -> Self
+impl<'s> ProcessQueue<'s> {
+	pub fn new(target: Target, db: Option<&'s str>, inputs: Vec<PathBuf>) -> Self
 	{
 		let cache = Arc::new(Cache::new(db).unwrap());
+		let project_path = db
+			.map(|s| Path::new(s))
+			.unwrap_or(Path::new("."));
 
 		let parser = Parser::new();
 		let compiler = Compiler::new(target, cache.clone());
@@ -41,6 +45,7 @@ impl ProcessQueue {
 			inputs,
 			outputs: vec![],
 			cache,
+			project_path,
 			parser,
 			compiler
 		}
@@ -61,8 +66,6 @@ impl ProcessQueue {
 			},
 		};
 
-		// TODO: Check input files & options
-
 		let mut processed = vec![];
 		for input in &self.inputs {
 			let input_string = input
@@ -74,6 +77,15 @@ impl ProcessQueue {
 
 			println!("Processing: {input_string}");
 
+			// Compute path
+			let Some(local_path) = pathdiff::diff_paths(&input_string, self.project_path) else {
+				Err(ProcessError::InputError(format!("Failed to compute local path. Base=`{:#?}` Input=`{input_string}`", self.project_path), input_string))?
+			};
+			let Some(local_path) = local_path.to_str().map(|s| s.to_string()) else {
+				Err(ProcessError::InputError(format!("Failed to translate `{local_path:#?}` to a string."), input_string))?
+			};
+
+
 			// Get mtime
 			let meta = std::fs::metadata(input)
 				.map_err(|err| ProcessError::InputError(input_string.clone(), format!("Failed to get metadata for `{input_string}`: {err}")))?;
@@ -83,8 +95,8 @@ impl ProcessQueue {
 				.map_err(|err| ProcessError::InputError(input_string.clone(), format!("Unable to query modification time for `{input_string}`: {err}")))?;
 
 			// Create unit
-			let source = Arc::new(SourceFile::new(input_string.clone(), None).unwrap());
-			let mut unit = TranslationUnit::new(&self.parser, source, false, true);
+			let source = Arc::new(SourceFile::new(local_path.clone(), None).unwrap());
+			let mut unit = TranslationUnit::new(local_path, &self.parser, source, false, true);
 
 			// TODO: Check if necessary to compile using mtime
 			let output_file = match &options {
@@ -111,6 +123,18 @@ impl ProcessQueue {
 			//todo!();
 			//compiled.push(self.compiler.compile(&unit));
 		}
+
+		// Create resolver
+		let con = tokio::runtime::Runtime::new()
+			.unwrap()
+			.block_on(self.cache.get_connection());
+		let resolver = match Resolver::new(con, &processed) {
+			Ok(resolver) => resolver,
+			Err(err) => return Err(ProcessError::GeneralError(format!("Failed to construct resolver: {err}"))),
+		};
+		//let refname = Refname::try_from("source#test").unwrap();
+		//let res = resolver.resolve_reference(con, resolver.units[0], &refname);
+		//println!("For {refname:#?} = {res:#?}");
 		Ok(vec![])
 	}
 }

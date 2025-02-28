@@ -2,7 +2,6 @@ use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -41,8 +40,6 @@ pub struct TranslationUnit<'u> {
 	pub parser: &'u Parser,
 	/// Entry point of this translation unit
 	source: Arc<dyn Source>,
-	/// Absolute path correspondig to the `source`
-	path: PathBuf,
 	/// Reporting colors defined for this translation unit
 	colors: ReportColors,
 	/// Entry scope of the translation unit
@@ -66,6 +63,8 @@ pub struct TranslationUnit<'u> {
 	/// Error reports
 	reports: Vec<(Rc<RefCell<Scope>>, Report)>,
 	
+	/// Path relative to the database
+	path: String,
 	/// Exported (internal) references
 	references: HashMap<String, Rc<dyn ReferenceableElement>>,
 	/// Output data extracted from parsing
@@ -89,6 +88,7 @@ impl<'u> TranslationUnit<'u> {
 	///
 	/// Should be called once for each distinct source file
 	pub fn new(
+		path: String,
 		parser: &'u Parser,
 		source: Arc<dyn Source>,
 		with_lsp: bool,
@@ -100,11 +100,9 @@ impl<'u> TranslationUnit<'u> {
 			ParseMode::default(),
 			0,
 		)));
-		let path = std::fs::canonicalize(source.name()).unwrap();
 		let mut s = Self {
 			parser,
 			source,
-			path,
 			colors: with_colors
 				.then(ReportColors::with_colors)
 				.unwrap_or(ReportColors::without_colors()),
@@ -118,6 +116,7 @@ impl<'u> TranslationUnit<'u> {
 			//elem_styles: StyleHolder::default(),
 			//custom_styles: CustomStyleHolder::default(),
 
+			path,
 			reports: Vec::default(),
 			references: HashMap::default(),
 			output: OnceCell::default(),
@@ -211,7 +210,11 @@ impl<'u> TranslationUnit<'u> {
 
 	pub fn report(&mut self, report: Report) { self.reports.push((self.current_scope.clone(), report)); }
 
-	pub fn get_path(&self) -> &PathBuf {
+	pub fn get_path(&self) -> &String {
+		&self.path
+	}
+
+	pub fn get_refkey(&self) -> &String {
 		&self.path
 	}
 }

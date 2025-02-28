@@ -3,6 +3,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::cache::cache::Cache;
+use crate::document::element::ReferenceableElement;
+use crate::document::references::InternalReference;
 use crate::document::variable::Variable;
 use crate::parser::reports::Report;
 use crate::parser::translation::TranslationUnit;
