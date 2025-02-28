@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
-use crate::document::references::Refname;
 use crate::document::variable::PropertyValue;
 use crate::document::variable::PropertyVariable;
 use crate::document::variable::VariableName;
@@ -185,6 +184,15 @@ impl<'u> TranslationUnit<'u> {
 					value: PropertyValue::String(output_file),
 					value_token: token.clone(),
 				}));
+		self.get_entry_scope()
+			.insert_variable(Rc::new(
+				PropertyVariable {
+					location: token.clone(),
+					name: VariableName::try_from("nml.reference_key").unwrap(),
+					visibility: VariableVisibility::Internal,
+					value: PropertyValue::String(self.path.to_string()),
+					value_token: token.clone(),
+				}));
 
 		self.parser.parse(&mut self);
 		if let Some(lsp) = &mut self.lsp {
@@ -214,8 +222,12 @@ impl<'u> TranslationUnit<'u> {
 		&self.path
 	}
 
-	pub fn get_refkey(&self) -> &String {
-		&self.path
+	pub fn get_refkey(&self) -> String {
+		let varname = VariableName::try_from("nml.reference_key").unwrap();
+		self.get_scope()
+			.get_variable(&varname)
+			.map(|(var, _)| var.to_string())
+			.unwrap()
 	}
 }
 
@@ -226,7 +238,8 @@ pub trait TranslationAccessors {
 	/// Adds a reference, note that this is not necessary to call
 	fn add_reference(&mut self, elem: Rc<dyn ReferenceableElement>);
 
-	fn get_reference(&self, refname: &Refname) -> Option<Rc<dyn ReferenceableElement>>;
+	/// Finds an internal reference, with name `name`, declared in this document
+	fn get_reference<S: AsRef<str>>(&self, refname: S) -> Option<Rc<dyn ReferenceableElement>>;
 }
 
 impl TranslationAccessors for TranslationUnit<'_> {
@@ -243,11 +256,8 @@ impl TranslationAccessors for TranslationUnit<'_> {
 		self.references.insert(elem.reference().refname.to_string(), elem);
 	}
 
-	fn get_reference(&self, refname: &Refname) -> Option<Rc<dyn ReferenceableElement>>
+	fn get_reference<S: AsRef<str>>(&self, name: S) -> Option<Rc<dyn ReferenceableElement>>
 	{
-		match refname {
-			Refname::Internal(name) => self.references.get(name).cloned(),
-			_ => None
-		}
+		self.references.get(name.as_ref()).cloned()
 	}
 }

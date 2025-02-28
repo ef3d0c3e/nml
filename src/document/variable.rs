@@ -133,6 +133,8 @@ pub trait Variable : core::fmt::Debug {
 
 	/// Expands the variable when it is requested
 	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token);
+
+	fn to_string(&self) -> String;
 }
 
 /// Variable that can be expanded to content
@@ -180,6 +182,10 @@ impl Variable for ContentVariable {
 		unit.get_scope()
 			.add_content(Rc::new(expansion));
     }
+
+	fn to_string(&self) -> String {
+		self.content.content().into()
+	}
 }
 
 /// Values for property variables
@@ -203,6 +209,7 @@ impl ToString for PropertyValue
 /// Variable representing a property
 #[derive(Debug)]
 pub struct PropertyVariable {
+	// TODO: Mutability restrictions
 	pub location: Token,
 	pub name: VariableName,
 	pub visibility: VariableVisibility,
@@ -253,4 +260,8 @@ impl Variable for PropertyVariable {
 		unit.get_scope()
 			.add_content(Rc::new(expansion));
     }
+
+	fn to_string(&self) -> String {
+		self.value.to_string()
+	}
 }

@@ -212,7 +212,7 @@ fn main() -> ExitCode {
 		}
 	}
 
-	let mut queue = ProcessQueue::new(Target::HTML, Some("debug.db"), files);
+	let mut queue = ProcessQueue::new(Target::HTML, db_path.as_ref().map(|s| s.as_str()), files);
 	if let Err(err) = queue.process(compiler::process::ProcessOutputOptions::Directory("out".into()))
 	{
 		println!("{err:#?}");

@@ -13,22 +13,49 @@ use super::{scope::{Scope, ScopeAccessor}, source::Source, translation::{Transla
 pub struct Reference
 {
 	/// Name of reference
-	pub refname: Refname,
+	pub refname: String,
 	/// Type of reference
 	pub refkey: String,
 	/// Source unit path, relative to the database
 	pub source_unit: String,
 	/// Declaring token of the reference
 	pub token: Range<usize>,
-	/// [FIXME] anchor to the reference
-	/// This anchor should be made compiler agnostic...
-	pub anchor: String,
 }
 
-pub enum ResolverUnit<'u>
+impl Reference {
+	/// Returns the unique path to this reference in the database
+	pub fn anchor(&self) -> String
+	{
+		// FIXME:
+		format!("{}#{}", self.source_unit, self.refname)
+	}
+}
+
+/// Wrapper units that may be present in memory or in the database
+pub enum DbUnit<'u>
 {
-	Unloaded(String, String, String),
 	Loaded(&'u TranslationUnit<'u>),
+	Unloaded(String, String, String),
+}
+
+impl<'u> DbUnit<'u> {
+	/// Find reference named `name` in the unit
+	/// This returns an owned value.
+	pub fn query_reference<'con, S: AsRef<str>>(&self, con: &MutexGuard<'con, Connection>, name: S) -> Option<Reference>
+	{
+		match self {
+			DbUnit::Loaded(unit) => {
+				unit.get_reference(&name)
+					.map(|elem| Reference {
+						refname: name.as_ref().to_string(),
+						refkey: elem.refcount_key().to_string(),
+						source_unit: unit.get_path().to_owned(),
+						token: elem.location().range.clone(),
+					})
+			},
+			DbUnit::Unloaded(_, _, _) => todo!(),
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -40,7 +67,7 @@ pub enum ResolveError
 
 pub struct Resolver<'u>
 {
-	units: HashMap<String, ResolverUnit<'u>>
+	units: HashMap<String, DbUnit<'u>>
 }
 
 
@@ -74,7 +101,7 @@ impl<'u> Resolver<'u>
 		for unloaded in unlodaded_iter
 		{
 			let unloaded : (String, String, String) = unloaded.unwrap();
-			if let Some(ResolverUnit::Unloaded(previous_key, previous_input, _)) = units.insert(unloaded.0.clone(), ResolverUnit::Unloaded(
+			if let Some(DbUnit::Unloaded(previous_key, previous_input, _)) = units.insert(unloaded.0.clone(), DbUnit::Unloaded(
 				unloaded.0.clone(),
 				unloaded.1.clone(),
 				unloaded.2)) {
@@ -85,12 +112,20 @@ impl<'u> Resolver<'u>
 		// Add provided units
 		for loaded in provided
 		{
-			if let Some(ResolverUnit::Unloaded(previous_key, previous_input, _)) = units.insert(loaded.get_refkey().to_owned(), ResolverUnit::Loaded(
-				loaded)) {
-				if previous_input != *loaded.get_path()
+			match units.insert(loaded.get_refkey().to_owned(), DbUnit::Loaded(
+				loaded))
+			{
+				Some(DbUnit::Unloaded(previous_key, previous_input, _)) =>
 				{
-					return Err(format!("Duplicate reference key! Unit `{}` [key={}] and unit `{}` [key={}]", loaded.get_path(), loaded.get_refkey(), previous_input, previous_key))
-				}
+					if previous_input != *loaded.get_path()
+					{
+						return Err(format!("Duplicate reference key! Unit `{}` [key={}] and unit `{}` [key={}]", loaded.get_path(), loaded.get_refkey(), previous_input, previous_key))
+					}
+				},
+				Some(DbUnit::Loaded(previous)) => {
+					return Err(format!("Duplicate reference key! Unit `{}` [key={}] and unit `{}` [key={}]", loaded.get_path(), loaded.get_refkey(), previous.get_path(), previous.get_refkey()))
+				},
+				_ => {},
 			}
 		}
 
@@ -103,18 +138,23 @@ impl<'u> Resolver<'u>
 	{
 		match refname {
 			Refname::Internal(name) =>
-				unit.get_reference(refname)
+				unit.get_reference(&name)
 					.map(|elem| Reference {
-						refname: refname.clone(),
+						refname: name.to_owned(),
 						refkey: elem.refcount_key().to_string(),
 						source_unit: unit.get_path().to_owned(),
 						token: elem.location().range.clone(),
-						anchor: todo!(),
 					})
 			.ok_or(ResolveError::NotFound(name.clone())),
 			Refname::External(path, name) => {
 				println!("Resolve: {path:#?}");
-				todo!();
+				println!("Resolve: {:#?}", unit.get_refkey());
+				let provider = self.units.get(path).ok_or(
+					ResolveError::InvalidPath(format!("Failed to find unit with reference key `{path}`"))
+				)?;
+				provider.query_reference(&con, &name).ok_or(
+					ResolveError::NotFound(format!("Failed to find reference `{name}` in unit `{path}`"))
+					)
 			},
 			Refname::Bibliography(path, name) => todo!(),
 		}

@@ -104,9 +104,9 @@ impl RegexRule for InternalLinkRule {
 			}
 		};
 
-		let resolved = if let Refname::Internal(_) = &link_refname
+		let resolved = if let Refname::Internal(name) = &link_refname
 		{
-			unit.get_reference(&link_refname)
+			unit.get_reference(&name)
 				.map(|reference| reference.reference())
 		} else { None };
 
