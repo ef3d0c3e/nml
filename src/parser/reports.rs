@@ -155,8 +155,8 @@ impl Report {
 		(builder.finish(), ariadne::sources(cache))
 	}
 
-	pub fn reports_to_stdout(colors: &ReportColors, mut reports: Vec<(Rc<RefCell<Scope>>, Report)>) {
-		reports.drain(..).for_each(|(_scope, report)| {
+	pub fn reports_to_stdout(colors: &ReportColors, mut reports: Vec<Report>) {
+		reports.drain(..).for_each(|report| {
 			let (report, cache) = report.to_ariadne(colors);
 			report.eprint(cache).unwrap();
 		});

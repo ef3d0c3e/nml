@@ -1,3 +1,5 @@
+use downcast_rs::impl_downcast;
+use downcast_rs::Downcast;
 use serde::Serialize;
 
 use crate::compiler::compiler::Compiler;
@@ -114,7 +116,7 @@ pub enum VariableVisibility
 }
 
 /// Trait for document variables
-pub trait Variable : core::fmt::Debug {
+pub trait Variable : Downcast + core::fmt::Debug {
 	/// Gets the definition location of the variable
 	fn location(&self) -> &Token;
 
@@ -136,6 +138,7 @@ pub trait Variable : core::fmt::Debug {
 
 	fn to_string(&self) -> String;
 }
+impl_downcast!(Variable);
 
 /// Variable that can be expanded to content
 #[derive(Debug)]
@@ -215,6 +218,13 @@ pub struct PropertyVariable {
 	pub visibility: VariableVisibility,
 	pub value: PropertyValue,
 	pub value_token: Token,
+}
+
+impl PropertyVariable {
+	pub fn value(&self) -> &PropertyValue
+	{
+		&self.value
+	}
 }
 
 impl Variable for PropertyVariable {

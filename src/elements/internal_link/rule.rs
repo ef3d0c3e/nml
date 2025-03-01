@@ -2,6 +2,7 @@ use crate::document::references::Refname;
 use crate::elements::text::elem::Text;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use crate::parser::resolver::Reference;
 use crate::parser::scope::ScopeAccessor;
 use crate::parser::state::ParseMode;
 use crate::parser::translation::TranslationAccessors;
@@ -11,6 +12,7 @@ use crate::parser::util::parse_paragraph;
 use ariadne::Fmt;
 use regex::Captures;
 use regex::Regex;
+use std::cell::OnceCell;
 use std::rc::Rc;
 
 use crate::parser::reports::Report;
@@ -104,10 +106,16 @@ impl RegexRule for InternalLinkRule {
 			}
 		};
 
-		let resolved = if let Refname::Internal(name) = &link_refname
+		// Attempt to resolve reference at parse time
+		let reference = if let Refname::Internal(name) = &link_refname
 		{
 			unit.get_reference(&name)
-				.map(|reference| reference.reference())
+				.map(|reference| Reference {
+					refname: name.clone(),
+					refkey: reference.refcount_key().to_string(),
+					source_unit: unit.reference_key(),
+					token: reference.location().range.clone(),
+    			})
 		} else { None };
 
 		// Custom display, if '[' present
@@ -174,7 +182,7 @@ impl RegexRule for InternalLinkRule {
 			location: token.clone(),
 			refname: link_refname,
 			display: vec![display],
-			resolved,
+			reference: reference.map(OnceCell::from).unwrap_or(OnceCell::new()),
 		}));
 	}
 }

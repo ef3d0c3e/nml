@@ -126,6 +126,10 @@ impl<'u> TranslationUnit<'u> {
 		s
 	}
 
+	pub fn token(&self) -> Token {
+		self.source.clone().into()
+	}
+
 	pub fn parser(&self) -> &'u Parser { &self.parser }
 
 	/// Gets the current scope
@@ -198,7 +202,8 @@ impl<'u> TranslationUnit<'u> {
 		if let Some(lsp) = &mut self.lsp {
 			// TODO: send to lsp
 		} else {
-			Report::reports_to_stdout(&self.colors, std::mem::replace(&mut self.reports, vec![]));
+			let reports = self.reports.drain(..).map(|(_, report)| report).collect::<Vec<_>>();
+			Report::reports_to_stdout(&self.colors, reports);
 		}
 
 		let input_file = Rc::as_ref(self.get_entry_scope()).borrow().source();
@@ -218,11 +223,12 @@ impl<'u> TranslationUnit<'u> {
 
 	pub fn report(&mut self, report: Report) { self.reports.push((self.current_scope.clone(), report)); }
 
-	pub fn get_path(&self) -> &String {
+	/// Returns the path of the unit relative to the project's root. This is used to uniquely identify each units.
+	pub fn input_path(&self) -> &String {
 		&self.path
 	}
 
-	pub fn get_refkey(&self) -> String {
+	pub fn reference_key(&self) -> String {
 		let varname = VariableName::try_from("nml.reference_key").unwrap();
 		self.get_scope()
 			.get_variable(&varname)

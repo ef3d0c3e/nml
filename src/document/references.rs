@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::parser::source::Token;
+use crate::parser::{resolver::Reference, source::Token};
 
 use super::element::Element;
 

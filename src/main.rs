@@ -10,8 +10,9 @@ use std::env;
 use std::process::ExitCode;
 
 use compiler::compiler::Target;
-use compiler::process::ProcessQueue;
+use compiler::process::{ProcessError, ProcessQueue};
 use getopts::Options;
+use parser::reports::{Report, ReportColors};
 use walkdir::WalkDir;
 
 extern crate getopts;
@@ -213,9 +214,15 @@ fn main() -> ExitCode {
 	}
 
 	let mut queue = ProcessQueue::new(Target::HTML, db_path.as_ref().map(|s| s.as_str()), files);
-	if let Err(err) = queue.process(compiler::process::ProcessOutputOptions::Directory("out".into()))
+	match queue.process(compiler::process::ProcessOutputOptions::Directory("out".into()))
 	{
-		println!("{err:#?}");
+		Ok(_) => todo!(),
+		Err(ProcessError::GeneralError(err)) => todo!(),
+		Err(ProcessError::InputError(file, err)) => todo!(),
+		Err(ProcessError::LinkError(reports)) => {
+			let colors = ReportColors::with_colors();
+			Report::reports_to_stdout(&colors, reports);
+		},
 	}
 
 	/*

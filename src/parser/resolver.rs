@@ -1,12 +1,16 @@
 use std::{cell::RefCell, collections::HashMap, ops::Range, path::{Path, PathBuf}, rc::Rc, sync::{Arc}};
 
+use ariadne::Fmt;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tokio::sync::MutexGuard;
 
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
+
 use crate::document::{element::{Element, ReferenceableElement}, references::{InternalReference, Refname}};
 
-use super::{scope::{Scope, ScopeAccessor}, source::Source, translation::{TranslationAccessors, TranslationUnit}};
+use super::{reports::Report, scope::{Scope, ScopeAccessor}, source::Source, translation::{TranslationAccessors, TranslationUnit}};
 
 /// Link/Compile-time reference
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,38 +26,54 @@ pub struct Reference
 	pub token: Range<usize>,
 }
 
-impl Reference {
-	/// Returns the unique path to this reference in the database
-	pub fn anchor(&self) -> String
-	{
-		// FIXME:
-		format!("{}#{}", self.source_unit, self.refname)
-	}
+/// In-database translation unit
+pub struct DatabaseUnit
+{
+	pub reference_key: String,
+	pub input_file: String,
+	pub output_file: String,
 }
 
 /// Wrapper units that may be present in memory or in the database
-pub enum DbUnit<'u>
+pub enum OffloadedUnit<'u>
 {
+	/// In-memory translation unit
 	Loaded(&'u TranslationUnit<'u>),
-	Unloaded(String, String, String),
+	/// In-database translation unit
+	Unloaded(DatabaseUnit),
 }
 
-impl<'u> DbUnit<'u> {
+impl<'u> OffloadedUnit<'u> {
+	pub fn reference_key(&self) -> String
+	{
+		match self {
+			OffloadedUnit::Loaded(unit) => unit.reference_key(),
+			OffloadedUnit::Unloaded(unit) => unit.reference_key.clone(),
+		}
+	}
+
+	pub fn input_path(&self) -> String {
+		match self {
+			OffloadedUnit::Loaded(unit) => unit.input_path().to_owned(),
+			OffloadedUnit::Unloaded(unit) => unit.input_file.clone(),
+		}
+	}
+
 	/// Find reference named `name` in the unit
 	/// This returns an owned value.
 	pub fn query_reference<'con, S: AsRef<str>>(&self, con: &MutexGuard<'con, Connection>, name: S) -> Option<Reference>
 	{
 		match self {
-			DbUnit::Loaded(unit) => {
+			OffloadedUnit::Loaded(unit) => {
 				unit.get_reference(&name)
 					.map(|elem| Reference {
 						refname: name.as_ref().to_string(),
 						refkey: elem.refcount_key().to_string(),
-						source_unit: unit.get_path().to_owned(),
+						source_unit: unit.input_path().to_owned(),
 						token: elem.location().range.clone(),
 					})
 			},
-			DbUnit::Unloaded(_, _, _) => todo!(),
+			OffloadedUnit::Unloaded(unit) => todo!(),
 		}
 	}
 }
@@ -61,19 +81,20 @@ impl<'u> DbUnit<'u> {
 #[derive(Debug)]
 pub enum ResolveError
 {
-	NotFound(String),
 	InvalidPath(String),
+	NotFound(String),
 }
 
 pub struct Resolver<'u>
 {
-	units: HashMap<String, DbUnit<'u>>
+	/// List of available units via reference_key
+	units: HashMap<String, OffloadedUnit<'u>>
 }
 
 
 impl<'u> Resolver<'u>
 {
-	pub fn new<'con>(con: MutexGuard<'con, Connection>, provided: &'u Vec<TranslationUnit<'u>>) -> Result<Self, String>
+	pub fn new<'con>(colors: &ReportColors, con: &MutexGuard<'con, Connection>, provided: &'u Vec<TranslationUnit<'u>>) -> Result<Self, Report>
 	{
 		// Init tables
 		con.execute(
@@ -101,29 +122,62 @@ impl<'u> Resolver<'u>
 		for unloaded in unlodaded_iter
 		{
 			let unloaded : (String, String, String) = unloaded.unwrap();
-			if let Some(DbUnit::Unloaded(previous_key, previous_input, _)) = units.insert(unloaded.0.clone(), DbUnit::Unloaded(
-				unloaded.0.clone(),
-				unloaded.1.clone(),
-				unloaded.2)) {
-				return Err(format!("Duplicate reference key! Unit `{}` [key={}] and unit `{}` [key={}]", unloaded.1, unloaded.0, previous_input, previous_key))
+			if let Some(previous) = units.insert(unloaded.0.clone(), OffloadedUnit::Unloaded(DatabaseUnit {
+				reference_key: unloaded.0.clone(),
+				input_file: unloaded.1.clone(),
+				output_file: unloaded.2
+			})) {
+				panic!("Duplicate unit in database")
+				// Should not happen since the database should enforce uniqueness
 			}
 		}
 
 		// Add provided units
 		for loaded in provided
 		{
-			match units.insert(loaded.get_refkey().to_owned(), DbUnit::Loaded(
-				loaded))
+			match units.insert(loaded.reference_key().to_owned(), OffloadedUnit::Loaded(
+				loaded)).as_ref()
 			{
-				Some(DbUnit::Unloaded(previous_key, previous_input, _)) =>
+				Some(OffloadedUnit::Unloaded(previous)) =>
 				{
-					if previous_input != *loaded.get_path()
+					// Duplicate with a database unit
+					if previous.input_file != *loaded.input_path()
 					{
-						return Err(format!("Duplicate reference key! Unit `{}` [key={}] and unit `{}` [key={}]", loaded.get_path(), loaded.get_refkey(), previous_input, previous_key))
+						let token = loaded.token();
+						Err(make_err!(
+							token.source(),
+							"Unable to resolve project".into(),
+							span(
+								0..0,
+								format!("Two units are sharing the same reference key!")
+							),
+							span_info(
+								0..0,
+								format!("Unit 1: `{}` with key `{}`", loaded.input_path().fg(colors.info), loaded.reference_key().fg(colors.info))
+							),
+							note(format!("Unit 2: `{}` with key `{}`", (&previous.input_file).fg(colors.info), (&previous.reference_key).fg(colors.info)))
+						))?;
 					}
 				},
-				Some(DbUnit::Loaded(previous)) => {
-					return Err(format!("Duplicate reference key! Unit `{}` [key={}] and unit `{}` [key={}]", loaded.get_path(), loaded.get_refkey(), previous.get_path(), previous.get_refkey()))
+				Some(OffloadedUnit::Loaded(previous)) => {
+					// Duplicate witinh parameters
+					Err(make_err!(
+							loaded.token().source(),
+							"Unable to resolve project".into(),
+							span(
+								0..0,
+								format!("Two units are sharing the same reference key!")
+							),
+							span_info(
+								0..0,
+								format!("Unit 1: `{}` with key `{}`", loaded.input_path().fg(colors.info), loaded.reference_key().fg(colors.info))
+							),
+							span_info(
+								previous.token().source(),
+								0..0,
+								format!("Unit 2: `{}` with key `{}`", previous.input_path().fg(colors.info), previous.reference_key().fg(colors.info))
+							),
+					))?;
 				},
 				_ => {},
 			}
@@ -134,7 +188,7 @@ impl<'u> Resolver<'u>
 		})
 	}
 
-	pub fn resolve_reference<'con>(&self, con: MutexGuard<'con, Connection>, unit: &TranslationUnit, refname: &Refname) -> Result<Reference, ResolveError>
+	pub fn resolve_reference<'con>(&self, con: &MutexGuard<'con, Connection>, unit: &TranslationUnit, refname: &Refname) -> Result<Reference, ResolveError>
 	{
 		match refname {
 			Refname::Internal(name) =>
@@ -142,21 +196,70 @@ impl<'u> Resolver<'u>
 					.map(|elem| Reference {
 						refname: name.to_owned(),
 						refkey: elem.refcount_key().to_string(),
-						source_unit: unit.get_path().to_owned(),
+						source_unit: unit.input_path().to_owned(),
 						token: elem.location().range.clone(),
 					})
 			.ok_or(ResolveError::NotFound(name.clone())),
 			Refname::External(path, name) => {
 				println!("Resolve: {path:#?}");
-				println!("Resolve: {:#?}", unit.get_refkey());
+				println!("Resolve: {:#?}", unit.reference_key());
 				let provider = self.units.get(path).ok_or(
-					ResolveError::InvalidPath(format!("Failed to find unit with reference key `{path}`"))
+					ResolveError::InvalidPath(path.to_owned())
 				)?;
 				provider.query_reference(&con, &name).ok_or(
-					ResolveError::NotFound(format!("Failed to find reference `{name}` in unit `{path}`"))
-					)
+					ResolveError::NotFound(refname.to_string()))
 			},
 			Refname::Bibliography(path, name) => todo!(),
 		}
+	}
+
+	/// Resolves all references and populate reports if required
+	pub fn resolve_all<'con>(&self, con: &MutexGuard<'con, Connection>) -> Vec<Report> {
+		let mut errors = vec![];
+		self.units
+			.iter()
+			.for_each(|(_, unit)| {
+				let OffloadedUnit::Loaded(unit) = unit else { return };
+
+				unit.get_entry_scope()
+					.content_iter()
+					.filter_map(|(_, elem)| elem.as_linkable())
+					.filter(|elem| elem.wants_link())
+					.for_each(|linkable| {
+
+				println!("RESOLV={:#?}", linkable.wants_refname());
+						match self.resolve_reference(&con, unit, linkable.wants_refname())
+						{
+							/// Link reference
+							Ok(link) => { println!("resolved to: {link:#?}"); linkable.link(link) },
+							Err(ResolveError::InvalidPath(path)) => {
+								errors.push(
+									make_err!(
+										linkable.location().source(),
+										"Linking failed".into(),
+										span(
+											linkable.location().range.clone(),
+											format!("Failed to resolve `{}`: Reference path `{}` not found",
+												linkable.wants_refname().to_string().fg(unit.colors().info),
+												path.fg(unit.colors().info))
+										)
+									));
+							},
+							Err(ResolveError::NotFound(name)) => {
+								errors.push(
+									make_err!(
+										linkable.location().source(),
+										"Linking failed".into(),
+										span(
+											linkable.location().range.clone(),
+											format!("Failed to resolve `{}`: Reference not found",
+												name.fg(unit.colors().info))
+										)
+									));
+							}
+						}
+					});
+			});
+		errors
 	}
 }

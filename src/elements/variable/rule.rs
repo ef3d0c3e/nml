@@ -55,7 +55,7 @@ impl Default for VariableRule
 	fn default() -> Self
 	{
 		Self {
-			decl_re: Regex::new(r#"(?:\n|^):(export|set)\s+(\w*)\s*(=?)\s*"#).unwrap(),
+			decl_re: Regex::new(r#"(?:\n|^):(export|set)\s+([^=\s]*)\s*(=?)\s*"#).unwrap(),
 			int_re: Regex::new(r#"\s*(.*?)(true|false|(?:\+|-)?[0-9]*)[^\S\r\n]*(?:$|\n)"#).unwrap(),
 		}
 	}

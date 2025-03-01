@@ -1,6 +1,11 @@
 use std::{path::{Path, PathBuf}, sync::Arc};
 
-use crate::{cache::cache::Cache, document::references::Refname, parser::{parser::Parser, resolver::Resolver, source::SourceFile, translation::TranslationUnit}};
+use ariadne::Fmt;
+
+use crate::{cache::cache::Cache, document::{element::LinkableElement, references::Refname}, parser::{parser::Parser, reports::Report, resolver::{ResolveError, Resolver}, scope::ScopeAccessor, source::SourceFile, translation::TranslationUnit}};
+
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
 
 use super::{compiled::CompiledUnit, compiler::{Compiler, Target}};
 
@@ -9,6 +14,7 @@ pub enum ProcessError
 {
 	GeneralError(String),
 	InputError(String, String),
+	LinkError(Vec<Report>),
 }
 
 pub enum ProcessOutputOptions {
@@ -123,26 +129,22 @@ impl ProcessQueue {
 				},
 			};
 			unit = unit.consume(output_file);
-			println!("{:#?}", unit.get_scope());
 			processed.push(unit);
-			//todo!();
-			//compiled.push(self.compiler.compile(&unit));
 		}
 
-		// Create resolver
+		// Resolve all references
 		let con = tokio::runtime::Runtime::new()
 			.unwrap()
 			.block_on(self.cache.get_connection());
-		let resolver = match Resolver::new(con, &processed) {
-			Ok(resolver) => resolver,
-			Err(err) => return Err(ProcessError::GeneralError(format!("Failed to construct resolver: {err}"))),
-		};
-		let con = tokio::runtime::Runtime::new()
-			.unwrap()
-			.block_on(self.cache.get_connection());
-		let refname = Refname::try_from("source.nml#test").unwrap();
-		let res = resolver.resolve_reference(con, &processed[0], &refname);
-		println!("For {refname:#?} = {res:#?}");
+		let colors = ReportColors::with_colors();
+		let resolver = Resolver::new(&colors, &con, &processed)
+			.map_err(|err| ProcessError::LinkError(vec![err]))?;
+		let errors = resolver.resolve_all(&con);
+		if !errors.is_empty()
+		{
+			return Err(ProcessError::LinkError(errors));
+		}
+
 		Ok(vec![])
 	}
 }

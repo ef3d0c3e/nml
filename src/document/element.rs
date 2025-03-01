@@ -5,6 +5,7 @@ use std::str::FromStr;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::Report;
+use crate::parser::resolver::Reference;
 use crate::parser::scope::Scope;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
@@ -19,7 +20,7 @@ use super::references::Refname;
 /// The kind of an element determines how it affects paragraphing as well as nested elements.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ElemKind {
-	/// An invisible element (i.e comment)
+	/// An invisible element (e.g comment)
 	Invisible,
 	/// Special elements don't trigger special formatting events
 	Special,
@@ -63,11 +64,15 @@ pub trait Element: Downcast + core::fmt::Debug {
 	/// Gets the element as a referenceable i.e an element that can be referenced
 	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
 
+	/// Gets the element as a linkable element, i.e needs to be resolved to an appropriate reference
+	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
+
 	/// Gets the element as a container containing other elements
 	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { None }
 }
 impl_downcast!(Element);
 
+/// An element from which a reference can be extracted
 pub trait ReferenceableElement: Element {
 	/// Returns the internal reference
 	fn reference(&self) -> Rc<InternalReference>;
@@ -83,6 +88,17 @@ pub trait ReferenceableElement: Element {
 	fn refid(&self, compiler: &Compiler, refid: usize) -> String;
 }
 
+/// An element which can be linked to a reference
+pub trait LinkableElement: Element {
+	/// Refname this element wants to link to
+	fn wants_refname(&self) -> &Refname;
+	/// Gets whether this element requires linking
+	fn wants_link(&self) -> bool;
+	/// Sets the link of this reference
+	fn link(&self, reference: Reference);
+}
+
+/// An element containing at least one scope
 pub trait ContainerElement: Element {
 	/// Gets the contained elements
 	fn contained(&self) -> &[Rc<RefCell<Scope>>];
