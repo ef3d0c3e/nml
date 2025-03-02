@@ -1,82 +1,16 @@
-use std::{cell::RefCell, collections::HashMap, ops::Range, path::{Path, PathBuf}, rc::Rc, sync::{Arc}};
+use std::collections::HashMap;
 
 use ariadne::Fmt;
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
 use tokio::sync::MutexGuard;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-
-use crate::document::{element::{Element, ReferenceableElement}, references::{InternalReference, Refname}};
-
-use super::{reports::Report, scope::{Scope, ScopeAccessor}, source::Source, translation::{TranslationAccessors, TranslationUnit}};
-
-/// Link/Compile-time reference
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Reference
-{
-	/// Name of reference
-	pub refname: String,
-	/// Type of reference
-	pub refkey: String,
-	/// Source unit path, relative to the database
-	pub source_unit: String,
-	/// Declaring token of the reference
-	pub token: Range<usize>,
-}
-
-/// In-database translation unit
-pub struct DatabaseUnit
-{
-	pub reference_key: String,
-	pub input_file: String,
-	pub output_file: String,
-}
-
-/// Wrapper units that may be present in memory or in the database
-pub enum OffloadedUnit<'u>
-{
-	/// In-memory translation unit
-	Loaded(&'u TranslationUnit<'u>),
-	/// In-database translation unit
-	Unloaded(DatabaseUnit),
-}
-
-impl<'u> OffloadedUnit<'u> {
-	pub fn reference_key(&self) -> String
-	{
-		match self {
-			OffloadedUnit::Loaded(unit) => unit.reference_key(),
-			OffloadedUnit::Unloaded(unit) => unit.reference_key.clone(),
-		}
-	}
-
-	pub fn input_path(&self) -> String {
-		match self {
-			OffloadedUnit::Loaded(unit) => unit.input_path().to_owned(),
-			OffloadedUnit::Unloaded(unit) => unit.input_file.clone(),
-		}
-	}
-
-	/// Find reference named `name` in the unit
-	/// This returns an owned value.
-	pub fn query_reference<'con, S: AsRef<str>>(&self, con: &MutexGuard<'con, Connection>, name: S) -> Option<Reference>
-	{
-		match self {
-			OffloadedUnit::Loaded(unit) => {
-				unit.get_reference(&name)
-					.map(|elem| Reference {
-						refname: name.as_ref().to_string(),
-						refkey: elem.refcount_key().to_string(),
-						source_unit: unit.input_path().to_owned(),
-						token: elem.location().range.clone(),
-					})
-			},
-			OffloadedUnit::Unloaded(unit) => todo!(),
-		}
-	}
-}
+use crate::unit::database::DatabaseUnit;
+use crate::unit::references::Refname;
+use crate::unit::scope::ScopeAccessor;
+use crate::unit::translation::{TranslationAccessors, TranslationUnit};
+use crate::unit::unit::{OffloadedUnit, Reference};
 
 #[derive(Debug)]
 pub enum ResolveError

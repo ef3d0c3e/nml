@@ -6,7 +6,8 @@ use std::rc::Rc;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
-use super::translation::TranslationUnit;
+use crate::unit::translation::TranslationUnit;
+
 
 /// Modifies the parser's behaviour
 ///

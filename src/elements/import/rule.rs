@@ -10,11 +10,11 @@ use parser::source::Token;
 use regex::{Captures, Regex};
 
 use crate::parser::reports::macros::*;
-use crate::parser::scope::ScopeAccessor;
 use crate::parser::source::SourceFile;
 use crate::parser::{reports::*, util};
 use crate::parser::state::ParseMode;
-use crate::parser::translation::{TranslationAccessors, TranslationUnit};
+use crate::unit::scope::ScopeAccessor;
+use crate::unit::translation::{TranslationAccessors, TranslationUnit};
 
 use super::elem::Import;
 

@@ -1,6 +1,6 @@
 use std::{cell::{OnceCell, RefCell}, rc::Rc};
 
-use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, document::{element::{ElemKind, Element, LinkableElement}, references::{InternalReference, Refname}}, parser::{reports::Report, resolver::Reference, scope::Scope, source::Token}};
+use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement}, references::Refname, scope::Scope, unit::Reference}};
 
 #[derive(Debug)]
 pub struct InternalLink {
@@ -15,8 +15,8 @@ impl Element for InternalLink {
         &self.location
     }
 
-    fn kind(&self) -> crate::document::element::ElemKind {
-        ElemKind::Inline
+    fn kind(&self) -> ElemKind {
+        ElemKind::Compound
     }
 
     fn element_name(&self) -> &'static str {
@@ -33,6 +33,12 @@ impl Element for InternalLink {
     }
 
 	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { Some(self) }
+}
+
+impl ContainerElement for InternalLink {
+    fn contained(&self) -> &[Rc<RefCell<Scope>>] {
+		&self.display
+    }
 }
 
 impl LinkableElement for InternalLink {

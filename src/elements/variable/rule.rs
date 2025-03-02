@@ -1,18 +1,16 @@
-use crate::document::variable::{ContentVariable, PropertyValue, PropertyVariable, Variable, VariableMutability, VariableVisibility};
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::{RegexRule, Rule};
-use crate::parser::scope::ScopeAccessor;
 use crate::parser::source::{Cursor, Token};
 use crate::parser::util::{escape_source, escape_text};
+use crate::unit::scope::ScopeAccessor;
+use crate::unit::translation::TranslationUnit;
+use crate::unit::variable::{ContentVariable, PropertyValue, PropertyVariable, Variable, VariableMutability, VariableName, VariableVisibility};
 use ariadne::Fmt;
-use document::variable::VariableName;
 use parser::state::ParseMode;
-use parser::translation::TranslationUnit;
 use regex::{Captures, Regex};
 use std::any::Any;
 use std::rc::Rc;
-use std::sync::Arc;
 
 
 fn parse_delimited(content: &str, delim: &str) -> Option<usize>
@@ -222,7 +220,7 @@ impl Rule for VariableRule
 					location: Token::new(captures.get(0).unwrap().start()..val_captures.get(0).unwrap().end() - 1, cursor.source()),
 					name,
 					visibility,
-					mutability: document::variable::VariableMutability::Mutable,
+					mutability: VariableMutability::Mutable,
 					value: PropertyValue::Integer(val),
 					value_token: Token::new(value.range(), cursor.source()),
 				}));
@@ -261,7 +259,7 @@ impl Rule for VariableRule
 					location: Token::new(keyword.start()-1..content_range.end, cursor.source()),
 					name,
 					visibility,
-					mutability: document::variable::VariableMutability::Mutable,
+					mutability: VariableMutability::Mutable,
 					content: content_source,
 				}) as Rc<dyn Variable>);
 		}
@@ -274,7 +272,7 @@ impl Rule for VariableRule
 				location: Token::new(keyword.start()-1..content_range.end, cursor.source()),
 				name,
 				visibility,
-				mutability: document::variable::VariableMutability::Mutable,
+				mutability: VariableMutability::Mutable,
 				value: PropertyValue::String(value),
 				value_token: Token::new(content_range, cursor.source()),
 			}) as Rc<dyn Variable>);

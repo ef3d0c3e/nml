@@ -1,6 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{document::element::{ContainerElement, ElemKind, Element}, elements::internal_link::elem, parser::{scope::Scope, source::Token}};
+use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element}, scope::Scope}};
+
 
 #[derive(Debug)]
 pub struct Import
@@ -14,8 +15,8 @@ impl Element for Import {
 		&self.location
     }
 
-    fn kind(&self) -> crate::document::element::ElemKind {
-        ElemKind::Special
+    fn kind(&self) -> ElemKind {
+        ElemKind::Compound
     }
 
     fn element_name(&self) -> &'static str {
@@ -24,10 +25,10 @@ impl Element for Import {
 
     fn compile(
 		    &self,
-		    scope: std::rc::Rc<std::cell::RefCell<crate::parser::scope::Scope>>,
-		    compiler: &crate::compiler::compiler::Compiler,
-		    output: &mut crate::compiler::output::CompilerOutput,
-	    ) -> Result<(), Vec<crate::parser::reports::Report>> {
+		    scope: Rc<RefCell<Scope>>,
+		    compiler: &Compiler,
+		    output: &mut CompilerOutput,
+	    ) -> Result<(), Vec<Report>> {
         todo!()
     }
 

@@ -1,26 +1,27 @@
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
-use serde::Serialize;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
-use crate::document::element::ElemKind;
 use crate::elements::text::elem::Text;
-use crate::parser::scope::Scope;
-use crate::parser::scope::ScopeAccessor;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::state::ParseMode;
-use crate::parser::translation::TranslationUnit;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use super::element::ContainerElement;
+use super::element::ElemKind;
 use super::element::Element;
+use super::scope::Scope;
+use super::scope::ScopeAccessor;
+use super::translation::TranslationUnit;
 
-/// Internal name for variables
+/// Holds the name of a variable (as a string)
+///
+/// Constructed using [`TryFrom<&str> for VariableName`]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableName(pub String);
 
@@ -72,8 +73,8 @@ impl Element for VariableExpansion {
         &self.location
     }
 
-    fn kind(&self) -> super::element::ElemKind {
-		ElemKind::Special
+    fn kind(&self) -> ElemKind {
+		ElemKind::Compound
     }
 
     fn element_name(&self) -> &'static str {
@@ -279,7 +280,7 @@ impl Variable for PropertyVariable {
 			scope.add_content(Rc::new(Text{
 				location: definition_source.into(),
 				content: self.value.to_string(),
-			}));
+			}) as Rc<dyn Element>);
 			scope
 		});
 		let expansion = VariableExpansion {

@@ -3,11 +3,10 @@ use std::rc::Rc;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
-use crate::document::element::ElemKind;
-use crate::document::element::Element;
 use crate::parser::reports::Report;
-use crate::parser::scope::Scope;
 use crate::parser::source::Token;
+use crate::unit::element::{ElemKind, Element};
+use crate::unit::scope::Scope;
 
 #[derive(Debug)]
 pub struct Text {

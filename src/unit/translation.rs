@@ -5,26 +5,26 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::document::element::Element;
-use crate::document::element::ReferenceableElement;
-use crate::document::variable::PropertyValue;
-use crate::document::variable::PropertyVariable;
-use crate::document::variable::VariableMutability;
-use crate::document::variable::VariableName;
-use crate::document::variable::VariableVisibility;
 use crate::lsp::data::LangServerData;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
+use crate::parser::parser::Parser;
+use crate::parser::reports::Report;
+use crate::parser::reports::ReportColors;
+use crate::parser::source::Source;
+use crate::parser::source::SourceFile;
+use crate::parser::source::Token;
+use crate::parser::state::ParseMode;
 
-use super::parser::Parser;
-use super::reports::Report;
-use super::reports::ReportColors;
+use super::element::Element;
+use super::element::ReferenceableElement;
 use super::scope::Scope;
 use super::scope::ScopeAccessor;
-use super::source::Source;
-use super::source::SourceFile;
-use super::source::Token;
-use super::state::ParseMode;
+use super::variable::PropertyValue;
+use super::variable::PropertyVariable;
+use super::variable::VariableMutability;
+use super::variable::VariableName;
+use super::variable::VariableVisibility;
 
 /// Stores output data for [`TranslationUnit`]
 #[derive(Debug)]

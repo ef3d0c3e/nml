@@ -3,8 +3,8 @@ use std::sync::MutexGuard;
 
 use rusqlite::Connection;
 
-use crate::document::references::Refname;
-use crate::document::variable::VariableName;
+use crate::unit::references::Refname;
+use crate::unit::variable::VariableName;
 
 use super::output::CompilerOutput;
 

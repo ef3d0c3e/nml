@@ -1,11 +1,6 @@
-use std::rc::Rc;
-
-
 use serde::{Deserialize, Serialize};
 
-use crate::parser::{resolver::Reference, source::Token};
-
-use super::element::Element;
+use crate::parser::source::Token;
 
 /// Name for references
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

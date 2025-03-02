@@ -1,14 +1,15 @@
-use crate::document::references::Refname;
 use crate::elements::text::elem::Text;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-use crate::parser::resolver::Reference;
-use crate::parser::scope::ScopeAccessor;
 use crate::parser::state::ParseMode;
-use crate::parser::translation::TranslationAccessors;
-use crate::parser::translation::TranslationUnit;
 use crate::parser::util::escape_source;
 use crate::parser::util::parse_paragraph;
+use crate::unit::element::Element;
+use crate::unit::references::Refname;
+use crate::unit::scope::ScopeAccessor;
+use crate::unit::translation::TranslationAccessors;
+use crate::unit::translation::TranslationUnit;
+use crate::unit::unit::Reference;
 use ariadne::Fmt;
 use regex::Captures;
 use regex::Regex;
@@ -173,7 +174,7 @@ impl RegexRule for InternalLinkRule {
 				scope.add_content(Rc::new(Text{
 					location: display_source.into(),
 					content: link_refname.to_string(),
-				}));
+				}) as Rc<dyn Element>);
 				scope
 			})
 		};

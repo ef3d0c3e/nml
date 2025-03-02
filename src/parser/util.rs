@@ -3,13 +3,14 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use super::scope::Scope;
-use super::scope::ScopeAccessor;
+use crate::unit::scope::Scope;
+use crate::unit::scope::ScopeAccessor;
+use crate::unit::translation::TranslationUnit;
+
 use super::source::Source;
 use super::source::Token;
 use super::source::VirtualSource;
 use super::state::ParseMode;
-use super::translation::TranslationUnit;
 
 /// Processes text for escape characters and paragraphing
 /*

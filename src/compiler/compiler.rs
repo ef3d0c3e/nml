@@ -1,18 +1,9 @@
-use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::cache::cache::Cache;
-use crate::document::element::ReferenceableElement;
-use crate::document::references::InternalReference;
-use crate::document::variable::Variable;
-use crate::parser::reports::Report;
-use crate::parser::translation::TranslationUnit;
-use rusqlite::Connection;
-use tokio::sync::MutexGuard;
+use crate::unit::translation::TranslationUnit;
 
 use super::compiled::CompiledUnit;
-use super::output::CompilerOutput;
 use super::sanitize::Sanitizer;
 
 #[derive(Clone, Copy)]

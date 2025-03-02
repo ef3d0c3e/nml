@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::{Rc, Weak}};
 
-use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, document::{element::{ElemKind, Element, ReferenceableElement}, references::{InternalReference, Refname}}, parser::{reports::Report, scope::Scope, source::Token}};
+use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ElemKind, Element, ReferenceableElement}, references::{InternalReference, Refname}, scope::Scope}};
 
 
 #[derive(Debug)]

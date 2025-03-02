@@ -2,9 +2,7 @@ use std::{path::{Path, PathBuf}, sync::Arc};
 
 use ariadne::Fmt;
 
-use crate::{cache::cache::Cache, document::{element::LinkableElement, references::Refname}, parser::{parser::Parser, reports::Report, resolver::{ResolveError, Resolver}, scope::ScopeAccessor, source::SourceFile, translation::TranslationUnit}};
-
-use crate::parser::reports::macros::*;
+use crate::{cache::cache::Cache, parser::{parser::Parser, reports::macros::*, resolver::Resolver, source::SourceFile}, unit::translation::TranslationUnit};
 use crate::parser::reports::*;
 
 use super::{compiled::CompiledUnit, compiler::{Compiler, Target}};

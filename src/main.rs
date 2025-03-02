@@ -1,10 +1,10 @@
 mod cache;
 mod compiler;
-mod document;
 mod elements;
 mod lsp;
 mod lua;
 mod parser;
+mod unit;
 
 use std::env;
 use std::process::ExitCode;

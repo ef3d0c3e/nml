@@ -5,14 +5,15 @@ use std::str::FromStr;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::Report;
-use crate::parser::resolver::Reference;
-use crate::parser::scope::Scope;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
 use super::references::InternalReference;
 use super::references::Refname;
+use super::scope::Scope;
+use super::scope::ScopeAccessor;
+use super::unit::Reference;
 
 
 /// The kind for an element
@@ -22,8 +23,8 @@ use super::references::Refname;
 pub enum ElemKind {
 	/// An invisible element (e.g comment)
 	Invisible,
-	/// Special elements don't trigger special formatting events
-	Special,
+	/// Made of multiple smaller elements which need to be taken into account
+	Compound,
 	/// Inline elements don't break paragraphing
 	Inline,
 	/// Block elements are outside of paragraphs
@@ -36,7 +37,7 @@ impl FromStr for ElemKind {
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s {
 			"invisible" => Ok(ElemKind::Invisible),
-			"special" => Ok(ElemKind::Special),
+			"compound" => Ok(ElemKind::Compound),
 			"inline" => Ok(ElemKind::Inline),
 			"block" => Ok(ElemKind::Block),
 			_ => Err(format!("Unknown ElemKind: {s}")),
@@ -102,6 +103,36 @@ pub trait LinkableElement: Element {
 pub trait ContainerElement: Element {
 	/// Gets the contained elements
 	fn contained(&self) -> &[Rc<RefCell<Scope>>];
+
+	/// Determines the element kind made up by the content of this element
+	fn nested_kind(&self) -> ElemKind {
+		if self.kind() != ElemKind::Compound
+		{
+			return self.kind();
+		}
+
+		for contained in self.contained()
+		{
+			for it in contained.content_iter()
+			{
+				match it.1.kind()
+				{
+					ElemKind::Block => return ElemKind::Block,
+					ElemKind::Compound => {
+						if let Some(container) = it.1.as_container()
+						{
+							if container.nested_kind() == ElemKind::Block 
+							{
+								return ElemKind::Block
+							}
+						}
+					},
+					_ => {},
+				}
+			}
+		}
+		ElemKind::Inline
+	}
 }
 
 #[derive(Debug)]

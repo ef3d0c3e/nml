@@ -4,17 +4,11 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use super::source::Source;
-use super::state::ParseMode;
-use super::state::ParserState;
+use crate::parser::source::Source;
+use crate::parser::state::{ParseMode, ParserState};
 
-use crate::document::element::ContainerElement;
-use crate::document::element::Element;
-use crate::document::references::InternalReference;
-use crate::document::references::Refname;
-use crate::document::variable::Variable;
-use crate::document::variable::VariableName;
-use crate::document::variable::VariableVisibility;
+use super::element::{ContainerElement, Element};
+use super::variable::{Variable, VariableName, VariableVisibility};
 
 /// The scope from a translation unit
 /// Each scope is tied to a unique [`Source`]
@@ -29,7 +23,7 @@ pub struct Scope {
 	content: Vec<Rc<dyn Element>>,
 
 	/// State of the parser
-	parser_state: super::state::ParserState,
+	parser_state: ParserState,
 
 	/// Source of this scope
 	source: Arc<dyn Source>,
@@ -80,6 +74,10 @@ impl Scope {
 
 	/// Returns a mutable parser state
 	pub fn parser_state_mut(&mut self) -> &mut ParserState { &mut self.parser_state }
+
+pub fn set_parser_state(&mut self, parser_state: ParserState) {
+        self.parser_state = parser_state;
+    }
 }
 
 pub trait ScopeAccessor {

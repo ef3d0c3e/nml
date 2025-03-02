@@ -4,13 +4,10 @@ use std::rc::Rc;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::compiler::compiler::Target::HTML;
-use crate::document::element::ContainerElement;
-use crate::document::element::ElemKind;
-use crate::document::element::Element;
 use crate::parser::reports::Report;
-use crate::parser::scope::Scope;
-use crate::parser::scope::ScopeAccessor;
 use crate::parser::source::Token;
+use crate::unit::element::{ContainerElement, ElemKind, Element};
+use crate::unit::scope::{Scope, ScopeAccessor};
 
 #[derive(Debug)]
 pub struct Link {
@@ -57,4 +54,33 @@ impl ContainerElement for Link {
     fn contained(&self) -> &[Rc<RefCell<Scope>>] {
 		self.display.as_slice()
     }
+
+    fn nested_kind(&self) -> ElemKind {
+		    if self.kind() != ElemKind::Compound
+		    {
+			    return self.kind();
+		    }
+
+		    for contained in self.contained()
+		    {
+			    for it in contained.content_iter()
+			    {
+				    match it.1.kind()
+				    {
+					    ElemKind::Block => return ElemKind::Block,
+					    ElemKind::Compound => {
+						    if let Some(container) = it.1.as_container()
+						    {
+							    if container.nested_kind() == ElemKind::Block 
+							    {
+								    return ElemKind::Block
+							    }
+						    }
+					    },
+					    _ => {},
+				    }
+			    }
+		    }
+		    ElemKind::Inline
+	    }
 }

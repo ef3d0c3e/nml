@@ -3,10 +3,10 @@ use std::fmt::Display;
 use std::ops::Range;
 
 use ariadne::Fmt;
-use parser::translation::TranslationUnit;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use crate::unit::translation::TranslationUnit;
 
 use super::reports::Report;
 use super::source::Token;

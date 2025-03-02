@@ -1,10 +1,10 @@
-use crate::document::references::InternalReference;
-use crate::document::references::Refname;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::state::ParseMode;
-use crate::parser::translation::TranslationAccessors;
-use crate::parser::translation::TranslationUnit;
+use crate::unit::references::InternalReference;
+use crate::unit::references::Refname;
+use crate::unit::translation::TranslationAccessors;
+use crate::unit::translation::TranslationUnit;
 use ariadne::Fmt;
 use regex::Captures;
 use regex::Regex;

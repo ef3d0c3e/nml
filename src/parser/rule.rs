@@ -1,8 +1,8 @@
 use super::source::Cursor;
 use super::source::Token;
 use super::state::ParseMode;
-use super::translation::TranslationUnit;
 use crate::lua::kernel::Kernel;
+use crate::unit::translation::TranslationUnit;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 

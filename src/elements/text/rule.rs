@@ -1,16 +1,11 @@
 use std::any::Any;
 use std::rc::Rc;
-use std::sync::Arc;
 
-use mlua::Function;
-
-use crate::lua::kernel::ContextAccessor;
 use crate::lua::kernel::Kernel;
 use crate::parser::rule::Rule;
 use crate::parser::source::Cursor;
 use crate::parser::state::ParseMode;
-use crate::parser::translation::TranslationAccessors;
-use crate::parser::translation::TranslationUnit;
+use crate::unit::translation::{TranslationAccessors, TranslationUnit};
 
 use super::elem::Text;
 

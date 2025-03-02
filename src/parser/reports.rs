@@ -1,7 +1,5 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Range;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Color;
@@ -11,7 +9,6 @@ use tower_lsp::lsp_types::Diagnostic;
 
 use crate::parser::source::LineCursor;
 
-use super::scope::Scope;
 use super::source::OffsetEncoding;
 use super::source::Source;
 use super::source::SourcePosition;

@@ -4,11 +4,10 @@ use std::rc::Rc;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target::HTML;
 use crate::compiler::output::CompilerOutput;
-use crate::document::element::ElemKind;
-use crate::document::element::Element;
 use crate::parser::reports::Report;
-use crate::parser::scope::Scope;
 use crate::parser::source::Token;
+use crate::unit::element::{ElemKind, Element};
+use crate::unit::scope::Scope;
 
 #[derive(Debug)]
 pub struct LineBreak {
@@ -16,19 +15,10 @@ pub struct LineBreak {
 	pub(crate) length: usize,
 }
 
-/*impl Paragraph {
-	pub fn find_back<P: FnMut(&&Box<dyn Element + 'static>) -> bool>(
-		&self,
-		predicate: P,
-	) -> Option<&Box<dyn Element>> {
-		self.content.iter().rev().find(predicate)
-	}
-}*/
-
 impl Element for LineBreak {
 	fn location(&self) -> &Token { &self.location }
 
-	fn kind(&self) -> ElemKind { ElemKind::Special }
+	fn kind(&self) -> ElemKind { ElemKind::Invisible }
 
 	fn element_name(&self) -> &'static str { "Break" }
 

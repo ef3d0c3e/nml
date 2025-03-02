@@ -11,7 +11,7 @@ use mlua::Table;
 use crate::parser::parser::ParserRuleAccessor;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
-use crate::parser::translation::TranslationUnit;
+use crate::unit::translation::TranslationUnit;
 
 /// Redirected data from lua execution
 pub struct KernelRedirect {

@@ -5,12 +5,13 @@ use std::rc::Rc;
 use std::slice::Iter;
 
 use crate::elements::text::elem::Text;
+use crate::unit::element::Element;
+use crate::unit::translation::TranslationAccessors;
+use crate::unit::translation::TranslationUnit;
 
 use super::rule::Rule;
 use super::source::Cursor;
 use super::source::Token;
-use super::translation::TranslationAccessors;
-use super::translation::TranslationUnit;
 
 pub struct Parser {
 	rules: Vec<Box<dyn Rule>>,
@@ -150,7 +151,7 @@ impl Parser {
 			return;
 		}
 
-		unit.add_content(Rc::new(Text::new(token, content.into())));
+		unit.add_content(Rc::new(Text::new(token, content.into())) as Rc<dyn Element>);
 	}
 
 	/// Parses the current scope in the translation unit
