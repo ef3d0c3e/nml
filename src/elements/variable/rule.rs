@@ -1,4 +1,4 @@
-use crate::document::variable::{ContentVariable, PropertyValue, PropertyVariable, Variable, VariableVisibility};
+use crate::document::variable::{ContentVariable, PropertyValue, PropertyVariable, Variable, VariableMutability, VariableVisibility};
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::{RegexRule, Rule};
@@ -148,6 +148,28 @@ impl Rule for VariableRule
 			return cursor.at(end_pos)
 		}
 
+		// Check if mutable
+		if let Some((var, _)) = unit.get_entry_scope()
+									.get_variable(&name)
+									.filter(|(var, _)| *var.mutability() != VariableMutability::Mutable)
+		{
+			report_err!(
+				unit,
+				cursor.source(),
+				"Invalid variable definition".into(),
+				span(
+					varname.range(),
+					format!("Cannot overwrite immutable variable: {}", varname.as_str().fg(unit.colors().highlight))
+				),
+				span_highlight(
+					var.location().source(),
+					var.location().range.clone(),
+					format!("Previously defined here")
+				),
+			);
+			return cursor.at(end_pos)
+		}
+
 		let delim = if content[end_pos..].starts_with("'''") { "'''" }
 		else if content[end_pos..].starts_with("\"\"\"") { "\"\"\"" }
 		else if content[end_pos..].starts_with("{{") { "}}" }
@@ -200,6 +222,7 @@ impl Rule for VariableRule
 					location: Token::new(captures.get(0).unwrap().start()..val_captures.get(0).unwrap().end() - 1, cursor.source()),
 					name,
 					visibility,
+					mutability: document::variable::VariableMutability::Mutable,
 					value: PropertyValue::Integer(val),
 					value_token: Token::new(value.range(), cursor.source()),
 				}));
@@ -238,6 +261,7 @@ impl Rule for VariableRule
 					location: Token::new(keyword.start()-1..content_range.end, cursor.source()),
 					name,
 					visibility,
+					mutability: document::variable::VariableMutability::Mutable,
 					content: content_source,
 				}) as Rc<dyn Variable>);
 		}
@@ -250,6 +274,7 @@ impl Rule for VariableRule
 				location: Token::new(keyword.start()-1..content_range.end, cursor.source()),
 				name,
 				visibility,
+				mutability: document::variable::VariableMutability::Mutable,
 				value: PropertyValue::String(value),
 				value_token: Token::new(content_range, cursor.source()),
 			}) as Rc<dyn Variable>);

@@ -155,11 +155,6 @@ impl Parser {
 
 	/// Parses the current scope in the translation unit
 	pub fn parse<'u>(&'u self, unit: &mut TranslationUnit<'u>) {
-		{
-			let scope = Rc::as_ref(unit.get_scope()).borrow();
-			println!("PARSING={:#?}", scope.source());
-			println!("STATE={:#?}", scope.parser_state());
-		}
 		let mut cursor = Cursor::new(0, Rc::as_ref(unit.get_scope()).borrow().source().into());
 
 		while let Some((next_cursor, rule, rule_data)) = self.next_match(unit, &cursor) {

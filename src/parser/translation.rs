@@ -9,6 +9,7 @@ use crate::document::element::Element;
 use crate::document::element::ReferenceableElement;
 use crate::document::variable::PropertyValue;
 use crate::document::variable::PropertyVariable;
+use crate::document::variable::VariableMutability;
 use crate::document::variable::VariableName;
 use crate::document::variable::VariableVisibility;
 use crate::lsp::data::LangServerData;
@@ -176,6 +177,7 @@ impl<'u> TranslationUnit<'u> {
 					location: token.clone(),
 					name: VariableName::try_from("nml.input_file").unwrap(),
 					visibility: VariableVisibility::Internal,
+					mutability: VariableMutability::Immutable,
 					value: PropertyValue::String(self.source.name().into()),
 					value_token: token.clone(),
 				}));
@@ -185,6 +187,7 @@ impl<'u> TranslationUnit<'u> {
 					location: token.clone(),
 					name: VariableName::try_from("nml.output_file").unwrap(),
 					visibility: VariableVisibility::Internal,
+					mutability: VariableMutability::Mutable,
 					value: PropertyValue::String(output_file),
 					value_token: token.clone(),
 				}));
@@ -194,6 +197,7 @@ impl<'u> TranslationUnit<'u> {
 					location: token.clone(),
 					name: VariableName::try_from("nml.reference_key").unwrap(),
 					visibility: VariableVisibility::Internal,
+					mutability: VariableMutability::Mutable,
 					value: PropertyValue::String(self.path.to_string()),
 					value_token: token.clone(),
 				}));

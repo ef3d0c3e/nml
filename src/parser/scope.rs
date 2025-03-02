@@ -14,12 +14,13 @@ use crate::document::references::InternalReference;
 use crate::document::references::Refname;
 use crate::document::variable::Variable;
 use crate::document::variable::VariableName;
+use crate::document::variable::VariableVisibility;
 
 /// The scope from a translation unit
 /// Each scope is tied to a unique [`Source`]
 pub struct Scope {
 	/// Stores the element range in the unit's ast
-	pub(crate) range: Range<usize>,
+	range: Range<usize>,
 
 	/// Parent scope
 	parent: Option<Rc<RefCell<Scope>>>,
@@ -107,6 +108,11 @@ pub trait ScopeAccessor {
 
 	/// Gets an iterator over scope elements
 	fn content_iter(&self) -> ScopeIterator;
+
+	/// Add an imported scope to this scope
+	/// This will insert the variables defined within `imported`
+	/// into `self`
+	fn add_import(&self, imported: Rc<RefCell<Scope>>);
 }
 
 impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
@@ -158,6 +164,7 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	fn add_content(&self, elem: Rc<dyn Element>) {
 		let mut scope = Rc::as_ref(self).borrow_mut();
 		assert_eq!(*elem.location().source(), *scope.source);
+		scope.range.end = elem.location().end();
 		scope.content.push(elem);
 	}
 
@@ -173,6 +180,18 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	}
 
 	fn content_iter(&self) -> ScopeIterator { ScopeIterator::new(self.clone()) }
+
+	fn add_import(&self, imported: Rc<RefCell<Scope>>)
+	{
+		let borrow = imported.borrow();
+		borrow.variables.iter()
+			.for_each(|(_, var)| {
+			if *var.visility() == VariableVisibility::Exported
+			{
+				self.insert_variable(var.clone());
+			}
+		});
+	}
 }
 
 /// DFS iterator for the syntax tree

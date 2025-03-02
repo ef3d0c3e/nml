@@ -26,7 +26,7 @@ pub struct VariableName(pub String);
 
 impl core::fmt::Display for VariableName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -115,6 +115,13 @@ pub enum VariableVisibility
 	Internal,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum VariableMutability
+{
+	Mutable,
+	Immutable,
+}
+
 /// Trait for document variables
 pub trait Variable : Downcast + core::fmt::Debug {
 	/// Gets the definition location of the variable
@@ -129,6 +136,9 @@ pub trait Variable : Downcast + core::fmt::Debug {
 
 	/// Gets the visibility of the variable
 	fn visility(&self) -> &VariableVisibility;
+
+	/// Gets the mutability of the variable
+	fn mutability(&self) -> &VariableMutability;
 
 	/// The token when the variable value was defined from
 	fn value_token(&self) -> &Token;
@@ -146,6 +156,7 @@ pub struct ContentVariable {
 	pub location: Token,
 	pub name: VariableName,
 	pub visibility: VariableVisibility,
+	pub mutability: VariableMutability,
 	pub content: Arc<dyn Source>,
 }
 
@@ -165,6 +176,10 @@ impl Variable for ContentVariable {
     fn visility(&self) -> &VariableVisibility {
 		&self.visibility
     }
+
+	fn mutability(&self) -> &VariableMutability {
+		&self.mutability
+	}
 
     fn value_token(&self) -> &Token {
 		self.content.location()
@@ -216,6 +231,7 @@ pub struct PropertyVariable {
 	pub location: Token,
 	pub name: VariableName,
 	pub visibility: VariableVisibility,
+	pub mutability: VariableMutability,
 	pub value: PropertyValue,
 	pub value_token: Token,
 }
@@ -243,6 +259,10 @@ impl Variable for PropertyVariable {
     fn visility(&self) -> &VariableVisibility {
         &self.visibility
     }
+
+	fn mutability(&self) -> &VariableMutability {
+		&self.mutability
+	}
 
     fn value_token(&self) -> &Token {
         &self.value_token

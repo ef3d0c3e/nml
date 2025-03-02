@@ -129,6 +129,7 @@ impl ProcessQueue {
 				},
 			};
 			unit = unit.consume(output_file);
+			println!("result={:#?}", unit.get_entry_scope());
 			processed.push(unit);
 		}
 
