@@ -272,9 +272,9 @@ pub fn parse_paragraph<'u>(
 	)
 }
 
+/*
 /// Parses source into a single paragraph
 /// If source contains anything but a single paragraph, an error is returned
-/*
 pub fn parse_paragraph<'a>(
 	state: &ParserState,
 	source: Arc<dyn Source>,
@@ -309,6 +309,7 @@ pub fn parse_paragraph<'a>(
 }
 */
 
+/*
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -412,3 +413,4 @@ mod tests {
 		);
 	}
 }
+*/

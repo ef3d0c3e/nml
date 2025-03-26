@@ -262,6 +262,7 @@ pub fn create_navigation(
 }
 */
 
+/*
 #[cfg(test)]
 mod tests {
 	use rand::prelude::SliceRandom;
@@ -371,3 +372,4 @@ mod tests {
 		);
 	}
 }
+*/

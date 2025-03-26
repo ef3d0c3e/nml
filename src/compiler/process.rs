@@ -138,6 +138,11 @@ impl ProcessQueue {
 		let colors = ReportColors::with_colors();
 		let resolver = Resolver::new(&colors, &con, &processed)
 			.map_err(|err| ProcessError::LinkError(vec![err]))?;
+		for unit in &processed
+		{
+			// Output references
+			unit.export_references("output.html" /* TODO */, &con).expect("Failed to export");
+		}
 		let errors = resolver.resolve_all(&con);
 		if !errors.is_empty()
 		{

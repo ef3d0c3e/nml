@@ -36,13 +36,15 @@ impl<'u> Resolver<'u>
 				reference_key	TEXT PRIMARY KEY,
 				input_file		TEXT NOT NULL,
 				output_file		TEXT NOT NULL
-			);
-			CREATE TABLE IF NOT EXISTS references(
-				FOREIGN KEY(unit) REFERENCES referenceable_unit(reference_key),
+			);", ()).unwrap();
+		con.execute(
+			"CREATE TABLE IF NOT EXISTS exported_references(
 				name			TEXT PRIMARY KEY,
-				data			TEXT NOT NULL
-			);", ()
-		).unwrap();
+				data			TEXT NOT NULL,
+				unit			TEXT NOT NULL,
+				FOREIGN KEY(unit) REFERENCES referenceable_units(reference_key)
+			);", ()).unwrap();
+		println!("HERE!");
 
 		let mut units = HashMap::default();
 
@@ -94,7 +96,7 @@ impl<'u> Resolver<'u>
 					}
 				},
 				Some(OffloadedUnit::Loaded(previous)) => {
-					// Duplicate witinh parameters
+					// Duplicate within parameters
 					Err(make_err!(
 							loaded.token().source(),
 							"Unable to resolve project".into(),
@@ -160,8 +162,7 @@ impl<'u> Resolver<'u>
 					.filter_map(|(_, elem)| elem.as_linkable())
 					.filter(|elem| elem.wants_link())
 					.for_each(|linkable| {
-
-				println!("RESOLV={:#?}", linkable.wants_refname());
+						println!("RESOLV={:#?}", linkable.wants_refname());
 						match self.resolve_reference(&con, unit, linkable.wants_refname())
 						{
 							/// Link reference

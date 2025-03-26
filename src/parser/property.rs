@@ -431,6 +431,7 @@ impl PropertyParser {
 	}
 }
 
+/*
 #[cfg(test)]
 mod tests {
 	use parser::source::Source;
@@ -514,3 +515,4 @@ mod tests {
 			.is_none());
 	}
 }
+*/

@@ -5,6 +5,10 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use rusqlite::params;
+use rusqlite::Connection;
+use tokio::sync::MutexGuard;
+
 use crate::lsp::data::LangServerData;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
@@ -238,6 +242,24 @@ impl<'u> TranslationUnit<'u> {
 			.get_variable(&varname)
 			.map(|(var, _)| var.to_string())
 			.unwrap()
+	}
+
+	/// Export all references of this [`TranslationUnit`]
+	pub fn export_references<'con>(&self, output_path: &str, con: &MutexGuard<'con, Connection>) -> Result<(), String>
+	{
+		con.execute("INSERT OR REPLACE INTO
+			referenceable_units (reference_key, input_file, output_file)
+			VALUES (?1, ?2, ?3)", (self.reference_key(), self.input_path(), output_path)).unwrap();
+
+		let mut stmt = con.prepare("INSERT OR REPLACE INTO exported_references (name, data, unit) VALUES (?1, ?2, ?3);").unwrap();
+		for (name, reference) in &self.references
+		{
+			// FIXME: Proper type-erased serialization for referneceables
+			let serialized = "TEST";
+			stmt.execute(params![name, serialized, self.reference_key()])
+				.map_err(|err| format!("Failed to insert reference ({name}, {serialized}, {0}): {err:#?}", self.reference_key()))?;
+		}
+		Ok(())
 	}
 }
 

@@ -1,10 +1,10 @@
 mod cache;
 mod compiler;
-mod document;
 mod elements;
 mod lsp;
 mod lua;
 mod parser;
+mod unit;
 
 use std::sync::Arc;
 
@@ -14,10 +14,6 @@ use lsp::conceal::ConcealInfo;
 use lsp::conceal::ConcealParams;
 use lsp::styles::StyleInfo;
 use lsp::styles::StyleParams;
-use parser::langparser::LangParser;
-use parser::parser::ParseMode;
-use parser::parser::Parser;
-use parser::parser::ParserState;
 use parser::reports::Report;
 use parser::source::SourceFile;
 use tower_lsp::jsonrpc;
