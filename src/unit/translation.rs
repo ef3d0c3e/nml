@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use graphviz_rust::print;
 use rusqlite::params;
 use rusqlite::Connection;
 use tokio::sync::MutexGuard;
@@ -214,11 +215,9 @@ impl<'u> TranslationUnit<'u> {
 			Report::reports_to_stdout(&self.colors, reports);
 		}
 
-		let input_file = Rc::as_ref(self.get_entry_scope()).borrow().source();
-
 		let output_file = self.get_scope().get_variable(&VariableName("compiler.output".into()));
 		let output = UnitOutput {
-			input_file: input_file.downcast_ref::<SourceFile>().unwrap().name().to_string(),
+			input_file: self.path.clone(),
 			output_file: output_file.map(|(var, _)| "TODO".to_string()),
 		};
 		self.output.set(output).unwrap();
@@ -245,11 +244,14 @@ impl<'u> TranslationUnit<'u> {
 	}
 
 	/// Export all references of this [`TranslationUnit`]
-	pub fn export_references<'con>(&self, output_path: &str, con: &MutexGuard<'con, Connection>) -> Result<(), String>
+	pub fn export_references<'con>(&self, con: &MutexGuard<'con, Connection>) -> Result<(), String>
 	{
+		let output = self.output.get().unwrap();
+
+		println!("out={output:#?}");
 		con.execute("INSERT OR REPLACE INTO
 			referenceable_units (reference_key, input_file, output_file)
-			VALUES (?1, ?2, ?3)", (self.reference_key(), self.input_path(), output_path)).unwrap();
+			VALUES (?1, ?2, ?3)", (self.reference_key(), &output.input_file, &output.output_file)).unwrap();
 
 		let mut stmt = con.prepare("INSERT OR REPLACE INTO exported_references (name, data, unit) VALUES (?1, ?2, ?3);").unwrap();
 		for (name, reference) in &self.references

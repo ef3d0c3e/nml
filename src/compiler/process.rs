@@ -141,7 +141,7 @@ impl ProcessQueue {
 		for unit in &processed
 		{
 			// Output references
-			unit.export_references("output.html" /* TODO */, &con).expect("Failed to export");
+			unit.export_references(&con).expect("Failed to export");
 		}
 		let errors = resolver.resolve_all(&con);
 		if !errors.is_empty()

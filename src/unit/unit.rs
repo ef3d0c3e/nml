@@ -4,8 +4,7 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tokio::sync::MutexGuard;
 
-use super::{database::DatabaseUnit, translation::{TranslationAccessors, TranslationUnit}};
-
+use super::{translation::{TranslationAccessors, TranslationUnit}};
 
 /// Link/Compile-time reference
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,6 +18,14 @@ pub struct Reference
 	pub source_unit: String,
 	/// Declaring token of the reference
 	pub token: Range<usize>,
+}
+
+/// In-database translation unit
+pub struct DatabaseUnit
+{
+	pub reference_key: String,
+	pub input_file: String,
+	pub output_file: Option<String>,
 }
 
 /// Wrapper units that may be present in memory or in the database

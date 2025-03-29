@@ -6,11 +6,10 @@ use tokio::sync::MutexGuard;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-use crate::unit::database::DatabaseUnit;
 use crate::unit::references::Refname;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::{TranslationAccessors, TranslationUnit};
-use crate::unit::unit::{OffloadedUnit, Reference};
+use crate::unit::unit::{DatabaseUnit, OffloadedUnit, Reference};
 
 #[derive(Debug)]
 pub enum ResolveError
@@ -35,7 +34,7 @@ impl<'u> Resolver<'u>
 			"CREATE TABLE IF NOT EXISTS referenceable_units(
 				reference_key	TEXT PRIMARY KEY,
 				input_file		TEXT NOT NULL,
-				output_file		TEXT NOT NULL
+				output_file		TEXT
 			);", ()).unwrap();
 		con.execute(
 			"CREATE TABLE IF NOT EXISTS exported_references(
@@ -44,7 +43,6 @@ impl<'u> Resolver<'u>
 				unit			TEXT NOT NULL,
 				FOREIGN KEY(unit) REFERENCES referenceable_units(reference_key)
 			);", ()).unwrap();
-		println!("HERE!");
 
 		let mut units = HashMap::default();
 
@@ -53,11 +51,11 @@ impl<'u> Resolver<'u>
 		let unlodaded_iter = cmd.query_map([], |row| {
 			Ok((row.get(0).unwrap(),
 				row.get(1).unwrap(),
-				row.get(2).unwrap()))
+				row.get(2).ok()))
 		}).unwrap();
 		for unloaded in unlodaded_iter
 		{
-			let unloaded : (String, String, String) = unloaded.unwrap();
+			let unloaded : (String, String, Option<String>) = unloaded.unwrap();
 			if let Some(previous) = units.insert(unloaded.0.clone(), OffloadedUnit::Unloaded(DatabaseUnit {
 				reference_key: unloaded.0.clone(),
 				input_file: unloaded.1.clone(),
@@ -71,6 +69,7 @@ impl<'u> Resolver<'u>
 		// Add provided units
 		for loaded in provided
 		{
+			println!("loaded.input_path={:#?}", loaded.input_path());
 			match units.insert(loaded.reference_key().to_owned(), OffloadedUnit::Loaded(
 				loaded)).as_ref()
 			{
@@ -162,7 +161,8 @@ impl<'u> Resolver<'u>
 					.filter_map(|(_, elem)| elem.as_linkable())
 					.filter(|elem| elem.wants_link())
 					.for_each(|linkable| {
-						println!("RESOLV={:#?}", linkable.wants_refname());
+
+				println!("RESOLV={:#?}", linkable.wants_refname());
 						match self.resolve_reference(&con, unit, linkable.wants_refname())
 						{
 							/// Link reference
