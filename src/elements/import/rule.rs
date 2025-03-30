@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Fmt;
+use graphviz_rust::print;
 use parser::rule::RegexRule;
 use parser::source::Token;
 use regex::{Captures, Regex};
@@ -96,7 +97,11 @@ impl RegexRule for ImportRule {
 
 		// Build relative path
 		let path_content = util::escape_text('\\', "\"", path.as_str(), false);
-		let path_buf = match std::fs::canonicalize(path_content.as_str()) {
+		let mut rel_path = std::path::PathBuf::from(unit.token().source().name());
+		rel_path.pop();
+		rel_path.push(path_content.as_str());
+		println!("RELPATH={rel_path:#?}");
+		let path_buf = match std::fs::canonicalize(&rel_path) {
 			Ok(path) => path,
 			Err(err) => {
 				report_err!(
@@ -105,32 +110,16 @@ impl RegexRule for ImportRule {
 					"Invalid import".into(),
 					span(
 						path.range(),
-						format!("Failed to canonicalize `{}`: {err}", path_content.fg(unit.colors().highlight))
+						format!("Failed to canonicalize `{:#?}`: {err}", path_content.fg(unit.colors().highlight))
 					),
 					note(format!("Current working directory: {}", current_dir().unwrap().to_string_lossy().fg(unit.colors().info) ))
 				);
 				return
 			},
 		};
-		let mut input_path = Path::new(unit.input_path()).to_path_buf();
-		input_path.pop();
-		let Some(rel_path) = pathdiff::diff_paths(path_buf, input_path) else {
-			report_err!(
-				unit,
-				token.source(),
-				"Invalid import".into(),
-				span(
-					path.range(),
-					format!("Failed to build relative path")
-				),
-				note(format!("Path origin: {}", unit.input_path().fg(unit.colors().info) ))
-			);
-			return
-		};
-		let rel_path = rel_path.to_str().map(|s| s.to_string()).expect("Failed to convert path to string");
 
 		// Parse imported
-		let source = match SourceFile::new(rel_path, Some(token.clone())) {
+		let source = match SourceFile::new(path_buf.to_str().expect("Invalid path").to_string(), Some(token.clone())) {
 			Ok(source) => source,
 			Err(err) => {
 				report_err!(

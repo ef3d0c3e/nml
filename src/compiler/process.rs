@@ -1,4 +1,4 @@
-use std::{path::{Path, PathBuf}, sync::Arc, time::UNIX_EPOCH};
+use std::{path::{Path, PathBuf}, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
 
 use ariadne::Fmt;
 
@@ -49,7 +49,6 @@ impl ProcessQueue {
 		let parser = Parser::new();
 		let compiler = Compiler::new(target, cache.clone());
 
-		println!("db_path={inputs:#?}");
 		Self {
 			inputs,
 			outputs: vec![],
@@ -104,7 +103,6 @@ impl ProcessQueue {
 			let Some(local_path) = local_path.to_str().map(|s| s.to_string()) else {
 				Err(ProcessError::InputError(format!("Failed to translate `{local_path:#?}` to a string."), input_string))?
 			};
-			println!("local={local_path:#?}\ninput={input_string}\nproj={:#?}", self.project_path);
 
 			// Get mtime
 			let meta = std::fs::metadata(input)
@@ -123,7 +121,7 @@ impl ProcessQueue {
 
 				if prev_mtime >= mtime
 				{
-					eprint!("Skipping processing of `{local_path}`");
+					println!("Skipping processing of `{local_path}`");
 					continue;
 				}
 			}
@@ -151,16 +149,17 @@ impl ProcessQueue {
 					format!("{basename}.html")
 				},
 			};
-			unit = unit.consume(output_file);
-			println!("result={:#?}", unit.get_entry_scope());
 
+			// Insert document in unit database
 			let con = tokio::runtime::Runtime::new()
 				.unwrap()
 				.block_on(self.cache.get_connection());
-			// Insert document in unit database
 			con.execute("INSERT OR REPLACE INTO
 				units (input_file, mtime)
-				VALUES (?1, ?2)", (unit.input_path(), mtime)).unwrap();
+				VALUES (?1, ?2)", (unit.input_path(), 0)).unwrap();
+
+			let Some(unit) = unit.consume(output_file) else { continue };
+			println!("result={:#?}", unit.get_entry_scope());
 
 			processed.push(unit);
 		}
@@ -182,6 +181,15 @@ impl ProcessQueue {
 		if !errors.is_empty()
 		{
 			return Err(ProcessError::LinkError(errors));
+		}
+
+		let time_now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+		for unit in &processed
+		{
+			// Insert document in unit database
+			con.execute("INSERT OR REPLACE INTO
+				units (input_file, mtime)
+				VALUES (?1, ?2)", (unit.input_path(), time_now)).unwrap();
 		}
 
 		Ok(vec![])

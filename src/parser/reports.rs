@@ -44,7 +44,7 @@ impl ReportColors {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ReportKind {
 	Error,
 	Warning,

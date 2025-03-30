@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use graphviz_rust::print;
 use rusqlite::params;
 use rusqlite::Connection;
 use tokio::sync::MutexGuard;
@@ -16,9 +15,8 @@ use crate::lua::kernel::KernelHolder;
 use crate::parser::parser::Parser;
 use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
+use crate::parser::reports::ReportKind;
 use crate::parser::source::Source;
-use crate::parser::source::SourceFile;
-use crate::parser::source::SourcePosition;
 use crate::parser::source::Token;
 use crate::parser::state::ParseMode;
 
@@ -174,7 +172,8 @@ impl<'u> TranslationUnit<'u> {
 	}
 
 	/// Consumes the translation unit with it's current scope
-	pub fn consume(mut self, output_file: String) -> Self {
+	/// Returns `None` if an error happened
+	pub fn consume(mut self, output_file: String) -> Option<Self> {
 		// Insert default variables
 		let token = Token::new(0..0, self.source.clone());
 		self.get_entry_scope()
@@ -213,7 +212,12 @@ impl<'u> TranslationUnit<'u> {
 			// TODO: send to lsp
 		} else {
 			let reports = self.reports.drain(..).map(|(_, report)| report).collect::<Vec<_>>();
+			let has_error = reports.iter().any(|report| report.kind == ReportKind::Error);
 			Report::reports_to_stdout(&self.colors, reports);
+			if has_error
+			{
+				return None;
+			}
 		}
 
 		let output_file = self.get_scope().get_variable(&VariableName("compiler.output".into()));
@@ -223,7 +227,7 @@ impl<'u> TranslationUnit<'u> {
 		};
 		self.output.set(output).unwrap();
 
-		self
+		Some(self)
 	}
 	pub fn colors<'s>(&'s self) -> &'s ReportColors {
 		&self.colors

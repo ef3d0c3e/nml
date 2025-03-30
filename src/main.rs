@@ -216,14 +216,19 @@ fn main() -> ExitCode {
 	let mut queue = ProcessQueue::new(Target::HTML, db_path.as_ref().map(|s| s.as_str()), files);
 	match queue.process(compiler::process::ProcessOutputOptions::Directory("out".into()))
 	{
-		Ok(_) => todo!(),
-		Err(ProcessError::GeneralError(err)) => todo!(),
-		Err(ProcessError::InputError(file, err)) => todo!(),
+		Ok(_) => {},
+		Err(ProcessError::GeneralError(err)) => {
+			eprintln!("Processing failed with error: `{err}`");
+		},
+		Err(ProcessError::InputError(file, err)) => {
+			eprintln!("Processing failed with error: `{err}` while processing file '{file}'");
+		}
 		Err(ProcessError::LinkError(reports)) => {
 			let colors = ReportColors::with_colors();
 			Report::reports_to_stdout(&colors, reports);
 		},
 	}
+	
 
 	/*
 	// Parse, compile using the cache

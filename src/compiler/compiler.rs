@@ -13,7 +13,6 @@ pub enum Target {
 	LATEX,
 }
 
-// TODO: Compiler should be immutable
 pub struct Compiler {
 	target: Target,
 	cache: Arc<Cache>,
