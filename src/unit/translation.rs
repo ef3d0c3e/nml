@@ -18,6 +18,7 @@ use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
+use crate::parser::source::SourcePosition;
 use crate::parser::source::Token;
 use crate::parser::state::ParseMode;
 
@@ -253,12 +254,15 @@ impl<'u> TranslationUnit<'u> {
 			referenceable_units (reference_key, input_file, output_file)
 			VALUES (?1, ?2, ?3)", (self.reference_key(), &output.input_file, &output.output_file)).unwrap();
 
-		let mut stmt = con.prepare("INSERT OR REPLACE INTO exported_references (name, data, unit) VALUES (?1, ?2, ?3);").unwrap();
+		let mut stmt = con.prepare("INSERT OR REPLACE INTO
+			exported_references (name, unit_ref, token_start, token_end, type, data)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6 );").unwrap();
 		for (name, reference) in &self.references
 		{
 			// FIXME: Proper type-erased serialization for referneceables
-			let serialized = "TEST";
-			stmt.execute(params![name, serialized, self.reference_key()])
+			let serialized = "TODO";
+			let range = reference.original_location().range;
+			stmt.execute(params![name, self.reference_key(), range.start, range.end, reference.refcount_key(), serialized])
 				.map_err(|err| format!("Failed to insert reference ({name}, {serialized}, {0}): {err:#?}", self.reference_key()))?;
 		}
 		Ok(())

@@ -5,6 +5,7 @@ use std::str::FromStr;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::Report;
+use crate::parser::source::SourcePosition;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
@@ -48,6 +49,11 @@ impl FromStr for ElemKind {
 pub trait Element: Downcast + core::fmt::Debug {
 	/// Gets the element defined location i.e token without filename
 	fn location(&self) -> &Token;
+
+	/// Gets the original byte range in the unit's source file
+	fn original_location(&self) -> Token {
+		self.location().source().original_range(self.location().range.clone())
+	}
 
 	fn kind(&self) -> ElemKind;
 

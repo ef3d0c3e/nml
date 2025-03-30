@@ -54,17 +54,17 @@ fn from_source_impl(
 		let borrow = lsp.as_ref().unwrap().borrow();
 		if let Some(def_data) = borrow.definitions.get(&original.source()) {
 			let mut db = def_data.definitions.borrow_mut();
-			let token = original.source().original_range(original.range).1;
+			let token = original.source().original_range(original.range).range;
 
 			// Resolve target
 			let mut target_cursor = LineCursor::new(target.source(), OffsetEncoding::Utf16);
 			let orignal_target = target.source().original_range(target.range.clone());
-			target_cursor.move_to(orignal_target.1.start);
+			target_cursor.move_to(orignal_target.range.start);
 			let target_start = Position {
 				line: target_cursor.line as u32,
 				character: target_cursor.line_pos as u32,
 			};
-			target_cursor.move_to(orignal_target.1.end);
+			target_cursor.move_to(orignal_target.range.end);
 			let target_end = Position {
 				line: target_cursor.line as u32,
 				character: target_cursor.line_pos as u32,
@@ -84,10 +84,10 @@ fn from_source_impl(
 			};
 
 			// Add definition
-			let uri = if orignal_target.0.name().starts_with("file://") {
-				Url::try_from(orignal_target.0.name().as_str()).unwrap()
+			let uri = if orignal_target.source().name().starts_with("file://") {
+				Url::try_from(orignal_target.source().name().as_str()).unwrap()
 			} else {
-				let target_path = std::fs::canonicalize(orignal_target.0.name().as_str()).unwrap();
+				let target_path = std::fs::canonicalize(orignal_target.source().name().as_str()).unwrap();
 				Url::from_file_path(target_path).unwrap()
 			};
 			db.push((

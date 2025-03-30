@@ -439,14 +439,14 @@ impl<'lsp> Semantics<'lsp> {
 	/// Note that this will move the cursor to the start of the range, thus making it impossible to add another token before this one.
 	/// Use the [`Self::add_to_queue`] if you need to be able to add other tokens before a new token.
 	pub fn add(&self, range: Range<usize>, token: (u32, u32)) {
-		let range = self.original_source.original_range(range).1;
+		let range = self.original_source.original_range(range).range;
 		self.process_queue(range.start);
 		self.add_impl(range, token);
 	}
 
 	/// Add a semantic token to be processed in a future call to `add()`
 	pub fn add_to_queue(&self, range: Range<usize>, token: (u32, u32)) {
-		let range = self.original_source.original_range(range).1;
+		let range = self.original_source.original_range(range).range;
 		let mut queue = self.sems.semantic_queue.borrow_mut();
 		match queue.binary_search_by_key(&range.start, |(range, _)| range.start) {
 			Ok(pos) | Err(pos) => queue.insert(pos, (range, token)),

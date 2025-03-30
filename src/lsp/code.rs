@@ -95,7 +95,7 @@ impl<'a> CodeRange<'a> {
 	}
 
 	pub fn add(&self, range: Range<usize>, language: String) {
-		let range = self.original_source.original_range(range.clone()).1;
+		let range = self.original_source.original_range(range.clone()).range;
 		let mut cursor = LineCursor::new(self.source.clone(), OffsetEncoding::Utf8);
 
 		cursor.move_to(range.start);

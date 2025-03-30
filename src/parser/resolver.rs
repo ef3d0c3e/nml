@@ -40,9 +40,12 @@ impl<'u> Resolver<'u>
 		con.execute(
 			"CREATE TABLE IF NOT EXISTS exported_references(
 				name			TEXT PRIMARY KEY,
+				unit_ref		TEXT NOT NULL,
+				token_start		INTEGER NOT NULL,			
+				token_end		INTEGER NOT NULL,			
+				type			TEXT NOT NULL,
 				data			TEXT NOT NULL,
-				unit			TEXT NOT NULL,
-				FOREIGN KEY(unit) REFERENCES referenceable_units(reference_key)
+				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key)
 			);", ()).unwrap();
 
 		let mut units = HashMap::default();

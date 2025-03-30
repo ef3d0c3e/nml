@@ -203,7 +203,7 @@ pub trait SourcePosition {
 	///
 	/// This function will return the first parent [`SourceFile`] aswell as the range mapped
 	/// in that source
-	fn original_range(&self, range: Range<usize>) -> (Arc<dyn Source>, Range<usize>);
+	fn original_range(&self, range: Range<usize>) -> Token;
 }
 
 impl SourcePosition for Arc<dyn Source> {
@@ -229,10 +229,10 @@ impl SourcePosition for Arc<dyn Source> {
 		(self.clone(), pos)
 	}
 
-	fn original_range(&self, mut range: Range<usize>) -> (Arc<dyn Source>, Range<usize>) {
+	fn original_range(&self, mut range: Range<usize>) -> Token {
 		// Stop recursion
 		if self.downcast_ref::<SourceFile>().is_some() {
-			return (self.clone(), range);
+			return Token::new(range, self.clone());
 		}
 
 		// Apply offsets
@@ -250,7 +250,7 @@ impl SourcePosition for Arc<dyn Source> {
 				.original_range(parent.range.start + range.start..parent.range.start + range.end);
 		}
 
-		(self.clone(), range)
+		Token::new(range, self.clone())
 	}
 }
 

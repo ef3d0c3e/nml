@@ -70,7 +70,16 @@ impl<'u> OffloadedUnit<'u> {
 					})
 			},
 			OffloadedUnit::Unloaded(unit) => {
-				con.query_row("SELECT ()")
+				con.query_row("SELECT name, token_start, token_end, type
+					FROM exported_references
+					WHERE name = (?1) AND unit_ref = (?2)", [name.as_ref(), &unit.reference_key], |row| {
+						Ok(Reference {
+							refname: row.get_unwrap(0),
+							refkey: row.get_unwrap(3),
+							source_unit: self.input_path(),
+							token: row.get_unwrap(1)..row.get_unwrap(2),
+						})
+					}).ok()
 			},
 		}
 	}

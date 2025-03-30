@@ -136,8 +136,9 @@ impl Report {
 
 		for span in self.spans {
 			cache.insert(span.token.source(), span.token.source().content().clone());
+			let token = span.token.source().original_range(span.token.range);
 			builder = builder.with_label(
-				ariadne::Label::new(span.token.source().original_range(span.token.range))
+				ariadne::Label::new((token.source(), token.range))
 					.with_message(span.message)
 					.with_color(Self::ariadne_color(span.color, colors)),
 			)
@@ -161,12 +162,12 @@ impl Report {
 
 	fn to_diagnostics(self, diagnostic_map: &DashMap<String, Vec<Diagnostic>>) {
 		for span in self.spans {
-			let (source, range) = span.token.source().original_range(span.token.range.clone());
+			let token = span.token.source().original_range(span.token.range.clone());
 
-			let mut start = LineCursor::new(source.clone(), OffsetEncoding::Utf16);
-			start.move_to(range.start);
+			let mut start = LineCursor::new(token.source(), OffsetEncoding::Utf16);
+			start.move_to(token.range.start);
 			let mut end = start.clone();
-			end.move_to(range.end);
+			end.move_to(token.range.end);
 
 			let diag = Diagnostic {
 				range: tower_lsp::lsp_types::Range {
@@ -188,10 +189,10 @@ impl Report {
 				tags: None,
 				data: None,
 			};
-			if let Some(mut diags) = diagnostic_map.get_mut(source.name()) {
+			if let Some(mut diags) = diagnostic_map.get_mut(token.source().name()) {
 				diags.push(diag);
 			} else {
-				diagnostic_map.insert(source.name().to_owned(), vec![diag]);
+				diagnostic_map.insert(token.source().name().to_owned(), vec![diag]);
 			}
 		}
 	}

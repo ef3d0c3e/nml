@@ -102,7 +102,7 @@ impl<'a> Styles<'a> {
 	}
 
 	pub fn add(&self, range: Range<usize>, style: Style) {
-		let range = self.original_source.original_range(range).1;
+		let range = self.original_source.original_range(range).range;
 		let mut cursor = LineCursor::new(self.source.clone(), OffsetEncoding::Utf8);
 
 		cursor.move_to(range.start);
