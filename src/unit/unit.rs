@@ -69,7 +69,9 @@ impl<'u> OffloadedUnit<'u> {
 						token: elem.location().range.clone(),
 					})
 			},
-			OffloadedUnit::Unloaded(unit) => todo!(),
+			OffloadedUnit::Unloaded(unit) => {
+				con.query_row("SELECT ()")
+			},
 		}
 	}
 }

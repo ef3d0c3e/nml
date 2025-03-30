@@ -81,7 +81,7 @@ impl ProcessQueue {
 			.block_on(self.cache.get_connection());
 		con.execute(
 			"CREATE TABLE IF NOT EXISTS units(
-				input_file		TEXT NOT NULL,
+				input_file		TEXT PRIMARY KEY,
 				mtime			INTEGER NOT NULL
 			);", ()).unwrap();
 		drop(con);
