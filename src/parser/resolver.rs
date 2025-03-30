@@ -34,7 +34,8 @@ impl<'u> Resolver<'u>
 			"CREATE TABLE IF NOT EXISTS referenceable_units(
 				reference_key	TEXT PRIMARY KEY,
 				input_file		TEXT NOT NULL,
-				output_file		TEXT
+				output_file		TEXT,
+				FOREIGN KEY(input_file) REFERENCES units(input_file)
 			);", ()).unwrap();
 		con.execute(
 			"CREATE TABLE IF NOT EXISTS exported_references(

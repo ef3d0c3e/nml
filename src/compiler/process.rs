@@ -1,4 +1,4 @@
-use std::{path::{Path, PathBuf}, sync::Arc};
+use std::{path::{Path, PathBuf}, sync::Arc, time::UNIX_EPOCH};
 
 use ariadne::Fmt;
 
@@ -75,6 +75,17 @@ impl ProcessQueue {
 			},
 		};
 
+		// Init cache
+		let con = tokio::runtime::Runtime::new()
+			.unwrap()
+			.block_on(self.cache.get_connection());
+		con.execute(
+			"CREATE TABLE IF NOT EXISTS units(
+				input_file		TEXT NOT NULL,
+				mtime			INTEGER NOT NULL
+			);", ()).unwrap();
+		drop(con);
+
 		let mut processed = vec![];
 		for input in &self.inputs {
 			let input_string = input
@@ -99,9 +110,23 @@ impl ProcessQueue {
 			let meta = std::fs::metadata(input)
 				.map_err(|err| ProcessError::InputError(input_string.clone(), format!("Failed to get metadata for `{input_string}`: {err}")))?;
 
-			let modified = meta
+			let mtime = meta
 				.modified()
+				.map(|e| e.duration_since(UNIX_EPOCH).unwrap().as_secs())
 				.map_err(|err| ProcessError::InputError(input_string.clone(), format!("Unable to query modification time for `{input_string}`: {err}")))?;
+
+			{
+				let con = tokio::runtime::Runtime::new()
+					.unwrap()
+					.block_on(self.cache.get_connection());
+				let prev_mtime = con.query_row("SELECT mtime FROM units WHERE input_file = (?1)", [local_path.to_string()], |row| Ok(row.get_unwrap::<_, u64>(0))).unwrap_or(0);
+
+				if prev_mtime >= mtime
+				{
+					eprint!("Skipping processing of `{local_path}`");
+					continue;
+				}
+			}
 
 			// Create unit
 			let source = Arc::new(SourceFile::new(input_string.clone(), None).unwrap());
@@ -110,7 +135,7 @@ impl ProcessQueue {
 			// TODO: Check if necessary to compile using mtime
 			let output_file = match &options {
 				ProcessOutputOptions::Directory(dir) => {
-					let basename = match input_string.find(|c| c == '.')
+					let basename = match input_string.rfind(|c| c == '.')
 					{
 						Some(pos) => &input_string[0..pos],
 						None => &input_string,
@@ -118,7 +143,7 @@ impl ProcessQueue {
 					format!("{dir}/{basename}.html")
 				},
 				ProcessOutputOptions::File(file) => {
-					let basename = match input_string.find(|c| c == '.')
+					let basename = match input_string.rfind(|c| c == '.')
 					{
 						Some(pos) => &input_string[0..pos],
 						None => &input_string,
@@ -128,13 +153,23 @@ impl ProcessQueue {
 			};
 			unit = unit.consume(output_file);
 			println!("result={:#?}", unit.get_entry_scope());
+
+			let con = tokio::runtime::Runtime::new()
+				.unwrap()
+				.block_on(self.cache.get_connection());
+			// Insert document in unit database
+			con.execute("INSERT OR REPLACE INTO
+				units (input_file, mtime)
+				VALUES (?1, ?2)", (unit.input_path(), mtime)).unwrap();
+
 			processed.push(unit);
 		}
 
-		// Resolve all references
 		let con = tokio::runtime::Runtime::new()
 			.unwrap()
 			.block_on(self.cache.get_connection());
+
+		// Resolve all references
 		let colors = ReportColors::with_colors();
 		let resolver = Resolver::new(&colors, &con, &processed)
 			.map_err(|err| ProcessError::LinkError(vec![err]))?;
