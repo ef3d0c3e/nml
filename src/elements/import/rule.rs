@@ -100,7 +100,6 @@ impl RegexRule for ImportRule {
 		let mut rel_path = std::path::PathBuf::from(unit.token().source().name());
 		rel_path.pop();
 		rel_path.push(path_content.as_str());
-		println!("RELPATH={rel_path:#?}");
 		let path_buf = match std::fs::canonicalize(&rel_path) {
 			Ok(path) => path,
 			Err(err) => {
