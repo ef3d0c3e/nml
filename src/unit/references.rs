@@ -33,18 +33,21 @@ impl TryFrom<&str> for Refname
 
 		// Validate
 		let mut kind = None;
-		s
+		let word = match s.split_once('#') {
+			Some((_path, name)) => { kind = Some('#'); name },
+			None => match s.split_once('@') {
+				Some((_path, name)) => { kind = Some('@'); name },
+				None => s,
+			},
+		};
+		word
 			.chars()
 			.try_for_each(|c| {
 				if c == '#' || c == '@'
 				{
-					if kind.is_some()
-					{
-						return Err(format!(
-								"Refname `{s}` cannot contain `{c}` after previous specifier"
-						));
-					}
-					kind = Some(c);
+					return Err(format!(
+							"Refname `{s}` cannot contain `{c}` after previous specifier"
+					));
 				}
 				else if c.is_ascii_punctuation() && !(c == '.' || c == '_') {
 					return Err(format!(
