@@ -162,9 +162,9 @@ impl<'u> Resolver<'u>
 
 				unit.get_entry_scope()
 					.content_iter()
-					.filter_map(|(_, elem)| elem.as_linkable())
-					.filter(|elem| elem.wants_link())
-					.for_each(|linkable| {
+					.filter_map(|(scope, elem)| elem.as_linkable().and_then(|link| Some((scope, link))))
+					.filter(|(_, elem)| elem.wants_link())
+					.for_each(|(scope, linkable)| {
 						match self.resolve_reference(&con, unit, linkable.wants_refname())
 						{
 							// Link reference

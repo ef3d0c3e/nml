@@ -4,8 +4,10 @@ use std::sync::Arc;
 
 use ariadne::Color;
 use ariadne::IndexType;
+use ariadne::ReportBuilder;
 use dashmap::DashMap;
 use tower_lsp::lsp_types::Diagnostic;
+use url::Origin;
 
 use crate::parser::source::LineCursor;
 
@@ -95,6 +97,21 @@ pub struct Report {
 }
 
 impl Report {
+	/// Recursively add the origin scope to a report
+	fn add_origin<'a>(mut builder: ReportBuilder<'a, (Arc<dyn Source>, Range<usize>)>, cache: &mut HashMap<Arc<dyn Source>, String>, location: Option<&Token>, colors: &ReportColors)
+		-> ReportBuilder<'a, (Arc<dyn Source>, Range<usize>)>  {
+		if let Some(location) = location
+		{
+			cache.insert(location.source(), location.source().content().clone());
+			builder = builder
+				.with_label(ariadne::Label::new((location.source(), location.range.clone()))
+					.with_message("Originating from")
+					.with_color(Self::ariadne_color(SpanColor::Highlight, colors)));
+			return Self::add_origin(builder, cache, location.source().location(), colors);
+		}
+		builder
+	}
+
 	fn ariadne_color(color: SpanColor, colors: &ReportColors) -> ariadne::Color {
 		match color {
 			SpanColor::Error => colors.error,
@@ -102,6 +119,7 @@ impl Report {
 			SpanColor::Highlight => colors.highlight,
 		}.unwrap_or(ariadne::Color::Primary)
 	}
+
 
 	fn to_ariadne(
 		self,
@@ -143,6 +161,8 @@ impl Report {
 					.with_color(Self::ariadne_color(span.color, colors)),
 			)
 		}
+		builder = Self::add_origin(builder, &mut cache, source.location(), colors);
+
 		if let Some(help) = &self.help {
 			builder.set_help(help);
 		}
@@ -150,6 +170,7 @@ impl Report {
 			builder.set_note(note);
 		}
 
+		println!("Report cache={cache:#?}");
 		(builder.finish(), ariadne::sources(cache))
 	}
 

@@ -4,6 +4,8 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use tokio::sync::watch::Ref;
+
 use crate::parser::source::Source;
 use crate::parser::state::{ParseMode, ParserState};
 
@@ -66,7 +68,7 @@ impl Scope {
 	/// The name of this scope (which corresponds to the name of the source)
 	pub fn name(&self) -> &String { self.source.name() }
 
-	/// Returns the source of this document
+	/// Returns the source of this scope
 	pub fn source(&self) -> Arc<dyn Source> { self.source.clone() }
 
 	/// Returns the parser's state
@@ -75,9 +77,12 @@ impl Scope {
 	/// Returns a mutable parser state
 	pub fn parser_state_mut(&mut self) -> &mut ParserState { &mut self.parser_state }
 
-pub fn set_parser_state(&mut self, parser_state: ParserState) {
+	/// Sets the parser state for this scope
+	pub fn set_parser_state(&mut self, parser_state: ParserState) {
         self.parser_state = parser_state;
     }
+
+	pub fn parent(&self) -> &Option<Rc<RefCell<Scope>>> { &self.parent }
 }
 
 pub trait ScopeAccessor {
