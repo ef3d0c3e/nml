@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::cache::cache::Cache;
 use crate::unit::translation::TranslationUnit;
 
-use super::compiled::CompiledUnit;
 use super::sanitize::Sanitizer;
 
 #[derive(Clone, Copy)]
@@ -117,7 +116,7 @@ impl Compiler {
 	pub fn compile(
 		&self,
 		unit: &TranslationUnit,
-	) -> CompiledUnit {
+	) -> ( /* TODO */ ) {
 		/*
 		let borrow = document.content().borrow();
 

@@ -5,7 +5,7 @@ use ariadne::Fmt;
 use crate::{cache::cache::Cache, parser::{parser::Parser, reports::macros::*, resolver::Resolver, source::SourceFile}, unit::translation::TranslationUnit};
 use crate::parser::reports::*;
 
-use super::{compiled::CompiledUnit, compiler::{Compiler, Target}};
+use super::{compiler::{Compiler, Target}};
 
 #[derive(Debug)]
 pub enum ProcessError
@@ -26,7 +26,7 @@ pub enum ProcessOutputOptions {
 pub struct ProcessQueue
 {
 	inputs: Vec<PathBuf>,
-	outputs: Vec<CompiledUnit>,
+	outputs: Vec<( /* TODO */ )>,
 
 	cache: Arc<Cache>,
 	project_path: String,
@@ -59,7 +59,7 @@ impl ProcessQueue {
 		}
 	}
 
-	pub fn process(&mut self, options: ProcessOutputOptions) -> Result<Vec<CompiledUnit>, ProcessError>
+	pub fn process(&mut self, options: ProcessOutputOptions) -> Result<Vec<(/* TODO */)>, ProcessError>
 	{
 		match &options
 		{

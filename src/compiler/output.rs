@@ -10,7 +10,6 @@ use tokio::task::JoinHandle;
 use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
 
-use super::compiled::CompiledUnit;
 use super::compiler::Compiler;
 
 pub struct CompilerOutput {

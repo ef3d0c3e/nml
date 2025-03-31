@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use ariadne::Fmt;
 use rusqlite::Connection;
 use tokio::sync::MutexGuard;
+use tower_lsp::lsp_types::WorkspaceFileOperationsServerCapabilities;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
@@ -60,13 +61,13 @@ impl<'u> Resolver<'u>
 		for unloaded in unlodaded_iter
 		{
 			let unloaded : (String, String, Option<String>) = unloaded.unwrap();
-			if let Some(previous) = units.insert(unloaded.0.clone(), OffloadedUnit::Unloaded(DatabaseUnit {
+			if let Some(_) = units.insert(unloaded.0.clone(), OffloadedUnit::Unloaded(DatabaseUnit {
 				reference_key: unloaded.0.clone(),
 				input_file: unloaded.1.clone(),
 				output_file: unloaded.2
 			})) {
-				panic!("Duplicate unit in database")
 				// Should not happen since the database should enforce uniqueness
+				panic!("Duplicate unit in database")
 			}
 		}
 
@@ -127,6 +128,7 @@ impl<'u> Resolver<'u>
 		})
 	}
 
+	/// Resolvers a single reference
 	pub fn resolve_reference<'con>(&self, con: &MutexGuard<'con, Connection>, unit: &TranslationUnit, refname: &Refname) -> Result<Reference, ResolveError>
 	{
 		match refname {
@@ -140,8 +142,6 @@ impl<'u> Resolver<'u>
 					})
 			.ok_or(ResolveError::NotFound(name.clone())),
 			Refname::External(path, name) => {
-				println!("Resolve: {path:#?}");
-				println!("Resolve: {:#?}", unit.reference_key());
 				let provider = self.units.get(path).ok_or(
 					ResolveError::InvalidPath(path.to_owned())
 				)?;
@@ -165,12 +165,10 @@ impl<'u> Resolver<'u>
 					.filter_map(|(_, elem)| elem.as_linkable())
 					.filter(|elem| elem.wants_link())
 					.for_each(|linkable| {
-
-				println!("RESOLV={:#?}", linkable.wants_refname());
 						match self.resolve_reference(&con, unit, linkable.wants_refname())
 						{
-							/// Link reference
-							Ok(link) => { println!("resolved to: {link:#?}"); linkable.link(link) },
+							// Link reference
+							Ok(link) => linkable.link(link),
 							Err(ResolveError::InvalidPath(path)) => {
 								errors.push(
 									make_err!(
