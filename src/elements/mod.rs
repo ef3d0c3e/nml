@@ -21,3 +21,4 @@ pub mod internal_link;
 pub mod text;
 //pub mod toc;
 pub mod variable;
+pub mod eof;

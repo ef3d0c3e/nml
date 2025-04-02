@@ -4,8 +4,10 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::slice::Iter;
 
+use crate::elements::eof::elem::Eof;
 use crate::elements::text::elem::Text;
 use crate::unit::element::Element;
+use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 
@@ -169,6 +171,11 @@ impl Parser {
 		// Add leftover as text
 		let end_cursor = cursor.at(cursor.source().content().len());
 		self.add_text(unit, cursor..end_cursor);
+
+		let end = unit.token().range.end;
+		unit.get_scope().add_content(Rc::new(Eof {
+			location: Token::new(end..end, unit.token().source()),
+		}));
 
 		// Trigger the end of document for the semantics
 		//unit.with_lsp(|lsp| {
