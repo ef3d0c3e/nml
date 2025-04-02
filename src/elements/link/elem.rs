@@ -3,10 +3,10 @@ use std::rc::Rc;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
-use crate::compiler::compiler::Target::HTML;
+use crate::compiler::compiler::Target;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
-use crate::unit::element::{ContainerElement, ElemKind, Element};
+use crate::unit::element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement};
 use crate::unit::scope::{Scope, ScopeAccessor};
 
 #[derive(Debug)]
@@ -29,7 +29,7 @@ impl Element for Link {
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
-			HTML => {
+			Target::HTML => {
 				output.add_content(format!(
 					"<a href=\"{}\">",
 					compiler.sanitize(self.url.as_str())
@@ -47,6 +47,8 @@ impl Element for Link {
 		Ok(())
 	}
 
+	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
+	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
 	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { Some(self) }
 }
 

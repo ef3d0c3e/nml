@@ -15,6 +15,8 @@ use std::sync::Arc;
 use super::element::ContainerElement;
 use super::element::ElemKind;
 use super::element::Element;
+use super::element::LinkableElement;
+use super::element::ReferenceableElement;
 use super::scope::Scope;
 use super::scope::ScopeAccessor;
 use super::translation::TranslationUnit;
@@ -94,9 +96,9 @@ impl Element for VariableExpansion {
 		Ok(())
     }
 
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> {
-		return Some(self)
-	}
+	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
+	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
+	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { Some(self) }
 }
 
 impl ContainerElement for VariableExpansion {

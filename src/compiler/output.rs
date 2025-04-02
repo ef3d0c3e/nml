@@ -14,9 +14,11 @@ use tokio::task::JoinHandle;
 
 use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
+use crate::unit::references::Refname;
 use crate::unit::scope::Scope;
 
 use super::compiler::Compiler;
+use super::compiler::Target;
 
 #[derive(Debug)]
 struct RcKey<T>(Rc<RefCell<T>>);
@@ -36,8 +38,12 @@ impl<T> Hash for RcKey<T> {
 }
 
 pub struct CompilerOutput {
+	/// Compilation target
+	target: Target,
 	/// Paragraph state of the output
 	paragraph: HashSet<RcKey<Scope>>,
+	/// Internal links
+	internal_links: HashMap<String, String>,
 
 	// Holds the content of the resulting document
 	pub(crate) content: String,
@@ -51,13 +57,15 @@ impl CompilerOutput {
 	/// Run work function `f` with the task processor running
 	///
 	/// The result of async taks will be inserted into the output
-	pub fn run_with_processor<F>(colors: &ReportColors, f: F) -> CompilerOutput
+	pub fn run_with_processor<F>(target: Target, colors: &ReportColors, f: F) -> CompilerOutput
 	where
 		F: FnOnce(CompilerOutput) -> CompilerOutput,
 	{
 		// Create the output & the runtime
 		let mut output = Self {
+			target,
 			paragraph: HashSet::new(),
+			internal_links: HashMap::new(),
 			content: String::default(),
 
 			tasks: vec![],
@@ -138,6 +146,46 @@ impl CompilerOutput {
 		else
 		{
 			self.paragraph.remove(&RcKey(scope.to_owned()));
+		}
+	}
+
+	/// Gets an internal link name for a given refname
+	/// The given refname has to be an internal refname
+	pub fn get_link(&mut self, refname: &Refname) -> String
+	{
+		let Refname::Internal(name) = refname else { panic!("Expected internal refname") };
+		if let Some(internal) = self.internal_links.get(name)
+		{
+			internal.to_owned()
+		}
+		else
+		{
+			match self.target {
+				Target::HTML => {
+					let mut transformed = name.chars()
+						.map(|c| {
+							if c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.'
+							{
+								c
+							}
+							else if c == ' '
+							{
+								'-'
+							}
+							else
+							{
+								'_'
+							}
+						}).collect::<String>();
+					while self.internal_links.iter().find(|(_, value)| **value == transformed).is_some()
+					{
+						transformed.push('_');
+					}
+					self.internal_links.insert(name.to_owned(), transformed);
+				},
+				Target::LATEX => todo!(),
+			}
+			self.internal_links.get(name).unwrap().to_owned()
 		}
 	}
 }

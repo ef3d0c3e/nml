@@ -170,11 +170,10 @@ impl Parser {
 		println!("done");
 		// Add leftover as text
 		let end_cursor = cursor.at(cursor.source().content().len());
-		self.add_text(unit, cursor..end_cursor);
+		self.add_text(unit, cursor..end_cursor.clone());
 
-		let end = unit.token().range.end;
 		unit.get_scope().add_content(Rc::new(Eof {
-			location: Token::new(end..end, unit.token().source()),
+			location: Token::new(end_cursor.pos()..end_cursor.pos(), end_cursor.source()),
 		}));
 
 		// Trigger the end of document for the semantics

@@ -1,6 +1,6 @@
 use std::{cell::{OnceCell, RefCell}, rc::Rc};
 
-use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement}, references::Refname, scope::Scope, unit::Reference}};
+use crate::{compiler::{compiler::{Compiler, Target}, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, references::Refname, scope::{Scope, ScopeAccessor}, unit::Reference}};
 
 #[derive(Debug)]
 pub struct InternalLink {
@@ -25,14 +25,34 @@ impl Element for InternalLink {
 
     fn compile(
 		    &self,
-		    scope: Rc<RefCell<Scope>>,
+		    _scope: Rc<RefCell<Scope>>,
 		    compiler: &Compiler,
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {
-        todo!()
+		// Get link
+		let link = output.get_link(&self.refname);
+
+		match compiler.target() {
+			Target::HTML => {
+				output.add_content(format!(
+						"<a href=\"#{link}\">",
+				));
+
+				let display = &self.display[0];
+				for (scope, elem) in display.content_iter(false) {
+					elem.compile(scope, compiler, output)?;
+				}
+
+				output.add_content("</a>");
+			}
+			_ => todo!(""),
+		}
+		Ok(())
     }
 
+	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
 	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { Some(self) }
+	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { Some(self) }
 }
 
 impl ContainerElement for InternalLink {
@@ -51,5 +71,4 @@ impl LinkableElement for InternalLink {
     fn link(&self, reference: Reference) {
 		self.reference.set(reference).unwrap();
     }
-	
 }

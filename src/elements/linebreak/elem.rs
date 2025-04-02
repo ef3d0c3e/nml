@@ -6,7 +6,7 @@ use crate::compiler::compiler::Target::HTML;
 use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
-use crate::unit::element::{ElemKind, Element};
+use crate::unit::element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement};
 use crate::unit::scope::Scope;
 
 #[derive(Debug)]
@@ -40,4 +40,8 @@ impl Element for LineBreak {
 		}
 		Ok(())
 	}
+
+	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
+	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
+	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { None }
 }

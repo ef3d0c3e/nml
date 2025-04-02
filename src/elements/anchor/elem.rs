@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::{Rc, Weak}};
 
-use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ElemKind, Element, ReferenceableElement}, references::{InternalReference, Refname}, scope::Scope}};
+use crate::{compiler::{compiler::{Compiler, Target}, output::{self, CompilerOutput}}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, references::{InternalReference, Refname}, scope::Scope}};
 
 
 #[derive(Debug)]
@@ -26,11 +26,26 @@ impl Element for Anchor {
     fn compile(
 		    &self,
 		    _scope: Rc<RefCell<Scope>>,
-		    _compiler: &Compiler,
-		    _output: &mut CompilerOutput,
-	    ) -> Result<(), Vec<Report>> { Ok(()) }
+		    compiler: &Compiler,
+		    output: &mut CompilerOutput,
+	    ) -> Result<(), Vec<Report>> {
+		// Get link
+		let link = output.get_link(&self.refname);
+
+		match compiler.target() {
+			Target::HTML => {
+				output.add_content(format!(
+						"<a id=\"{link}\"></a>",
+				));
+			}
+			_ => todo!(""),
+		}
+		Ok(())
+	}
 
 	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { Some(self) }
+	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
+	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { None }
 }
 
 impl ReferenceableElement for Anchor

@@ -6,7 +6,7 @@ use graphviz_rust::print;
 
 use crate::cache::cache::Cache;
 use crate::parser::reports::Report;
-use crate::unit::element::ElemKind;
+use crate::unit::element::{nested_kind, ElemKind};
 use crate::unit::scope::{Scope, ScopeAccessor};
 use crate::unit::translation::TranslationUnit;
 
@@ -126,7 +126,7 @@ impl Compiler {
 		let mut reports = vec![];
 		for (scope, elem) in scope.content_iter(false)
 		{
-			if elem.kind() == ElemKind::Inline && !output.in_paragraph(&scope)
+			if nested_kind(elem.clone()) == ElemKind::Inline && !output.in_paragraph(&scope)
 			{
 				match self.target
 				{
@@ -135,7 +135,7 @@ impl Compiler {
 				}
 				output.set_paragraph(&scope, true);
 			}
-			else if output.in_paragraph(&scope)
+			else if output.in_paragraph(&scope) && nested_kind(elem.clone()) == ElemKind::Block
 			{
 				match self.target
 				{
@@ -159,7 +159,7 @@ impl Compiler {
 		&self,
 		unit: &TranslationUnit,
 	) -> ( /* TODO */ ) {
-		CompilerOutput::run_with_processor(&unit.colors(), |output| {
+		CompilerOutput::run_with_processor(self.target, &unit.colors(), |output| {
 			self.compile_scope(output, unit.get_entry_scope().to_owned())
 		});
 		/*
@@ -187,7 +187,6 @@ impl Compiler {
 
 		output.to_compiled(self, document, header, footer)
 		*/
-		todo!();
 	}
 }
 

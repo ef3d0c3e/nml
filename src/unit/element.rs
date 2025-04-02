@@ -55,6 +55,7 @@ pub trait Element: Downcast + core::fmt::Debug {
 		self.location().source().original_range(self.location().range.clone())
 	}
 
+	/// The basic element kind
 	fn kind(&self) -> ElemKind;
 
 	/// Get the element's name
@@ -69,13 +70,13 @@ pub trait Element: Downcast + core::fmt::Debug {
 	) -> Result<(), Vec<Report>>;
 
 	/// Gets the element as a referenceable i.e an element that can be referenced
-	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
+	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>>;
 
 	/// Gets the element as a linkable element, i.e needs to be resolved to an appropriate reference
-	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
+	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>>;
 
 	/// Gets the element as a container containing other elements
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { None }
+	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>>;
 }
 impl_downcast!(Element);
 
@@ -127,7 +128,7 @@ pub trait ContainerElement: Element {
 					ElemKind::Compound => {
 						if let Some(container) = it.1.as_container()
 						{
-							if container.nested_kind() == ElemKind::Block 
+							if container.nested_kind() == ElemKind::Block
 							{
 								return ElemKind::Block
 							}
@@ -141,22 +142,11 @@ pub trait ContainerElement: Element {
 	}
 }
 
-#[derive(Debug)]
-pub struct DocumentEnd(pub Token);
+pub fn nested_kind(elem: Rc<dyn Element>) -> ElemKind
+{
+	let Some(container) = elem.clone().as_container() else {
+		return elem.kind()
+	};
 
-impl Element for DocumentEnd {
-	fn location(&self) -> &Token { &self.0 }
-
-	fn kind(&self) -> ElemKind { ElemKind::Invisible }
-
-	fn element_name(&self) -> &'static str { "Document End" }
-
-	fn compile<'e>(
-		&'e self,
-		_scope: Rc<RefCell<Scope>>,
-		_compiler: &'e Compiler,
-		_output: &mut CompilerOutput,
-	) -> Result<(), Vec<Report>> {
-		Ok(())
-	}
+	container.nested_kind()
 }
