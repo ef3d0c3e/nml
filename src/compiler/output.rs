@@ -1,7 +1,12 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::future::Future;
 use std::future::IntoFuture;
+use std::hash::Hasher;
+use std::hash::Hash;
 use std::pin::Pin;
+use std::rc::Rc;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -9,10 +14,31 @@ use tokio::task::JoinHandle;
 
 use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
+use crate::unit::scope::Scope;
 
 use super::compiler::Compiler;
 
+#[derive(Debug)]
+struct RcKey<T>(Rc<RefCell<T>>);
+
+impl<T> PartialEq for RcKey<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0) // Compare Rc pointer addresses
+    }
+}
+
+impl<T> Eq for RcKey<T> {}
+
+impl<T> Hash for RcKey<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_usize(Rc::as_ptr(&self.0) as usize); // Hash the pointer address
+    }
+}
+
 pub struct CompilerOutput {
+	/// Paragraph state of the output
+	paragraph: HashSet<RcKey<Scope>>,
+
 	// Holds the content of the resulting document
 	pub(crate) content: String,
 	/// Holds the spawned async tasks. After the work function has completed, these tasks will be waited on in order to insert their result in the compiled document
@@ -31,6 +57,7 @@ impl CompilerOutput {
 	{
 		// Create the output & the runtime
 		let mut output = Self {
+			paragraph: HashSet::new(),
 			content: String::default(),
 
 			tasks: vec![],
@@ -97,5 +124,20 @@ impl CompilerOutput {
 		&self,
 	) -> &String {
 		&self.content
+	}
+
+	pub fn in_paragraph(&mut self, scope: &Rc<RefCell<Scope>>) -> bool {
+		self.paragraph.contains(&RcKey(scope.to_owned()))
+	}
+
+	pub fn set_paragraph(&mut self, scope: &Rc<RefCell<Scope>>, value: bool) {
+		if value
+		{
+			self.paragraph.insert(RcKey(scope.to_owned()));
+		}
+		else
+		{
+			self.paragraph.remove(&RcKey(scope.to_owned()));
+		}
 	}
 }

@@ -24,14 +24,20 @@ impl Element for LineBreak {
 
 	fn compile<'e>(
 		&'e self,
-		_scope: Rc<RefCell<Scope>>,
+		scope: Rc<RefCell<Scope>>,
 		compiler: &'e Compiler,
-		_output: &mut CompilerOutput,
+		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
-			HTML => todo!(),
+			HTML => {
+				if output.in_paragraph(&scope)
+				{
+					output.add_content("</p>");
+					output.set_paragraph(&scope, false);
+				}
+			},
 			_ => todo!("Unimplemented compiler"),
 		}
-		//Ok(())
+		Ok(())
 	}
 }
