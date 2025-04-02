@@ -36,7 +36,7 @@ impl Element for Link {
 				));
 
 				let display = &self.display[0];
-				for (scope, elem) in display.content_iter() {
+				for (scope, elem) in display.content_iter(false) {
 					elem.compile(scope, compiler, output)?;
 				}
 
@@ -63,7 +63,7 @@ impl ContainerElement for Link {
 
 		    for contained in self.contained()
 		    {
-			    for it in contained.content_iter()
+			    for it in contained.content_iter(true)
 			    {
 				    match it.1.kind()
 				    {

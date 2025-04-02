@@ -94,8 +94,8 @@ impl CompilerOutput {
 	}
 
 	pub fn content(
-		self,
-	) -> String {
-		self.content
+		&self,
+	) -> &String {
+		&self.content
 	}
 }

@@ -192,6 +192,12 @@ impl ProcessQueue {
 				VALUES (?1, ?2)", (unit.input_path(), time_now)).unwrap();
 		}
 
+		// Compile all units
+		for unit in &processed
+		{
+			self.compiler.compile(unit);
+		}
+
 		Ok(vec![])
 	}
 }

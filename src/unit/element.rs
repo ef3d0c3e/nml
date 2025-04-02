@@ -119,7 +119,7 @@ pub trait ContainerElement: Element {
 
 		for contained in self.contained()
 		{
-			for it in contained.content_iter()
+			for it in contained.content_iter(true)
 			{
 				match it.1.kind()
 				{

@@ -97,7 +97,7 @@ pub struct Report {
 }
 
 impl Report {
-	/// Recursively add the origin scope to a report
+	/// Recursively add the origin of a scope to a report
 	fn add_origin<'a>(mut builder: ReportBuilder<'a, (Arc<dyn Source>, Range<usize>)>, cache: &mut HashMap<Arc<dyn Source>, String>, location: Option<&Token>, colors: &ReportColors)
 		-> ReportBuilder<'a, (Arc<dyn Source>, Range<usize>)>  {
 		if let Some(location) = location

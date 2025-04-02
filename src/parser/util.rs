@@ -262,7 +262,7 @@ pub fn parse_paragraph<'u>(
 			unit.parser.parse(unit);
 
 			// Iterate over parsed content
-			let mut iter = scope.content_iter();
+			let mut iter = scope.content_iter(true);
 			while let Some(elem) = iter.next() {
 				// TODO
 			}

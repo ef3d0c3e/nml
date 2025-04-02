@@ -161,7 +161,7 @@ impl<'u> Resolver<'u>
 				let OffloadedUnit::Loaded(unit) = unit else { return };
 
 				unit.get_entry_scope()
-					.content_iter()
+					.content_iter(true)
 					.filter_map(|(scope, elem)| elem.as_linkable().and_then(|link| Some((scope, link))))
 					.filter(|(_, elem)| elem.wants_link())
 					.for_each(|(scope, linkable)| {

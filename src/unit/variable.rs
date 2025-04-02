@@ -87,7 +87,7 @@ impl Element for VariableExpansion {
 		    compiler: &Compiler,
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<crate::parser::reports::Report>> {
-		for (scope, elem) in self.content[0].content_iter()
+		for (scope, elem) in self.content[0].content_iter(false)
 		{
 			elem.compile(scope, compiler, output)?;
 		}

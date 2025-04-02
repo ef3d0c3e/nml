@@ -110,7 +110,10 @@ pub trait ScopeAccessor {
 	fn content_last(&self) -> Option<Rc<dyn Element>>;
 
 	/// Gets an iterator over scope elements
-	fn content_iter(&self) -> ScopeIterator;
+	///
+	/// When recurse is enabled, recursively contained scopes will be iterated.
+	/// Otherwise only the content of the current scope will be iterated.
+	fn content_iter(&self, recurse: bool) -> ScopeIterator;
 
 	/// Add an imported scope to this scope
 	/// This will insert the variables defined within `imported`
@@ -182,7 +185,7 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		return (*self.clone()).borrow().content.last().cloned();
 	}
 
-	fn content_iter(&self) -> ScopeIterator { ScopeIterator::new(self.clone()) }
+	fn content_iter(&self, recurse: bool) -> ScopeIterator { ScopeIterator::new(self.clone(), recurse) }
 
 	fn add_import(&self, imported: Rc<RefCell<Scope>>)
 	{
@@ -202,14 +205,16 @@ pub struct ScopeIterator {
 	scope: Rc<RefCell<Scope>>,
 	position: Vec<(usize, usize)>,
 	depth: Vec<Rc<dyn ContainerElement>>,
+	recurse: bool,
 }
 
 impl ScopeIterator {
-	pub fn new(scope: Rc<RefCell<Scope>>) -> Self {
+	pub fn new(scope: Rc<RefCell<Scope>>, recurse: bool) -> Self {
 		Self {
 			scope,
 			position: vec![(0usize, 0usize); 1],
 			depth: vec![],
+			recurse
 		}
 	}
 }

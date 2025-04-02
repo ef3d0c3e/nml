@@ -1,8 +1,15 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
+use graphviz_rust::print;
+
 use crate::cache::cache::Cache;
+use crate::parser::reports::Report;
+use crate::unit::scope::{Scope, ScopeAccessor};
 use crate::unit::translation::TranslationUnit;
 
+use super::output::CompilerOutput;
 use super::sanitize::Sanitizer;
 
 #[derive(Clone, Copy)]
@@ -50,9 +57,6 @@ impl Compiler {
 
 	/// Gets the output target of this compiler
 	pub fn target(&self) -> Target { self.target }
-
-	/// Gets the cache (a sqlite database) of this compiler
-	pub fn cache(&self) -> Arc<Cache> { self.cache.clone() }
 
 	/* FIXME
 	/// Produces the header for a given document
@@ -112,11 +116,32 @@ impl Compiler {
 	}
 	*/
 
+	pub fn compile_scope(
+		&self,
+		mut output: CompilerOutput,
+		scope: Rc<RefCell<Scope>>
+		) -> CompilerOutput
+	{
+		let mut reports = vec![];
+		for (scope, elem) in scope.content_iter(false)
+		{
+			if let Err(mut reps) = elem.compile(scope, self, &mut output)
+			{
+				reports.extend(reps.drain(..));
+			}
+		}
+		println!("Output={}", output.content());
+		output
+	}
+
 	/// Compiles a document to it's output
 	pub fn compile(
 		&self,
 		unit: &TranslationUnit,
 	) -> ( /* TODO */ ) {
+		CompilerOutput::run_with_processor(&unit.colors(), |output| {
+			self.compile_scope(output, unit.get_entry_scope().to_owned())
+		});
 		/*
 		let borrow = document.content().borrow();
 
