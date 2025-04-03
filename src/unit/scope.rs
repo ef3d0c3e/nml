@@ -250,11 +250,14 @@ impl Iterator for ScopeIterator {
 			let elem = (*self.scope.clone()).borrow().content[self.position[0].1].clone();
 			self.position[0].1 += 1;
 
-			if let Some(container) = elem.clone().as_container() {
+			if self.recurse
+			{
+				if let Some(container) = elem.clone().as_container() {
 
-				self.position.push((0, 0));
-				self.depth
-					.push(container);
+					self.position.push((0, 0));
+					self.depth
+						.push(container);
+				}
 			}
 
 			return Some((self.scope.clone(), elem));

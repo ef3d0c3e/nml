@@ -16,7 +16,6 @@ use super::scope::Scope;
 use super::scope::ScopeAccessor;
 use super::unit::Reference;
 
-
 /// The kind for an element
 ///
 /// The kind of an element determines how it affects paragraphing as well as nested elements.
@@ -52,7 +51,9 @@ pub trait Element: Downcast + core::fmt::Debug {
 
 	/// Gets the original byte range in the unit's source file
 	fn original_location(&self) -> Token {
-		self.location().source().original_range(self.location().range.clone())
+		self.location()
+			.source()
+			.original_range(self.location().range.clone())
 	}
 
 	/// The basic element kind
@@ -112,29 +113,24 @@ pub trait ContainerElement: Element {
 	fn contained(&self) -> &[Rc<RefCell<Scope>>];
 
 	/// Determines the element kind made up by the content of this element
+	/// This is only used when the kind of an element is [`ElemKind::Compound`]
 	fn nested_kind(&self) -> ElemKind {
-		if self.kind() != ElemKind::Compound
-		{
+		if self.kind() != ElemKind::Compound {
 			return self.kind();
 		}
 
-		for contained in self.contained()
-		{
-			for it in contained.content_iter(true)
-			{
-				match it.1.kind()
-				{
+		for contained in self.contained() {
+			for it in contained.content_iter(true) {
+				match it.1.kind() {
 					ElemKind::Block => return ElemKind::Block,
 					ElemKind::Compound => {
-						if let Some(container) = it.1.as_container()
-						{
-							if container.nested_kind() == ElemKind::Block
-							{
-								return ElemKind::Block
+						if let Some(container) = it.1.as_container() {
+							if container.nested_kind() == ElemKind::Block {
+								return ElemKind::Block;
 							}
 						}
-					},
-					_ => {},
+					}
+					_ => {}
 				}
 			}
 		}
@@ -142,10 +138,11 @@ pub trait ContainerElement: Element {
 	}
 }
 
-pub fn nested_kind(elem: Rc<dyn Element>) -> ElemKind
-{
+/// Gets the nested kind of an [`Rc<dyn Element>`] this will either call
+/// [`Element::kind`] or (if the element is a container) [`ContainerElement::nested_kind`].
+pub fn nested_kind(elem: Rc<dyn Element>) -> ElemKind {
 	let Some(container) = elem.clone().as_container() else {
-		return elem.kind()
+		return elem.kind();
 	};
 
 	container.nested_kind()
