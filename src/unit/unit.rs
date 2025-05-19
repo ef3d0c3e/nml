@@ -1,8 +1,6 @@
 use std::{ops::Range, sync::Arc};
 
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use tokio::sync::MutexGuard;
 
 use crate::cache::cache::Cache;
 
@@ -18,6 +16,8 @@ pub struct Reference
 	pub refkey: String,
 	/// Source unit path, relative to the database
 	pub source_unit: String,
+	/// The reference link in it's own unit
+	pub link: String,
 	/// Declaring token of the reference
 	pub token: Range<usize>,
 }
@@ -69,6 +69,7 @@ impl<'u> OffloadedUnit<'u> {
 						refkey: elem.refcount_key().to_string(),
 						source_unit: unit.input_path().to_owned(),
 						token: elem.location().range.clone(),
+						link: elem.get_link().unwrap().to_owned(),
 					})
 			},
 			OffloadedUnit::Unloaded(unit) => cache.query_reference(unit, name.as_ref())

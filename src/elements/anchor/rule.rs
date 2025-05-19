@@ -8,6 +8,7 @@ use crate::unit::translation::TranslationUnit;
 use ariadne::Fmt;
 use regex::Captures;
 use regex::Regex;
+use std::cell::OnceCell;
 use std::rc::Rc;
 
 use crate::parser::reports::Report;
@@ -103,14 +104,15 @@ impl RegexRule for AnchorRule {
 			},
 		};
 
-		let reference = Rc::new(InternalReference {
-			location: token.clone(),
-			refname: anchor_refname.clone(),
-		});
+		let reference = Rc::new(InternalReference::new(
+			token.clone(),
+			anchor_refname.clone(),
+		));
 		let mut elem = Rc::new(Anchor {
 			location: token.clone(),
 			refname: anchor_refname.clone(),
 			reference: reference.clone(),
+			link: OnceCell::default(),
 		});
 		unit.add_content(elem);
 	}

@@ -1,4 +1,6 @@
-use std::{cell::RefCell, rc::{Rc, Weak}};
+use std::{cell::{OnceCell, RefCell}, rc::{Rc, Weak}};
+
+use url::Url;
 
 use crate::{compiler::{compiler::{Compiler, Target}, output::{self, CompilerOutput}}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, references::{InternalReference, Refname}, scope::Scope}};
 
@@ -7,7 +9,8 @@ use crate::{compiler::{compiler::{Compiler, Target}, output::{self, CompilerOutp
 pub struct Anchor {
 	pub(crate) location: Token,
 	pub(crate) refname: Refname,
-	pub(crate) reference: Rc<InternalReference>
+	pub(crate) reference: Rc<InternalReference>,
+	pub(crate) link: OnceCell<String>
 }
 
 impl Element for Anchor {
@@ -30,7 +33,7 @@ impl Element for Anchor {
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {
 		// Get link
-		let link = output.get_internal_link(&self.refname).unwrap();
+		let link = self.get_link().unwrap();
 
 		match compiler.target() {
 			Target::HTML => {
@@ -61,4 +64,15 @@ impl ReferenceableElement for Anchor
     fn refid(&self, _compiler: &Compiler, refid: usize) -> String {
 		refid.to_string()
     }
+
+	fn get_link(&self) -> Option<&String>
+	{
+		self.link.get()
+	}
+
+	fn set_link(&self, url: String)
+	{
+		self.link.set(url)
+			.expect("set_url can only be called once");
+	}
 }

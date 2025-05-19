@@ -1,3 +1,4 @@
+use dashmap::mapref::one::Ref;
 use serde::{Deserialize, Serialize};
 
 use crate::parser::source::Token;
@@ -89,11 +90,15 @@ impl TryFrom<&str> for Refname
 #[derive(Debug)]
 pub struct InternalReference {
 	// Declaration
-	pub location: Token,
+	location: Token,
 	/// Name of the reference
-	pub refname: Refname,
+	refname: Refname,
 }
 
 impl InternalReference {
+	pub fn new(location: Token, refname: Refname) -> Self {
+        Self { location, refname }
+    }
+
 	pub fn name(&self) -> &Refname { &self.refname }
 }

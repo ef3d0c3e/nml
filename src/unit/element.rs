@@ -95,16 +95,22 @@ pub trait ReferenceableElement: Element {
 	/// Gets the refid for a compiler. The refid is some key that can be used from an external
 	/// document to reference this element.
 	fn refid(&self, compiler: &Compiler, refid: usize) -> String;
+
+	/// Internal link of this element, translated in the required compilation target
+	fn get_link(&self) -> Option<&String>;
+
+	/// Sets the link of this element, can only be called once
+	fn set_link(&self, link: String);
 }
 
-/// An element which can be linked to a reference
+/// An element that can link to a reference
 pub trait LinkableElement: Element {
 	/// Refname this element wants to link to
 	fn wants_refname(&self) -> &Refname;
 	/// Gets whether this element requires linking
 	fn wants_link(&self) -> bool;
 	/// Sets the link of this reference
-	fn link(&self, reference: Reference);
+	fn set_link(&self, reference: Reference);
 }
 
 /// An element containing at least one scope

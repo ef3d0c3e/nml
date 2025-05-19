@@ -16,9 +16,9 @@ use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
 use crate::unit::references::Refname;
 use crate::unit::scope::Scope;
+use crate::unit::unit::Reference;
 
 use super::compiler::Target;
-use super::postprocess::PostProcessTask;
 
 #[derive(Debug)]
 struct RcKey<T>(Rc<RefCell<T>>);
@@ -42,13 +42,9 @@ pub struct CompilerOutput {
 	target: Target,
 	/// Paragraph state of the output
 	paragraph: HashSet<RcKey<Scope>>,
-	/// Internal links
-	internal_links: HashMap<String, String>,
 
 	// Holds the content of the resulting document
 	pub(crate) content: String,
-	/// Postprocessing tasks
-	postprocess: Vec<Box<dyn PostProcessTask>>,
 	/// Holds the spawned async tasks. After the work function has completed, these tasks will be
 	/// waited on in order to insert their result in the compiled document
 	tasks: Vec<(usize, JoinHandle<Result<String, Vec<Report>>>)>,
@@ -68,10 +64,8 @@ impl CompilerOutput {
 		let mut output = Self {
 			target,
 			paragraph: HashSet::new(),
-			internal_links: HashMap::new(),
 
 			content: String::default(),
-			postprocess: vec![],
 			tasks: vec![],
 			runtime: tokio::runtime::Builder::new_multi_thread()
 				.worker_threads(8)
@@ -124,12 +118,6 @@ impl CompilerOutput {
 	/// Gets the current position in the content
 	pub fn content_pos(&self) -> usize { return self.content.len() }
 
-	/// Adds a post processing task to this ouput
-	pub fn add_postprocess_task(&mut self, task: Box<dyn PostProcessTask>)
-	{
-		self.postprocess.push(task);
-	}
-
 	/// Adds an async task to the output. The task's result will be appended at the current output position
 	///
 	/// The task is a future that returns it's result in a string, or errors as a Vec of [`Report`]s
@@ -162,43 +150,8 @@ impl CompilerOutput {
 		}
 	}
 
-	/// Gets an internal link name for a given refname
-	/// The given refname has to be an internal refname
-	pub fn get_internal_link(&mut self, refname: &Refname) -> Option<String>
+	pub fn translate_link(&self, reference: &Reference)
 	{
-		let Refname::Internal(name) = refname else { return None };
-		if let Some(internal) = self.internal_links.get(name)
-		{
-			Some(internal.to_owned())
-		}
-		else
-		{
-			match self.target {
-				Target::HTML => {
-					let mut transformed = name.chars()
-						.map(|c| {
-							if c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.'
-							{
-								c
-							}
-							else if c == ' '
-							{
-								'-'
-							}
-							else
-							{
-								'_'
-							}
-						}).collect::<String>();
-					while self.internal_links.iter().find(|(_, value)| **value == transformed).is_some()
-					{
-						transformed.push('_');
-					}
-					self.internal_links.insert(name.to_owned(), transformed);
-				},
-				Target::LATEX => todo!(),
-			}
-			Some(self.internal_links.get(name).unwrap().to_owned())
-		}
+		reference.
 	}
 }

@@ -116,6 +116,7 @@ impl RegexRule for InternalLinkRule {
 					refkey: reference.refcount_key().to_string(),
 					source_unit: unit.reference_key(),
 					token: reference.location().range.clone(),
+					link: reference.get_link().unwrap().to_owned(),
     			})
 		} else { None };
 

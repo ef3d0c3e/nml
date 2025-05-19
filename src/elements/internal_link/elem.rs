@@ -1,6 +1,21 @@
-use std::{cell::{OnceCell, RefCell}, rc::Rc};
+use std::cell::OnceCell;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-use crate::{compiler::{compiler::{Compiler, Target}, output::CompilerOutput, postprocess::ResolveLinkTask}, make_err, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, references::Refname, scope::{Scope, ScopeAccessor}, unit::Reference}};
+use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::Target;
+use crate::compiler::output::CompilerOutput;
+use crate::parser::reports::Report;
+use crate::parser::source::Token;
+use crate::unit::element::ContainerElement;
+use crate::unit::element::ElemKind;
+use crate::unit::element::Element;
+use crate::unit::element::LinkableElement;
+use crate::unit::element::ReferenceableElement;
+use crate::unit::references::Refname;
+use crate::unit::scope::Scope;
+use crate::unit::scope::ScopeAccessor;
+use crate::unit::unit::Reference;
 
 #[derive(Debug)]
 pub struct InternalLink {
@@ -11,33 +26,29 @@ pub struct InternalLink {
 }
 
 impl Element for InternalLink {
-    fn location(&self) -> &Token {
-        &self.location
-    }
+	fn location(&self) -> &Token {
+		&self.location
+	}
 
-    fn kind(&self) -> ElemKind {
-        ElemKind::Compound
-    }
+	fn kind(&self) -> ElemKind {
+		ElemKind::Compound
+	}
 
-    fn element_name(&self) -> &'static str {
+	fn element_name(&self) -> &'static str {
 		"Internal Link"
-    }
+	}
 
-    fn compile(
-		    &self,
-		    _scope: Rc<RefCell<Scope>>,
-		    compiler: &Compiler,
-		    output: &mut CompilerOutput,
-	    ) -> Result<(), Vec<Report>> {
+	fn compile(
+		&self,
+		_scope: Rc<RefCell<Scope>>,
+		compiler: &Compiler,
+		output: &mut CompilerOutput,
+	) -> Result<(), Vec<Report>> {
 		// Get link
-		
 
 		match compiler.target() {
 			Target::HTML => {
-				output.add_content("<a href=\"");
-				todo!();
-				//output.add_postprocess_task(Box::new(ResolveLinkTask::new()));
-				output.add_content("\">");
+				output.add_content(format!("<a href=\"{}\">", 0));
 
 				let display = &self.display[0];
 				for (scope, elem) in display.content_iter(false) {
@@ -49,27 +60,35 @@ impl Element for InternalLink {
 			_ => todo!(""),
 		}
 		Ok(())
-    }
+	}
 
-	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
-	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { Some(self) }
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { Some(self) }
+	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> {
+		None
+	}
+	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> {
+		Some(self)
+	}
+	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> {
+		Some(self)
+	}
 }
 
 impl ContainerElement for InternalLink {
-    fn contained(&self) -> &[Rc<RefCell<Scope>>] {
+	fn contained(&self) -> &[Rc<RefCell<Scope>>] {
 		&self.display
-    }
+	}
 }
 
 impl LinkableElement for InternalLink {
-    fn wants_refname(&self) -> &Refname {
-        &self.refname
-    }
+	fn wants_refname(&self) -> &Refname {
+		&self.refname
+	}
 
-	fn wants_link(&self) -> bool { self.reference.get().is_none() }
+	fn wants_link(&self) -> bool {
+		self.reference.get().is_none()
+	}
 
-    fn link(&self, reference: Reference) {
+	fn set_link(&self, reference: Reference) {
 		self.reference.set(reference).unwrap();
-    }
+	}
 }

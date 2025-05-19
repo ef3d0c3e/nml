@@ -1,19 +1,19 @@
 use core::panic;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use ariadne::Fmt;
-use rusqlite::Connection;
-use tokio::sync::MutexGuard;
-use tower_lsp::lsp_types::WorkspaceFileOperationsServerCapabilities;
+use url::Url;
 
 use crate::cache::cache::Cache;
+use crate::compiler::compiler::Target;
+use crate::compiler::links::get_unique_link;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::unit::references::Refname;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::{TranslationAccessors, TranslationUnit};
-use crate::unit::unit::{DatabaseUnit, OffloadedUnit, Reference};
+use crate::unit::unit::{OffloadedUnit, Reference};
 
 #[derive(Debug)]
 pub enum ResolveError {
@@ -130,6 +130,7 @@ impl<'u> Resolver<'u> {
 					refkey: elem.refcount_key().to_string(),
 					source_unit: unit.input_path().to_owned(),
 					token: elem.location().range.clone(),
+					link: elem.get_link().unwrap().clone(),
 				})
 				.ok_or(ResolveError::NotFound(name.clone())),
 			Refname::External(path, name) => {
@@ -157,8 +158,23 @@ impl<'u> Resolver<'u> {
 	}
 
 	/// Resolves all references and populate reports if required
-	pub fn resolve_all(&self, cache: Arc<Cache>) -> Vec<Report> {
+	pub fn resolve_all(&self, cache: Arc<Cache>, target: Target) -> Vec<Report> {
 		let mut errors = vec![];
+		// Translate referenceable's refnames to links
+		self.units.iter().for_each(|(_, unit)| {
+			let OffloadedUnit::Loaded(unit) = unit else {
+				return;
+			};
+
+			// Used links by this unit
+			let mut used_links = HashSet::default();
+			unit.references().iter().for_each(|(name, reference)| {
+				let link = get_unique_link(target, &mut used_links, name);
+				reference.set_link(link);
+			});
+		});
+
+		// Resolve all links
 		self.units.iter().for_each(|(_, unit)| {
 			let OffloadedUnit::Loaded(unit) = unit else {
 				return;
@@ -171,7 +187,7 @@ impl<'u> Resolver<'u> {
 				.for_each(|(scope, linkable)| {
 					match self.resolve_reference(cache.clone(), unit, linkable.wants_refname()) {
 						// Link reference
-						Ok(link) => linkable.link(link),
+						Ok(link) => linkable.set_link(link),
 						Err(ResolveError::InvalidPath(path)) => {
 							errors.push(make_err!(
 								linkable.location().source(),

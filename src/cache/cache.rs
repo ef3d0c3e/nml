@@ -4,7 +4,6 @@ use std::sync::Arc;
 use rusqlite::params;
 use rusqlite::types::FromSql;
 use rusqlite::Connection;
-use rusqlite::OptionalExtension;
 use rusqlite::ToSql;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
@@ -13,7 +12,6 @@ use crate::compiler::compiler::Target;
 use crate::unit::element::ReferenceableElement;
 use crate::unit::translation::TranslationUnit;
 use crate::unit::unit::DatabaseUnit;
-use crate::unit::unit::OffloadedUnit;
 use crate::unit::unit::Reference;
 
 pub enum CachedError<E> {
@@ -153,7 +151,7 @@ impl Cache {
 				token_end		INTEGER NOT NULL,			
 				type			TEXT NOT NULL,
 				data			TEXT NOT NULL,
-				link			TEXT,
+				link			TEXT NOT NULL,
 				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key)
 			);",
 			(),
@@ -192,7 +190,8 @@ impl Cache {
 
 	/// Export units
 	pub fn export_units<'a, I>(&self, it: I, time_now: u64)
-	where	I: Iterator<Item = &'a TranslationUnit<'a>>
+	where
+		I: Iterator<Item = &'a TranslationUnit<'a>>,
 	{
 		let con = tokio::runtime::Runtime::new()
 			.unwrap()
@@ -206,12 +205,25 @@ impl Cache {
 			)
 			.unwrap();
 
-		for unit in it
-		{
-			stmt.execute(params![
-				unit.input_path(), time_now
-			]).unwrap();
+		for unit in it {
+			stmt.execute(params![unit.input_path(), time_now]).unwrap();
 		}
+	}
+
+	/// Gets a unit's mtime
+	pub fn get_mtime(&self, input_file: &String) -> Option<u64> {
+		let con = tokio::runtime::Runtime::new()
+			.unwrap()
+			.block_on(self.get_connection());
+
+		con.query_row(
+			"SELECT mtime
+		FROM units
+		WHERE input_file = (?1)",
+			[input_file],
+			|row| Ok(row.get_unwrap::<_, u64>(0)),
+		)
+		.ok()
 	}
 
 	/// Export a referenceable unit
@@ -238,7 +250,7 @@ impl Cache {
 			.block_on(self.get_connection());
 
 		con.query_row(
-			"SELECT name, token_start, token_end, type
+			"SELECT name, token_start, token_end, type, link
 		FROM exported_references
 		WHERE name = (?1) AND unit_ref = (?2)",
 			[name, &unit.reference_key],
@@ -248,6 +260,7 @@ impl Cache {
 					refkey: row.get_unwrap(3),
 					source_unit: unit.input_file.clone(),
 					token: row.get_unwrap(1)..row.get_unwrap(2),
+					link: row.get_unwrap(4),
 				})
 			},
 		)

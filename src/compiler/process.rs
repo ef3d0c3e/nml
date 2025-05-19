@@ -102,25 +102,19 @@ impl ProcessQueue {
 				.modified()
 				.map(|e| e.duration_since(UNIX_EPOCH).unwrap().as_secs())
 				.map_err(|err| ProcessError::InputError(input_string.clone(), format!("Unable to query modification time for `{input_string}`: {err}")))?;
+			let prev_mtime = self.cache.get_mtime(&local_path.to_string())
+				.unwrap_or(0);
 
+			if prev_mtime >= mtime
 			{
-				let con = tokio::runtime::Runtime::new()
-					.unwrap()
-					.block_on(self.cache.get_connection());
-				let prev_mtime = con.query_row("SELECT mtime FROM units WHERE input_file = (?1)", [local_path.to_string()], |row| Ok(row.get_unwrap::<_, u64>(0))).unwrap_or(0);
-
-				if prev_mtime >= mtime
-				{
-					println!("Skipping processing of `{local_path}`");
-					continue;
-				}
+				println!("Skipping processing of `{local_path}`");
+				continue;
 			}
-
+			
 			// Create unit
 			let source = Arc::new(SourceFile::new(input_string.clone(), None).unwrap());
-			let mut unit = TranslationUnit::new(local_path, &self.parser, source, false, true);
+			let unit = TranslationUnit::new(local_path, &self.parser, source, false, true);
 
-			// TODO: Check if necessary to compile using mtime
 			let output_file = match &options {
 				ProcessOutputOptions::Directory(dir) => {
 					let basename = match input_string.rfind(|c| c == '.')
@@ -140,19 +134,14 @@ impl ProcessQueue {
 				},
 			};
 
-			// Insert document in unit database
-			let con = tokio::runtime::Runtime::new()
-				.unwrap()
-				.block_on(self.cache.get_connection());
-			con.execute("INSERT OR REPLACE INTO
-				units (input_file, mtime)
-				VALUES (?1, ?2)", (unit.input_path(), 0)).unwrap();
-
 			let Some(unit) = unit.consume(output_file) else { continue };
 			println!("result={:#?}", unit.get_entry_scope());
 
 			processed.push(unit);
 		}
+
+		// Insert with time 0
+		self.cache.export_units(processed.iter(), 0);
 
 		// Resolve all references
 		let colors = ReportColors::with_colors();
@@ -164,20 +153,20 @@ impl ProcessQueue {
 			unit.export_references(self.cache.clone())
 				.expect("Failed to export");
 		}
-		let errors = resolver.resolve_all(self.cache.clone());
+		let errors = resolver.resolve_all(self.cache.clone(), self.compiler.target());
 		if !errors.is_empty()
 		{
 			return Err(ProcessError::LinkError(errors));
 		}
-
-		let time_now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-		self.cache.export_units(processed.iter(), time_now);
 
 		// Compile all units
 		for unit in &processed
 		{
 			self.compiler.compile(unit);
 		}
+
+		let time_now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+		self.cache.export_units(processed.iter(), time_now);
 
 		Ok(vec![])
 	}

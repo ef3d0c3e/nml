@@ -2,6 +2,7 @@ use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -22,6 +23,7 @@ use crate::parser::source::Token;
 use crate::parser::state::ParseMode;
 
 use super::element::Element;
+use super::element::LinkableElement;
 use super::element::ReferenceableElement;
 use super::scope::Scope;
 use super::scope::ScopeAccessor;
@@ -72,6 +74,8 @@ pub struct TranslationUnit<'u> {
 	path: String,
 	/// Exported (internal) references
 	references: HashMap<String, Rc<dyn ReferenceableElement>>,
+	/// Links for internal references, populated at link-time
+	links: HashMap<String, String>,
 	/// Output data extracted from parsing
 	output: OnceCell<UnitOutput>,
 }
@@ -124,6 +128,7 @@ impl<'u> TranslationUnit<'u> {
 			path,
 			reports: Vec::default(),
 			references: HashMap::default(),
+			links: HashMap::default(),
 			output: OnceCell::default(),
 		};
 
@@ -269,6 +274,9 @@ pub trait TranslationAccessors {
 
 	/// Finds an internal reference, with name `name`, declared in this document
 	fn get_reference<S: AsRef<str>>(&self, refname: S) -> Option<Rc<dyn ReferenceableElement>>;
+
+	/// Returns the hashmap containing all referenceables in this unit
+	fn references(&self) -> &HashMap<String, Rc<dyn ReferenceableElement>>;
 }
 
 impl TranslationAccessors for TranslationUnit<'_> {
@@ -282,11 +290,16 @@ impl TranslationAccessors for TranslationUnit<'_> {
 
 	fn add_reference(&mut self, elem: Rc<dyn ReferenceableElement>)
 	{
-		self.references.insert(elem.reference().refname.to_string(), elem);
+		self.references.insert(elem.reference().name().to_string(), elem);
 	}
 
 	fn get_reference<S: AsRef<str>>(&self, name: S) -> Option<Rc<dyn ReferenceableElement>>
 	{
 		self.references.get(name.as_ref()).cloned()
+	}
+
+	fn references(&self) -> &HashMap<String, Rc<dyn ReferenceableElement>>
+	{
+		&self.references
 	}
 }
