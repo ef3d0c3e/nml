@@ -9,6 +9,7 @@ use rusqlite::params;
 use rusqlite::Connection;
 use tokio::sync::MutexGuard;
 
+use crate::cache::cache::Cache;
 use crate::lsp::data::LangServerData;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelHolder;
@@ -249,27 +250,13 @@ impl<'u> TranslationUnit<'u> {
 	}
 
 	/// Export all references of this [`TranslationUnit`]
-	pub fn export_references<'con>(&self, con: &MutexGuard<'con, Connection>) -> Result<(), String>
+	pub fn export_references(&self, cache: Arc<Cache>) -> Result<(), String>
 	{
 		let output = self.output.get().unwrap();
-
 		println!("out={output:#?}");
-		con.execute("INSERT OR REPLACE INTO
-			referenceable_units (reference_key, input_file, output_file)
-			VALUES (?1, ?2, ?3)", (self.reference_key(), &output.input_file, &output.output_file)).unwrap();
 
-		let mut stmt = con.prepare("INSERT OR REPLACE INTO
-			exported_references (name, unit_ref, token_start, token_end, type, data)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6 );").unwrap();
-		for (name, reference) in &self.references
-		{
-			// FIXME: Proper type-erased serialization for referneceables
-			let serialized = "TODO";
-			let range = reference.original_location().range;
-			stmt.execute(params![name, self.reference_key(), range.start, range.end, reference.refcount_key(), serialized])
-				.map_err(|err| format!("Failed to insert reference ({name}, {serialized}, {0}): {err:#?}", self.reference_key()))?;
-		}
-		Ok(())
+		cache.export_ref_unit(&self, &output.input_file, &output.output_file);
+		cache.export_references(&self.reference_key(), self.references.iter())
 	}
 }
 

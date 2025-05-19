@@ -38,6 +38,7 @@ impl ProcessQueue {
 	pub fn new(target: Target, db: Option<&str>, inputs: Vec<PathBuf>) -> Self
 	{
 		let cache = Arc::new(Cache::new(db).unwrap());
+		cache.setup_tables();
 		let project_path = db
 			.map(|s| { 
 				let mut buf = Path::new(s).to_path_buf();
@@ -73,17 +74,6 @@ impl ProcessQueue {
 				}
 			},
 		};
-
-		// Init cache
-		let con = tokio::runtime::Runtime::new()
-			.unwrap()
-			.block_on(self.cache.get_connection());
-		con.execute(
-			"CREATE TABLE IF NOT EXISTS units(
-				input_file		TEXT PRIMARY KEY,
-				mtime			INTEGER NOT NULL
-			);", ()).unwrap();
-		drop(con);
 
 		let mut processed = vec![];
 		for input in &self.inputs {
@@ -164,33 +154,24 @@ impl ProcessQueue {
 			processed.push(unit);
 		}
 
-		let con = tokio::runtime::Runtime::new()
-			.unwrap()
-			.block_on(self.cache.get_connection());
-
 		// Resolve all references
 		let colors = ReportColors::with_colors();
-		let resolver = Resolver::new(&colors, &con, &processed)
+		let resolver = Resolver::new(&colors, self.cache.clone(), &processed)
 			.map_err(|err| ProcessError::LinkError(vec![err]))?;
 		for unit in &processed
 		{
 			// Output references
-			unit.export_references(&con).expect("Failed to export");
+			unit.export_references(self.cache.clone())
+				.expect("Failed to export");
 		}
-		let errors = resolver.resolve_all(&con);
+		let errors = resolver.resolve_all(self.cache.clone());
 		if !errors.is_empty()
 		{
 			return Err(ProcessError::LinkError(errors));
 		}
 
 		let time_now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-		for unit in &processed
-		{
-			// Insert document in unit database
-			con.execute("INSERT OR REPLACE INTO
-				units (input_file, mtime)
-				VALUES (?1, ?2)", (unit.input_path(), time_now)).unwrap();
-		}
+		self.cache.export_units(processed.iter(), time_now);
 
 		// Compile all units
 		for unit in &processed

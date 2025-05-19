@@ -1,8 +1,10 @@
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tokio::sync::MutexGuard;
+
+use crate::cache::cache::Cache;
 
 use super::{translation::{TranslationAccessors, TranslationUnit}};
 
@@ -57,7 +59,7 @@ impl<'u> OffloadedUnit<'u> {
 
 	/// Find reference named `name` in the unit
 	/// This returns an owned value.
-	pub fn query_reference<'con, S: AsRef<str>>(&self, con: &MutexGuard<'con, Connection>, name: S) -> Option<Reference>
+	pub fn query_reference<S: AsRef<str>>(&self, cache: Arc<Cache>, name: S) -> Option<Reference>
 	{
 		match self {
 			OffloadedUnit::Loaded(unit) => {
@@ -69,18 +71,7 @@ impl<'u> OffloadedUnit<'u> {
 						token: elem.location().range.clone(),
 					})
 			},
-			OffloadedUnit::Unloaded(unit) => {
-				con.query_row("SELECT name, token_start, token_end, type
-					FROM exported_references
-					WHERE name = (?1) AND unit_ref = (?2)", [name.as_ref(), &unit.reference_key], |row| {
-						Ok(Reference {
-							refname: row.get_unwrap(0),
-							refkey: row.get_unwrap(3),
-							source_unit: self.input_path(),
-							token: row.get_unwrap(1)..row.get_unwrap(2),
-						})
-					}).ok()
-			},
+			OffloadedUnit::Unloaded(unit) => cache.query_reference(unit, name.as_ref())
 		}
 	}
 }

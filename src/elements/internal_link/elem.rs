@@ -1,6 +1,6 @@
 use std::{cell::{OnceCell, RefCell}, rc::Rc};
 
-use crate::{compiler::{compiler::{Compiler, Target}, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, references::Refname, scope::{Scope, ScopeAccessor}, unit::Reference}};
+use crate::{compiler::{compiler::{Compiler, Target}, output::CompilerOutput, postprocess::ResolveLinkTask}, make_err, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, references::Refname, scope::{Scope, ScopeAccessor}, unit::Reference}};
 
 #[derive(Debug)]
 pub struct InternalLink {
@@ -30,13 +30,14 @@ impl Element for InternalLink {
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {
 		// Get link
-		let link = output.get_link(&self.refname);
+		
 
 		match compiler.target() {
 			Target::HTML => {
-				output.add_content(format!(
-						"<a href=\"#{link}\">",
-				));
+				output.add_content("<a href=\"");
+				todo!();
+				//output.add_postprocess_task(Box::new(ResolveLinkTask::new()));
+				output.add_content("\">");
 
 				let display = &self.display[0];
 				for (scope, elem) in display.content_iter(false) {

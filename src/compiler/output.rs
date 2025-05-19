@@ -17,8 +17,8 @@ use crate::parser::reports::ReportColors;
 use crate::unit::references::Refname;
 use crate::unit::scope::Scope;
 
-use super::compiler::Compiler;
 use super::compiler::Target;
+use super::postprocess::PostProcessTask;
 
 #[derive(Debug)]
 struct RcKey<T>(Rc<RefCell<T>>);
@@ -47,7 +47,10 @@ pub struct CompilerOutput {
 
 	// Holds the content of the resulting document
 	pub(crate) content: String,
-	/// Holds the spawned async tasks. After the work function has completed, these tasks will be waited on in order to insert their result in the compiled document
+	/// Postprocessing tasks
+	postprocess: Vec<Box<dyn PostProcessTask>>,
+	/// Holds the spawned async tasks. After the work function has completed, these tasks will be
+	/// waited on in order to insert their result in the compiled document
 	tasks: Vec<(usize, JoinHandle<Result<String, Vec<Report>>>)>,
 	/// The tasks runtime
 	runtime: tokio::runtime::Runtime,
@@ -66,8 +69,9 @@ impl CompilerOutput {
 			target,
 			paragraph: HashSet::new(),
 			internal_links: HashMap::new(),
-			content: String::default(),
 
+			content: String::default(),
+			postprocess: vec![],
 			tasks: vec![],
 			runtime: tokio::runtime::Builder::new_multi_thread()
 				.worker_threads(8)
@@ -117,6 +121,15 @@ impl CompilerOutput {
 	/// Appends content to the output
 	pub fn add_content<S: AsRef<str>>(&mut self, s: S) { self.content.push_str(s.as_ref()); }
 
+	/// Gets the current position in the content
+	pub fn content_pos(&self) -> usize { return self.content.len() }
+
+	/// Adds a post processing task to this ouput
+	pub fn add_postprocess_task(&mut self, task: Box<dyn PostProcessTask>)
+	{
+		self.postprocess.push(task);
+	}
+
 	/// Adds an async task to the output. The task's result will be appended at the current output position
 	///
 	/// The task is a future that returns it's result in a string, or errors as a Vec of [`Report`]s
@@ -151,12 +164,12 @@ impl CompilerOutput {
 
 	/// Gets an internal link name for a given refname
 	/// The given refname has to be an internal refname
-	pub fn get_link(&mut self, refname: &Refname) -> String
+	pub fn get_internal_link(&mut self, refname: &Refname) -> Option<String>
 	{
-		let Refname::Internal(name) = refname else { panic!("Expected internal refname") };
+		let Refname::Internal(name) = refname else { return None };
 		if let Some(internal) = self.internal_links.get(name)
 		{
-			internal.to_owned()
+			Some(internal.to_owned())
 		}
 		else
 		{
@@ -185,7 +198,7 @@ impl CompilerOutput {
 				},
 				Target::LATEX => todo!(),
 			}
-			self.internal_links.get(name).unwrap().to_owned()
+			Some(self.internal_links.get(name).unwrap().to_owned())
 		}
 	}
 }

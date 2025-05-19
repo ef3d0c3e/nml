@@ -30,7 +30,7 @@ impl Element for Anchor {
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {
 		// Get link
-		let link = output.get_link(&self.refname);
+		let link = output.get_internal_link(&self.refname).unwrap();
 
 		match compiler.target() {
 			Target::HTML => {

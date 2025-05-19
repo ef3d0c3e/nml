@@ -4,8 +4,6 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use tokio::sync::watch::Ref;
-
 use crate::parser::source::Source;
 use crate::parser::state::{ParseMode, ParserState};
 
