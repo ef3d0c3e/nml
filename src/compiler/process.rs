@@ -178,6 +178,7 @@ impl ProcessQueue {
 		let colors = ReportColors::with_colors();
 		let resolver = Resolver::new(&colors, self.cache.clone(), &processed)
 			.map_err(|err| ProcessError::LinkError(vec![err]))?;
+		resolver.resolve_links(self.cache.clone(), self.compiler.target());
 		for (idx, unit) in processed.iter().enumerate()
 		{
 			output_message(ProcessQueueMessage::Resolving(unit), (1 + idx) as f64 / processed.len() as f64);
@@ -185,7 +186,7 @@ impl ProcessQueue {
 			unit.export_references(self.cache.clone())
 				.expect("Failed to export");
 		}
-		let errors = resolver.resolve_all(self.cache.clone(), self.compiler.target());
+		let errors = resolver.resolve_references(self.cache.clone(), self.compiler.target());
 		if !errors.is_empty()
 		{
 			return Err(ProcessError::LinkError(errors));

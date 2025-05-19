@@ -3,7 +3,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use ariadne::Fmt;
-use url::Url;
 
 use crate::cache::cache::Cache;
 use crate::compiler::compiler::Target;
@@ -162,11 +161,10 @@ impl<'u> Resolver<'u> {
 			Refname::Bibliography(path, name) => todo!(),
 		}
 	}
-
-	/// Resolves all references and populate reports if required
-	pub fn resolve_all(&self, cache: Arc<Cache>, target: Target) -> Vec<Report> {
-		let mut errors = vec![];
-		// Translate referenceable's refnames to links
+	
+	/// Resolve links for internal references
+	pub fn resolve_links(&self, cache: Arc<Cache>, target: Target)
+	{
 		self.units.iter().for_each(|(_, unit)| {
 			let OffloadedUnit::Loaded(unit) = unit else {
 				return;
@@ -179,8 +177,11 @@ impl<'u> Resolver<'u> {
 				reference.set_link(link);
 			});
 		});
+	}
 
-		// Resolve all links
+	/// Resolves all references and populate reports if required
+	pub fn resolve_references(&self, cache: Arc<Cache>, target: Target) -> Vec<Report> {
+		let mut errors = vec![];
 		self.units.iter().for_each(|(_, unit)| {
 			let OffloadedUnit::Loaded(unit) = unit else {
 				return;

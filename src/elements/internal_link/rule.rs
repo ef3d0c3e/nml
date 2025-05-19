@@ -107,19 +107,6 @@ impl RegexRule for InternalLinkRule {
 			}
 		};
 
-		// Attempt to resolve reference at parse time
-		let reference = if let Refname::Internal(name) = &link_refname
-		{
-			unit.get_reference(&name)
-				.map(|reference| Reference {
-					refname: name.clone(),
-					refkey: reference.refcount_key().to_string(),
-					source_unit: unit.reference_key(),
-					token: reference.location().range.clone(),
-					link: reference.get_link().unwrap().to_owned(),
-    			})
-		} else { None };
-
 		// Custom display, if '[' present
 		let display = if captures.get(3).is_some()
 		{
@@ -184,8 +171,7 @@ impl RegexRule for InternalLinkRule {
 			location: token.clone(),
 			refname: link_refname,
 			display: vec![display],
-			reference: reference.map(|reference| OnceCell::from((reference.link.clone(), reference)))
-				.unwrap_or(OnceCell::new()),
+			reference: OnceCell::new(),
 		}));
 	}
 }

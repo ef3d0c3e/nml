@@ -278,8 +278,8 @@ impl Cache {
 		let mut stmt = con
 			.prepare(
 				"INSERT OR REPLACE
-			INTO exported_references (name, unit_ref, token_start, token_end, type, data)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6 );",
+			INTO exported_references (name, unit_ref, token_start, token_end, type, data, link)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);",
 			)
 			.unwrap();
 		for (name, reference) in refs {
@@ -292,7 +292,8 @@ impl Cache {
 				range.start,
 				range.end,
 				reference.refcount_key(),
-				serialized
+				serialized,
+				reference.get_link().unwrap().clone(),
 			])
 			.map_err(|err| {
 				format!(
