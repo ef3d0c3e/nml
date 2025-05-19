@@ -6,6 +6,7 @@ use std::hash::Hash;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use graphviz_rust::print;
 use rusqlite::params;
 use rusqlite::Connection;
 use tokio::sync::MutexGuard;
@@ -74,8 +75,6 @@ pub struct TranslationUnit<'u> {
 	path: String,
 	/// Exported (internal) references
 	references: HashMap<String, Rc<dyn ReferenceableElement>>,
-	/// Links for internal references, populated at link-time
-	links: HashMap<String, String>,
 	/// Output data extracted from parsing
 	output: OnceCell<UnitOutput>,
 }
@@ -128,7 +127,6 @@ impl<'u> TranslationUnit<'u> {
 			path,
 			reports: Vec::default(),
 			references: HashMap::default(),
-			links: HashMap::default(),
 			output: OnceCell::default(),
 		};
 
@@ -226,10 +224,10 @@ impl<'u> TranslationUnit<'u> {
 			}
 		}
 
-		let output_file = self.get_scope().get_variable(&VariableName("compiler.output".into()));
+		let output_file = self.get_scope().get_variable(&VariableName("nml.output_file".into()));
 		let output = UnitOutput {
 			input_file: self.path.clone(),
-			output_file: output_file.map(|(var, _)| "TODO".to_string()),
+			output_file: output_file.map(|(var, _)| var.to_string()),
 		};
 		self.output.set(output).unwrap();
 
@@ -245,6 +243,13 @@ impl<'u> TranslationUnit<'u> {
 	pub fn input_path(&self) -> &String {
 		&self.path
 	}
+	
+	/// Gets the output path for this unit
+	pub fn output_path(&self) -> Option<&String>
+	{
+		self.output.get()
+			.map(|out| out.output_file.as_ref().unwrap())
+	}
 
 	pub fn reference_key(&self) -> String {
 		let varname = VariableName::try_from("nml.reference_key").unwrap();
@@ -258,7 +263,6 @@ impl<'u> TranslationUnit<'u> {
 	pub fn export_references(&self, cache: Arc<Cache>) -> Result<(), String>
 	{
 		let output = self.output.get().unwrap();
-		println!("out={output:#?}");
 
 		cache.export_ref_unit(&self, &output.input_file, &output.output_file);
 		cache.export_references(&self.reference_key(), self.references.iter())

@@ -126,7 +126,6 @@ impl Compiler {
 		let mut reports = vec![];
 		for (scope, elem) in scope.content_iter(false)
 		{
-			println!("Compiling={elem:#?}");
 			if nested_kind(elem.clone()) == ElemKind::Inline && !output.in_paragraph(&scope)
 			{
 				match self.target

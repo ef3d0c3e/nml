@@ -50,10 +50,18 @@ impl<'u> OffloadedUnit<'u> {
 	}
 
 	/// Gets the unit's input path
-	pub fn input_path(&self) -> String {
+	pub fn input_path(&self) -> &String {
 		match self {
-			OffloadedUnit::Loaded(unit) => unit.input_path().to_owned(),
-			OffloadedUnit::Unloaded(unit) => unit.input_file.clone(),
+			OffloadedUnit::Loaded(unit) => &unit.input_path(),
+			OffloadedUnit::Unloaded(unit) => &unit.input_file,
+		}
+	}
+
+	/// Gets the unit's output path
+	pub fn output_path(&self) -> &String {
+		match self {
+			OffloadedUnit::Loaded(unit) => unit.output_path().as_ref().unwrap(),
+			OffloadedUnit::Unloaded(unit) => unit.output_file.as_ref().unwrap()
 		}
 	}
 

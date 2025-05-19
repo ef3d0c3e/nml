@@ -7,7 +7,7 @@ use url::Url;
 
 use crate::cache::cache::Cache;
 use crate::compiler::compiler::Target;
-use crate::compiler::links::get_unique_link;
+use crate::compiler::links::{get_unique_link, translate_reference};
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::unit::references::Refname;
@@ -45,7 +45,6 @@ impl<'u> Resolver<'u> {
 
 		// Add provided units
 		for loaded in provided {
-			println!("loaded.input_path={:#?}", loaded.input_path());
 			match units
 				.insert(
 					loaded.reference_key().to_owned(),
@@ -119,23 +118,27 @@ impl<'u> Resolver<'u> {
 	pub fn resolve_reference(
 		&self,
 		cache: Arc<Cache>,
+		target: Target,
 		unit: &TranslationUnit,
 		refname: &Refname,
-	) -> Result<Reference, ResolveError> {
+	) -> Result<(String, Reference), ResolveError> {
 		match refname {
 			Refname::Internal(name) => unit
 				.get_reference(&name)
-				.map(|elem| Reference {
-					refname: name.to_owned(),
-					refkey: elem.refcount_key().to_string(),
-					source_unit: unit.input_path().to_owned(),
-					token: elem.location().range.clone(),
-					link: elem.get_link().unwrap().clone(),
+				.map(|elem| {
+					let reference = Reference {
+						refname: name.to_owned(),
+						refkey: elem.refcount_key().to_string(),
+						source_unit: unit.input_path().to_owned(),
+						token: elem.location().range.clone(),
+						link: elem.get_link().unwrap().to_owned(),
+					};
+					(translate_reference(target, &OffloadedUnit::Loaded(unit), &OffloadedUnit::Loaded(unit), &reference), reference) 
 				})
 				.ok_or(ResolveError::NotFound(name.clone())),
 			Refname::External(path, name) => {
 				if !path.is_empty()
-				// Query from give unit path
+				// Query from given unit path
 				{
 					let provider = self
 						.units
@@ -143,13 +146,16 @@ impl<'u> Resolver<'u> {
 						.ok_or(ResolveError::InvalidPath(path.to_owned()))?;
 					provider
 						.query_reference(cache.clone(), &name)
+						.map(|reference| (translate_reference(target, provider, &OffloadedUnit::Loaded(unit), &reference), reference))
 						.ok_or(ResolveError::NotFound(refname.to_string()))
 				} else
 				// Search in all units
 				{
 					self.units
 						.iter()
-						.find_map(|(_, unit)| unit.query_reference(cache.clone(), &name))
+						.find_map(|(_, unit)| unit.query_reference(cache.clone(), &name)
+							.and_then(|reference| Some((reference, unit))))
+						.map(|(reference, provider)| (translate_reference(target, provider, &OffloadedUnit::Loaded(unit), &reference), reference))
 						.ok_or(ResolveError::NotFound(name.to_owned()))
 				}
 			}
@@ -185,9 +191,9 @@ impl<'u> Resolver<'u> {
 				.filter_map(|(scope, elem)| elem.as_linkable().and_then(|link| Some((scope, link))))
 				.filter(|(_, elem)| elem.wants_link())
 				.for_each(|(scope, linkable)| {
-					match self.resolve_reference(cache.clone(), unit, linkable.wants_refname()) {
+					match self.resolve_reference(cache.clone(), target, unit, linkable.wants_refname()) {
 						// Link reference
-						Ok(link) => linkable.set_link(link),
+						Ok((link, reference)) => linkable.set_link(reference, link),
 						Err(ResolveError::InvalidPath(path)) => {
 							errors.push(make_err!(
 								linkable.location().source(),

@@ -110,7 +110,7 @@ pub trait LinkableElement: Element {
 	/// Gets whether this element requires linking
 	fn wants_link(&self) -> bool;
 	/// Sets the link of this reference
-	fn set_link(&self, reference: Reference);
+	fn set_link(&self, reference: Reference, link: String);
 }
 
 /// An element containing at least one scope

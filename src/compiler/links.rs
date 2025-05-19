@@ -1,4 +1,6 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::format};
+
+use crate::unit::unit::{OffloadedUnit, Reference};
 
 use super::compiler::Target;
 
@@ -34,4 +36,20 @@ pub fn get_unique_link(
 	}
 	used_links.insert(transformed.clone());
 	transformed
+}
+
+/// Translate link from source unit to target unit
+pub fn translate_reference(target: Target, from: &OffloadedUnit, to: &OffloadedUnit, reference: &Reference) -> String
+{
+	match target {
+    Target::HTML => {
+		if from.output_path() == to.output_path()
+		{ format!("#{}", reference.link) }
+		else
+		{
+			format!("{}#{}", from.output_path(), reference.link)
+		}
+	},
+    _ => todo!(),
+}	
 }

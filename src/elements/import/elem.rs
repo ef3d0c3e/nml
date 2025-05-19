@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, scope::Scope}};
+use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, scope::{Scope, ScopeAccessor}}};
 
 
 #[derive(Debug)]
@@ -29,7 +29,13 @@ impl Element for Import {
 		    compiler: &Compiler,
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {
-        todo!()
+		for scope in self.content.iter().cloned()
+		{
+			for (scope, elem) in scope.content_iter(false) {
+				elem.compile(scope, compiler, output)?
+			}
+		}
+		Ok(())
     }
 
 	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }

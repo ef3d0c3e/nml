@@ -151,7 +151,7 @@ impl Cache {
 				token_end		INTEGER NOT NULL,			
 				type			TEXT NOT NULL,
 				data			TEXT NOT NULL,
-				link			TEXT NOT NULL,
+				link			TEXT,
 				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key)
 			);",
 			(),

@@ -167,7 +167,6 @@ impl Parser {
 			// Trigger rule
 			cursor = rule.on_match(unit, &next_cursor, rule_data);
 		}
-		println!("done");
 		// Add leftover as text
 		let end_cursor = cursor.at(cursor.source().content().len());
 		self.add_text(unit, cursor..end_cursor.clone());

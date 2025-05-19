@@ -14,7 +14,6 @@ use tokio::task::JoinHandle;
 
 use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
-use crate::unit::references::Refname;
 use crate::unit::scope::Scope;
 use crate::unit::unit::Reference;
 
@@ -148,10 +147,5 @@ impl CompilerOutput {
 		{
 			self.paragraph.remove(&RcKey(scope.to_owned()));
 		}
-	}
-
-	pub fn translate_link(&self, reference: &Reference)
-	{
-		reference.
 	}
 }

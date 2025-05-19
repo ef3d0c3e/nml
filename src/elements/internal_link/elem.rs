@@ -22,7 +22,7 @@ pub struct InternalLink {
 	pub(crate) location: Token,
 	pub(crate) refname: Refname,
 	pub(crate) display: Vec<Rc<RefCell<Scope>>>,
-	pub(crate) reference: OnceCell<Reference>,
+	pub(crate) reference: OnceCell<(String, Reference)>,
 }
 
 impl Element for InternalLink {
@@ -48,7 +48,7 @@ impl Element for InternalLink {
 
 		match compiler.target() {
 			Target::HTML => {
-				output.add_content(format!("<a href=\"{}\">", 0));
+				output.add_content(format!("<a href=\"{}\">", self.reference.get().unwrap().0));
 
 				let display = &self.display[0];
 				for (scope, elem) in display.content_iter(false) {
@@ -88,7 +88,7 @@ impl LinkableElement for InternalLink {
 		self.reference.get().is_none()
 	}
 
-	fn set_link(&self, reference: Reference) {
-		self.reference.set(reference).unwrap();
+	fn set_link(&self, reference: Reference, link: String) {
+		self.reference.set((link, reference)).unwrap();
 	}
 }

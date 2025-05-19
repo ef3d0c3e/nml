@@ -184,7 +184,8 @@ impl RegexRule for InternalLinkRule {
 			location: token.clone(),
 			refname: link_refname,
 			display: vec![display],
-			reference: reference.map(OnceCell::from).unwrap_or(OnceCell::new()),
+			reference: reference.map(|reference| OnceCell::from((reference.link.clone(), reference)))
+				.unwrap_or(OnceCell::new()),
 		}));
 	}
 }
