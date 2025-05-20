@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -152,7 +154,20 @@ impl Cache {
 				type			TEXT NOT NULL,
 				data			TEXT NOT NULL,
 				link			TEXT,
-				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key)
+				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key) ON DELETE CASCADE
+			);",
+			(),
+		)
+		.unwrap();
+		// Table containing unit dependencies
+		con.execute(
+			"CREATE TABLE IF NOT EXISTS dependencies(
+				depends_for		TEXT NOT NULL,
+				unit_ref		TEXT NOT NULL,
+				depends_on		TEXT NOT NULL,
+				PRIMARY KEY(depends_for, unit_ref),
+				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key) ON DELETE CASCADE
+				FOREIGN KEY(depends_on) REFERENCES referenceable_units(reference_key) ON DELETE CASCADE
 			);",
 			(),
 		)
@@ -197,7 +212,7 @@ impl Cache {
 			.unwrap()
 			.block_on(self.get_connection());
 
-		let mut stmt = con
+		let mut insert_stmt = con
 			.prepare(
 				"INSERT OR REPLACE
 			INTO units (input_file, mtime)
@@ -206,7 +221,7 @@ impl Cache {
 			.unwrap();
 
 		for unit in it {
-			stmt.execute(params![unit.input_path(), time_now]).unwrap();
+			insert_stmt.execute(params![unit.input_path(), time_now]).unwrap();
 		}
 	}
 
@@ -232,6 +247,13 @@ impl Cache {
 			.unwrap()
 			.block_on(self.get_connection());
 
+		// Delete previous unit-related data
+		con.execute(
+			"DELETE
+			FROM referenceable_units
+			WHERE reference_key = (?1);",
+			[unit.reference_key()]).unwrap();
+		// Insert new unit
 		con.execute(
 			"INSERT OR REPLACE
 		INTO referenceable_units
@@ -305,36 +327,31 @@ impl Cache {
 		Ok(())
 	}
 
-	/// Gets the link of a reference
-	pub fn get_reference_link(&self, reference: &Reference, target: Target) -> Option<String> {
-		let con = tokio::runtime::Runtime::new()
+	pub fn export_dependencies(&self, deps: &HashMap<String, HashMap<String, Vec<String>>>)
+	{
+		let mut con = tokio::runtime::Runtime::new()
 			.unwrap()
 			.block_on(self.get_connection());
 
-		let unit = con
-			.query_row(
-				"SELECT output_file
-			FROM referenceable_units
-			WHERE reference_key = (?1)",
-				[&reference.source_unit],
-				|row| Ok(row.get_unwrap::<_, String>(0)),
-			)
-			.ok()?;
-		let link = con
-			.query_row(
-				"SELECT link
-			FROM exported_references
-			WHERE
-				name = (?1)
-				unit_ref = (?2)",
-				(&reference.refname, &reference.source_unit),
-				|row| Ok(row.get_unwrap::<_, String>(0)),
-			)
-			.ok()?;
-
-		match target {
-			Target::HTML => Some(format!("{unit}#{link}")),
-			_ => todo!(),
+		let tx = con.transaction().unwrap();
+		let mut export_stmt = tx.prepare(
+			"INSERT
+			INTO dependencies (unit_ref, depends_on, depends_for)
+			VALUES (?1, ?2, ?3);"
+			).unwrap();
+		// Export new dependencies
+		for (unit_ref, map) in deps
+		{
+			for (depends_on, list) in map
+			{
+				for depends_for in list
+				{
+					export_stmt.execute([unit_ref, depends_on, depends_for])
+						.unwrap();
+				}
+			}
 		}
+		drop(export_stmt);
+		tx.commit().unwrap();
 	}
 }

@@ -158,7 +158,7 @@ impl RegexRule for InternalLinkRule {
 		{
 			let display_source = token.to_source(format!("Internal link display for `{}`", link_refname.to_string()));
 			// Add content to scope
-			unit.with_child(display_source.clone(), ParseMode::default(), true, |unit, scope| {
+			unit.with_child(display_source.clone(), ParseMode::default(), true, |_unit, scope| {
 				scope.add_content(Rc::new(Text{
 					location: display_source.into(),
 					content: link_refname.to_string(),

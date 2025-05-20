@@ -129,6 +129,7 @@ impl Parser {
 		}
 	}
 
+	/// Adds content from `range` as text to `unit`
 	fn add_text<'u>(&'u self, unit: &mut TranslationUnit<'u>, range: Range<Cursor>) {
 		let token: Token = (&range).into();
 		let mut content = token.content().chars().fold(String::default(), {

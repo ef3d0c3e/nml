@@ -1,18 +1,23 @@
 use core::panic;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use ariadne::Fmt;
 
 use crate::cache::cache::Cache;
 use crate::compiler::compiler::Target;
-use crate::compiler::links::{get_unique_link, translate_reference};
+use crate::compiler::links::get_unique_link;
+use crate::compiler::links::translate_reference;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::unit::references::Refname;
 use crate::unit::scope::ScopeAccessor;
-use crate::unit::translation::{TranslationAccessors, TranslationUnit};
-use crate::unit::unit::{OffloadedUnit, Reference};
+use crate::unit::translation::TranslationAccessors;
+use crate::unit::translation::TranslationUnit;
+use crate::unit::unit::OffloadedUnit;
+use crate::unit::unit::Reference;
 
 #[derive(Debug)]
 pub enum ResolveError {
@@ -36,7 +41,8 @@ impl<'u> Resolver<'u> {
 		cache.load_units(|unit| {
 			if units
 				.insert(unit.reference_key.clone(), OffloadedUnit::Unloaded(unit))
-				.is_some() {
+				.is_some()
+			{
 				panic!("Duplicate units in database");
 			}
 			Result::<(), ()>::Ok(())
@@ -120,7 +126,7 @@ impl<'u> Resolver<'u> {
 		target: Target,
 		unit: &TranslationUnit,
 		refname: &Refname,
-	) -> Result<(String, Reference), ResolveError> {
+	) -> Result<(String, Reference, String), ResolveError> {
 		match refname {
 			Refname::Internal(name) => unit
 				.get_reference(&name)
@@ -132,7 +138,16 @@ impl<'u> Resolver<'u> {
 						token: elem.location().range.clone(),
 						link: elem.get_link().unwrap().to_owned(),
 					};
-					(translate_reference(target, &OffloadedUnit::Loaded(unit), &OffloadedUnit::Loaded(unit), &reference), reference) 
+					(
+						translate_reference(
+							target,
+							&OffloadedUnit::Loaded(unit),
+							&OffloadedUnit::Loaded(unit),
+							&reference,
+						),
+						reference,
+						unit.reference_key(),
+					)
 				})
 				.ok_or(ResolveError::NotFound(name.clone())),
 			Refname::External(path, name) => {
@@ -145,26 +160,49 @@ impl<'u> Resolver<'u> {
 						.ok_or(ResolveError::InvalidPath(path.to_owned()))?;
 					provider
 						.query_reference(cache.clone(), &name)
-						.map(|reference| (translate_reference(target, provider, &OffloadedUnit::Loaded(unit), &reference), reference))
+						.map(|reference| {
+							(
+								translate_reference(
+									target,
+									provider,
+									&OffloadedUnit::Loaded(unit),
+									&reference,
+								),
+								reference,
+								provider.reference_key(),
+							)
+						})
 						.ok_or(ResolveError::NotFound(refname.to_string()))
 				} else
 				// Search in all units
 				{
 					self.units
 						.iter()
-						.find_map(|(_, unit)| unit.query_reference(cache.clone(), &name)
-							.and_then(|reference| Some((reference, unit))))
-						.map(|(reference, provider)| (translate_reference(target, provider, &OffloadedUnit::Loaded(unit), &reference), reference))
+						.find_map(|(_, unit)| {
+							unit.query_reference(cache.clone(), &name)
+								.and_then(|reference| Some((reference, unit)))
+						})
+						.map(|(reference, provider)| {
+							(
+								translate_reference(
+									target,
+									provider,
+									&OffloadedUnit::Loaded(unit),
+									&reference,
+								),
+								reference,
+								provider.reference_key(),
+							)
+						})
 						.ok_or(ResolveError::NotFound(name.to_owned()))
 				}
 			}
 			Refname::Bibliography(path, name) => todo!(),
 		}
 	}
-	
+
 	/// Resolve links for internal references
-	pub fn resolve_links(&self, cache: Arc<Cache>, target: Target)
-	{
+	pub fn resolve_links(&self, cache: Arc<Cache>, target: Target) {
 		self.units.iter().for_each(|(_, unit)| {
 			let OffloadedUnit::Loaded(unit) = unit else {
 				return;
@@ -179,22 +217,65 @@ impl<'u> Resolver<'u> {
 		});
 	}
 
+	fn add_dependency(
+		deps: &mut HashMap<String, HashMap<String, Vec<String>>>,
+		unit: &String,
+		depends_on: &String,
+		depends_for: &String,
+	) {
+		if depends_on == unit {
+			return;
+		}
+		match deps.get_mut(unit) {
+			Some(map) => match map.get_mut(depends_on) {
+				Some(list) => list.push(depends_for.to_owned()),
+				None => {
+					map.insert(depends_on.to_owned(), vec![depends_for.to_owned()]);
+				}
+			},
+			None => {
+				let mut map = HashMap::new();
+				map.insert(depends_on.to_owned(), vec![depends_for.to_owned()]);
+				deps.insert(unit.to_owned(), map);
+			}
+		}
+	}
+
 	/// Resolves all references and populate reports if required
-	pub fn resolve_references(&self, cache: Arc<Cache>, target: Target) -> Vec<Report> {
+	pub fn resolve_references(
+		&self,
+		cache: Arc<Cache>,
+		target: Target,
+	) -> Result<HashMap<String, HashMap<String, Vec<String>>>, Vec<Report>> {
 		let mut errors = vec![];
+		let mut dependencies = HashMap::new();
 		self.units.iter().for_each(|(_, unit)| {
 			let OffloadedUnit::Loaded(unit) = unit else {
 				return;
 			};
 
+			let reference_key = unit.reference_key();
 			unit.get_entry_scope()
 				.content_iter(true)
 				.filter_map(|(scope, elem)| elem.as_linkable().and_then(|link| Some((scope, link))))
 				.filter(|(_, elem)| elem.wants_link())
-				.for_each(|(scope, linkable)| {
-					match self.resolve_reference(cache.clone(), target, unit, linkable.wants_refname()) {
+				.for_each(|(_, linkable)| {
+					match self.resolve_reference(
+						cache.clone(),
+						target,
+						unit,
+						linkable.wants_refname(),
+					) {
 						// Link reference
-						Ok((link, reference)) => linkable.set_link(reference, link),
+						Ok((link, reference, depends_on)) => {
+							Self::add_dependency(
+								&mut dependencies,
+								&reference_key,
+								&depends_on,
+								&reference.refname,
+							);
+							linkable.set_link(reference, link);
+						}
 						Err(ResolveError::InvalidPath(path)) => {
 							errors.push(make_err!(
 								linkable.location().source(),
@@ -225,6 +306,10 @@ impl<'u> Resolver<'u> {
 					}
 				});
 		});
-		errors
+		if errors.is_empty() {
+			Ok(dependencies)
+		} else {
+			Err(errors)
+		}
 	}
 }

@@ -44,8 +44,6 @@ impl Element for InternalLink {
 		compiler: &Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
-		// Get link
-
 		match compiler.target() {
 			Target::HTML => {
 				output.add_content(format!("<a href=\"{}\">", self.reference.get().unwrap().0));
