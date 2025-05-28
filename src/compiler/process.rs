@@ -15,6 +15,7 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::resolver::Resolver;
 use crate::parser::source::SourceFile;
+use crate::settings::settings::ProjectSettings;
 use crate::unit::translation::TranslationUnit;
 
 use super::compiler::Compiler;
@@ -49,7 +50,7 @@ pub enum ProcessQueueMessage<'u> {
 
 /// Displays message to stdout
 pub fn output_message<'u>(message: ProcessQueueMessage<'u>, perc: f64) {
-	print!("[{: >3}%] ", perc * 100.0f64);
+	print!("[{: >3.0}%] ", perc * 100.0f64);
 	match message {
 		ProcessQueueMessage::Skipped(source) => {
 			println!("{}", format!("Skipping '{}'", source).fg(Color::Green))
@@ -76,6 +77,7 @@ pub fn output_message<'u>(message: ProcessQueueMessage<'u>, perc: f64) {
 
 /// Processqueue for inputs
 pub struct ProcessQueue {
+	settings: ProjectSettings,
 	inputs: Vec<PathBuf>,
 	outputs: Vec<()>,
 
@@ -86,22 +88,15 @@ pub struct ProcessQueue {
 }
 
 impl ProcessQueue {
-	pub fn new(target: Target, db: Option<&str>, inputs: Vec<PathBuf>) -> Self {
-		let cache = Arc::new(Cache::new(db).unwrap());
+	pub fn new(target: Target, project_path: String, settings: ProjectSettings, inputs: Vec<PathBuf>) -> Self {
+		let cache = Arc::new(Cache::new(settings.db_path.as_str().into()).unwrap());
 		cache.setup_tables();
-		let project_path = db
-			.map(|s| {
-				let mut buf = Path::new(s).to_path_buf();
-				buf.pop();
-				buf.to_str().unwrap().to_string()
-			})
-			.unwrap_or(String::default());
 
 		let parser = Parser::new();
 		let compiler = Compiler::new(target, cache.clone());
 
-		println!("input={inputs:#?}");
 		Self {
+			settings,
 			inputs,
 			outputs: vec![],
 			cache,
@@ -130,8 +125,6 @@ impl ProcessQueue {
 					.ok_or(ProcessError::GeneralError(format!(
 						"Failed to convert {input:#?} to string"
 					)))?;
-
-			//println!("Processing: {input_string} / {}", self.project_path);
 
 			// Compute path
 			let Some(local_path) = pathdiff::diff_paths(&input_string, &self.project_path) else {
@@ -249,9 +242,7 @@ impl ProcessQueue {
 				}
 			});
 			return Err(ProcessError::LinkError(reports))
-			//return Err()
 		}
-
 
 		// Compile all units
 		for (idx, unit) in processed.iter().enumerate() {

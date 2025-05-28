@@ -252,7 +252,6 @@ impl Cache {
 			.block_on(self.get_connection());
 
 		// Delete previous unit-related data
-		println!("Deleting -- {}", unit.reference_key());
 		con.execute(
 			"DELETE
 			FROM referenceable_units
