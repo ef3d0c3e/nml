@@ -2,6 +2,7 @@ use core::panic;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
+use std::ops::Range;
 use std::sync::Arc;
 
 use ariadne::Fmt;
@@ -28,6 +29,15 @@ pub enum ResolveError {
 pub struct Resolver<'u> {
 	/// List of available units via reference_key
 	units: HashMap<String, OffloadedUnit<'u>>,
+}
+
+/// Dependency of an unit to another unit
+#[derive(Debug)]
+pub struct UnitDependency {
+	/// Depends on this unit for
+	pub depends_for: String,
+	/// Range where the dependency was introduced
+	pub range: Range<usize>,
 }
 
 impl<'u> Resolver<'u> {
@@ -218,24 +228,24 @@ impl<'u> Resolver<'u> {
 	}
 
 	fn add_dependency(
-		deps: &mut HashMap<String, HashMap<String, Vec<String>>>,
+		deps: &mut HashMap<String, HashMap<String, Vec<UnitDependency>>>,
 		unit: &String,
 		depends_on: &String,
-		depends_for: &String,
+		dependency: UnitDependency,
 	) {
 		if depends_on == unit {
 			return;
 		}
 		match deps.get_mut(unit) {
 			Some(map) => match map.get_mut(depends_on) {
-				Some(list) => list.push(depends_for.to_owned()),
+				Some(list) => list.push(dependency),
 				None => {
-					map.insert(depends_on.to_owned(), vec![depends_for.to_owned()]);
+					map.insert(depends_on.to_owned(), vec![dependency]);
 				}
 			},
 			None => {
 				let mut map = HashMap::new();
-				map.insert(depends_on.to_owned(), vec![depends_for.to_owned()]);
+				map.insert(depends_on.to_owned(), vec![dependency]);
 				deps.insert(unit.to_owned(), map);
 			}
 		}
@@ -246,7 +256,7 @@ impl<'u> Resolver<'u> {
 		&self,
 		cache: Arc<Cache>,
 		target: Target,
-	) -> Result<HashMap<String, HashMap<String, Vec<String>>>, Vec<Report>> {
+	) -> Result<HashMap<String, HashMap<String, Vec<UnitDependency>>>, Vec<Report>> {
 		let mut errors = vec![];
 		let mut dependencies = HashMap::new();
 		self.units.iter().for_each(|(_, unit)| {
@@ -272,7 +282,10 @@ impl<'u> Resolver<'u> {
 								&mut dependencies,
 								&reference_key,
 								&depends_on,
-								&reference.refname,
+								UnitDependency {
+									depends_for: reference.refname.clone(),
+									range: linkable.original_location().range,
+								}
 							);
 							linkable.set_link(reference, link);
 						}

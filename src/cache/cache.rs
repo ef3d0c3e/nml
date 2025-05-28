@@ -10,7 +10,7 @@ use rusqlite::ToSql;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
-use crate::compiler::compiler::Target;
+use crate::parser::resolver::UnitDependency;
 use crate::unit::element::ReferenceableElement;
 use crate::unit::translation::TranslationUnit;
 use crate::unit::unit::DatabaseUnit;
@@ -154,7 +154,8 @@ impl Cache {
 				type			TEXT NOT NULL,
 				data			TEXT NOT NULL,
 				link			TEXT,
-				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key) ON DELETE CASCADE
+				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key) ON DELETE CASCADE,
+				UNIQUE(unit_ref, name)
 			);",
 			(),
 		)
@@ -162,12 +163,13 @@ impl Cache {
 		// Table containing unit dependencies
 		con.execute(
 			"CREATE TABLE IF NOT EXISTS dependencies(
-				depends_for		TEXT NOT NULL,
 				unit_ref		TEXT NOT NULL,
 				depends_on		TEXT NOT NULL,
+				range_start    	INTEGER NOT NULL,
+				range_end    	INTEGER NOT NULL,
+				depends_for		TEXT NOT NULL,
 				PRIMARY KEY(depends_for, unit_ref),
 				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key) ON DELETE CASCADE
-				FOREIGN KEY(depends_on) REFERENCES referenceable_units(reference_key) ON DELETE CASCADE
 			);",
 			(),
 		)
@@ -221,7 +223,9 @@ impl Cache {
 			.unwrap();
 
 		for unit in it {
-			insert_stmt.execute(params![unit.input_path(), time_now]).unwrap();
+			insert_stmt
+				.execute(params![unit.input_path(), time_now])
+				.unwrap();
 		}
 	}
 
@@ -248,11 +252,14 @@ impl Cache {
 			.block_on(self.get_connection());
 
 		// Delete previous unit-related data
+		println!("Deleting -- {}", unit.reference_key());
 		con.execute(
 			"DELETE
 			FROM referenceable_units
 			WHERE reference_key = (?1);",
-			[unit.reference_key()]).unwrap();
+			[unit.reference_key()],
+		)
+		.unwrap();
 		// Insert new unit
 		con.execute(
 			"INSERT OR REPLACE
@@ -327,31 +334,86 @@ impl Cache {
 		Ok(())
 	}
 
-	pub fn export_dependencies(&self, deps: &HashMap<String, HashMap<String, Vec<String>>>)
-	{
+	/// Export dependencies to the cache, returns units that are missing dependencies
+	pub fn export_dependencies(
+		&self,
+		deps: &HashMap<String, HashMap<String, Vec<UnitDependency>>>,
+	) -> HashMap<String, Vec<UnitDependency>> {
 		let mut con = tokio::runtime::Runtime::new()
 			.unwrap()
 			.block_on(self.get_connection());
 
 		let tx = con.transaction().unwrap();
-		let mut export_stmt = tx.prepare(
-			"INSERT
-			INTO dependencies (unit_ref, depends_on, depends_for)
-			VALUES (?1, ?2, ?3);"
-			).unwrap();
+		let mut delete_stmt = tx
+			.prepare(
+				"DELETE
+			FROM dependencies
+			WHERE unit_ref = (?1);",
+			)
+			.unwrap();
+		let mut export_stmt = tx
+			.prepare(
+				"INSERT OR REPLACE
+			INTO dependencies (unit_ref, depends_on, range_start, range_end, depends_for)
+			VALUES (?1, ?2, ?3, ?4, ?5);",
+			)
+			.unwrap();
 		// Export new dependencies
-		for (unit_ref, map) in deps
-		{
-			for (depends_on, list) in map
-			{
-				for depends_for in list
-				{
-					export_stmt.execute([unit_ref, depends_on, depends_for])
+		for (unit_ref, map) in deps {
+			//delete_stmt.execute([unit_ref]).unwrap();
+			for (depends_on, list) in map {
+				for dep in list {
+					export_stmt
+						.execute(params!(unit_ref, depends_on, dep.range.start, dep.range.end, dep.depends_for))
 						.unwrap();
 				}
 			}
 		}
 		drop(export_stmt);
+		drop(delete_stmt);
 		tx.commit().unwrap();
+
+		// Populate missing
+		let mut update = con
+			.prepare(
+				"SELECT DISTINCT ru.input_file, dep.range_start, dep.range_end, dep.depends_for
+		FROM dependencies AS dep
+		JOIN referenceable_units AS ru
+			ON ru.reference_key = dep.unit_ref
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM exported_references AS ref
+			WHERE ref.unit_ref = dep.depends_on
+			AND ref.name = dep.depends_for
+		);",
+			)
+			.unwrap();
+		let mut missing : HashMap<String, Vec<UnitDependency>> = HashMap::new();
+		update
+			.query_map([], |row| Ok((
+						row.get_unwrap::<_, String>(0),
+						row.get_unwrap::<_, usize>(1),
+						row.get_unwrap::<_, usize>(2),
+						row.get_unwrap::<_, String>(3),
+						)))
+			.unwrap()
+			.into_iter()
+			.map(|v| {
+				let Ok((unit_ref, start, end, depends_for)) = v else { panic!() };
+				if let Some(list) = missing.get_mut(&unit_ref) {
+					list.push(UnitDependency {
+						depends_for,
+						range: start..end,
+					});
+				}
+				else
+				{
+					missing.insert(unit_ref, vec![UnitDependency {
+						depends_for,
+						range: start..end,
+					}]);
+				}
+			}).count();
+		missing
 	}
 }

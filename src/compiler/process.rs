@@ -1,3 +1,4 @@
+use std::fmt::format;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -99,6 +100,7 @@ impl ProcessQueue {
 		let parser = Parser::new();
 		let compiler = Compiler::new(target, cache.clone());
 
+		println!("input={inputs:#?}");
 		Self {
 			inputs,
 			outputs: vec![],
@@ -226,7 +228,30 @@ impl ProcessQueue {
 		let dependencies = resolver
 			.resolve_references(self.cache.clone(), self.compiler.target())
 			.map_err(|err| ProcessError::LinkError(err))?;
-		self.cache.export_dependencies(&dependencies);
+		let missing = self.cache.export_dependencies(&dependencies);
+		if !missing.is_empty() {
+			let mut reports = vec![];
+			missing.iter().for_each(|(unit_file, list)| {
+				for item in list
+				{
+					let source = Arc::new(SourceFile::new(format!("{}/{unit_file}", self.project_path), None).unwrap());
+					reports.push(make_err!(
+						source.clone(),
+						"Missing references".into(),
+						span(
+							item.range.clone(),
+							format!(
+								"Reference `{}` no longer exists",
+								(&item.depends_for).fg(Color::Blue),
+							)
+						)
+							));
+				}
+			});
+			return Err(ProcessError::LinkError(reports))
+			//return Err()
+		}
+
 
 		// Compile all units
 		for (idx, unit) in processed.iter().enumerate() {
