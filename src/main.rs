@@ -8,6 +8,7 @@ mod settings;
 mod unit;
 
 use std::env::{self};
+use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -17,6 +18,7 @@ use compiler::process::ProcessOutputOptions;
 use compiler::process::ProcessQueue;
 use getopts::Matches;
 use getopts::Options;
+use graphviz_rust::attributes::root;
 use graphviz_rust::print;
 use parser::reports::Report;
 use parser::reports::ReportColors;
@@ -52,13 +54,12 @@ NML version: 0.5\n"
 
 fn input_manual(
 	matches: &Matches,
-) -> Result<(Vec<PathBuf>, ProcessOutputOptions, ProjectSettings), ExitCode> {
+) -> Result<(Vec<PathBuf>, ProcessOutputOptions, ProjectSettings), String> {
 	let input = matches.opt_str("i").unwrap();
 	let input_meta = match std::fs::metadata(&input) {
 		Ok(meta) => meta,
 		Err(e) => {
-			eprintln!("Unable to get metadata for input `{input}`: {e}");
-			return Err(ExitCode::FAILURE);
+			return Err(format!("Unable to get metadata for input `{input}`: {e}"));
 		}
 	};
 	let output = matches.opt_str("o").unwrap();
@@ -68,35 +69,36 @@ fn input_manual(
 			match std::fs::create_dir_all(&output) {
 				Ok(()) => {}
 				Err(err) => {
-					eprintln!("Unable to create output directory `{output}`: {err}");
-					return Err(ExitCode::FAILURE);
+					return Err(format!(
+						"Unable to create output directory `{output}`: {err}"
+					));
 				}
 			}
 		}
 		match std::fs::metadata(&output) {
 			Ok(output_meta) => {
 				if !output_meta.is_dir() {
-					eprintln!("Input is a directory, but ouput is not a directory, halting");
-					return Err(ExitCode::FAILURE);
+					return Err(format!(
+						"Input is a directory, but ouput is not a directory, halting"
+					));
 				}
 			}
 			Err(e) => {
-				eprintln!("Unable to get metadata for output `{output}`: {e}");
-				return Err(ExitCode::FAILURE);
+				return Err(format!("Unable to get metadata for output `{output}`: {e}"));
 			}
 		}
 	} else if std::fs::exists(&output).unwrap_or(false) {
 		let output_meta = match std::fs::metadata(&output) {
 			Ok(meta) => meta,
 			Err(e) => {
-				eprintln!("Unable to get metadata for output `{output}`: {e}");
-				return Err(ExitCode::FAILURE);
+				return Err(format!("Unable to get metadata for output `{output}`: {e}"));
 			}
 		};
 
 		if output_meta.is_dir() {
-			eprintln!("Input `{input}` is a file, but output `{output}` is a directory");
-			return Err(ExitCode::FAILURE);
+			return Err(format!(
+				"Input `{input}` is a file, but output `{output}` is a directory"
+			));
 		}
 	}
 
@@ -110,12 +112,10 @@ fn input_manual(
 				{
 					Ok(Some(path)) => Some(path.to_string()),
 					Ok(None) => {
-						eprintln!("Failed to transform path to string `{db}`");
-						return Err(ExitCode::FAILURE);
+						return Err(format!("Failed to transform path to string `{db}`"));
 					}
 					Err(err) => {
-						eprintln!("{err}");
-						return Err(ExitCode::FAILURE);
+						return Err(format!("{err}"));
 					}
 				}
 			} else
@@ -131,12 +131,10 @@ fn input_manual(
 				{
 					Ok(Some(path)) => Some(path.to_string()),
 					Ok(None) => {
-						eprintln!("Failed to transform path to string `{db}`");
-						return Err(ExitCode::FAILURE);
+						return Err(format!("Failed to transform path to string `{db}`"));
 					}
 					Err(err) => {
-						eprintln!("{err}");
-						return Err(ExitCode::FAILURE);
+						return Err(format!("{err}"));
 					}
 				}
 			}
@@ -147,14 +145,14 @@ fn input_manual(
 	let mut files = vec![];
 	if input_meta.is_dir() {
 		if db_path.is_none() {
-			eprintln!("Directory mode requires a database (-d)");
-			return Err(ExitCode::FAILURE);
+			return Err(format!("Directory mode requires a database (-d)"));
 		}
 
 		for entry in WalkDir::new(&input) {
 			if let Err(err) = entry {
-				eprintln!("Failed to recursively walk over input directory: {err}");
-				return Err(ExitCode::FAILURE);
+				return Err(format!(
+					"Failed to recursively walk over input directory: {err}"
+				));
 			}
 			match entry.as_ref().unwrap().metadata() {
 				Ok(meta) => {
@@ -163,22 +161,19 @@ fn input_manual(
 					}
 				}
 				Err(e) => {
-					eprintln!("Faield to get metadata for `{entry:#?}`: {e}");
-					return Err(ExitCode::FAILURE);
+					return Err(format!("Faield to get metadata for `{entry:#?}`: {e}"));
 				}
 			}
 
 			let path = match entry.as_ref().unwrap().path().to_str() {
 				Some(path) => path.to_string(),
 				None => {
-					eprintln!("Faield to convert input file `{entry:#?}` to UTF-8");
-					return Err(ExitCode::FAILURE);
+					return Err(format!(
+						"Faield to convert input file `{entry:#?}` to UTF-8"
+					));
 				}
 			};
-			if !path.ends_with(".nml") {
-				println!("Skipping '{path}'");
-				continue;
-			}
+			if !path.ends_with(".nml") { continue }
 
 			files.push(std::fs::canonicalize(path).unwrap());
 		}
@@ -191,8 +186,91 @@ fn input_manual(
 	settings.output_path = Some(
 		output
 			.clone()
-			.split_at(output.rfind(|c| c == '/').unwrap_or(0)).0.to_string(),
+			.split_at(output.rfind(|c| c == '/').unwrap_or(0))
+			.0
+			.to_string(),
 	);
+	println!("set={settings:#?}");
+	Ok((
+		files,
+		compiler::process::ProcessOutputOptions::Directory(
+			settings.output_path.as_ref().unwrap().clone(),
+		),
+		settings,
+	))
+}
+
+fn input_project(
+	matches: &Matches,
+) -> Result<(Vec<PathBuf>, ProcessOutputOptions, ProjectSettings), String> {
+	let settings_file = matches.opt_str("p").unwrap();
+	// Get root path
+	let root_path = &settings_file
+		.split_at(settings_file.rfind(|c| c == '/').unwrap_or(0))
+		.0
+		.to_string();
+	let root_meta = std::fs::metadata(root_path)
+		.map_err(|e| format!("Failed to get project root metadata `{root_path}`: {e}"))?;
+	if !root_meta.is_dir() {
+		return Err(format!("Project root `{root_path}` is not a directory"));
+	}
+
+	let meta = match std::fs::metadata(&settings_file) {
+		Ok(meta) => meta,
+		Err(e) => {
+			return Err(format!(
+				"Unable to get metadata for file `{settings_file}`: {e}"
+			))
+		}
+	};
+	if !meta.is_file() {
+		return Err(format!(
+			"Project file `{settings_file}` must be a regular file"
+		));
+	}
+	let settings = match fs::read(&settings_file) {
+		Ok(content) => {
+			let content = String::from_utf8(content)
+				.map_err(|e| format!("Unable to read project file `{settings_file}`: {e}"))?;
+
+			toml::from_str::<ProjectSettings>(content.as_str())
+				.map_err(|e| format!("Failed to deserialize `{settings_file}`: {e}"))?
+		}
+		Err(e) => {
+			return Err(format!(
+				"Unable to read project file `{settings_file}`: {e}"
+			))
+		}
+	};
+
+	let mut files = vec![];
+	for entry in WalkDir::new(&root_path) {
+		if let Err(err) = entry {
+			return Err(format!(
+				"Failed to recursively walk over input directory: {err}"
+			));
+		}
+		match entry.as_ref().unwrap().metadata() {
+			Ok(meta) => {
+				if !meta.is_file() {
+					continue;
+				}
+			}
+			Err(e) => return Err(format!("Faield to get metadata for `{entry:#?}`: {e}")),
+		}
+
+		let path = match entry.as_ref().unwrap().path().to_str() {
+			Some(path) => path.to_string(),
+			None => {
+				return Err(format!(
+					"Faield to convert input file `{entry:#?}` to UTF-8"
+				))
+			}
+		};
+		if !path.ends_with(".nml") { continue }
+
+		files.push(std::fs::canonicalize(path).unwrap());
+	}
 	println!("set={settings:#?}");
 	Ok((
 		files,
@@ -231,16 +309,25 @@ fn main() -> ExitCode {
 		print_usage(&program, opts);
 		return ExitCode::SUCCESS;
 	}
-	if (!matches.opt_present("i") || !matches.opt_present("o")) && !matches.opt_present("p") {
+
+	let res = if matches.opt_present("p") {
+		input_project(&matches)
+	} else if matches.opt_present("i") && matches.opt_present("o") {
+		input_manual(&matches)
+	} else {
 		print_usage(&program, opts);
 		return ExitCode::FAILURE;
-	}
+	};
+	let (files, output, settings) = match res {
+		Ok((files, output, settings)) => (files, output, settings),
+		Err(err) => {
+			eprintln!("{}", err);
+			return ExitCode::FAILURE;
+		}
+	};
+
 	let force_rebuild = matches.opt_present("force-rebuild");
 	let debug_opts = matches.opt_strs("z");
-
-	let Ok((files, output, settings)) = input_manual(&matches) else {
-		return ExitCode::FAILURE;
-	};
 
 	// Check that all files have a valid unicode path
 	for file in &files {
@@ -254,7 +341,9 @@ fn main() -> ExitCode {
 	let project_path = settings
 		.db_path
 		.clone()
-		.split_at(settings.db_path.rfind(|c| c == '/').unwrap_or(0)).0.to_string();
+		.split_at(settings.db_path.rfind(|c| c == '/').unwrap_or(0))
+		.0
+		.to_string();
 	let mut queue = ProcessQueue::new(Target::HTML, project_path, settings, files);
 	match queue.process(output) {
 		Ok(_) => {}

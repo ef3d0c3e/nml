@@ -13,7 +13,9 @@ pub struct HtmlOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum ProjectOutput {
+	#[serde(rename = "html")]
 	Html(HtmlOutput),
 }
 
