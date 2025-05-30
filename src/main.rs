@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use compiler::compiler::Target;
-use compiler::process::ProcessError;
+use compiler::process::{ProcessError, ProcessOptions};
 use compiler::process::ProcessOutputOptions;
 use compiler::process::ProcessQueue;
 use getopts::Matches;
@@ -181,7 +181,7 @@ fn input_manual(
 		files.push(std::fs::canonicalize(input).unwrap());
 	}
 	let mut settings = ProjectSettings::default();
-	settings.db_path = db_path.unwrap_or("nml.db".into());
+	settings.db_path = db_path.unwrap_or("".into());
 	settings.output_path = output
 		.clone()
 		.split_at(output.rfind(|c| c == '/').unwrap_or(0))
@@ -319,8 +319,10 @@ fn main() -> ExitCode {
 		}
 	};
 
+	let mut options = ProcessOptions::default();
 	let force_rebuild = matches.opt_present("force-rebuild");
 	let debug_opts = matches.opt_strs("z");
+	if debug_opts.contains(&"ast".into()) { options.debug_ast = true }
 
 	// Check that all files have a valid unicode path
 	for file in &files {
@@ -338,7 +340,7 @@ fn main() -> ExitCode {
 		.0
 		.to_string();
 	let mut queue = ProcessQueue::new(Target::HTML, project_path, settings, files);
-	match queue.process(output) {
+	match queue.process(output, options) {
 		Ok(_) => {}
 		Err(ProcessError::GeneralError(err)) => {
 			eprintln!("Processing failed with error: `{err}`");
@@ -346,11 +348,10 @@ fn main() -> ExitCode {
 		Err(ProcessError::InputError(file, err)) => {
 			eprintln!("Processing failed with error: `{err}` while processing file '{file}'");
 		}
-		Err(ProcessError::LinkError(reports)) => {
+		Err(ProcessError::LinkError(reports)) | Err(ProcessError::CompileError(reports)) => {
 			let colors = ReportColors::with_colors();
 			Report::reports_to_stdout(&colors, reports);
 		}
 	}
-
 	ExitCode::SUCCESS
 }

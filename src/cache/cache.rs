@@ -105,10 +105,13 @@ pub struct Cache {
 }
 
 impl Cache {
-	pub fn new(db_path: Option<&str>) -> Result<Self, String> {
-		let con = db_path
-			.map_or(Connection::open_in_memory(), Connection::open)
-			.map_err(|err| format!("Unable to open connection to the database: {err}"))?;
+	pub fn new(db_path: &str) -> Result<Self, String> {
+		let con = if db_path.is_empty() {
+			Connection::open_in_memory()
+		} else {
+			Connection::open(db_path)
+		}
+		.map_err(|err| format!("Unable to open connection to the database: {err}"))?;
 		Ok(Self {
 			con: Arc::new(Mutex::new(con)),
 		})
@@ -363,7 +366,13 @@ impl Cache {
 			for (depends_on, list) in map {
 				for dep in list {
 					export_stmt
-						.execute(params!(unit_ref, depends_on, dep.range.start, dep.range.end, dep.depends_for))
+						.execute(params!(
+							unit_ref,
+							depends_on,
+							dep.range.start,
+							dep.range.end,
+							dep.depends_for
+						))
 						.unwrap();
 				}
 			}
@@ -387,32 +396,38 @@ impl Cache {
 		);",
 			)
 			.unwrap();
-		let mut missing : HashMap<String, Vec<UnitDependency>> = HashMap::new();
+		let mut missing: HashMap<String, Vec<UnitDependency>> = HashMap::new();
 		update
-			.query_map([], |row| Ok((
-						row.get_unwrap::<_, String>(0),
-						row.get_unwrap::<_, usize>(1),
-						row.get_unwrap::<_, usize>(2),
-						row.get_unwrap::<_, String>(3),
-						)))
+			.query_map([], |row| {
+				Ok((
+					row.get_unwrap::<_, String>(0),
+					row.get_unwrap::<_, usize>(1),
+					row.get_unwrap::<_, usize>(2),
+					row.get_unwrap::<_, String>(3),
+				))
+			})
 			.unwrap()
 			.into_iter()
 			.map(|v| {
-				let Ok((unit_ref, start, end, depends_for)) = v else { panic!() };
+				let Ok((unit_ref, start, end, depends_for)) = v else {
+					panic!()
+				};
 				if let Some(list) = missing.get_mut(&unit_ref) {
 					list.push(UnitDependency {
 						depends_for,
 						range: start..end,
 					});
+				} else {
+					missing.insert(
+						unit_ref,
+						vec![UnitDependency {
+							depends_for,
+							range: start..end,
+						}],
+					);
 				}
-				else
-				{
-					missing.insert(unit_ref, vec![UnitDependency {
-						depends_for,
-						range: start..end,
-					}]);
-				}
-			}).count();
+			})
+			.count();
 		missing
 	}
 }

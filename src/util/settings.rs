@@ -34,7 +34,7 @@ pub struct ProjectSettings {
 impl Default for ProjectSettings {
 	fn default() -> Self {
 		Self {
-			db_path: "cache.db".into(),
+			db_path: "".into(),
 			output_path: "out".into(),
 			output: ProjectOutput::Html(HtmlOutput {
 				language: "en-us".into(),

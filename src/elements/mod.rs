@@ -17,7 +17,7 @@ pub mod internal_link;
 //pub mod section;
 //pub mod style;
 //pub mod table;
-//pub mod tex;
+pub mod latex;
 pub mod text;
 //pub mod toc;
 pub mod variable;

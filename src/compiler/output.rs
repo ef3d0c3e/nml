@@ -1,3 +1,5 @@
+use core::time;
+use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -6,16 +8,25 @@ use std::future::IntoFuture;
 use std::hash::Hasher;
 use std::hash::Hash;
 use std::pin::Pin;
+use std::process::exit;
 use std::rc::Rc;
 use std::thread::sleep;
 use std::time::Duration;
+use std::time::Instant;
 
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
+
+use ariadne::Color;
+use ariadne::Fmt;
 use tokio::task::JoinHandle;
 
+use crate::make_err;
 use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
+use crate::parser::source::Token;
+use crate::report_err;
 use crate::unit::scope::Scope;
-use crate::unit::unit::Reference;
 
 use super::compiler::Target;
 
@@ -36,6 +47,24 @@ impl<T> Hash for RcKey<T> {
     }
 }
 
+/// Async task processed by the output
+#[derive(Debug)]
+pub struct OutputTask
+{
+	/// Task handle
+	handle: OnceCell<JoinHandle<Result<String, Vec<Report>>>>,
+	/// Task location in it's original scope
+	location: Token,
+	/// Task position in the final output
+	pos: usize,
+	/// Task name
+	name: String,
+	/// Task timeout in milliseconds
+	timeout: u128,
+	/// Task result
+	result: OnceCell<Result<String, Vec<Report>>>,
+}
+
 pub struct CompilerOutput {
 	/// Compilation target
 	target: Target,
@@ -46,7 +75,7 @@ pub struct CompilerOutput {
 	pub(crate) content: String,
 	/// Holds the spawned async tasks. After the work function has completed, these tasks will be
 	/// waited on in order to insert their result in the compiled document
-	tasks: Vec<(usize, JoinHandle<Result<String, Vec<Report>>>)>,
+	tasks: Vec<OutputTask>,
 	/// The tasks runtime
 	runtime: tokio::runtime::Runtime,
 }
@@ -55,7 +84,7 @@ impl CompilerOutput {
 	/// Run work function `f` with the task processor running
 	///
 	/// The result of async taks will be inserted into the output
-	pub fn run_with_processor<F>(target: Target, colors: &ReportColors, f: F) -> CompilerOutput
+	pub fn run_with_processor<F>(target: Target, colors: &ReportColors, f: F) -> Result<CompilerOutput, Vec<Report>>
 	where
 		F: FnOnce(CompilerOutput) -> CompilerOutput,
 	{
@@ -76,56 +105,84 @@ impl CompilerOutput {
 		// Process the document with caller work-function
 		output = f(output);
 
-		// Wait for all tasks to finish [TODO Status message/Timer for tasks that may never finish]
-		if !output.tasks.is_empty() {
-			'outer: loop {
-				for (_, handle) in &output.tasks {
-					if !handle.is_finished() {
-						break 'outer;
-					}
+		// Wait for all tasks to finish
+		let mut finished = 0;
+		let time_start = Instant::now();
+		while finished != output.tasks.len()
+		{
+			for task in &mut output.tasks {
+				if task.result.get().is_some() || !task.handle.get().is_some() { continue }
+
+				if task.handle.get().map_or(false, |handle| handle.is_finished()) {
+					output.runtime.block_on(async {
+						task.result.set(task.handle.take().unwrap().into_future().await.unwrap())
+					}).unwrap();
+					task.handle.take();
+					finished += 1;
+					continue;
 				}
-				sleep(Duration::from_millis(50));
+				else if time_start.elapsed().as_millis() < task.timeout { continue; }
+
+				task.handle.get().unwrap().abort();
+				task.handle.take();
+				println!("Aborted task `{}`, timeout exceeded", task.name);
+				finished += 1;
 			}
+			println!("[{}/{}] Waiting for tasks... ({}ms)", finished, output.tasks.len(), time_start.elapsed().as_millis());
+			sleep(Duration::from_millis(500));
 		}
 
-		// Get results from async tasks
-		let mut results = output.runtime.block_on(async {
-			let mut results = vec![];
-			for (pos, handle) in output.tasks.drain(..) {
-				let result = handle.into_future().await.unwrap();
-				results.push((pos, result));
+		// Check for errors
+		let mut reports = vec![];
+		for task in &mut output.tasks
+		{
+			if task.result.get().is_some_and(Result::is_ok) { continue }
+
+			if task.result.get().is_none()
+			{
+				reports.push(make_err!(
+						task.location.source(),
+						"Task processing failed".into(),
+						span(
+							task.location.range.clone(),
+							format!(
+								"Processing for task `{}` timed out",
+								(&task.name).fg(Color::Green),
+							)
+						)));
+				continue ;
 			}
-			output.tasks.clear();
-			results
-		});
+			let Some(Err(mut err)) = task.result.take() else { panic!() };
+			reports.extend(err.drain(..));
+		}
+		if !reports.is_empty() { return Err(reports) }
 
 		// Insert tasks results into output & offset references positions
-		for (pos, result) in results.drain(..).rev() {
-			match result {
-				Ok(content) => {
-					output.content.insert_str(pos, content.as_str()) 
-				},
-				Err(err) => todo!()/*Report::reports_to_stdout(colors, err)*/,
-			}
+		for (pos, content) in output.tasks.iter().rev().map(|task| (task.pos, task.result.get().unwrap().as_ref().unwrap())) {
+			output.content.insert_str(pos, content.as_str());
 		}
-		output
+		Ok(output)
 	}
 
 	/// Appends content to the output
 	pub fn add_content<S: AsRef<str>>(&mut self, s: S) { self.content.push_str(s.as_ref()); }
 
-	/// Gets the current position in the content
-	pub fn content_pos(&self) -> usize { return self.content.len() }
-
 	/// Adds an async task to the output. The task's result will be appended at the current output position
 	///
 	/// The task is a future that returns it's result in a string, or errors as a Vec of [`Report`]s
-	pub fn add_task<F>(&mut self, task: Pin<Box<F>>)
+	pub fn add_task<F>(&mut self, location: Token, name: String, task: Pin<Box<F>>)
 	where
 		F: Future<Output = Result<String, Vec<Report>>> + Send + 'static,
 	{
 		let handle = self.runtime.spawn(task);
-		self.tasks.push((self.content.len(), handle));
+		self.tasks.push(OutputTask {
+			handle: OnceCell::from(handle),
+			location,
+			pos: self.content.len(),
+			name,
+			timeout: 1500,
+			result: OnceCell::default(),
+		});	
 	}
 
 	pub fn content(

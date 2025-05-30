@@ -1,9 +1,7 @@
 use std::cell::RefCell;
-use std::fmt::format;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use graphviz_rust::print;
 
 use crate::cache::cache::Cache;
 use crate::parser::reports::Report;
@@ -143,10 +141,13 @@ impl Compiler {
 	}
 
 	/// Compiles a document to it's output
-	pub fn compile(&self, unit: &TranslationUnit) -> () {
-		let out = CompilerOutput::run_with_processor(self.target, &unit.colors(), |output| {
+	pub fn compile(&self, unit: &TranslationUnit) -> Result<(), Vec<Report>> {
+		match CompilerOutput::run_with_processor(self.target, &unit.colors(), |output| {
 			self.compile_scope(output, unit.get_entry_scope().to_owned())
-		});
+		}) {
+			Ok(_) => Ok(()),
+			Err(reports) => Err(reports),
+		}
 
 		/*
 		let borrow = document.content().borrow();

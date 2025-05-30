@@ -5,6 +5,7 @@ use std::time::UNIX_EPOCH;
 
 use ariadne::Color;
 use ariadne::Fmt;
+use graphviz_rust::print;
 
 use crate::cache::cache::Cache;
 use crate::parser::parser::Parser;
@@ -19,11 +20,18 @@ use util::settings::ProjectSettings;
 use super::compiler::Compiler;
 use super::compiler::Target;
 
+#[derive(Default)]
+pub struct ProcessOptions
+{
+	pub debug_ast: bool,
+}
+
 #[derive(Debug)]
 pub enum ProcessError {
 	GeneralError(String),
 	InputError(String, String),
 	LinkError(Vec<Report>),
+	CompileError(Vec<Report>),
 }
 
 pub enum ProcessOutputOptions {
@@ -86,7 +94,7 @@ pub struct ProcessQueue {
 
 impl ProcessQueue {
 	pub fn new(target: Target, project_path: String, settings: ProjectSettings, inputs: Vec<PathBuf>) -> Self {
-		let cache = Arc::new(Cache::new(settings.db_path.as_str().into()).unwrap());
+		let cache = Arc::new(Cache::new(settings.db_path.as_str()).unwrap());
 		cache.setup_tables();
 
 		let parser = Parser::new();
@@ -103,8 +111,8 @@ impl ProcessQueue {
 		}
 	}
 
-	pub fn process(&mut self, options: ProcessOutputOptions) -> Result<Vec<()>, ProcessError> {
-		match &options {
+	pub fn process(&mut self, output: ProcessOutputOptions, options: ProcessOptions) -> Result<Vec<()>, ProcessError> {
+		match &output {
 			ProcessOutputOptions::Directory(dir) => {}
 			ProcessOutputOptions::File(file) => {
 				if self.inputs.len() > 1 {
@@ -175,7 +183,7 @@ impl ProcessQueue {
 			let source = Arc::new(SourceFile::new(input_string.clone(), None).unwrap());
 			let unit = TranslationUnit::new(local_path.clone(), &self.parser, source, false, true);
 
-			let output_file = match &options {
+			let output_file = match &output {
 				ProcessOutputOptions::Directory(dir) => {
 					let basename = match local_path.rfind(|c| c == '.') {
 						Some(pos) => &local_path[0..pos],
@@ -195,6 +203,9 @@ impl ProcessQueue {
 			let Some(unit) = unit.consume(output_file) else {
 				continue;
 			};
+			if options.debug_ast {
+				println!("{:#?}", unit.get_entry_scope());
+			}
 			processed.push(unit);
 		}
 
@@ -248,13 +259,18 @@ impl ProcessQueue {
 		}
 
 		// Compile all units
+		let mut reports = vec![];
 		for (idx, unit) in processed.iter().enumerate() {
 			output_message(
 				ProcessQueueMessage::Compiling(unit),
 				(1 + idx) as f64 / processed.len() as f64,
 			);
-			self.compiler.compile(unit);
+			match self.compiler.compile(unit) {
+				Ok(_) => todo!(),
+				Err(err) => reports.extend(err)
+			}
 		}
+		if !reports.is_empty() { return Err(ProcessError::CompileError(reports)) }
 
 		let time_now = SystemTime::now()
 			.duration_since(UNIX_EPOCH)
