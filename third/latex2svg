@@ -51,6 +51,9 @@ module.exports = {
 latex_cmd = 'latex -interaction nonstopmode -halt-on-error'
 dvisvgm_cmd = 'dvisvgm --no-fonts'
 svgo_cmd = 'svgo'
+scour_cmd = ('scour --shorten-ids --shorten-ids-prefix="{{ prefix }}" '
+    '--no-line-breaks --remove-metadata --enable-comment-stripping '
+    '--strip-xml-prolog -i {{ infile }} -o {{ outfile }}')
 
 default_params = {
     'fontsize': 12,  # TeX pt
@@ -58,6 +61,8 @@ default_params = {
     'dvisvgm_cmd': dvisvgm_cmd,
     'svgo_cmd': svgo_cmd,
     'svgo_config': default_svgo_config,
+    'scour_cmd': scour_cmd,
+    'optimizer': 'scour',
     'libgs': None,
 }
 
@@ -164,27 +169,55 @@ def latex2svg(code, params=default_params, working_directory=None):
     svg.set('style', f'vertical-align:{-depth:.6f}em')
     xml.write(os.path.join(working_directory, 'code.svg'))
 
-    # Run svgo to get a minified oneliner with (pseudo-)unique Ids
+    # Run optimizer to get a minified oneliner with (pseudo-)unique Ids
     # generate random prefix using ASCII letters (ID may not start with a digit)
     import random, string
-    prefix = ''.join(random.choice(string.ascii_letters) for n in range(4))
+    prefix = ''.join(random.choice(string.ascii_letters) for n in range(3))
+    svgo_cmd = (params['svgo_cmd']
+        .replace('{{ infile }}', 'code.svg')
+        .replace('{{ outfile }}', 'optimized.svg'))
     svgo_config = (params['svgo_config']
-                .replace('{{ prefix }}', prefix))
+        .replace('{{ prefix }}', prefix))
+    # with scour, input & output files must be different
+    scour_cmd = (params['scour_cmd']
+        .replace('{{ prefix }}', prefix+'_')
+        .replace('{{ infile }}', 'code.svg')
+        .replace('{{ outfile }}', 'optimized.svg'))
 
-    # write svgo params file
-    with open(os.path.join(working_directory, 'svgo.config.js'), 'w') as f:
-        f.write(svgo_config)
+    if params['optimizer'] == 'scour':
+        # optimize SVG using scour (default)
+        try:
+            ret = subprocess.run(shlex.split(scour_cmd),
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 cwd=working_directory, env=env)
+            ret.check_returncode()
+        except FileNotFoundError:
+            raise RuntimeError('scour not found')
 
-    try:
-        ret = subprocess.run(shlex.split(params['svgo_cmd']+' code.svg'),
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                             cwd=working_directory, env=env)
-        ret.check_returncode()
-    except FileNotFoundError:
-        raise RuntimeError('svgo not found')
+        with open(os.path.join(working_directory, 'optimized.svg'), 'r') as f:
+            svg = f.read()
 
-    with open(os.path.join(working_directory, 'code.svg'), 'r') as f:
-        svg = f.read()
+    elif params['optimizer'] == 'svgo':
+        # optimize SVG using svgo (optional)
+        # write svgo params file
+        with open(os.path.join(working_directory, 'svgo.config.js'), 'w') as f:
+            f.write(svgo_config)
+
+        try:
+            ret = subprocess.run(shlex.split(svgo_cmd),
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 cwd=working_directory, env=env)
+            ret.check_returncode()
+        except FileNotFoundError:
+            raise RuntimeError('svgo not found')
+
+        with open(os.path.join(working_directory, 'optimized.svg'), 'r') as f:
+            svg = f.read()
+
+    else:
+        # no optimization, just return SVG
+        with open(os.path.join(working_directory, 'code.svg'), 'r') as f:
+            svg = f.read()
 
     return {'svg': svg, 'valign': round(-depth,6),
         'width': round(width,6), 'height': round(height,6)}
@@ -205,6 +238,9 @@ def main():
     """)
     parser.add_argument('--version', action='version',
                     version='%(prog)s {version}'.format(version=__version__))
+    parser.add_argument('--optimizer', choices=['scour', 'svgo', 'none'],
+        default='scour',
+        help='SVG optimizer to use (default: %(default)s)')
     parser.add_argument('--fontsize',
                         help="LaTeX fontsize in pt")
     args = parser.parse_args()
@@ -215,6 +251,7 @@ def main():
     try:
         params = default_params.copy()
         params['fontsize'] = fontsize
+        params['optimizer'] = args.optimizer
         out = latex2svg(latex, params)
         sys.stdout.write(out['svg'])
     except subprocess.CalledProcessError as exc:
