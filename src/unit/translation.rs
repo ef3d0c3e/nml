@@ -22,6 +22,8 @@ use crate::parser::reports::ReportKind;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::state::ParseMode;
+use crate::util::settings::ProjectOutput;
+use crate::util::settings::ProjectSettings;
 
 use super::element::Element;
 use super::element::LinkableElement;
@@ -77,6 +79,9 @@ pub struct TranslationUnit<'u> {
 	references: HashMap<String, Rc<dyn ReferenceableElement>>,
 	/// Output data extracted from parsing
 	output: OnceCell<UnitOutput>,
+
+	/// Per unit project settings
+	settings: OnceCell<ProjectSettings>,
 }
 
 ///
@@ -128,6 +133,8 @@ impl<'u> TranslationUnit<'u> {
 			reports: Vec::default(),
 			references: HashMap::default(),
 			output: OnceCell::default(),
+
+			settings: OnceCell::default(),
 		};
 
 		let main_kernel = Kernel::new(&s);
@@ -281,6 +288,12 @@ pub trait TranslationAccessors {
 
 	/// Returns the hashmap containing all referenceables in this unit
 	fn references(&self) -> &HashMap<String, Rc<dyn ReferenceableElement>>;
+
+	/// Update unit project setting
+	fn update_settings(&self, settings: ProjectSettings);
+
+	/// Gets the unit's settings (will panic if not set)
+	fn get_settings(&self) -> &ProjectSettings;
 }
 
 impl TranslationAccessors for TranslationUnit<'_> {
@@ -305,5 +318,31 @@ impl TranslationAccessors for TranslationUnit<'_> {
 	fn references(&self) -> &HashMap<String, Rc<dyn ReferenceableElement>>
 	{
 		&self.references
+	}
+
+	fn update_settings(&self, mut settings: ProjectSettings)
+	{
+		let scope = self.get_scope();
+
+		match &mut settings.output {
+			ProjectOutput::Html(html) => {
+				if let Some((var, _)) =
+					scope.get_variable(&VariableName("html.language".to_string()))
+				{
+					html.language = var.to_string();
+				}
+				if let Some((var, _)) = scope.get_variable(&VariableName("html.icon".to_string())) {
+					html.icon = Some(var.to_string())
+				}
+				if let Some((var, _)) = scope.get_variable(&VariableName("html.css".to_string())) {
+					html.icon = Some(var.to_string());
+				}
+			}
+		}
+		self.settings.set(settings).unwrap();
+	}
+
+	fn get_settings(&self) -> &ProjectSettings {
+		self.settings.get().unwrap()
 	}
 }

@@ -187,7 +187,6 @@ fn input_manual(
 		.split_at(output.rfind(|c| c == '/').unwrap_or(0))
 		.0
 		.to_string();
-	println!("set={settings:#?}");
 	Ok((
 		files,
 		compiler::process::ProcessOutputOptions::Directory(settings.output_path.clone()),
@@ -267,9 +266,7 @@ fn input_project(
 		}
 		files.push(path.into());
 	}
-	println!("set={settings:#?}");
 	settings.set_root_path(&root_path)?;
-	println!("set={settings:#?}");
 	Ok((
 		files,
 		compiler::process::ProcessOutputOptions::Directory(settings.output_path.clone()),

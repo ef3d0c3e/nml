@@ -12,6 +12,7 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::resolver::Resolver;
 use crate::parser::source::SourceFile;
+use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;
 
@@ -238,6 +239,12 @@ impl ProcessQueue {
 				}
 			});
 			return Err(ProcessError::LinkError(reports))
+		}
+
+		// Apply settings
+		for unit in &mut processed
+		{
+			unit.update_settings(self.settings.clone());
 		}
 
 		// Compile all units

@@ -46,28 +46,6 @@ impl Default for ProjectSettings {
 }
 
 impl ProjectSettings {
-	/// Add configuration details from the translation unit
-	pub fn source_unit(&mut self, unit: &TranslationUnit) {
-		let scope = unit.get_scope();
-
-		match &mut self.output {
-			ProjectOutput::Html(html) => {
-				if let Some((var, _)) =
-					scope.get_variable(&VariableName("html.language".to_string()))
-				{
-					html.language = var.to_string();
-				}
-				if let Some((var, _)) = scope.get_variable(&VariableName("html.icon".to_string())) {
-					html.icon = Some(var.to_string())
-				}
-				if let Some((var, _)) = scope.get_variable(&VariableName("html.css".to_string())) {
-					html.icon = Some(var.to_string());
-				}
-			}
-			_ => todo!(),
-		}
-	}
-
 	/// Sets the project's root path
 	/// - path: The directory containing the project settings file
 	pub fn set_root_path(&mut self, path: &String) -> Result<(), String> {

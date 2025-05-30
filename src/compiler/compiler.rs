@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fmt::format;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -6,9 +7,14 @@ use graphviz_rust::print;
 
 use crate::cache::cache::Cache;
 use crate::parser::reports::Report;
-use crate::unit::element::{nested_kind, ElemKind};
-use crate::unit::scope::{Scope, ScopeAccessor};
+use crate::unit::element::nested_kind;
+use crate::unit::element::ElemKind;
+use crate::unit::scope::Scope;
+use crate::unit::scope::ScopeAccessor;
+use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
+use crate::util::settings::ProjectOutput;
+use crate::util::settings::ProjectSettings;
 
 use super::output::CompilerOutput;
 use super::sanitize::Sanitizer;
@@ -36,10 +42,14 @@ impl Compiler {
 	}
 
 	/// Gets the sanitizer for this compiler
-	pub fn sanitizer(&self) -> Sanitizer { self.sanitizer }
+	pub fn sanitizer(&self) -> Sanitizer {
+		self.sanitizer
+	}
 
 	/// Sanitizes text using this compiler's [`sanitizer`]
-	pub fn sanitize<S: AsRef<str>>(&self, str: S) -> String { self.sanitizer.sanitize(str) }
+	pub fn sanitize<S: AsRef<str>>(&self, str: S) -> String {
+		self.sanitizer.sanitize(str)
+	}
 
 	/// Sanitizes a format string for a [`Target`]
 	///
@@ -57,97 +67,32 @@ impl Compiler {
 	}
 
 	/// Gets the output target of this compiler
-	pub fn target(&self) -> Target { self.target }
-
-	/* FIXME
-	/// Produces the header for a given document
-	fn header(&self, document: &dyn Document) -> String {
-		pub fn get_variable_or_error(
-			document: &dyn Document,
-			var_name: &'static str,
-		) -> Option<Rc<dyn Variable>> {
-			document.get_variable(var_name).or_else(|| {
-				println!(
-					"Missing variable `{var_name}` in {}",
-					document.source().name()
-				);
-				None
-			})
-		}
-
-		let mut result = String::new();
-		match self.target() {
-			Target::HTML => {
-				result += "<!DOCTYPE HTML><html><head>";
-				result += "<meta charset=\"UTF-8\">";
-				if let Some(page_title) = get_variable_or_error(document, "html.page_title") {
-					result += format!(
-						"<title>{}</title>",
-						self.sanitizer.sanitize(page_title.to_string())
-					)
-					.as_str();
-				}
-
-				if let Some(css) = document.get_variable("html.css") {
-					result += format!(
-						"<link rel=\"stylesheet\" href=\"{}\">",
-						self.sanitizer.sanitize(css.to_string())
-					)
-					.as_str();
-				}
-				result += r#"</head><body><div class="layout">"#;
-
-				// TODO: Author, Date, Title, Div
-			}
-			Target::LATEX => {}
-		}
-		result
+	pub fn target(&self) -> Target {
+		self.target
 	}
-
-	/// Produces the footer for a given document
-	fn footer(&self, _document: &dyn Document) -> String {
-		let mut result = String::new();
-		match self.target() {
-			Target::HTML => {
-				result += "</div></body></html>";
-			}
-			Target::LATEX => todo!(""),
-		}
-		result
-	}
-	*/
 
 	pub fn compile_scope(
 		&self,
 		mut output: CompilerOutput,
-		scope: Rc<RefCell<Scope>>
-		) -> CompilerOutput
-	{
+		scope: Rc<RefCell<Scope>>,
+	) -> CompilerOutput {
 		let mut reports = vec![];
-		for (scope, elem) in scope.content_iter(false)
-		{
-			if nested_kind(elem.clone()) == ElemKind::Inline && !output.in_paragraph(&scope)
-			{
-				match self.target
-				{
+		for (scope, elem) in scope.content_iter(false) {
+			if nested_kind(elem.clone()) == ElemKind::Inline && !output.in_paragraph(&scope) {
+				match self.target {
 					Target::HTML => output.add_content("<p>"),
 					Target::LATEX => todo!(),
 				}
 				output.set_paragraph(&scope, true);
-			}
-			else if output.in_paragraph(&scope) && nested_kind(elem.clone()) != ElemKind::Inline
-			{
-				match self.target
-				{
+			} else if output.in_paragraph(&scope) && nested_kind(elem.clone()) != ElemKind::Inline {
+				match self.target {
 					Target::HTML => output.add_content("</p>"),
 					Target::LATEX => todo!(),
 				}
 				output.set_paragraph(&scope, false);
 			}
-				
 
-			if let Err(mut reps) = elem.compile(scope, self, &mut output)
-			{
+			if let Err(mut reps) = elem.compile(scope, self, &mut output) {
 				reports.extend(reps.drain(..));
 			}
 		}
@@ -155,14 +100,54 @@ impl Compiler {
 		output
 	}
 
+	fn header(&self, unit: &TranslationUnit) -> String {
+		let settings = unit.get_settings();
+
+		match self.target {
+			Target::HTML => {
+				let ProjectOutput::Html(html) = &settings.output else {
+					panic!("Invalid project settings")
+				};
+				let css = if let Some(css) = &html.css {
+					format!(
+						"<link rel=\"stylesheet\" href=\"{}\">",
+						self.sanitize(css.as_str())
+					)
+				} else {
+					"".into()
+				};
+				let icon = if let Some(icon) = &html.icon {
+					format!(
+						"<link rel=\"icon\" href=\"{}\">",
+						self.sanitize(icon.as_str())
+					)
+				} else {
+					"".into()
+				};
+				format!(
+					"<!DOCTYPE html><html lang=\"{}\"><meta charset=\"utf-8\">{icon}{css}<head></head><body>",
+					self.sanitize(html.language.as_str())
+				)
+			}
+			_ => todo!(),
+		}
+	}
+
+	fn footer(&self, unit: &TranslationUnit) -> String {
+		let settings = unit.get_settings();
+
+		match self.target {
+			Target::HTML => "</body></html>".into(),
+			_ => todo!(),
+		}
+	}
+
 	/// Compiles a document to it's output
-	pub fn compile(
-		&self,
-		unit: &TranslationUnit,
-	) -> ( /* TODO */ ) {
-		CompilerOutput::run_with_processor(self.target, &unit.colors(), |output| {
+	pub fn compile(&self, unit: &TranslationUnit) -> () {
+		let out = CompilerOutput::run_with_processor(self.target, &unit.colors(), |output| {
 			self.compile_scope(output, unit.get_entry_scope().to_owned())
 		});
+
 		/*
 		let borrow = document.content().borrow();
 
