@@ -1,5 +1,3 @@
-use std::fmt::format;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -7,7 +5,6 @@ use std::time::UNIX_EPOCH;
 
 use ariadne::Color;
 use ariadne::Fmt;
-use graphviz_rust::print;
 
 use crate::cache::cache::Cache;
 use crate::parser::parser::Parser;
@@ -15,12 +12,11 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::resolver::Resolver;
 use crate::parser::source::SourceFile;
-use crate::settings::settings::ProjectSettings;
 use crate::unit::translation::TranslationUnit;
+use util::settings::ProjectSettings;
 
 use super::compiler::Compiler;
 use super::compiler::Target;
-use super::output;
 
 #[derive(Debug)]
 pub enum ProcessError {

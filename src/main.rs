@@ -4,8 +4,8 @@ mod elements;
 mod lsp;
 mod lua;
 mod parser;
-mod settings;
 mod unit;
+mod util;
 
 use std::env::{self};
 use std::fs;
@@ -18,12 +18,9 @@ use compiler::process::ProcessOutputOptions;
 use compiler::process::ProcessQueue;
 use getopts::Matches;
 use getopts::Options;
-use graphviz_rust::attributes::root;
-use graphviz_rust::print;
 use parser::reports::Report;
 use parser::reports::ReportColors;
-use settings::settings::HtmlOutput;
-use settings::settings::ProjectSettings;
+use util::settings::ProjectSettings;
 use walkdir::WalkDir;
 
 extern crate getopts;
@@ -173,7 +170,9 @@ fn input_manual(
 					));
 				}
 			};
-			if !path.ends_with(".nml") { continue }
+			if !path.ends_with(".nml") {
+				continue;
+			}
 
 			files.push(std::fs::canonicalize(path).unwrap());
 		}
@@ -183,19 +182,15 @@ fn input_manual(
 	}
 	let mut settings = ProjectSettings::default();
 	settings.db_path = db_path.unwrap_or("nml.db".into());
-	settings.output_path = Some(
-		output
-			.clone()
-			.split_at(output.rfind(|c| c == '/').unwrap_or(0))
-			.0
-			.to_string(),
-	);
+	settings.output_path = output
+		.clone()
+		.split_at(output.rfind(|c| c == '/').unwrap_or(0))
+		.0
+		.to_string();
 	println!("set={settings:#?}");
 	Ok((
 		files,
-		compiler::process::ProcessOutputOptions::Directory(
-			settings.output_path.as_ref().unwrap().clone(),
-		),
+		compiler::process::ProcessOutputOptions::Directory(settings.output_path.clone()),
 		settings,
 	))
 }
@@ -228,7 +223,7 @@ fn input_project(
 			"Project file `{settings_file}` must be a regular file"
 		));
 	}
-	let settings = match fs::read(&settings_file) {
+	let mut settings = match fs::read(&settings_file) {
 		Ok(content) => {
 			let content = String::from_utf8(content)
 				.map_err(|e| format!("Unable to read project file `{settings_file}`: {e}"))?;
@@ -267,16 +262,17 @@ fn input_project(
 				))
 			}
 		};
-		if !path.ends_with(".nml") { continue }
-
-		files.push(std::fs::canonicalize(path).unwrap());
+		if !path.ends_with(".nml") {
+			continue;
+		}
+		files.push(path.into());
 	}
+	println!("set={settings:#?}");
+	settings.set_root_path(&root_path)?;
 	println!("set={settings:#?}");
 	Ok((
 		files,
-		compiler::process::ProcessOutputOptions::Directory(
-			settings.output_path.as_ref().unwrap().clone(),
-		),
+		compiler::process::ProcessOutputOptions::Directory(settings.output_path.clone()),
 		settings,
 	))
 }
