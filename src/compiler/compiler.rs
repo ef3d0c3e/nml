@@ -145,7 +145,10 @@ impl Compiler {
 		match CompilerOutput::run_with_processor(self.target, &unit.colors(), |output| {
 			self.compile_scope(output, unit.get_entry_scope().to_owned())
 		}) {
-			Ok(_) => Ok(()),
+			Ok(output) => {
+				println!("output={:#?}", output.content);
+				Ok(())
+			},
 			Err(reports) => Err(reports),
 		}
 
@@ -174,6 +177,10 @@ impl Compiler {
 
 		output.to_compiled(self, document, header, footer)
 		*/
+	}
+
+	pub fn get_cache(&self) -> Arc<Cache> {
+		self.cache.clone()
 	}
 }
 
