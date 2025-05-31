@@ -1,18 +1,10 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::parser::source::Source;
-use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
-use crate::parser::source::VirtualSource;
-use crate::unit::variable::Variable;
-use crate::unit::variable::VariableName;
 
 use super::code::CodeRangeData;
-use super::completion::CompleteData;
-use super::completion::CompleteRange;
-use super::completion::Completes;
 use super::conceal::ConcealsData;
 use super::definition::DefinitionData;
 use super::hints::HintsData;
@@ -28,7 +20,6 @@ pub struct LangServerData {
 	pub semantic_tokens: Tokens,
 	/// List of semantic tokens for this translatiop unit
 	pub semantic_data: HashMap<Arc<dyn Source>, SemanticsData>,
-	pub completes: HashMap<Arc<dyn Source>, CompleteData>,
 	pub inlay_hints: HashMap<Arc<dyn Source>, HintsData>,
 	pub definitions: HashMap<Arc<dyn Source>, DefinitionData>,
 	pub conceals: HashMap<Arc<dyn Source>, ConcealsData>,
@@ -42,10 +33,6 @@ impl LangServerData {
 		if !self.semantic_data.contains_key(&source) {
 			self.semantic_data
 				.insert(source.clone(), SemanticsData::new(source.clone()));
-		}
-		if !self.completes.contains_key(&source) {
-			self.completes
-				.insert(source.clone(), CompleteData::default());
 		}
 		if !self.inlay_hints.contains_key(&source) {
 			self.inlay_hints
@@ -84,11 +71,5 @@ impl LangServerData {
 			Some(sems) => Some(f(&sems, &self.semantic_tokens)),
 			None => None,
 		}
-	}
-	
-	pub fn add_completion<'lsp>(&'lsp self, range: CompleteRange)
-	{
-		let Some(comp) = Completes::from_source(range.range.source(), self) else { return };
-		comp.add(range);
 	}
 }

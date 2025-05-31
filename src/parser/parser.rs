@@ -186,7 +186,7 @@ impl Parser {
 	}
 
 	/// Get completion providers for this parser
-	pub fn get_completors(&self) -> Vec<Box<dyn CompletionProvider>>
+	pub fn get_completors(&self) -> Vec<Box<dyn CompletionProvider + 'static + Send + Sync>>
 	{
 		let mut completors = vec![];
 

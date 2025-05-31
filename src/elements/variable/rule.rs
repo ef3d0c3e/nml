@@ -97,15 +97,6 @@ impl Rule for VariableRule {
 
 		// `:expand <name>`
 		let keyword = captures.get(1).unwrap();
-		unit.with_lsp(|lsp| {
-			let apply = Arc::new(|item: &mut CompletionItem| {
-				item.label = "in".into();
-			});
-			lsp.add_completion(CompleteRange {
-				range: Token::new(captures.get(1).unwrap().start()-1..captures.get(1).unwrap().end() + 5, cursor.source()),
-				apply,
-			});
-		});
 		let visibility = match keyword.as_str() {
 			"set" => VariableVisibility::Internal,
 			"export" => VariableVisibility::Exported,
@@ -375,7 +366,7 @@ impl RegexRule for VariableSubstitutionRule {
 		variable.0.expand(unit, token.clone());
 	}
 
-	fn completion(&self) -> Option<Box<dyn CompletionProvider>> {
+	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> {
 		Some(Box::new(VariableCompletion {}))
 	}
 }

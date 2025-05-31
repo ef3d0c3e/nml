@@ -21,6 +21,7 @@ use elements::variable::completion;
 use lsp::code::CodeRangeInfo;
 use lsp::completion::CompleteRange;
 use lsp::completion::Completes;
+use lsp::completion::CompletionProvider;
 use lsp::conceal::ConcealInfo;
 use lsp::conceal::ConcealParams;
 use lsp::styles::StyleInfo;
@@ -45,7 +46,7 @@ pub struct Backend {
 	settings: ProjectSettings,
 	root_path: PathBuf,
 
-	complete_ranges: DashMap<String, Vec<CompleteRange>>,
+	completors: DashMap<String, Vec<Box<dyn CompletionProvider + 'static + Send + Sync>>>,
 
 	document_map: DashMap<String, String>,
 	definition_map: DashMap<String, Vec<(Location, Range)>>,
@@ -72,7 +73,7 @@ impl Backend {
 			settings,
 			root_path,
 
-			complete_ranges: DashMap::default(),
+			completors: DashMap::default(),
 
 			document_map: DashMap::default(),
 			definition_map: DashMap::default(),
@@ -183,21 +184,13 @@ impl Backend {
 			}
 
 			// Completion
+			let completors = parser.get_completors();
 			let mut items = vec![];
-			for completors in parser.get_completors() {
-				completors.add_items(&unit, &mut items);
+			for comp in &completors {
+				comp.unit_items(&unit, &mut items);
 			}
 			self.completions_map.insert(params.uri.to_string(), items);
-			for (source, complete) in &lsp.completes {
-				if let Some(path) = source
-					.clone()
-					.downcast_ref::<SourceFile>()
-					.map(|source| source.path().to_owned())
-				{
-					self.complete_ranges
-						.insert(path, complete.completes.replace(vec![]));
-				}
-			}
+			self.completors.insert(params.uri.to_string(), completors);
 			
 		});
 	}
@@ -367,36 +360,12 @@ impl LanguageServer for Backend {
 		&self,
 		params: CompletionParams,
 	) -> tower_lsp::jsonrpc::Result<Option<CompletionResponse>> {
-		let default = || {
-			Ok(None)
-			//let Some(completions) = self.completions_map.get(params.text_document_position.text_document.uri.as_str()) else { return Ok(None) };
-			//Ok(Some(CompletionResponse::Array(completions.clone())))
-		};
-
-		let source = self.source_files.get(params.text_document_position.text_document.uri.as_str()).map(|v| v.clone()).unwrap();
-		let cursor = LineCursor::from_position(source.clone(), parser::source::OffsetEncoding::Utf16, params.text_document_position.position.line, params.text_document_position.position.character);
-
-		eprintln!("source={}", params.text_document_position.text_document.uri);
-		let Some(completes) = self.complete_ranges.get(params.text_document_position.text_document.uri.as_str()) else { return default() };
-		for i in 0..completes.len() {
-			let item = completes.get(i).unwrap();
-			eprintln!("r={:#?}\n", item.range)
-		}
-			eprintln!("cursor={:#?}\n", cursor);
-		let Ok(index) = completes.binary_search_by(|comp| {
-			if cursor.pos < comp.range.range.start { std::cmp::Ordering::Less }
-			else if cursor.pos > comp.range.range.end { std::cmp::Ordering::Greater }
-			else { std::cmp::Ordering::Equal }
-		}) else { return default() };
-
-			eprintln!("idx={params:#?}\n");
 		let Some(mut completions) = self.completions_map.get(params.text_document_position.text_document.uri.as_str()).map(|v| v.clone()) else { return Ok(None) };
-		let v = &completes[index];
-		for item in &mut completions
+		if let Some(completors) = self.completors.get(params.text_document_position.text_document.uri.as_str())
 		{
-			(v.apply)(item);
+			completors.iter().for_each(|comp| comp.static_items(&params.context, &mut completions));
 		}
-		Ok(Some(CompletionResponse::Array(completions)))
+		Ok(Some(CompletionResponse::Array(completions.clone())))
 	}
 
 	async fn semantic_tokens_full(

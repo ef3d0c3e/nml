@@ -107,7 +107,7 @@ pub trait Rule: Downcast {
 	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) { }
 
 	/// Creates the completion provided associated with the rule
-	fn completion(&self) -> Option<Box<dyn CompletionProvider>> { None }
+	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> { None }
 }
 impl_downcast!(Rule);
 
@@ -153,7 +153,7 @@ pub trait RegexRule {
 	#[allow(unused_variables)]
 	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) { }
 
-	fn completion(&self) -> Option<Box<dyn CompletionProvider>> { None }
+	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> { None }
 }
 
 impl<T: RegexRule + 'static> Rule for T {
@@ -215,7 +215,7 @@ impl<T: RegexRule + 'static> Rule for T {
 		self.register_bindings(kernel, table)
 	}
 
-	fn completion(&self) -> Option<Box<dyn CompletionProvider>> { self.completion() }
+	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> { self.completion() }
 }
 
 #[cfg(test)]
