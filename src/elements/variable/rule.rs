@@ -1,4 +1,5 @@
 use crate::lsp::completion::CompletionProvider;
+use crate::lsp::data::LangServerData;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
@@ -17,6 +18,7 @@ use crate::unit::variable::VariableMutability;
 use crate::unit::variable::VariableName;
 use crate::unit::variable::VariableVisibility;
 use ariadne::Fmt;
+use ariadne::Span;
 use parser::state::ParseMode;
 use regex::Captures;
 use regex::Regex;
@@ -83,14 +85,14 @@ impl Rule for VariableRule {
 		&self,
 		unit: &mut TranslationUnit<'u>,
 		cursor: &Cursor,
-		match_data: Box<dyn Any>,
+		_match_data: Box<dyn Any>,
 	) -> Cursor {
 		let source = cursor.source();
 		let content = source.content();
 		let captures = self.decl_re.captures_at(content, cursor.pos()).unwrap();
 		assert_eq!(captures.get(0).unwrap().start(), cursor.pos());
 
-		let mut end_pos = captures.get(0).unwrap().end();
+		let end_pos = captures.get(0).unwrap().end();
 
 		// `:expand <name>`
 		let keyword = captures.get(1).unwrap();
@@ -99,6 +101,11 @@ impl Rule for VariableRule {
 			"export" => VariableVisibility::Exported,
 			_ => panic!(),
 		};
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(cursor.source(), |sems, tokens| {
+				sems.add(keyword.start() - 1..keyword.end(), tokens.command);
+			})
+		});
 		let varname = captures.get(2).unwrap();
 		if varname.as_str().is_empty() {
 			report_err!(
@@ -109,6 +116,11 @@ impl Rule for VariableRule {
 			);
 			return cursor.at(end_pos);
 		}
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(cursor.source(), |sems, tokens| {
+				sems.add(varname.range(), tokens.variable_name);
+			})
+		});
 		let name = match VariableName::try_from(varname.as_str()) {
 			Ok(name) => name,
 			Err(err) => {
@@ -135,6 +147,11 @@ impl Rule for VariableRule {
 			);
 			return cursor.at(end_pos);
 		}
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(cursor.source(), |sems, tokens| {
+				sems.add(equal.range(), tokens.variable_sep);
+			})
+		});
 
 		// Check if mutable
 		if let Some((var, _)) = unit
@@ -207,6 +224,11 @@ impl Rule for VariableRule {
 				}
 			};
 
+			unit.with_lsp(|lsp| {
+				lsp.with_semantics(cursor.source(), |sems, tokens| {
+					sems.add(value.range(), tokens.variable_val_int);
+				})
+			});
 			unit.get_scope().insert_variable(Rc::new(PropertyVariable {
 				location: Token::new(
 					captures.get(0).unwrap().start()..val_captures.get(0).unwrap().end() - 1,
@@ -240,6 +262,15 @@ impl Rule for VariableRule {
 		let content_range = end_pos + delim.len()..end_pos + delim.len() + value_len;
 		// Insert as new source that can be parsed later
 		if delim == "}}" {
+			unit.with_lsp(|lsp| {
+				lsp.with_semantics(cursor.source(), |sems, tokens| {
+					sems.add(end_pos..end_pos + delim.len(), tokens.variable_val_block);
+					sems.add_to_queue(
+						content_range.end()..content_range.end() + delim.len(),
+						tokens.variable_val_block,
+					);
+				})
+			});
 			let content_source = escape_source(
 				cursor.source(),
 				content_range.clone(),
@@ -257,6 +288,14 @@ impl Rule for VariableRule {
 		}
 		// Insert as string property
 		else {
+			unit.with_lsp(|lsp| {
+				lsp.with_semantics(cursor.source(), |sems, tokens| {
+					sems.add(
+						content_range.start() - 1..content_range.end() + 1,
+						tokens.variable_val_string,
+					);
+				})
+			});
 			let value = escape_text(
 				'\\',
 				delim,
@@ -315,6 +354,15 @@ impl RegexRule for VariableSubstitutionRule {
 	) {
 		let variable_name = captures.get(1).unwrap();
 		let closing_token = captures.get(2).unwrap();
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(token.start()..token.start()+1, tokens.variable_sep);
+				sems.add_to_queue(variable_name.range(),
+					tokens.variable_name,
+				);
+				sems.add(closing_token.range(), tokens.variable_sep);
+			})
+		});
 		if closing_token.is_empty() {
 			report_err!(
 				unit,

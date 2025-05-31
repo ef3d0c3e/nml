@@ -93,205 +93,43 @@ macro_rules! token {
 /// Predefined list of tokens
 #[derive(Debug)]
 pub struct Tokens {
-	pub section_heading: (u32, u32),
-	pub section_reference: (u32, u32),
-	pub section_kind: (u32, u32),
-	pub section_name: (u32, u32),
+	pub command: (u32, u32),
 
 	pub prop_equal: (u32, u32),
 	pub prop_comma: (u32, u32),
 	pub prop_name: (u32, u32),
 	pub prop_value: (u32, u32),
 
-	pub comment: (u32, u32),
+	pub variable_name: (u32, u32),
+	pub variable_sep: (u32, u32),
+	pub variable_val_int: (u32, u32),
+	pub variable_val_string: (u32, u32),
+	pub variable_val_block: (u32, u32),
 
 	pub link_display_sep: (u32, u32),
 	pub link_url_sep: (u32, u32),
 	pub link_url: (u32, u32),
-
-	pub style_marker: (u32, u32),
-
-	pub customstyle_marker: (u32, u32),
-
-	pub import_import: (u32, u32),
-	pub import_as_sep: (u32, u32),
-	pub import_as: (u32, u32),
-	pub import_path: (u32, u32),
-
-	pub reference_operator: (u32, u32),
-	pub reference_link_sep: (u32, u32),
-	pub reference_doc_sep: (u32, u32),
-	pub reference_doc: (u32, u32),
-	pub reference_link: (u32, u32),
-	pub reference_props_sep: (u32, u32),
-
-	pub variable_operator: (u32, u32),
-	pub variable_kind: (u32, u32),
-	pub variable_name: (u32, u32),
-	pub variable_sep: (u32, u32),
-	pub variable_value: (u32, u32),
-
-	pub variable_sub_sep: (u32, u32),
-	pub variable_sub_name: (u32, u32),
-
-	pub elemstyle_operator: (u32, u32),
-	pub elemstyle_name: (u32, u32),
-	pub elemstyle_equal: (u32, u32),
-	pub elemstyle_value: (u32, u32),
-
-	pub code_sep: (u32, u32),
-	pub code_props_sep: (u32, u32),
-	pub code_lang: (u32, u32),
-	pub code_title: (u32, u32),
-
-	pub script_sep: (u32, u32),
-	pub script_kernel_sep: (u32, u32),
-	pub script_kernel: (u32, u32),
-	pub script_kind: (u32, u32),
-
-	pub list_bullet: (u32, u32),
-	pub list_props_sep: (u32, u32),
-	pub list_entry_type: (u32, u32),
-
-	pub block_marker: (u32, u32),
-	pub block_name: (u32, u32),
-	pub block_props_sep: (u32, u32),
-
-	pub raw_sep: (u32, u32),
-	pub raw_props_sep: (u32, u32),
-	pub raw_content: (u32, u32),
-
-	pub tex_sep: (u32, u32),
-	pub tex_props_sep: (u32, u32),
-	pub tex_content: (u32, u32),
-
-	pub graph_sep: (u32, u32),
-	pub graph_props_sep: (u32, u32),
-	pub graph_content: (u32, u32),
-
-	pub layout_sep: (u32, u32),
-	pub layout_token: (u32, u32),
-	pub layout_props_sep: (u32, u32),
-	pub layout_type: (u32, u32),
-
-	pub table_specifier: (u32, u32),
-	pub table_reference: (u32, u32),
-	pub table_title: (u32, u32),
-	pub table_sep: (u32, u32),
-	pub table_props_sep: (u32, u32),
-
-	pub toc_sep: (u32, u32),
-	pub toc_token: (u32, u32),
-	pub toc_title: (u32, u32),
-
-	pub media_sep: (u32, u32),
-	pub media_refname_sep: (u32, u32),
-	pub media_refname: (u32, u32),
-	pub media_uri_sep: (u32, u32),
-	pub media_uri: (u32, u32),
-	pub media_props_sep: (u32, u32),
 }
 
 impl Default for Tokens {
 	fn default() -> Self {
 		Self {
-			section_heading: token!("number"),
-			section_reference: token!("enum", "async"),
-			section_kind: token!("enum"),
-			section_name: token!("string"),
+			command: token!("function"),
 
 			prop_equal: token!("operator"),
 			prop_comma: token!("operator"),
 			prop_name: token!("class"),
 			prop_value: token!("enum"),
 
-			comment: token!("comment"),
+			variable_name: token!("constructor", "async"),
+			variable_sep: token!("operator"),
+			variable_val_int: token!("number"),
+			variable_val_string: token!("string"),
+			variable_val_block: token!("operator"),
 
 			link_display_sep: token!("macro"),
 			link_url_sep: token!("macro"),
 			link_url: token!("function", "readonly", "abstract", "abstract"),
-
-			style_marker: token!("operator"),
-
-			customstyle_marker: token!("operator"),
-
-			import_import: token!("macro"),
-			import_as_sep: token!("operator"),
-			import_as: token!("operator"),
-			import_path: token!("parameter"),
-
-			reference_operator: token!("operator"),
-			reference_link_sep: token!("operator"),
-			reference_doc_sep: token!("function"),
-			reference_doc: token!("function"),
-			reference_link: token!("macro"),
-			reference_props_sep: token!("operator"),
-
-			variable_operator: token!("operator"),
-			variable_kind: token!("operator"),
-			variable_name: token!("macro"),
-			variable_sep: token!("operator"),
-			variable_value: token!("parameter"),
-
-			variable_sub_sep: token!("operator"),
-			variable_sub_name: token!("macro"),
-
-			elemstyle_operator: token!("operator"),
-			elemstyle_name: token!("macro"),
-			elemstyle_equal: token!("operator"),
-			elemstyle_value: token!("number"),
-
-			code_sep: token!("operator"),
-			code_props_sep: token!("operator"),
-			code_lang: token!("function"),
-			code_title: token!("number"),
-
-			script_sep: token!("operator"),
-			script_kernel_sep: token!("operator"),
-			script_kernel: token!("function"),
-			script_kind: token!("function"),
-
-			list_bullet: token!("macro"),
-			list_props_sep: token!("operator"),
-			list_entry_type: token!("float"),
-
-			block_marker: token!("macro"),
-			block_name: token!("function"),
-			block_props_sep: token!("operator"),
-
-			raw_sep: token!("operator"),
-			raw_props_sep: token!("operator"),
-			raw_content: token!("string"),
-
-			tex_sep: token!("modifier"),
-			tex_props_sep: token!("operator"),
-			tex_content: token!("string"),
-
-			graph_sep: token!("modifier"),
-			graph_props_sep: token!("operator"),
-			graph_content: token!("string"),
-
-			layout_sep: token!("number"),
-			layout_token: token!("number"),
-			layout_props_sep: token!("operator"),
-			layout_type: token!("function"),
-
-			table_specifier: token!("comment"),
-			table_reference: token!("enum", "async"),
-			table_title: token!("string"),
-			table_sep: token!("comment"),
-			table_props_sep: token!("operator"),
-
-			toc_sep: token!("number"),
-			toc_token: token!("number"),
-			toc_title: token!("function"),
-
-			media_sep: token!("macro"),
-			media_refname_sep: token!("macro"),
-			media_refname: token!("enum"),
-			media_uri_sep: token!("macro"),
-			media_uri: token!("function"),
-			media_props_sep: token!("operator"),
 		}
 	}
 }
