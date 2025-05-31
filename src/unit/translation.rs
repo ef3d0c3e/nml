@@ -218,7 +218,10 @@ impl<'u> TranslationUnit<'u> {
 					value_token: token.clone(),
 				}));
 
+		self.with_lsp(|mut lsp| lsp.on_new_source(self.source.clone()));
 		self.parser.parse(&mut self);
+		self.with_lsp(|mut lsp| lsp.on_source_end(self.source.clone()));
+
 		if let Some(lsp) = &mut self.lsp {
 			// TODO: send to lsp
 		} else {

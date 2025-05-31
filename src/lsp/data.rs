@@ -1,10 +1,13 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
 use crate::parser::source::VirtualSource;
+use crate::unit::variable::Variable;
+use crate::unit::variable::VariableName;
 
 use super::code::CodeRangeData;
 use super::conceal::ConcealsData;
@@ -31,7 +34,7 @@ pub struct LangServerData {
 
 impl LangServerData {
 	/// Method that must be called when a source is added
-	pub fn new_source(&mut self, source: Arc<dyn Source>) {
+	pub fn on_new_source(&mut self, source: Arc<dyn Source>) {
 		if !self.semantic_data.contains_key(&source) {
 			self.semantic_data
 				.insert(source.clone(), SemanticsData::new(source.clone()));
@@ -77,16 +80,16 @@ impl LangServerData {
 		None
 	}
 
-	//pub fn on_scope_end(&mut self, source: Arc<dyn Source>) {
-	//	if source.content().is_empty() {
-	//		return;
-	//	}
-	//	// Process the rest of the semantic queue for the current source
-	//	let pos = source.original_position(source.content().len() - 1).1;
-	//	if let Some((sems, _)) = Semantics::from_source(source, lsp) {
-	//		sems.process_queue(pos);
-	//	}
-	//}
+	pub fn on_source_end(&mut self, source: Arc<dyn Source>) {
+		if source.content().is_empty() {
+			return;
+		}
+		// Process the rest of the semantic queue for the current source
+		let pos = source.original_position(source.content().len() - 1).1;
+		if let Some(sems) = Semantics::from_source(source, self) {
+			sems.process_queue(pos);
+		}
+	}
 
 	pub fn with_semantics<'lsp, F, R>(&'lsp self, source: Arc<dyn Source>, f: F) -> Option<R>
 		where F: FnOnce(&Semantics, &'lsp Tokens) -> R

@@ -364,7 +364,7 @@ impl<'lsp> Semantics<'lsp> {
 	pub fn from_source(
 		source: Arc<dyn Source>,
 		lsp: &'lsp LangServerData,
-	) -> Option<Semantics> {
+	) -> Option<Semantics<'lsp>> {
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
@@ -382,7 +382,7 @@ impl<'lsp> Semantics<'lsp> {
 	}
 
 	/// Processes the semantic queue up to a certain position
-	fn process_queue(&self, pos: usize) {
+	pub fn process_queue(&self, pos: usize) {
 		let mut queue = self.sems.semantic_queue.borrow_mut();
 		while !queue.is_empty() {
 			let (range, token) = queue.front().unwrap();

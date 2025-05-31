@@ -12,7 +12,6 @@ use std::fs::read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use compiler::output;
 use dashmap::DashMap;
 use lsp::code::CodeRangeInfo;
 use lsp::conceal::ConcealInfo;
@@ -21,7 +20,6 @@ use lsp::styles::StyleInfo;
 use lsp::styles::StyleParams;
 use parser::parser::Parser;
 use parser::source::SourceFile;
-use tokio::sync::Mutex;
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
@@ -31,7 +29,7 @@ use tower_lsp::Server;
 use unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;
 
-struct Backend {
+pub struct Backend {
 	client: Client,
 	settings: ProjectSettings,
 	root_path: PathBuf,
@@ -44,6 +42,7 @@ struct Backend {
 	conceals_map: DashMap<String, Vec<ConcealInfo>>,
 	styles_map: DashMap<String, Vec<StyleInfo>>,
 	coderanges_map: DashMap<String, Vec<CodeRangeInfo>>,
+	completions_map: DashMap<String, Vec<CompletionItem>>,
 }
 
 #[derive(Debug)]
@@ -67,6 +66,7 @@ impl Backend {
 			conceals_map: DashMap::default(),
 			styles_map: DashMap::default(),
 			coderanges_map: DashMap::default(),
+			completions_map: DashMap::default(),
 		}
 	}
 
@@ -94,7 +94,6 @@ impl Backend {
 		let unit = unit.consume(output_file);
 
 		// TODO: Run resolver
-
 		unit.with_lsp(|lsp| {
 			// Semantics
 			for (source, sem) in &lsp.semantic_data {
@@ -165,6 +164,13 @@ impl Backend {
 						.insert(path, coderanges.coderanges.replace(vec![]));
 				}
 			}
+
+			let mut items = vec![];
+			for completors in parser.get_completors() {
+				completors.add_items(&unit, &mut items);
+			}
+			self.completions_map.insert(params.uri.to_string(), items);
+			
 		});
 	}
 
@@ -331,16 +337,12 @@ impl LanguageServer for Backend {
 
 	async fn completion(
 		&self,
-		_params: CompletionParams,
+		params: CompletionParams,
 	) -> tower_lsp::jsonrpc::Result<Option<CompletionResponse>> {
 		//let uri = params.text_document_position.text_document.uri;
 		//let position = params.text_document_position.position;
-		let completions = || -> Option<Vec<CompletionItem>> {
-			let ret = Vec::with_capacity(0);
-
-			Some(ret)
-		}();
-		Ok(completions.map(CompletionResponse::Array))
+		let Some(completions) = self.completions_map.get(params.text_document_position.text_document.uri.as_str()) else { return Ok(None) };
+		Ok(Some(CompletionResponse::Array(completions.clone())))
 	}
 
 	async fn semantic_tokens_full(

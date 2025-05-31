@@ -4,8 +4,11 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::slice::Iter;
 
+use tower_lsp::lsp_types::CompletionItem;
+
 use crate::elements::eof::elem::Eof;
 use crate::elements::text::elem::Text;
+use crate::lsp::completion::CompletionProvider;
 use crate::unit::element::Element;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
@@ -180,6 +183,18 @@ impl Parser {
 		//unit.with_lsp(|lsp| {
 		//	lsp.
 		//});
+	}
+
+	/// Get completion providers for this parser
+	pub fn get_completors(&self) -> Vec<Box<dyn CompletionProvider>>
+	{
+		let mut completors = vec![];
+
+		self.rules.iter().for_each(|rule| {
+			let Some(completor) = rule.completion() else { return };
+			completors.push(completor);
+		});
+		completors
 	}
 }
 

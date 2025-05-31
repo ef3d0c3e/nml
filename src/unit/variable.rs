@@ -9,6 +9,7 @@ use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::state::ParseMode;
 use std::cell::RefCell;
+use std::fmt::write;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -118,11 +119,29 @@ pub enum VariableVisibility
 	Internal,
 }
 
+impl std::fmt::Display for VariableVisibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VariableVisibility::Exported => write!(f, "exported"),
+            VariableVisibility::Internal => write!(f, "internal"),
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum VariableMutability
 {
 	Mutable,
 	Immutable,
+}
+
+impl std::fmt::Display for VariableMutability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VariableMutability::Mutable => write!(f, "mutable"),
+            VariableMutability::Immutable => write!(f, "immutable"),
+        }
+    }
 }
 
 /// Trait for document variables

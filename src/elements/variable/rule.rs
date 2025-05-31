@@ -1,40 +1,44 @@
+use crate::lsp::completion::CompletionProvider;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-use crate::parser::rule::{RegexRule, Rule};
-use crate::parser::source::{Cursor, Token};
-use crate::parser::util::{escape_source, escape_text};
+use crate::parser::rule::RegexRule;
+use crate::parser::rule::Rule;
+use crate::parser::source::Cursor;
+use crate::parser::source::Token;
+use crate::parser::util::escape_source;
+use crate::parser::util::escape_text;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationUnit;
-use crate::unit::variable::{ContentVariable, PropertyValue, PropertyVariable, Variable, VariableMutability, VariableName, VariableVisibility};
+use crate::unit::variable::ContentVariable;
+use crate::unit::variable::PropertyValue;
+use crate::unit::variable::PropertyVariable;
+use crate::unit::variable::Variable;
+use crate::unit::variable::VariableMutability;
+use crate::unit::variable::VariableName;
+use crate::unit::variable::VariableVisibility;
 use ariadne::Fmt;
 use parser::state::ParseMode;
-use regex::{Captures, Regex};
+use regex::Captures;
+use regex::Regex;
 use std::any::Any;
 use std::rc::Rc;
 
-
-fn parse_delimited(content: &str, delim: &str) -> Option<usize>
-{
+fn parse_delimited(content: &str, delim: &str) -> Option<usize> {
 	let mut escaped = 0usize;
 	let mut it = content.char_indices();
 	let mut end_pos = 0;
 
 	loop {
-		let Some((pos, c)) = it.next() else { return None };
+		let Some((pos, c)) = it.next() else {
+			return None;
+		};
 		end_pos = pos;
-		if c == '\\'
-		{
+		if c == '\\' {
 			escaped += 1;
-		} else if escaped % 2 == 1
-		{
-			
-		}
-		else if content[pos..].starts_with(delim)
-		{
+		} else if escaped % 2 == 1 {
+		} else if content[pos..].starts_with(delim) {
 			break;
-		}
-		else
-		{
+		} else {
 			escaped = 0;
 		}
 	}
@@ -48,43 +52,37 @@ pub struct VariableRule {
 	int_re: Regex,
 }
 
-impl Default for VariableRule
-{
-	fn default() -> Self
-	{
+impl Default for VariableRule {
+	fn default() -> Self {
 		Self {
 			decl_re: Regex::new(r#"(?:\n|^):(export|set)\s+([^=\s]*)\s*(=?)\s*"#).unwrap(),
-			int_re: Regex::new(r#"\s*(.*?)(true|false|(?:\+|-)?[0-9]*)[^\S\r\n]*(?:$|\n)"#).unwrap(),
+			int_re: Regex::new(r#"\s*(.*?)(true|false|(?:\+|-)?[0-9]*)[^\S\r\n]*(?:$|\n)"#)
+				.unwrap(),
 		}
 	}
 }
 
-impl Rule for VariableRule
-{
-    fn name(&self) -> &'static str {
-        "Variable"
-    }
+impl Rule for VariableRule {
+	fn name(&self) -> &'static str {
+		"Variable"
+	}
 
-    fn previous(&self) -> Option<&'static str> {
-        Some("Link")
-    }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Link")
+	}
 
-    fn next_match(
-		    &self,
-		    _mode: &ParseMode,
-		    cursor: &Cursor,
-	    ) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _mode: &ParseMode, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.decl_re
 			.find_at(cursor.source().content(), cursor.pos())
 			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
-    }
+	}
 
-    fn on_match<'u>(
-		    &self,
-		    unit: &mut TranslationUnit<'u>,
-		    cursor: &Cursor,
-		    match_data: Box<dyn Any>,
-	    ) -> Cursor {
+	fn on_match<'u>(
+		&self,
+		unit: &mut TranslationUnit<'u>,
+		cursor: &Cursor,
+		match_data: Box<dyn Any>,
+	) -> Cursor {
 		let source = cursor.source();
 		let content = source.content();
 		let captures = self.decl_re.captures_at(content, cursor.pos()).unwrap();
@@ -92,48 +90,38 @@ impl Rule for VariableRule
 
 		let mut end_pos = captures.get(0).unwrap().end();
 
-		// `:expand <name>` 
+		// `:expand <name>`
 		let keyword = captures.get(1).unwrap();
-		let visibility = match keyword.as_str()
-		{
+		let visibility = match keyword.as_str() {
 			"set" => VariableVisibility::Internal,
 			"export" => VariableVisibility::Exported,
 			_ => panic!(),
 		};
 		let varname = captures.get(2).unwrap();
-		if varname.as_str().is_empty()
-		{
+		if varname.as_str().is_empty() {
 			report_err!(
 				unit,
 				cursor.source(),
 				"Invalid variable name".into(),
-				span(
-					varname.range(),
-					format!("Name is empty")
-				)
+				span(varname.range(), format!("Name is empty"))
 			);
-			return cursor.at(end_pos)
+			return cursor.at(end_pos);
 		}
-		let name = match VariableName::try_from(varname.as_str())
-		{
+		let name = match VariableName::try_from(varname.as_str()) {
 			Ok(name) => name,
 			Err(err) => {
 				report_err!(
 					unit,
 					cursor.source(),
 					"Invalid variable name".into(),
-					span(
-						varname.range(),
-						err
-					)
+					span(varname.range(), err)
 				);
-				return cursor.at(end_pos)
+				return cursor.at(end_pos);
 			}
 		};
 
 		let equal = captures.get(3).unwrap();
-		if equal.as_str().is_empty()
-		{
+		if equal.as_str().is_empty() {
 			report_err!(
 				unit,
 				cursor.source(),
@@ -143,13 +131,14 @@ impl Rule for VariableRule
 					format!("Missing '{}' symbol", "=".fg(unit.colors().info))
 				)
 			);
-			return cursor.at(end_pos)
+			return cursor.at(end_pos);
 		}
 
 		// Check if mutable
-		if let Some((var, _)) = unit.get_entry_scope()
-									.get_variable(&name)
-									.filter(|(var, _)| *var.mutability() != VariableMutability::Mutable)
+		if let Some((var, _)) = unit
+			.get_entry_scope()
+			.get_variable(&name)
+			.filter(|(var, _)| *var.mutability() != VariableMutability::Mutable)
 		{
 			report_err!(
 				unit,
@@ -157,7 +146,10 @@ impl Rule for VariableRule
 				"Invalid variable definition".into(),
 				span(
 					varname.range(),
-					format!("Cannot overwrite immutable variable: {}", varname.as_str().fg(unit.colors().highlight))
+					format!(
+						"Cannot overwrite immutable variable: {}",
+						varname.as_str().fg(unit.colors().highlight)
+					)
 				),
 				span_highlight(
 					var.location().source(),
@@ -165,65 +157,65 @@ impl Rule for VariableRule
 					format!("Previously defined here")
 				),
 			);
-			return cursor.at(end_pos)
+			return cursor.at(end_pos);
 		}
 
-		let delim = if content[end_pos..].starts_with("'''") { "'''" }
-		else if content[end_pos..].starts_with("\"\"\"") { "\"\"\"" }
-		else if content[end_pos..].starts_with("{{") { "}}" }
-		else if content[end_pos..].starts_with("'") { "'" }
-		else if content[end_pos..].starts_with("\"") { "\"" }
-		else {
+		let delim = if content[end_pos..].starts_with("'''") {
+			"'''"
+		} else if content[end_pos..].starts_with("\"\"\"") {
+			"\"\"\""
+		} else if content[end_pos..].starts_with("{{") {
+			"}}"
+		} else if content[end_pos..].starts_with("'") {
+			"'"
+		} else if content[end_pos..].starts_with("\"") {
+			"\""
+		} else {
 			// Parse as int
 			let val_captures = self.int_re.captures_at(content, end_pos).unwrap();
-			if !val_captures.get(1).unwrap().as_str().is_empty()
-			{
+			if !val_captures.get(1).unwrap().as_str().is_empty() {
 				report_err!(
 					unit,
 					cursor.source(),
 					"Invalid variable definition".into(),
 					span(
-						keyword.start()-1..end_pos,
+						keyword.start() - 1..end_pos,
 						format!("Expected value after declaration")
 					)
 				);
 				return cursor.at(end_pos);
 			}
 			let value = val_captures.get(2).unwrap();
-			let val = if value.as_str() == "true"
-			{
+			let val = if value.as_str() == "true" {
 				1i64
-			} else if value.as_str() == "false"
-			{
+			} else if value.as_str() == "false" {
 				0i64
 			} else {
-				match value.as_str().parse::<i64>()
-				{
+				match value.as_str().parse::<i64>() {
 					Ok(x) => x,
 					Err(err) => {
 						report_err!(
 							unit,
 							cursor.source(),
 							"Invalid variable definition".into(),
-							span(
-								value.range(),
-								format!("Failed to parse as integer: {err}")
-							)
+							span(value.range(), format!("Failed to parse as integer: {err}"))
 						);
 						return cursor.at(end_pos);
-					},
+					}
 				}
 			};
 
-			unit.get_scope()
-				.insert_variable(Rc::new(PropertyVariable {
-					location: Token::new(captures.get(0).unwrap().start()..val_captures.get(0).unwrap().end() - 1, cursor.source()),
-					name,
-					visibility,
-					mutability: VariableMutability::Mutable,
-					value: PropertyValue::Integer(val),
-					value_token: Token::new(value.range(), cursor.source()),
-				}));
+			unit.get_scope().insert_variable(Rc::new(PropertyVariable {
+				location: Token::new(
+					captures.get(0).unwrap().start()..val_captures.get(0).unwrap().end() - 1,
+					cursor.source(),
+				),
+				name,
+				visibility,
+				mutability: VariableMutability::Mutable,
+				value: PropertyValue::Integer(val),
+				value_token: Token::new(value.range(), cursor.source()),
+			}));
 			return cursor.at(val_captures.get(0).unwrap().end() - 1);
 		};
 
@@ -233,11 +225,11 @@ impl Rule for VariableRule
 				cursor.source(),
 				"Invalid variable definition".into(),
 				span(
-					keyword.start()-1..end_pos+delim.len(),
+					keyword.start() - 1..end_pos + delim.len(),
 					format!("Missing end delimiter")
 				),
 				span(
-					end_pos..end_pos+delim.len(),
+					end_pos..end_pos + delim.len(),
 					format!("Start delimiter here")
 				)
 			);
@@ -245,31 +237,32 @@ impl Rule for VariableRule
 		};
 		let content_range = end_pos + delim.len()..end_pos + delim.len() + value_len;
 		// Insert as new source that can be parsed later
-		if delim == "}}"
-		{
+		if delim == "}}" {
 			let content_source = escape_source(
 				cursor.source(),
 				content_range.clone(),
 				format!(":VAR:Variable Content for `{}`", &name.0),
 				'\\',
-				delim
-				);
-			unit.get_scope()
-				.insert_variable(Rc::new(ContentVariable {
-					location: Token::new(keyword.start()-1..content_range.end, cursor.source()),
-					name,
-					visibility,
-					mutability: VariableMutability::Mutable,
-					content: content_source,
-				}) as Rc<dyn Variable>);
+				delim,
+			);
+			unit.get_scope().insert_variable(Rc::new(ContentVariable {
+				location: Token::new(keyword.start() - 1..content_range.end, cursor.source()),
+				name,
+				visibility,
+				mutability: VariableMutability::Mutable,
+				content: content_source,
+			}) as Rc<dyn Variable>);
 		}
 		// Insert as string property
-		else
-		{
-			let value = escape_text('\\', delim, content[content_range.clone()].to_string(), false);
-			unit.get_scope()
-				.insert_variable(Rc::new(PropertyVariable {
-				location: Token::new(keyword.start()-1..content_range.end, cursor.source()),
+		else {
+			let value = escape_text(
+				'\\',
+				delim,
+				content[content_range.clone()].to_string(),
+				false,
+			);
+			unit.get_scope().insert_variable(Rc::new(PropertyVariable {
+				location: Token::new(keyword.start() - 1..content_range.end, cursor.source()),
 				name,
 				visibility,
 				mutability: VariableMutability::Mutable,
@@ -277,8 +270,8 @@ impl Rule for VariableRule
 				value_token: Token::new(content_range, cursor.source()),
 			}) as Rc<dyn Variable>);
 		}
-		return cursor.at(end_pos + value_len + 2 * delim.len())
-    }
+		return cursor.at(end_pos + value_len + 2 * delim.len());
+	}
 }
 
 #[auto_registry::auto_registry(registry = "rules")]
@@ -295,13 +288,21 @@ impl Default for VariableSubstitutionRule {
 }
 
 impl RegexRule for VariableSubstitutionRule {
-	fn name(&self) -> &'static str { "Variable Substitution" }
+	fn name(&self) -> &'static str {
+		"Variable Substitution"
+	}
 
-	fn previous(&self) -> Option<&'static str> { Some("Variable") }
+	fn previous(&self) -> Option<&'static str> {
+		Some("Variable")
+	}
 
-	fn regexes(&self) -> &[regex::Regex] { &self.re }
+	fn regexes(&self) -> &[regex::Regex] {
+		&self.re
+	}
 
-	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
+	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool {
+		true
+	}
 
 	fn on_regex_match<'u>(
 		&self,
@@ -312,51 +313,55 @@ impl RegexRule for VariableSubstitutionRule {
 	) {
 		let variable_name = captures.get(1).unwrap();
 		let closing_token = captures.get(2).unwrap();
-		if closing_token.is_empty()
-		{
+		if closing_token.is_empty() {
 			report_err!(
 				unit,
 				token.source(),
 				"Unterminated variable substitution".into(),
 				span(
-					variable_name.start()-1..closing_token.start(),
-					format!("Missing terminating '{0}' after initial '{0}'", "%".fg(unit.colors().info))
+					variable_name.start() - 1..closing_token.start(),
+					format!(
+						"Missing terminating '{0}' after initial '{0}'",
+						"%".fg(unit.colors().info)
+					)
 				)
 			);
-			return
+			return;
 		}
 
-		let varname = match VariableName::try_from(variable_name.as_str())
-		{
+		let varname = match VariableName::try_from(variable_name.as_str()) {
 			Ok(name) => name,
 			Err(err) => {
 				report_err!(
 					unit,
 					token.source(),
 					"Invalid variable name".into(),
-					span(
-						variable_name.end()-1..closing_token.start(),
-						err
-					)
+					span(variable_name.end() - 1..closing_token.start(), err)
 				);
-				return
-			},
+				return;
+			}
 		};
 
-		let Some(variable) = unit.get_scope()
-			.get_variable(&varname) else {
+		let Some(variable) = unit.get_scope().get_variable(&varname) else {
 			report_err!(
 				unit,
 				token.source(),
 				"Unknown variable".into(),
 				span(
 					variable_name.start()..closing_token.start(),
-					format!("Unable to find a variable with name `{}`", &varname.0.fg(unit.colors().highlight))
+					format!(
+						"Unable to find a variable with name `{}`",
+						&varname.0.fg(unit.colors().highlight)
+					)
 				),
 			);
-			return
+			return;
 		};
 
 		variable.0.expand(unit, token.clone());
+	}
+
+	fn completion(&self) -> Option<Box<dyn CompletionProvider>> {
+		Some(Box::new(VariableCompletion {}))
 	}
 }

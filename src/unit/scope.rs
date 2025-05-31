@@ -29,7 +29,7 @@ pub struct Scope {
 	source: Arc<dyn Source>,
 
 	/// Variables declared within the scope
-	variables: HashMap<VariableName, Rc<dyn Variable>>,
+	pub variables: HashMap<VariableName, Rc<dyn Variable>>,
 
 	/// Enables paragraphing
 	///

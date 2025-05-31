@@ -1,6 +1,7 @@
 use super::source::Cursor;
 use super::source::Token;
 use super::state::ParseMode;
+use crate::lsp::completion::CompletionProvider;
 use crate::lua::kernel::Kernel;
 use crate::unit::translation::TranslationUnit;
 use downcast_rs::impl_downcast;
@@ -104,6 +105,9 @@ pub trait Rule: Downcast {
 	/// Registers lua bindings for this rule on the given kernel
 	#[allow(unused_variables)]
 	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) { }
+
+	/// Creates the completion provided associated with the rule
+	fn completion(&self) -> Option<Box<dyn CompletionProvider>> { None }
 }
 impl_downcast!(Rule);
 
@@ -148,6 +152,8 @@ pub trait RegexRule {
 
 	#[allow(unused_variables)]
 	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) { }
+
+	fn completion(&self) -> Option<Box<dyn CompletionProvider>> { None }
 }
 
 impl<T: RegexRule + 'static> Rule for T {
@@ -208,6 +214,8 @@ impl<T: RegexRule + 'static> Rule for T {
 	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) {
 		self.register_bindings(kernel, table)
 	}
+
+	fn completion(&self) -> Option<Box<dyn CompletionProvider>> { self.completion() }
 }
 
 #[cfg(test)]
