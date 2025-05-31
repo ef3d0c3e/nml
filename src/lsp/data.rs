@@ -10,6 +10,9 @@ use crate::unit::variable::Variable;
 use crate::unit::variable::VariableName;
 
 use super::code::CodeRangeData;
+use super::completion::CompleteData;
+use super::completion::CompleteRange;
+use super::completion::Completes;
 use super::conceal::ConcealsData;
 use super::definition::DefinitionData;
 use super::hints::HintsData;
@@ -19,12 +22,13 @@ use super::semantic::Tokens;
 use super::styles::StylesData;
 
 /// Stores data for a translation unit that will be passed to the language server
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct LangServerData {
 	/// Available semantic tokens
 	pub semantic_tokens: Tokens,
 	/// List of semantic tokens for this translatiop unit
 	pub semantic_data: HashMap<Arc<dyn Source>, SemanticsData>,
+	pub completes: HashMap<Arc<dyn Source>, CompleteData>,
 	pub inlay_hints: HashMap<Arc<dyn Source>, HintsData>,
 	pub definitions: HashMap<Arc<dyn Source>, DefinitionData>,
 	pub conceals: HashMap<Arc<dyn Source>, ConcealsData>,
@@ -38,6 +42,10 @@ impl LangServerData {
 		if !self.semantic_data.contains_key(&source) {
 			self.semantic_data
 				.insert(source.clone(), SemanticsData::new(source.clone()));
+		}
+		if !self.completes.contains_key(&source) {
+			self.completes
+				.insert(source.clone(), CompleteData::default());
 		}
 		if !self.inlay_hints.contains_key(&source) {
 			self.inlay_hints
@@ -58,28 +66,6 @@ impl LangServerData {
 		}
 	}
 
-	fn get_original_source(source: Arc<dyn Source>) -> Option<Arc<dyn Source>>
-	{
-		// TODO: This should be refactored
-		if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
-			&& source.downcast_ref::<VirtualSource>().is_some()
-		{
-			return None;
-		}
-
-		if let Some(location) = source
-			.clone()
-			.downcast_ref::<VirtualSource>()
-			.map(|parent| parent.location())
-			.unwrap_or(None)
-		{
-			return Self::get_original_source(location.source());
-		} else if source.downcast_ref::<SourceFile>().is_some() {
-			return Some(source)
-		}
-		None
-	}
-
 	pub fn on_source_end(&mut self, source: Arc<dyn Source>) {
 		if source.content().is_empty() {
 			return;
@@ -98,5 +84,11 @@ impl LangServerData {
 			Some(sems) => Some(f(&sems, &self.semantic_tokens)),
 			None => None,
 		}
+	}
+	
+	pub fn add_completion<'lsp>(&'lsp self, range: CompleteRange)
+	{
+		let Some(comp) = Completes::from_source(range.range.source(), self) else { return };
+		comp.add(range);
 	}
 }

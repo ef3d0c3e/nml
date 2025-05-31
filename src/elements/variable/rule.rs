@@ -1,3 +1,4 @@
+use crate::lsp::completion::CompleteRange;
 use crate::lsp::completion::CompletionProvider;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
@@ -20,8 +21,12 @@ use ariadne::Fmt;
 use parser::state::ParseMode;
 use regex::Captures;
 use regex::Regex;
+use tower_lsp::lsp_types::CompletionItem;
 use std::any::Any;
 use std::rc::Rc;
+use std::sync::Arc;
+
+use super::completion::VariableCompletion;
 
 fn parse_delimited(content: &str, delim: &str) -> Option<usize> {
 	let mut escaped = 0usize;
@@ -92,6 +97,15 @@ impl Rule for VariableRule {
 
 		// `:expand <name>`
 		let keyword = captures.get(1).unwrap();
+		unit.with_lsp(|lsp| {
+			let apply = Arc::new(|item: &mut CompletionItem| {
+				item.label = "in".into();
+			});
+			lsp.add_completion(CompleteRange {
+				range: Token::new(captures.get(1).unwrap().start()-1..captures.get(1).unwrap().end() + 5, cursor.source()),
+				apply,
+			});
+		});
 		let visibility = match keyword.as_str() {
 			"set" => VariableVisibility::Internal,
 			"export" => VariableVisibility::Exported,

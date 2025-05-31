@@ -1,10 +1,12 @@
 use core::fmt::Debug;
 use std::fs;
+use std::mem::offset_of;
 use std::ops::Range;
 use std::sync::Arc;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use toml::value::Offset;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Trait for source content
@@ -36,13 +38,17 @@ impl core::fmt::Display for dyn Source {
 }
 
 impl std::cmp::PartialEq for dyn Source {
-	fn eq(&self, other: &Self) -> bool { self.name() == other.name() }
+	fn eq(&self, other: &Self) -> bool {
+		self.name() == other.name()
+	}
 }
 
 impl std::cmp::Eq for dyn Source {}
 
 impl std::hash::Hash for dyn Source {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) { self.name().hash(state) }
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.name().hash(state)
+	}
 }
 
 /// [`SourceFile`] is a type of [`Source`] that represents a real file.
@@ -82,13 +88,21 @@ impl SourceFile {
 	}
 
 	/// Gets the path of this [`SourceFile`]
-	pub fn path(&self) -> &String { &self.path }
+	pub fn path(&self) -> &String {
+		&self.path
+	}
 }
 
 impl Source for SourceFile {
-	fn location(&self) -> Option<&Token> { self.location.as_ref() }
-	fn name(&self) -> &String { &self.path }
-	fn content(&self) -> &String { &self.content }
+	fn location(&self) -> Option<&Token> {
+		self.location.as_ref()
+	}
+	fn name(&self) -> &String {
+		&self.path
+	}
+	fn content(&self) -> &String {
+		&self.content
+	}
 }
 
 /// Stores the offsets in a virtual source
@@ -173,9 +187,15 @@ impl VirtualSource {
 }
 
 impl Source for VirtualSource {
-	fn location(&self) -> Option<&Token> { Some(&self.location) }
-	fn name(&self) -> &String { &self.name }
-	fn content(&self) -> &String { &self.content }
+	fn location(&self) -> Option<&Token> {
+		Some(&self.location)
+	}
+	fn name(&self) -> &String {
+		&self.name
+	}
+	fn content(&self) -> &String {
+		&self.content
+	}
 }
 
 /// Trait for accessing position in a parent [`SourceFile`]
@@ -264,14 +284,15 @@ pub struct Cursor {
 }
 
 impl Cursor {
-	pub fn new(pos: usize, source: Arc<dyn Source>) -> Self { Self { pos, source } }
+	pub fn new(pos: usize, source: Arc<dyn Source>) -> Self {
+		Self { pos, source }
+	}
 
 	pub fn pos(&self) -> usize {
 		self.pos
 	}
 
-	pub fn source(&self) -> Arc<dyn Source>
-	{
+	pub fn source(&self) -> Arc<dyn Source> {
 		self.source.clone()
 	}
 
@@ -282,7 +303,6 @@ impl Cursor {
 			source: self.source.clone(),
 		}
 	}
-
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -324,12 +344,41 @@ impl LineCursor {
 		}
 	}
 
+	/// Creates a [`LineCursor`] at a given graphical position
+	pub fn from_position(
+		source: Arc<dyn Source>,
+		encoding: OffsetEncoding,
+		line: u32,
+		column: u32,
+	) -> LineCursor {
+		let mut cursor = Self::new(source.clone(), encoding);
+
+		let mut line_count = 0;
+		let mut col_count = 0;
+		for (pos, c) in source.content().char_indices() {
+			if c == '\n' {
+				col_count = 0;
+				line_count += 1;
+			} else {
+				col_count += match cursor.encoding {
+					OffsetEncoding::Utf8 => c.len_utf8(),
+					OffsetEncoding::Utf16 => c.len_utf16(),
+				}
+			}
+			if line_count == line as usize && col_count == column as usize {
+				cursor.move_to(pos);
+				break;
+			}
+		}
+		cursor
+	}
+
 	/// Moves [`LineCursor`] to an absolute byte position
 	/// This function may only advance the position, as is required for the LSP semantics.
 	///
 	/// # Error
 	///
-	/// This function will panic if [`Self::pos`] is not UTF-88 aligned, or if trying to go to a previous position.
+	/// This function will panic if [`Self::pos`] is not UTF-8 aligned, or if trying to go to a previous position.
 	pub fn move_to(&mut self, pos: usize) {
 		if self.pos < pos {
 			let start = self.pos;
@@ -372,20 +421,28 @@ pub struct Token {
 
 impl Token {
 	/// Creates a new token from a range and a source
-	pub fn new(range: Range<usize>, source: Arc<dyn Source>) -> Self { Self { range, source } }
+	pub fn new(range: Range<usize>, source: Arc<dyn Source>) -> Self {
+		Self { range, source }
+	}
 
 	/// Retrieve the source of the token
-	pub fn source(&self) -> Arc<dyn Source> { self.source.clone() }
+	pub fn source(&self) -> Arc<dyn Source> {
+		self.source.clone()
+	}
 
 	pub fn content(&self) -> &str {
 		&self.source.content().as_str()[self.range.clone()]
 	}
 
 	/// Get the start byte position of the token
-	pub fn start(&self) -> usize { self.range.start }
+	pub fn start(&self) -> usize {
+		self.range.start
+	}
 
 	/// Get the end byte position of the token
-	pub fn end(&self) -> usize { self.range.end }
+	pub fn end(&self) -> usize {
+		self.range.end
+	}
 
 	/// Get a byte position from a grapheme offset
 	///
@@ -439,8 +496,7 @@ impl Token {
 	}
 
 	/// Creates a virtual source from the token
-	pub fn to_source(&self, name: String) -> Arc<dyn Source>
-	{
+	pub fn to_source(&self, name: String) -> Arc<dyn Source> {
 		Arc::new(VirtualSource {
 			location: self.clone(),
 			name,
@@ -460,11 +516,11 @@ impl From<Arc<dyn Source>> for Token {
 }
 
 impl From<&Range<Cursor>> for Token {
-    fn from(range: &Range<Cursor>) -> Self {
+	fn from(range: &Range<Cursor>) -> Self {
 		assert_eq!(&range.start.source, &range.end.source);
-        Self {
+		Self {
 			range: range.start.pos..range.end.pos,
 			source: range.start.source.clone(),
 		}
-    }
+	}
 }

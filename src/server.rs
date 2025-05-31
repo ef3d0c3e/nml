@@ -7,18 +7,27 @@ mod parser;
 mod unit;
 mod util;
 
+use std::cell::RefCell;
+use std::default;
 use std::env::current_dir;
 use std::fs::read;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use dashmap::DashMap;
+use elements::variable::completion;
 use lsp::code::CodeRangeInfo;
+use lsp::completion::CompleteRange;
+use lsp::completion::Completes;
 use lsp::conceal::ConcealInfo;
 use lsp::conceal::ConcealParams;
 use lsp::styles::StyleInfo;
 use lsp::styles::StyleParams;
 use parser::parser::Parser;
+use parser::source::LineCursor;
+use parser::source::Source;
 use parser::source::SourceFile;
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::*;
@@ -26,13 +35,17 @@ use tower_lsp::Client;
 use tower_lsp::LanguageServer;
 use tower_lsp::LspService;
 use tower_lsp::Server;
+use unit::scope::Scope;
 use unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;
 
 pub struct Backend {
+	source_files: DashMap<String, Arc<dyn Source>>,
 	client: Client,
 	settings: ProjectSettings,
 	root_path: PathBuf,
+
+	complete_ranges: DashMap<String, Vec<CompleteRange>>,
 
 	document_map: DashMap<String, String>,
 	definition_map: DashMap<String, Vec<(Location, Range)>>,
@@ -54,9 +67,12 @@ struct TextDocumentItem {
 impl Backend {
 	pub fn new(client: Client, settings: ProjectSettings, root_path: PathBuf) -> Self {
 		Self {
+			source_files: DashMap::default(),
 			client,
 			settings,
 			root_path,
+
+			complete_ranges: DashMap::default(),
 
 			document_map: DashMap::default(),
 			definition_map: DashMap::default(),
@@ -81,6 +97,7 @@ impl Backend {
 			params.text.clone(),
 			None,
 		));
+		self.source_files.insert(params.uri.to_string(), source.clone());
 
 		let parser = Parser::new();
 		let unit = TranslationUnit::new(params.uri.to_string(), &parser, source, true, true);
@@ -165,11 +182,22 @@ impl Backend {
 				}
 			}
 
+			// Completion
 			let mut items = vec![];
 			for completors in parser.get_completors() {
 				completors.add_items(&unit, &mut items);
 			}
 			self.completions_map.insert(params.uri.to_string(), items);
+			for (source, complete) in &lsp.completes {
+				if let Some(path) = source
+					.clone()
+					.downcast_ref::<SourceFile>()
+					.map(|source| source.path().to_owned())
+				{
+					self.complete_ranges
+						.insert(path, complete.completes.replace(vec![]));
+				}
+			}
 			
 		});
 	}
@@ -222,7 +250,7 @@ impl LanguageServer for Backend {
 				definition_provider: Some(OneOf::Left(true)),
 				completion_provider: Some(CompletionOptions {
 					resolve_provider: Some(false),
-					trigger_characters: Some(vec!["%".to_string()]),
+					trigger_characters: Some(vec!["%".to_string(), ":".to_string()]),
 					work_done_progress_options: Default::default(),
 					all_commit_characters: None,
 					completion_item: None,
@@ -339,10 +367,36 @@ impl LanguageServer for Backend {
 		&self,
 		params: CompletionParams,
 	) -> tower_lsp::jsonrpc::Result<Option<CompletionResponse>> {
-		//let uri = params.text_document_position.text_document.uri;
-		//let position = params.text_document_position.position;
-		let Some(completions) = self.completions_map.get(params.text_document_position.text_document.uri.as_str()) else { return Ok(None) };
-		Ok(Some(CompletionResponse::Array(completions.clone())))
+		let default = || {
+			Ok(None)
+			//let Some(completions) = self.completions_map.get(params.text_document_position.text_document.uri.as_str()) else { return Ok(None) };
+			//Ok(Some(CompletionResponse::Array(completions.clone())))
+		};
+
+		let source = self.source_files.get(params.text_document_position.text_document.uri.as_str()).map(|v| v.clone()).unwrap();
+		let cursor = LineCursor::from_position(source.clone(), parser::source::OffsetEncoding::Utf16, params.text_document_position.position.line, params.text_document_position.position.character);
+
+		eprintln!("source={}", params.text_document_position.text_document.uri);
+		let Some(completes) = self.complete_ranges.get(params.text_document_position.text_document.uri.as_str()) else { return default() };
+		for i in 0..completes.len() {
+			let item = completes.get(i).unwrap();
+			eprintln!("r={:#?}\n", item.range)
+		}
+			eprintln!("cursor={:#?}\n", cursor);
+		let Ok(index) = completes.binary_search_by(|comp| {
+			if cursor.pos < comp.range.range.start { std::cmp::Ordering::Less }
+			else if cursor.pos > comp.range.range.end { std::cmp::Ordering::Greater }
+			else { std::cmp::Ordering::Equal }
+		}) else { return default() };
+
+			eprintln!("idx={params:#?}\n");
+		let Some(mut completions) = self.completions_map.get(params.text_document_position.text_document.uri.as_str()).map(|v| v.clone()) else { return Ok(None) };
+		let v = &completes[index];
+		for item in &mut completions
+		{
+			(v.apply)(item);
+		}
+		Ok(Some(CompletionResponse::Array(completions)))
 	}
 
 	async fn semantic_tokens_full(

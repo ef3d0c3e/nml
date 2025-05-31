@@ -3,7 +3,9 @@ use std::rc::Rc;
 
 use tower_lsp::lsp_types::CompletionItem;
 use tower_lsp::lsp_types::CompletionItemKind;
+use tower_lsp::lsp_types::InsertTextFormat;
 use tower_lsp::lsp_types::MarkupContent;
+use tower_lsp::lsp_types::SignatureHelp;
 
 use crate::lsp::completion::CompletionProvider;
 use crate::unit::translation::TranslationUnit;
@@ -14,6 +16,11 @@ pub struct VariableCompletion;
 
 impl VariableCompletion {
 	fn get_documentation(name: &VariableName, var: &Rc<dyn Variable>) -> MarkupContent {
+		let range = if var.location().end() != 0 {
+			format!(" ({}..{})", var.location().start(), var.location().end())
+		} else {
+			"".into()
+		};
 		MarkupContent {
 			kind: tower_lsp::lsp_types::MarkupKind::Markdown,
 			value: format!(
@@ -24,14 +31,12 @@ impl VariableCompletion {
 
 # Properties
  * **Type**: *{}*
- * **Definition**: {} ({}..{})
+ * **Definition**: {}{range}
  * **Visibility**: *{}*
  * **Mutability**: *{}*",
 				var.to_string(),
 				var.variable_typename(),
 				var.location().source().name(),
-				var.location().range.start,
-				var.location().range.end,
 				var.visility(),
 				var.mutability()
 			),
@@ -41,10 +46,82 @@ impl VariableCompletion {
 
 impl CompletionProvider for VariableCompletion {
 	fn trigger(&self) -> &'static [&'static str] {
-		["%"].as_slice()
+		["%", ":"].as_slice()
 	}
 
 	fn add_items(&self, unit: &TranslationUnit, items: &mut Vec<CompletionItem>) {
+		// :set
+		items.push(CompletionItem {
+			label: ":set ".to_string(),
+			detail: Some("Set a variable".into()),
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(MarkupContent {
+				kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+				value:
+"# Usage
+				
+`:set VARNAME = VALUE`
+
+Set variables are available through the current file. They are not inherited by
+`:import`-ing.
+
+# Examples
+
+`:set foo = \"Hello\"` *sets variable **foo** with string value **Hello***
+`:set bar = false` *sets variable **bar** with integer value **0***
+`:set baz = {{ [My **E-Mail** address](mailto://me@mail.org) }}` *sets variable **baz** with string value*
+`:set x = 64` *sets variable `x` with integer value **64***
+
+# Variable types
+
+ * `String`: delimited by `\"`, `'`, `\"\"\"`, `'''` or `{{` and `}}`
+ * `Integer`: no delimiters, a 64-bit signed integer
+
+# See also
+
+ * `:export` *export a variable*".into()
+			})),
+			kind: Some(CompletionItemKind::VALUE),
+			insert_text_format: Some(InsertTextFormat::SNIPPET),
+			insert_text: Some(":set ${1:VARIABLE} = ${2:VALUE}".into()),
+			..CompletionItem::default()
+		});
+
+		// :export
+		items.push(CompletionItem {
+			label: ":export ".to_string(),
+			detail: Some("Export a variable".into()),
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(MarkupContent {
+				kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+				value:
+"# Usage
+				
+`:export VARNAME = VALUE`
+
+Exported variables will be available to any subsequent file that `:import`s the file where they are defined.
+
+# Examples
+
+`:export foo = \"Hello\"` *exports variable **foo** with string value **Hello***
+`:export bar = false` *exports variable **bar** with integer value **0***
+`:export baz = {{ [My **E-Mail** address](mailto://me@mail.org) }}` *exports variable **baz** with string value*
+`:export x = 64` *exports variable `x` with integer value **64***
+
+# Variable types
+
+ * `String`: delimited by `\"`, `'`, `\"\"\"`, `'''` or `{{` and `}}`
+ * `Integer`: no delimiters, a 64-bit signed integer
+
+# See also
+
+ * `:set` *set a variable*".into()
+			})),
+			kind: Some(CompletionItemKind::VALUE),
+			insert_text_format: Some(InsertTextFormat::SNIPPET),
+			insert_text: Some(":export ${1:VARIABLE} = ${2:VALUE}".into()),
+			..CompletionItem::default()
+		});
+
+
 		struct Item(CompletionItem);
 		impl std::hash::Hash for Item {
 			fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
