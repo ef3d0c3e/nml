@@ -1,4 +1,3 @@
-use crate::lsp::completion::CompleteRange;
 use crate::lsp::completion::CompletionProvider;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
@@ -21,10 +20,8 @@ use ariadne::Fmt;
 use parser::state::ParseMode;
 use regex::Captures;
 use regex::Regex;
-use tower_lsp::lsp_types::CompletionItem;
 use std::any::Any;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use super::completion::VariableCompletion;
 

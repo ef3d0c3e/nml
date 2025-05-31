@@ -7,27 +7,19 @@ mod parser;
 mod unit;
 mod util;
 
-use std::cell::RefCell;
-use std::default;
 use std::env::current_dir;
 use std::fs::read;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use dashmap::DashMap;
-use elements::variable::completion;
 use lsp::code::CodeRangeInfo;
-use lsp::completion::CompleteRange;
-use lsp::completion::Completes;
 use lsp::completion::CompletionProvider;
 use lsp::conceal::ConcealInfo;
 use lsp::conceal::ConcealParams;
 use lsp::styles::StyleInfo;
 use lsp::styles::StyleParams;
 use parser::parser::Parser;
-use parser::source::LineCursor;
 use parser::source::Source;
 use parser::source::SourceFile;
 use tower_lsp::jsonrpc;
@@ -36,7 +28,6 @@ use tower_lsp::Client;
 use tower_lsp::LanguageServer;
 use tower_lsp::LspService;
 use tower_lsp::Server;
-use unit::scope::Scope;
 use unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;
 
