@@ -3,11 +3,15 @@ use std::sync::Arc;
 
 use crate::parser::source::Source;
 use crate::parser::source::SourcePosition;
+use crate::parser::source::Token;
 
 use super::code::CodeRangeData;
-use super::conceal::ConcealsData;
+use super::conceal::ConcealData;
 use super::definition::DefinitionData;
 use super::hints::HintsData;
+use super::hover::Hover;
+use super::hover::HoverData;
+use super::hover::HoverRange;
 use super::semantic::Semantics;
 use super::semantic::SemanticsData;
 use super::semantic::Tokens;
@@ -22,7 +26,8 @@ pub struct LangServerData {
 	pub semantic_data: HashMap<Arc<dyn Source>, SemanticsData>,
 	pub inlay_hints: HashMap<Arc<dyn Source>, HintsData>,
 	pub definitions: HashMap<Arc<dyn Source>, DefinitionData>,
-	pub conceals: HashMap<Arc<dyn Source>, ConcealsData>,
+	pub hovers: HashMap<Arc<dyn Source>, HoverData>,
+	pub conceals: HashMap<Arc<dyn Source>, ConcealData>,
 	pub styles: HashMap<Arc<dyn Source>, StylesData>,
 	pub coderanges: HashMap<Arc<dyn Source>, CodeRangeData>,
 }
@@ -42,8 +47,11 @@ impl LangServerData {
 			self.definitions
 				.insert(source.clone(), DefinitionData::new());
 		}
+		if !self.hovers.contains_key(&source) {
+			self.hovers.insert(source.clone(), HoverData::default());
+		}
 		if !self.conceals.contains_key(&source) {
-			self.conceals.insert(source.clone(), ConcealsData::new());
+			self.conceals.insert(source.clone(), ConcealData::default());
 		}
 		if !self.styles.contains_key(&source) {
 			self.styles.insert(source.clone(), StylesData::new());
@@ -71,5 +79,15 @@ impl LangServerData {
 			Some(sems) => Some(f(&sems, &self.semantic_tokens)),
 			None => None,
 		}
+	}
+
+	pub fn add_hover<'lsp>(&'lsp self, range: Token, content: String) {
+		eprintln!("HERE ORIG={range:#?}");
+		let Some (hov) = Hover::from_source(range.source(), self) else { return };
+		let original = range.source().original_range(range.range);
+		hov.add(HoverRange{
+			range: original,
+			content,
+		});
 	}
 }

@@ -7,6 +7,7 @@ mod parser;
 mod unit;
 mod util;
 
+use std::cmp;
 use std::env::current_dir;
 use std::fs::read;
 use std::path::PathBuf;
@@ -17,9 +18,11 @@ use lsp::code::CodeRangeInfo;
 use lsp::completion::CompletionProvider;
 use lsp::conceal::ConcealInfo;
 use lsp::conceal::ConcealParams;
+use lsp::hover::HoverRange;
 use lsp::styles::StyleInfo;
 use lsp::styles::StyleParams;
 use parser::parser::Parser;
+use parser::source::LineCursor;
 use parser::source::Source;
 use parser::source::SourceFile;
 use tower_lsp::jsonrpc;
@@ -48,6 +51,7 @@ pub struct Backend {
 	styles_map: DashMap<String, Vec<StyleInfo>>,
 	coderanges_map: DashMap<String, Vec<CodeRangeInfo>>,
 	completions_map: DashMap<String, Vec<CompletionItem>>,
+	hovers_map: DashMap<String, Vec<HoverRange>>,
 }
 
 #[derive(Debug)]
@@ -75,6 +79,7 @@ impl Backend {
 			styles_map: DashMap::default(),
 			coderanges_map: DashMap::default(),
 			completions_map: DashMap::default(),
+			hovers_map: DashMap::default(),
 		}
 	}
 
@@ -89,7 +94,8 @@ impl Backend {
 			params.text.clone(),
 			None,
 		));
-		self.source_files.insert(params.uri.to_string(), source.clone());
+		self.source_files
+			.insert(params.uri.to_string(), source.clone());
 
 		let parser = Parser::new();
 		let unit = TranslationUnit::new(params.uri.to_string(), &parser, source, true, true);
@@ -182,7 +188,17 @@ impl Backend {
 			}
 			self.completions_map.insert(params.uri.to_string(), items);
 			self.completors.insert(params.uri.to_string(), completors);
-			
+
+			// Hovers
+			for (source, hovers) in &lsp.hovers {
+				if let Some(path) = source
+					.clone()
+					.downcast_ref::<SourceFile>()
+					.map(|source| source.path().to_owned())
+				{
+					self.hovers_map.insert(path, hovers.hovers.replace(vec![]));
+				}
+			}
 		});
 	}
 
@@ -273,6 +289,7 @@ impl LanguageServer for Backend {
 					},
 				)),
 				inlay_hint_provider: Some(OneOf::Left(true)),
+				hover_provider: Some(HoverProviderCapability::Simple(true)),
 				..ServerCapabilities::default()
 			},
 			server_info: Some(ServerInfo {
@@ -311,6 +328,42 @@ impl LanguageServer for Backend {
 		.await
 	}
 
+	async fn hover(&self, params: HoverParams) -> tower_lsp::jsonrpc::Result<Option<Hover>> {
+		let uri = &params.text_document_position_params.text_document.uri;
+		let pos = &params.text_document_position_params.position;
+
+		let Some(source) = self.source_files.get(uri.as_str()).map(|v| v.clone()) else {
+			return Ok(None);
+		};
+		let Some(hovers) = self.hovers_map.get(uri.as_str()) else {
+			return Ok(None);
+		};
+
+		let cursor = LineCursor::from_position(
+			source,
+			parser::source::OffsetEncoding::Utf16,
+			pos.line,
+			pos.character,
+		);
+		let index = hovers.binary_search_by(|hover| {
+			if hover.range.start() > cursor.pos {
+				cmp::Ordering::Greater
+			} else if hover.range.end() < cursor.pos {
+				cmp::Ordering::Less
+			} else {
+				cmp::Ordering::Equal
+			}
+		});
+		let Ok(index) = index else { return Ok(None) };
+		Ok(Some(Hover {
+			contents: HoverContents::Markup(MarkupContent {
+				kind: MarkupKind::Markdown,
+				value: hovers[index].content.clone(),
+			}),
+			range: None,
+		}))
+	}
+
 	async fn goto_definition(
 		&self,
 		params: GotoDefinitionParams,
@@ -318,30 +371,31 @@ impl LanguageServer for Backend {
 		let uri = &params.text_document_position_params.text_document.uri;
 		let pos = &params.text_document_position_params.position;
 
-		if let Some(definitions) = self.definition_map.get(uri.as_str()) {
-			let index = definitions.binary_search_by(|(_, range)| {
-				if range.start.line > pos.line {
-					std::cmp::Ordering::Greater
-				} else if range.end.line <= pos.line {
-					if range.start.line == pos.line && range.start.character <= pos.character {
-						std::cmp::Ordering::Equal
-					} else if range.end.line == pos.line && range.end.character >= pos.character {
-						std::cmp::Ordering::Equal
-					} else if range.start.line < pos.line && range.end.line > pos.line {
-						std::cmp::Ordering::Equal
-					} else {
-						std::cmp::Ordering::Less
-					}
+		let Some(definitions) = self.definition_map.get(uri.as_str()) else {
+			return Ok(None);
+		};
+		let index = definitions.binary_search_by(|(_, range)| {
+			if range.start.line > pos.line {
+				std::cmp::Ordering::Greater
+			} else if range.end.line <= pos.line {
+				if range.start.line == pos.line && range.start.character <= pos.character {
+					std::cmp::Ordering::Equal
+				} else if range.end.line == pos.line && range.end.character >= pos.character {
+					std::cmp::Ordering::Equal
+				} else if range.start.line < pos.line && range.end.line > pos.line {
+					std::cmp::Ordering::Equal
 				} else {
 					std::cmp::Ordering::Less
 				}
-			});
-			if let Ok(index) = index {
-				let loc = self.definition_map.get(uri.as_str()).as_ref().unwrap()[index]
-					.0
-					.clone();
-				return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
+			} else {
+				std::cmp::Ordering::Less
 			}
+		});
+		if let Ok(index) = index {
+			let loc = self.definition_map.get(uri.as_str()).as_ref().unwrap()[index]
+				.0
+				.clone();
+			return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
 		}
 
 		Ok(None)
@@ -351,10 +405,20 @@ impl LanguageServer for Backend {
 		&self,
 		params: CompletionParams,
 	) -> tower_lsp::jsonrpc::Result<Option<CompletionResponse>> {
-		let Some(mut completions) = self.completions_map.get(params.text_document_position.text_document.uri.as_str()).map(|v| v.clone()) else { return Ok(None) };
-		if let Some(completors) = self.completors.get(params.text_document_position.text_document.uri.as_str())
+		let Some(mut completions) = self
+			.completions_map
+			.get(params.text_document_position.text_document.uri.as_str())
+			.map(|v| v.clone())
+		else {
+			return Ok(None);
+		};
+		if let Some(completors) = self
+			.completors
+			.get(params.text_document_position.text_document.uri.as_str())
 		{
-			completors.iter().for_each(|comp| comp.static_items(&params.context, &mut completions));
+			completors
+				.iter()
+				.for_each(|comp| comp.static_items(&params.context, &mut completions));
 		}
 		Ok(Some(CompletionResponse::Array(completions.clone())))
 	}

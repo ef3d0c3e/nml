@@ -45,24 +45,16 @@ pub enum ConcealTarget {
 }
 
 /// Per file conceals
-#[derive(Debug)]
-pub struct ConcealsData {
+#[derive(Debug, Default)]
+pub struct ConcealData {
 	/// The conceals
 	pub conceals: RefCell<Vec<ConcealInfo>>,
-}
-
-impl ConcealsData {
-	pub fn new() -> Self {
-		Self {
-			conceals: RefCell::new(vec![]),
-		}
-	}
 }
 
 /// Temporary data returned by [`Self::from_source_impl`]
 #[derive(Debug)]
 pub struct Conceals<'a> {
-	pub(self) conceals: Ref<'a, ConcealsData>,
+	pub(self) conceals: Ref<'a, ConcealData>,
 	// The source used when resolving the parent source
 	pub(self) original_source: Arc<dyn Source>,
 	/// The resolved parent source

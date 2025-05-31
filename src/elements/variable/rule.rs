@@ -409,9 +409,33 @@ impl RegexRule for VariableSubstitutionRule {
 
 		unit.with_lsp(|lsp| {
 			definition::from_source(token.clone(), variable.0.location(), &*lsp);
+
+			let range = if variable.0.location().end() != 0 {
+				format!(" ({}..{})", variable.0.location().start(), variable.0.location().end())
+			} else {
+				"".into()
+			};
+			lsp.add_hover(token.clone(), format!(
+"**Variable `{0}`**
+# Value
+
+```{1}```
+
+# Properties
+ * **Type**: *{2}*
+ * **Definition**: [{3}](){range}
+ * **Visibility**: *{4}*
+ * **Mutability**: *{5}*",
+ * variable.0.name(),
+				variable.0.to_string(),
+				variable.0.variable_typename(),
+				variable.0.location().source().name(),
+				variable.0.visility(),
+				variable.0.mutability()
+					));
 		});
 
-		variable.0.expand(unit, token.clone());
+		variable.0.expand(unit, token);
 	}
 
 	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> {

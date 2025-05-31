@@ -6,3 +6,4 @@ pub mod hints;
 pub mod semantic;
 pub mod styles;
 pub mod completion;
+pub mod hover;
