@@ -1,5 +1,6 @@
 use crate::lsp::completion::CompletionProvider;
 use crate::lsp::data::LangServerData;
+use crate::lsp::definition;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
@@ -231,7 +232,7 @@ impl Rule for VariableRule {
 			});
 			unit.get_scope().insert_variable(Rc::new(PropertyVariable {
 				location: Token::new(
-					captures.get(0).unwrap().start()..val_captures.get(0).unwrap().end() - 1,
+					keyword.start() - 1..val_captures.get(0).unwrap().end() - 1,
 					cursor.source(),
 				),
 				name,
@@ -291,7 +292,7 @@ impl Rule for VariableRule {
 			unit.with_lsp(|lsp| {
 				lsp.with_semantics(cursor.source(), |sems, tokens| {
 					sems.add(
-						content_range.start() - 1..content_range.end() + 1,
+						content_range.start() - delim.len()..content_range.end() + delim.len(),
 						tokens.variable_val_string,
 					);
 				})
@@ -356,10 +357,8 @@ impl RegexRule for VariableSubstitutionRule {
 		let closing_token = captures.get(2).unwrap();
 		unit.with_lsp(|lsp| {
 			lsp.with_semantics(token.source(), |sems, tokens| {
-				sems.add(token.start()..token.start()+1, tokens.variable_sep);
-				sems.add_to_queue(variable_name.range(),
-					tokens.variable_name,
-				);
+				sems.add(token.start()..token.start() + 1, tokens.variable_sep);
+				sems.add_to_queue(variable_name.range(), tokens.variable_name);
 				sems.add(closing_token.range(), tokens.variable_sep);
 			})
 		});
@@ -407,6 +406,10 @@ impl RegexRule for VariableSubstitutionRule {
 			);
 			return;
 		};
+
+		unit.with_lsp(|lsp| {
+			definition::from_source(token.clone(), variable.0.location(), &*lsp);
+		});
 
 		variable.0.expand(unit, token.clone());
 	}

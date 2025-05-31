@@ -114,8 +114,7 @@ Set variables are available through the current file. They are not inherited by
 # Variable types
 
  * `String`: delimited by `\"`, `'`, `\"\"\"`, `'''``.
-	Additionally strings variables can be enclosed between `{{` and `}}`,
-	which allows for newlines.
+	Additionally strings variables can be enclosed between `{{` and `}}`.
  * `Integer`: no delimiters, a 64-bit signed integer.
 	Additionally `true` can be used for `1` and `false` for `0`.
 
@@ -152,8 +151,7 @@ Exported variables will be available to any subsequent file that `:import`s the 
 # Variable types
 
  * `String`: delimited by `\"`, `'`, `\"\"\"`, `'''``
-	Additionally strings variables can be enclosed between `{{` and `}}`,
-	which allows for newlines.
+	Additionally strings variables can be enclosed between `{{` and `}}`.
  * `Integer`: no delimiters, a 64-bit signed integer.
 	Additionally `true` can be used for `1` and `false` for `0`.
 

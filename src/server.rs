@@ -344,7 +344,7 @@ impl LanguageServer for Backend {
 			}
 		}
 
-		Err(tower_lsp::jsonrpc::Error::method_not_found())
+		Ok(None)
 	}
 
 	async fn completion(
