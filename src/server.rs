@@ -5,27 +5,37 @@ mod lsp;
 mod lua;
 mod parser;
 mod unit;
+mod util;
 
+use std::env::current_dir;
+use std::fs::read;
+use std::path::PathBuf;
 use std::sync::Arc;
 
+use compiler::output;
 use dashmap::DashMap;
 use lsp::code::CodeRangeInfo;
 use lsp::conceal::ConcealInfo;
 use lsp::conceal::ConcealParams;
 use lsp::styles::StyleInfo;
 use lsp::styles::StyleParams;
-use parser::reports::Report;
+use parser::parser::Parser;
 use parser::source::SourceFile;
+use tokio::sync::Mutex;
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 use tower_lsp::LanguageServer;
 use tower_lsp::LspService;
 use tower_lsp::Server;
+use unit::translation::TranslationUnit;
+use util::settings::ProjectSettings;
 
-#[derive(Debug)]
 struct Backend {
 	client: Client,
+	settings: ProjectSettings,
+	root_path: PathBuf,
+
 	document_map: DashMap<String, String>,
 	definition_map: DashMap<String, Vec<(Location, Range)>>,
 	semantic_token_map: DashMap<String, Vec<SemanticToken>>,
@@ -43,6 +53,23 @@ struct TextDocumentItem {
 }
 
 impl Backend {
+	pub fn new(client: Client, settings: ProjectSettings, root_path: PathBuf) -> Self {
+		Self {
+			client,
+			settings,
+			root_path,
+
+			document_map: DashMap::default(),
+			definition_map: DashMap::default(),
+			semantic_token_map: DashMap::default(),
+			diagnostic_map: DashMap::default(),
+			hints_map: DashMap::default(),
+			conceals_map: DashMap::default(),
+			styles_map: DashMap::default(),
+			coderanges_map: DashMap::default(),
+		}
+	}
+
 	async fn on_change(&self, params: TextDocumentItem) {
 		self.document_map
 			.insert(params.uri.to_string(), params.text.clone());
@@ -55,27 +82,22 @@ impl Backend {
 			None,
 		));
 
-		// Diagnostics
-		self.diagnostic_map.clear();
-		let parser = LangParser::new(
-			false,
-			Box::new(|_colors, reports| {
-				Report::reports_to_diagnostics(&self.diagnostic_map, reports)
-			}),
-		);
-		// Parse
-		let (_doc, state) = parser.parse(
-			ParserState::new_with_semantics(&parser, None),
-			source.clone(),
-			None,
-			ParseMode::default(),
-		);
+		let parser = Parser::new();
+		let unit = TranslationUnit::new(params.uri.to_string(), &parser, source, true, true);
 
-		if let Some(lsp) = state.shared.lsp.as_ref() {
-			let borrow = lsp.borrow();
+		let basename = PathBuf::from(params.uri.as_str())
+			.file_stem()
+			.map(|p| p.to_str().unwrap_or("output"))
+			.unwrap_or("output")
+			.to_owned();
+		let output_file = format!("{}/{basename}", self.settings.output_path);
+		let unit = unit.consume(output_file);
 
+		// TODO: Run resolver
+
+		unit.with_lsp(|lsp| {
 			// Semantics
-			for (source, sem) in &borrow.semantic_data {
+			for (source, sem) in &lsp.semantic_data {
 				if let Some(path) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
@@ -87,7 +109,7 @@ impl Backend {
 			}
 
 			// Inlay hints
-			for (source, hints) in &borrow.inlay_hints {
+			for (source, hints) in &lsp.inlay_hints {
 				if let Some(path) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
@@ -98,7 +120,7 @@ impl Backend {
 			}
 
 			// Definitions
-			for (source, definitions) in &borrow.definitions {
+			for (source, definitions) in &lsp.definitions {
 				if let Some(path) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
@@ -110,7 +132,7 @@ impl Backend {
 			}
 
 			// Conceals
-			for (source, conceals) in &borrow.conceals {
+			for (source, conceals) in &lsp.conceals {
 				if let Some(path) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
@@ -122,7 +144,7 @@ impl Backend {
 			}
 
 			// Styles
-			for (source, styles) in &borrow.styles {
+			for (source, styles) in &lsp.styles {
 				if let Some(path) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
@@ -133,7 +155,7 @@ impl Backend {
 			}
 
 			// Code Ranges
-			for (source, coderanges) in &borrow.coderanges {
+			for (source, coderanges) in &lsp.coderanges {
 				if let Some(path) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
@@ -143,7 +165,7 @@ impl Backend {
 						.insert(path, coderanges.coderanges.replace(vec![]));
 				}
 			}
-		}
+		});
 	}
 
 	async fn handle_conceal_request(
@@ -248,7 +270,9 @@ impl LanguageServer for Backend {
 			.await;
 	}
 
-	async fn shutdown(&self) -> tower_lsp::jsonrpc::Result<()> { Ok(()) }
+	async fn shutdown(&self) -> tower_lsp::jsonrpc::Result<()> {
+		Ok(())
+	}
 
 	async fn did_open(&self, params: DidOpenTextDocumentParams) {
 		self.client
@@ -375,24 +399,38 @@ impl LanguageServer for Backend {
 
 #[tokio::main]
 async fn main() {
+	// Find project root
+	let mut path = current_dir().unwrap();
+	let mut settings = ProjectSettings::default();
+	loop {
+		let mut file = path.clone();
+		file.push("nml.toml");
+
+		if file.exists() && file.is_file() {
+			let content = String::from_utf8(
+				read(&file).expect(format!("Failed to read {}", file.display()).as_str()),
+			)
+			.expect(format!("Project file {} contains invalid UTF-8", file.display()).as_str());
+			match toml::from_str::<ProjectSettings>(content.as_str()) {
+				Ok(r) => settings = r,
+				Err(err) => {
+					eprintln!("Failed to parse {}: {err}", file.display());
+					return;
+				}
+			}
+			break;
+		}
+		let Some(parent) = path.parent() else { break };
+		path = parent.into();
+	}
+
+	let (service, socket) = LspService::build(|client| Backend::new(client, settings, path))
+		.custom_method("textDocument/conceal", Backend::handle_conceal_request)
+		.custom_method("textDocument/style", Backend::handle_style_request)
+		.custom_method("textDocument/codeRange", Backend::handle_coderange_request)
+		.finish();
+
 	let stdin = tokio::io::stdin();
 	let stdout = tokio::io::stdout();
-
-	let (service, socket) = LspService::build(|client| Backend {
-		client,
-		document_map: DashMap::new(),
-		definition_map: DashMap::new(),
-		semantic_token_map: DashMap::new(),
-		diagnostic_map: DashMap::new(),
-		hints_map: DashMap::new(),
-		conceals_map: DashMap::new(),
-		styles_map: DashMap::new(),
-		coderanges_map: DashMap::new(),
-	})
-	.custom_method("textDocument/conceal", Backend::handle_conceal_request)
-	.custom_method("textDocument/style", Backend::handle_style_request)
-	.custom_method("textDocument/codeRange", Backend::handle_coderange_request)
-	.finish();
-
 	Server::new(stdin, stdout, socket).serve(service).await;
 }

@@ -63,8 +63,7 @@ pub fn output_message<'u>(message: ProcessQueueMessage<'u>, perc: f64) {
 		ProcessQueueMessage::Parsing(source) => {
 			println!("{}", format!("Parsing '{}'", source).fg(Color::Green))
 		}
-		ProcessQueueMessage::Resolving(unit) => println!(
-			"{} {}",
+		ProcessQueueMessage::Resolving(unit) => println!("{} {}",
 			format!("Resolving '{}'", unit.input_path()).fg(Color::Green),
 			format!("[{}]", unit.reference_key()).fg(Color::Blue)
 		),
@@ -200,9 +199,7 @@ impl ProcessQueue {
 				}
 			};
 
-			let Some(unit) = unit.consume(output_file) else {
-				continue;
-			};
+			let unit = unit.consume(output_file);
 			if options.debug_ast {
 				println!("{:#?}", unit.get_entry_scope());
 			}

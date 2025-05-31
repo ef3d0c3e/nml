@@ -184,7 +184,7 @@ impl<'u> TranslationUnit<'u> {
 
 	/// Consumes the translation unit with it's current scope
 	/// Returns `None` if an error happened
-	pub fn consume(mut self, output_file: String) -> Option<Self> {
+	pub fn consume(mut self, output_file: String) -> Self {
 		// Insert default variables
 		let token = Token::new(0..0, self.source.clone());
 		self.get_entry_scope()
@@ -223,12 +223,7 @@ impl<'u> TranslationUnit<'u> {
 			// TODO: send to lsp
 		} else {
 			let reports = self.reports.drain(..).map(|(_, report)| report).collect::<Vec<_>>();
-			let has_error = reports.iter().any(|report| report.kind == ReportKind::Error);
 			Report::reports_to_stdout(&self.colors, reports);
-			if has_error
-			{
-				return None;
-			}
 		}
 
 		let output_file = self.get_scope().get_variable(&VariableName("nml.output_file".into()));
@@ -237,8 +232,7 @@ impl<'u> TranslationUnit<'u> {
 			output_file: output_file.map(|(var, _)| var.to_string()),
 		};
 		self.output.set(output).unwrap();
-
-		Some(self)
+		self
 	}
 	pub fn colors<'s>(&'s self) -> &'s ReportColors {
 		&self.colors
