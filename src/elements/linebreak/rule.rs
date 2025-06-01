@@ -20,7 +20,7 @@ pub struct BreakRule {
 impl Default for BreakRule {
 	fn default() -> Self {
 		Self {
-			re: [Regex::new(r"(\n\s*\n\s*)\n[^\s]").unwrap()],
+			re: [Regex::new(r"(\n[^\S\r\n]*)+\n").unwrap()],
 		}
 	}
 }
