@@ -118,6 +118,10 @@ pub struct Tokens {
 	pub internal_link_ref_sep: (u32, u32),
 	pub internal_link_display_sep: (u32, u32),
 	pub internal_link_ref: (u32, u32),
+
+	pub tex_sep: (u32, u32),
+	pub tex_content: (u32, u32),
+	pub tex_prop_sep: (u32, u32),
 }
 
 impl Default for Tokens {
@@ -148,6 +152,10 @@ impl Default for Tokens {
 			internal_link_ref_sep: token!("macro"),
 			internal_link_display_sep: token!("macro"),
 			internal_link_ref: token!("parameter"),
+
+			tex_sep: token!("property"),
+			tex_content: token!("regexp"),
+			tex_prop_sep: token!("macro"),
 		}
 	}
 }

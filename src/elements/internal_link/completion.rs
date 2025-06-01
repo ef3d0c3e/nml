@@ -5,9 +5,11 @@ use ariadne::Span;
 use tower_lsp::lsp_types::CompletionContext;
 use tower_lsp::lsp_types::CompletionItem;
 use tower_lsp::lsp_types::CompletionItemKind;
+use tower_lsp::lsp_types::InsertTextFormat;
 use tower_lsp::lsp_types::MarkupContent;
 use tower_lsp::lsp_types::MarkupKind::Markdown;
 
+use crate::lsp::completion::context_triggered;
 use crate::lsp::completion::CompletionProvider;
 use crate::lsp::data::LangServerData;
 use crate::lsp::reference::LsReference;
@@ -62,7 +64,7 @@ Full name: [{label}]()
 
 impl CompletionProvider for ReferenceCompletion {
 	fn trigger(&self) -> &'static [&'static str] {
-		[].as_slice()
+		["&"].as_slice()
 	}
 
 	fn unit_items(&self, unit: &TranslationUnit, items: &mut Vec<CompletionItem>) {
@@ -95,6 +97,57 @@ impl CompletionProvider for ReferenceCompletion {
 		});
 	}
 
-	fn static_items(&self, _context: &Option<CompletionContext>, _items: &mut Vec<CompletionItem>) {
+	fn static_items(&self, context: &Option<CompletionContext>, items: &mut Vec<CompletionItem>) {
+		// &{ref}
+		items.push(CompletionItem {
+			label: "&{ref}".to_string(),
+			detail: Some("Link to reference".into()),
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(MarkupContent {
+				kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+				value:
+					"# Usage
+
+`&{REF}` Link to reference `REF`
+`&{REF}[DISP]` Link to reference `REF` displayed using `DISP`
+
+Create a link to a reference.
+
+# Examples
+
+ * `&{foo}` *Will display a link to reference **foo***
+ * `&{bar}[click me]` *Will display `click me` that will link to reference **bar***
+ * `&{source#baz}` *Will display a link to reference **baz** declared in unit **source***".into()
+			})),
+			kind: Some(CompletionItemKind::SNIPPET),
+			insert_text_format: Some(InsertTextFormat::SNIPPET),
+			insert_text: Some(format!("{}{{${{1:REFNAME}}}}", if context_triggered(context, "&") { "" } else { "&" })),
+			..CompletionItem::default()
+		});
+
+		// &{ref}[disp]
+		items.push(CompletionItem {
+			label: "&{ref}[disp]".to_string(),
+			detail: Some("Link to reference with display".into()),
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(MarkupContent {
+				kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+				value:
+					"# Usage
+
+`&{REF}` Link to reference `REF`
+`&{REF}[DISP]` Link to reference `REF` displayed using `DISP`
+
+Create a link to a reference.
+
+# Examples
+
+ * `&{foo}` *Will display a link to reference **foo***
+ * `&{bar}[click me]` *Will display `click me` that will link to reference **bar***
+ * `&{source#baz}` *Will display a link to reference **baz** declared in unit **source***".into()
+			})),
+			kind: Some(CompletionItemKind::SNIPPET),
+			insert_text_format: Some(InsertTextFormat::SNIPPET),
+			insert_text: Some(format!("{}{{${{1:REFNAME}}}}[${{2:DISPLAY}}]", if context_triggered(context, "&") { "" } else { "&" })),
+			..CompletionItem::default()
+		});
 	}
 }

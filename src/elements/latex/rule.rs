@@ -21,6 +21,7 @@ use crate::unit::translation::TranslationUnit;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 
+use super::completion::LatexCompletion;
 use super::elem::Latex;
 use super::elem::TexKind;
 
@@ -200,6 +201,22 @@ impl RegexRule for LatexRule {
 			);
 		}
 		*/
+		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
+			let range = &token.range;
+			sems.add(
+				range.start..range.start + if index == 0 { 2 } else { 1 },
+				tokens.tex_sep,
+			);
+			if let Some(props) = captures.get(1).map(|m| m.range()) {
+				sems.add(props.start - 1..props.start, tokens.tex_prop_sep);
+				sems.add(props.end..props.end + 1, tokens.tex_prop_sep);
+			}
+			sems.add(captures.get(2).unwrap().range(), tokens.tex_content);
+			sems.add(
+				range.end - if index == 0 { 2 } else { 1 }..range.end,
+				tokens.tex_sep,
+			);
+		}));
 
 		unit.add_content(Rc::new(Latex {
 			location: token,
@@ -209,5 +226,9 @@ impl RegexRule for LatexRule {
 			tex: tex_content,
 			caption: tex_caption,
 		}));
+	}
+
+	fn completion(&self) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
+	    Some(Box::new(LatexCompletion{}))
 	}
 }
