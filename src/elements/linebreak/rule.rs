@@ -4,6 +4,7 @@ use regex::Captures;
 use regex::Regex;
 
 use crate::parser::rule::RegexRule;
+use crate::parser::rule::RuleTarget;
 use crate::parser::source::Token;
 use crate::parser::state::ParseMode;
 use crate::unit::translation::TranslationAccessors;
@@ -27,8 +28,9 @@ impl Default for BreakRule {
 impl RegexRule for BreakRule {
 	fn name(&self) -> &'static str { "Break" }
 
-	//FIXME: fn previous(&self) -> Option<&'static str> { Some("Comment") }
-	fn previous(&self) -> Option<&'static str> { Some("Text") }
+	fn target(&self) -> RuleTarget {
+	    RuleTarget::Meta
+	}
 
 	fn regexes(&self) -> &[regex::Regex] {
 		&self.re

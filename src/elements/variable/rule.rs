@@ -5,6 +5,7 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
 use crate::parser::rule::Rule;
+use crate::parser::rule::RuleTarget;
 use crate::parser::source::Cursor;
 use crate::parser::source::Token;
 use crate::parser::util::escape_source;
@@ -72,8 +73,8 @@ impl Rule for VariableRule {
 		"Variable"
 	}
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Link")
+	fn target(&self) -> RuleTarget {
+	    RuleTarget::Command
 	}
 
 	fn next_match(&self, _mode: &ParseMode, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
@@ -334,8 +335,8 @@ impl RegexRule for VariableSubstitutionRule {
 		"Variable Substitution"
 	}
 
-	fn previous(&self) -> Option<&'static str> {
-		Some("Variable")
+	fn target(&self) -> RuleTarget {
+	    RuleTarget::Inline
 	}
 
 	fn regexes(&self) -> &[regex::Regex] {

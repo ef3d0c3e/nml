@@ -2,7 +2,7 @@ use std::any::Any;
 use std::rc::Rc;
 
 use crate::lua::kernel::Kernel;
-use crate::parser::rule::Rule;
+use crate::parser::rule::{Rule, RuleTarget};
 use crate::parser::source::Cursor;
 use crate::parser::state::ParseMode;
 use crate::unit::translation::{TranslationAccessors, TranslationUnit};
@@ -16,7 +16,9 @@ pub struct TextRule;
 impl Rule for TextRule {
 	fn name(&self) -> &'static str { "Text" }
 
-	fn previous(&self) -> Option<&'static str> { Some("Link") }
+	fn target(&self) -> RuleTarget {
+	    RuleTarget::Meta
+	}
 
 	fn next_match(
 		&self,

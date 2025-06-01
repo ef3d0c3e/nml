@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use crate::parser::rule::RuleTarget;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use ariadne::Fmt;
@@ -38,7 +39,9 @@ impl Default for LinkRule {
 impl RegexRule for LinkRule {
 	fn name(&self) -> &'static str { "Link" }
 
-	fn previous(&self) -> Option<&'static str> { Some("Link") }
+	fn target(&self) -> RuleTarget {
+	    RuleTarget::Meta
+	}
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 

@@ -1,5 +1,6 @@
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use crate::parser::rule::RuleTarget;
 use crate::parser::state::ParseMode;
 use crate::unit::references::InternalReference;
 use crate::unit::references::Refname;
@@ -33,7 +34,9 @@ impl Default for AnchorRule {
 impl RegexRule for AnchorRule {
 	fn name(&self) -> &'static str { "Anchor" }
 
-	fn previous(&self) -> Option<&'static str> { Some("Break") }
+	fn target(&self) -> RuleTarget {
+	    RuleTarget::Command
+	}
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 

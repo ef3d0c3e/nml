@@ -12,59 +12,43 @@ use std::collections::HashMap;
 
 macro_rules! create_registry {
 	( $($construct:expr),+ $(,)? ) => {{
-		let mut map = HashMap::new();
+		let mut vec = Vec::new();
 		$(
 			let boxed = Box::new($construct) as Box<dyn Rule>;
-			map.insert(boxed.name(), boxed);
+			vec.push(boxed);
 		)+
-		map
+		vec
 	}};
 }
 
 /// Gets the list of all rules exported with the [`auto_registry`] proc macro.
 /// Rules are sorted according to topological order using the [`Rule::previous`] method.
-#[auto_registry::generate_registry(registry = "rules", target = make_rules, return_type = HashMap<&'static str, Box<dyn Rule>>, maker = create_registry)]
+#[auto_registry::generate_registry(registry = "rules", target = make_rules, return_type = Vec<Box<dyn Rule>>, maker = create_registry)]
 pub fn get_rule_registry() -> Vec<Box<dyn Rule>> {
-	fn cmp(
-		map: &HashMap<&'static str, Box<dyn Rule>>,
-		lname: &'static str,
-		rname: &'static str,
-	) -> std::cmp::Ordering {
-		let l = map.get(lname).unwrap();
-		let r = map.get(rname).unwrap();
-		if l.previous() == Some(r.name()) {
-			std::cmp::Ordering::Greater
-		} else if r.previous() == Some(l.name()) {
-			std::cmp::Ordering::Less
-		} else if l.previous().is_some() && r.previous().is_none() {
-			std::cmp::Ordering::Greater
-		} else if r.previous().is_some() && l.previous().is_none() {
-			std::cmp::Ordering::Less
-		} else if let (Some(pl), Some(pr)) = (l.previous(), r.previous()) {
-			cmp(map, pl, pr)
-		} else {
-			std::cmp::Ordering::Equal
-		}
-	}
-	let mut map = make_rules();
-	let mut sorted_keys = map.keys().copied().collect::<Vec<_>>();
-	sorted_keys.sort_by(|l, r| cmp(&map, l, r));
+	let mut vec = make_rules();
+	vec.sort_by_key(|rule| rule.target());
+	vec
+}
 
-	let mut owned = Vec::with_capacity(sorted_keys.len());
-	for key in sorted_keys {
-		let rule = map.remove(key).unwrap();
-		owned.push(rule);
-	}
-
-	owned
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
+pub enum RuleTarget {
+	/// Meta characters target, e.g newlines
+	Meta,
+	/// Command statements
+	Command,
+	/// Block statements
+	Block,
+	/// Inline elements, e.g style
+	Inline,
 }
 
 pub trait Rule: Downcast {
 	/// Returns the name of the rule
 	fn name(&self) -> &'static str;
 
-	/// Returns the name of the rule that should preceed this one in terms of priority
-	fn previous(&self) -> Option<&'static str>;
+	/// Rule ordering
+	fn target(&self) -> RuleTarget;
 
 	/// Finds the next match starting from `cursor`
 	///
@@ -121,8 +105,8 @@ pub trait RegexRule {
 	/// Returns the name of the rule
 	fn name(&self) -> &'static str;
 
-	/// Returns the name of the rule that should preceed this one in terms of priority
-	fn previous(&self) -> Option<&'static str>;
+	/// Rule ordering
+	fn target(&self) -> RuleTarget;
 
 	/// Returns the rule's regexes
 	fn regexes(&self) -> &[regex::Regex];
@@ -159,7 +143,7 @@ pub trait RegexRule {
 impl<T: RegexRule + 'static> Rule for T {
 	fn name(&self) -> &'static str { RegexRule::name(self) }
 
-	fn previous(&self) -> Option<&'static str> { RegexRule::previous(self) }
+	fn target(&self) -> RuleTarget { RegexRule::target(self) }
 
 	/// Finds the next match starting from [`Cursor`]
 	fn next_match(

@@ -11,6 +11,7 @@ use parser::source::Token;
 use regex::{Captures, Regex};
 
 use crate::parser::reports::macros::*;
+use crate::parser::rule::RuleTarget;
 use crate::parser::source::SourceFile;
 use crate::parser::{reports::*, util};
 use crate::parser::state::ParseMode;
@@ -35,7 +36,9 @@ impl Default for ImportRule {
 impl RegexRule for ImportRule {
 	fn name(&self) -> &'static str { "Import" }
 
-	fn previous(&self) -> Option<&'static str> { Some("Break") }
+	fn target(&self) -> RuleTarget {
+	    RuleTarget::Command
+	}
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 

@@ -9,6 +9,7 @@ use regex::Regex;
 use crate::parser::property::Property;
 use crate::parser::property::PropertyParser;
 use crate::parser::rule::RegexRule;
+use crate::parser::rule::RuleTarget;
 use crate::parser::source::Token;
 use crate::parser::state::ParseMode;
 use crate::parser::util::escape_source;
@@ -60,9 +61,8 @@ impl RegexRule for LatexRule {
 		"Latex"
 	}
 
-	//FIXME: fn previous(&self) -> Option<&'static str> { Some("Comment") }
-	fn previous(&self) -> Option<&'static str> {
-		Some("Text") // TODO
+	fn target(&self) -> RuleTarget {
+	    RuleTarget::Inline
 	}
 
 	fn regexes(&self) -> &[regex::Regex] {

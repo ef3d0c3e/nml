@@ -1,6 +1,7 @@
 use crate::elements::text::elem::Text;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use crate::parser::rule::RuleTarget;
 use crate::parser::state::ParseMode;
 use crate::parser::util::escape_source;
 use crate::parser::util::parse_paragraph;
@@ -38,7 +39,10 @@ impl Default for InternalLinkRule {
 impl RegexRule for InternalLinkRule {
 	fn name(&self) -> &'static str { "Inernal Link" }
 
-	fn previous(&self) -> Option<&'static str> { Some("Link") }
+	fn target(&self) -> RuleTarget {
+	    RuleTarget::Inline
+	}
+
 
 	fn regexes(&self) -> &[regex::Regex] { &self.re }
 
