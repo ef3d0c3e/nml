@@ -1,6 +1,3 @@
-use std::collections::HashSet;
-use std::rc::Rc;
-
 use tower_lsp::lsp_types::CompletionContext;
 use tower_lsp::lsp_types::CompletionItem;
 use tower_lsp::lsp_types::CompletionItemKind;
@@ -10,8 +7,6 @@ use tower_lsp::lsp_types::MarkupContent;
 use crate::lsp::completion::context_triggered;
 use crate::lsp::completion::CompletionProvider;
 use crate::unit::translation::TranslationUnit;
-use crate::unit::variable::Variable;
-use crate::unit::variable::VariableName;
 
 pub struct ImportCompletion;
 

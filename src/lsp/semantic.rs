@@ -98,6 +98,8 @@ pub struct Tokens {
 	pub import: (u32, u32),
 	pub import_path: (u32, u32),
 
+	pub anchor_refname: (u32, u32),
+
 	pub prop_equal: (u32, u32),
 	pub prop_comma: (u32, u32),
 	pub prop_name: (u32, u32),
@@ -112,6 +114,10 @@ pub struct Tokens {
 	pub link_display_sep: (u32, u32),
 	pub link_url_sep: (u32, u32),
 	pub link_url: (u32, u32),
+
+	pub internal_link_ref_sep: (u32, u32),
+	pub internal_link_display_sep: (u32, u32),
+	pub internal_link_ref: (u32, u32),
 }
 
 impl Default for Tokens {
@@ -121,6 +127,8 @@ impl Default for Tokens {
 
 			import: token!("function"),
 			import_path: token!("string"),
+
+			anchor_refname: token!("parameter"),
 
 			prop_equal: token!("operator"),
 			prop_comma: token!("operator"),
@@ -136,6 +144,10 @@ impl Default for Tokens {
 			link_display_sep: token!("macro"),
 			link_url_sep: token!("macro"),
 			link_url: token!("function", "readonly", "abstract", "abstract"),
+
+			internal_link_ref_sep: token!("macro"),
+			internal_link_display_sep: token!("macro"),
+			internal_link_ref: token!("parameter"),
 		}
 	}
 }

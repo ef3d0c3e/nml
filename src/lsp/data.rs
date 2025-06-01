@@ -1,10 +1,12 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use tower_lsp::lsp_types::Diagnostic;
 
-use crate::parser::reports::Report;
 use crate::parser::source::Source;
+use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
 use crate::parser::source::Token;
 
@@ -16,6 +18,7 @@ use super::hints::HintsData;
 use super::hover::Hover;
 use super::hover::HoverData;
 use super::hover::HoverRange;
+use super::reference::LsReference;
 use super::semantic::Semantics;
 use super::semantic::SemanticsData;
 use super::semantic::Tokens;
@@ -35,11 +38,20 @@ pub struct LangServerData {
 	pub conceals: HashMap<Arc<dyn Source>, ConcealData>,
 	pub styles: HashMap<Arc<dyn Source>, StylesData>,
 	pub coderanges: HashMap<Arc<dyn Source>, CodeRangeData>,
+
+	pub external_refs: HashMap<String, LsReference>,
+
+	pub sources: RefCell<HashMap<String, Arc<dyn Source>>>,
 }
 
 impl LangServerData {
 	/// Method that must be called when a source is added
 	pub fn on_new_source(&mut self, source: Arc<dyn Source>) {
+		if source.downcast_ref::<SourceFile>().is_some()
+		{
+			self.sources.borrow_mut().insert(source.name().to_owned(), source.clone());
+		}
+
 		if !self.semantic_data.contains_key(&source) {
 			self.semantic_data
 				.insert(source.clone(), SemanticsData::new(source.clone()));
@@ -79,6 +91,16 @@ impl LangServerData {
 		if let Some(sems) = Semantics::from_source(source, self) {
 			sems.process_queue(pos);
 		}
+	}
+
+	/// Gets a source file by name, or insert a new file
+	pub fn get_source<'lsp>(&'lsp self, name: &str) -> Option<Arc<dyn Source>> {
+		if let Some(found) = self.sources.borrow().get(name) { return Some(found.to_owned()) }
+		
+		let Ok(file) = SourceFile::new(name.to_string(), None) else { return None };
+		let source = Arc::new(file);
+		self.sources.borrow_mut().insert(source.name().to_owned(), source.clone());
+		Some(source)
 	}
 
 	pub fn with_semantics<'lsp, F, R>(&'lsp self, source: Arc<dyn Source>, f: F) -> Option<R>

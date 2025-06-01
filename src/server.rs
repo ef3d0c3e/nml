@@ -9,10 +9,12 @@ mod util;
 
 use std::cmp;
 use std::env::current_dir;
+use std::fmt::format;
 use std::fs::read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use cache::cache::Cache;
 use dashmap::DashMap;
 use lsp::code::CodeRangeInfo;
 use lsp::completion::CompletionProvider;
@@ -40,6 +42,7 @@ pub struct Backend {
 	client: Client,
 	settings: ProjectSettings,
 	root_path: PathBuf,
+	cache: Arc<Cache>,
 
 	completors: DashMap<String, Vec<Box<dyn CompletionProvider + 'static + Send + Sync>>>,
 
@@ -63,11 +66,15 @@ struct TextDocumentItem {
 
 impl Backend {
 	pub fn new(client: Client, settings: ProjectSettings, root_path: PathBuf) -> Self {
+		let cache = Arc::new(Cache::new(settings.db_path.as_str()).unwrap());
+		//cache.setup_tables();
+
 		Self {
 			source_files: DashMap::default(),
 			client,
 			settings,
 			root_path,
+			cache,
 
 			completors: DashMap::default(),
 
@@ -85,6 +92,10 @@ impl Backend {
 	}
 
 	async fn on_change(&self, params: TextDocumentItem) {
+		let mut external_refs = {
+			let cache = self.cache.clone();
+			cache.get_references().await
+		};
 		self.document_map
 			.insert(params.uri.to_string(), params.text.clone());
 
@@ -97,7 +108,18 @@ impl Backend {
 			.insert(params.uri.to_string(), source.clone());
 
 		let parser = Parser::new();
-		let unit = TranslationUnit::new(params.uri.to_string(), &parser, source, true, false);
+		let path = pathdiff::diff_paths(params.uri.to_string().replace("file:///", "/"), &self.root_path)
+			.map(|path| path.to_str().unwrap().to_string())
+			.unwrap();
+		let unit = TranslationUnit::new(path, &parser, source, true, false);
+
+		// Set references
+		unit.with_lsp(move |mut lsp| {
+			lsp.external_refs.clear();
+			external_refs.drain(..).for_each(|reference| {
+				lsp.external_refs.insert(format!("{}#{}", reference.source_refkey, reference.name), reference);
+			});
+		});
 
 		let basename = PathBuf::from(params.uri.as_str())
 			.file_stem()
@@ -112,6 +134,15 @@ impl Backend {
 		{
 			Report::to_diagnostics(report, &self.diagnostic_map);
 		}
+		
+		// Completion
+		let completors = parser.get_completors();
+		let mut items = vec![];
+		for comp in &completors {
+			comp.unit_items(&unit, &mut items);
+		}
+		self.completions_map.insert(params.uri.to_string(), items);
+		self.completors.insert(params.uri.to_string(), completors);
 
 		// TODO: Run resolver
 		unit.with_lsp(|lsp| {
@@ -184,15 +215,6 @@ impl Backend {
 						.insert(path, coderanges.coderanges.replace(vec![]));
 				}
 			}
-
-			// Completion
-			let completors = parser.get_completors();
-			let mut items = vec![];
-			for comp in &completors {
-				comp.unit_items(&unit, &mut items);
-			}
-			self.completions_map.insert(params.uri.to_string(), items);
-			self.completors.insert(params.uri.to_string(), completors);
 
 			// Hovers
 			for (source, hovers) in &lsp.hovers {

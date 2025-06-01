@@ -101,4 +101,6 @@ impl InternalReference {
     }
 
 	pub fn name(&self) -> &Refname { &self.refname }
+
+	pub fn location(&self) -> &Token { &self.location }
 }

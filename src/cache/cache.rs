@@ -10,6 +10,7 @@ use rusqlite::ToSql;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
+use crate::lsp::reference::LsReference;
 use crate::parser::resolver::UnitDependency;
 use crate::unit::element::ReferenceableElement;
 use crate::unit::translation::TranslationUnit;
@@ -296,6 +297,33 @@ impl Cache {
 			},
 		)
 		.ok()
+	}
+
+	/// Gets all exported references in the project
+	pub async fn get_references(&self) -> Vec<LsReference>
+	{
+		let con = self.get_connection().await;
+
+		let mut stmt = con.prepare("SELECT
+			name, unit_ref, token_start, token_end, type, ru.input_file
+		FROM exported_references
+		LEFT JOIN referenceable_units ru ON unit_ref = ru.reference_key;").unwrap();
+		let res = stmt.query_map((), |row| {
+			Ok(LsReference {
+				name: row.get_unwrap::<_, String>(0),
+				range: row.get_unwrap::<_, usize>(2)..row.get_unwrap::<_, usize>(3),
+				source_path: row.get_unwrap::<_, String>(5),
+				source_refkey: row.get_unwrap::<_, String>(1),
+				reftype: row.get_unwrap::<_, String>(4),
+			})
+		}).unwrap();
+
+		let mut result = vec![];
+		for r in res {
+			let Ok(reference) = r else { continue };
+			result.push(reference);
+		}
+		result
 	}
 
 	pub fn export_references<'a, I>(&self, reference_key: &String, refs: I) -> Result<(), String>
