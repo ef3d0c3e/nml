@@ -6,6 +6,7 @@ use regex::Regex;
 use crate::parser::rule::RegexRule;
 use crate::parser::rule::RuleTarget;
 use crate::parser::source::Token;
+use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
@@ -36,7 +37,7 @@ impl RegexRule for BreakRule {
 		&self.re
 	}
 
-	fn enabled(&self, mode: &ParseMode, _index: usize) -> bool {
+	fn enabled(&self, _unit: &TranslationUnit, mode: &ParseMode, _states: &mut CustomStates, _index: usize) -> bool {
 		return !mode.paragraph_only
 	}
 

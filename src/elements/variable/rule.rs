@@ -8,6 +8,8 @@ use crate::parser::rule::Rule;
 use crate::parser::rule::RuleTarget;
 use crate::parser::source::Cursor;
 use crate::parser::source::Token;
+use crate::parser::state::CustomStates;
+use crate::parser::state::ParserState;
 use crate::parser::util::escape_source;
 use crate::parser::util::escape_text;
 use crate::unit::scope::ScopeAccessor;
@@ -77,7 +79,7 @@ impl Rule for VariableRule {
 	    RuleTarget::Command
 	}
 
-	fn next_match(&self, _mode: &ParseMode, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _unit: &TranslationUnit, _mode: &ParseMode, _states: &mut CustomStates, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
 		self.decl_re
 			.find_at(cursor.source().content(), cursor.pos())
 			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
@@ -343,7 +345,7 @@ impl RegexRule for VariableSubstitutionRule {
 		&self.re
 	}
 
-	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool {
+	fn enabled(&self, _unit: &TranslationUnit, _mode: &ParseMode, _states: &mut CustomStates, _id: usize) -> bool {
 		true
 	}
 

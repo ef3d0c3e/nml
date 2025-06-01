@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crate::lua::kernel::Kernel;
 use crate::parser::rule::{Rule, RuleTarget};
 use crate::parser::source::Cursor;
-use crate::parser::state::ParseMode;
+use crate::parser::state::{CustomStates, ParseMode, ParserState};
 use crate::unit::translation::{TranslationAccessors, TranslationUnit};
 
 use super::elem::Text;
@@ -22,7 +22,8 @@ impl Rule for TextRule {
 
 	fn next_match(
 		&self,
-		_mode: &ParseMode,
+		_unit: &TranslationUnit,
+		_mode: &ParseMode, _states: &mut CustomStates,
 		_cursor: &Cursor,
 	) -> Option<(usize, Box<dyn Any>)> {
 		None

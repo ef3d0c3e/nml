@@ -2,14 +2,12 @@ use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use graphviz_rust::print;
-use rusqlite::params;
-use rusqlite::Connection;
-use tokio::sync::MutexGuard;
+
+use downcast_rs::impl_downcast;
+use downcast_rs::Downcast;
 
 use crate::cache::cache::Cache;
 use crate::lsp::data::LangServerData;
@@ -18,7 +16,6 @@ use crate::lua::kernel::KernelHolder;
 use crate::parser::parser::Parser;
 use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
-use crate::parser::reports::ReportKind;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::state::ParseMode;
@@ -26,7 +23,6 @@ use crate::util::settings::ProjectOutput;
 use crate::util::settings::ProjectSettings;
 
 use super::element::Element;
-use super::element::LinkableElement;
 use super::element::ReferenceableElement;
 use super::scope::Scope;
 use super::scope::ScopeAccessor;
@@ -35,6 +31,14 @@ use super::variable::PropertyVariable;
 use super::variable::VariableMutability;
 use super::variable::VariableName;
 use super::variable::VariableVisibility;
+
+/// Custom data populated by rules, stored in [`TranslationUnit::custom_data`]
+pub trait CustomData: Downcast {
+	/// Name of this custom data
+	fn name(&self) -> &str;
+
+}
+impl_downcast!(CustomData);
 
 /// Stores output data for [`TranslationUnit`]
 #[derive(Debug)]
@@ -68,6 +72,8 @@ pub struct TranslationUnit<'u> {
 	//elem_styles: StyleHolder,
 	/// User-defined styles
 	//custom_styles: CustomStyleHolder,
+	/// Custom data stored by rules
+	custom_data: RefCell<HashMap<String, Rc<RefCell<dyn CustomData>>>>,
 
 	/// Error reports
 	reports: Vec<(Rc<RefCell<Scope>>, Report)>,
@@ -123,6 +129,7 @@ impl<'u> TranslationUnit<'u> {
 			lsp: with_lsp.then(|| RefCell::new(LangServerData::default())),
 
 			lua_kernels: KernelHolder::default(),
+			custom_data: RefCell::default(),
 			//layouts: LayoutHolder::default(),
 			//blocks: BlockHolder::default(),
 			//elem_styles: StyleHolder::default(),
@@ -273,6 +280,38 @@ impl<'u> TranslationUnit<'u> {
 
 		cache.export_ref_unit(&self, &output.input_file, &output.output_file);
 		cache.export_references(&self.reference_key(), self.references.iter())
+	}
+
+	/// Checks if [`Self::custom_data`] contains data `key`
+	pub fn has_data(&self, name: &str) -> bool
+	{
+		self.custom_data.borrow().contains_key(name)
+	}
+
+	/// Inserts new custom data
+	pub fn new_data(&self, data: Rc<RefCell<dyn CustomData>>)
+	{
+		let key = data.borrow().name().to_owned();
+		self.custom_data.borrow_mut().insert(key, data);
+	}
+
+	/// Evaluates closure `f` with data downcasted to concrete type `T`
+	pub fn with_data<T, F, R>(&self, name: &str, f: F) -> R
+		where
+			T: CustomData,
+			F: FnOnce(RefMut<'_, T>) -> R,
+	{
+		let map = self.custom_data.borrow();
+		let data = map.get(name)
+			.unwrap()
+			.clone();
+		let borrowed = data.borrow_mut();
+		let mapped = RefMut::map(borrowed, |data| {
+			data.as_any_mut()
+				.downcast_mut::<T>()
+				.expect("Mismatch data types")
+		});
+		f(mapped)
 	}
 }
 

@@ -1,5 +1,6 @@
 use super::source::Cursor;
 use super::source::Token;
+use super::state::CustomStates;
 use super::state::ParseMode;
 use crate::lsp::completion::CompletionProvider;
 use crate::lua::kernel::Kernel;
@@ -63,7 +64,9 @@ pub trait Rule: Downcast {
 	/// modes. For instance mode `paragraph_only` makes the rule for `Section`s to be ignored.
 	fn next_match(
 		&self,
+		unit: &TranslationUnit,
 		mode: &ParseMode,
+		states: &mut CustomStates,
 		cursor: &Cursor,
 	) -> Option<(usize, Box<dyn Any>)>;
 
@@ -116,7 +119,7 @@ pub trait RegexRule {
 	///
 	/// `index` represents the index of the regex (given by [`Self::regexes`]) that is checked
 	/// against.
-	fn enabled(&self, mode: &ParseMode, index: usize) -> bool;
+	fn enabled(&self, unit: &TranslationUnit, mode: &ParseMode, states: &mut CustomStates, index: usize) -> bool;
 
 	/// Method called when the rule is chosen by the parser
 	///
@@ -147,7 +150,9 @@ impl<T: RegexRule + 'static> Rule for T {
 	/// Finds the next match starting from [`Cursor`]
 	fn next_match(
 		&self,
+		unit: &TranslationUnit,
 		mode: &ParseMode,
+		states: &mut CustomStates,
 		cursor: &Cursor,
 	) -> Option<(usize, Box<dyn Any>)> {
 		let source = cursor.source();
@@ -155,7 +160,7 @@ impl<T: RegexRule + 'static> Rule for T {
 
 		let mut found: Option<(usize, usize)> = None;
 		self.regexes().iter().enumerate().for_each(|(id, re)| {
-			if !RegexRule::enabled(self, mode, id) {
+			if !RegexRule::enabled(self, unit, mode, states, id) {
 				return;
 			}
 			if let Some(m) = re.find_at(content.as_str(), cursor.pos()) {

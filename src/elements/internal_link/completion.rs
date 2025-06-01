@@ -1,4 +1,3 @@
-use std::fmt::format;
 use std::rc::Rc;
 
 use ariadne::Span;
@@ -13,7 +12,6 @@ use crate::lsp::completion::context_triggered;
 use crate::lsp::completion::CompletionProvider;
 use crate::lsp::data::LangServerData;
 use crate::lsp::reference::LsReference;
-use crate::unit::element::Element;
 use crate::unit::element::ReferenceableElement;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationUnit;

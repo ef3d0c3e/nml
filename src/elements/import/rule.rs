@@ -1,11 +1,9 @@
 
 use std::env::current_dir;
-use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Fmt;
-use graphviz_rust::print;
 use parser::rule::RegexRule;
 use parser::source::Token;
 use regex::{Captures, Regex};
@@ -14,7 +12,7 @@ use crate::parser::reports::macros::*;
 use crate::parser::rule::RuleTarget;
 use crate::parser::source::SourceFile;
 use crate::parser::{reports::*, util};
-use crate::parser::state::ParseMode;
+use crate::parser::state::{CustomStates, ParseMode, ParserState};
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::{TranslationAccessors, TranslationUnit};
 
@@ -43,7 +41,7 @@ impl RegexRule for ImportRule {
 
 	fn regexes(&self) -> &[Regex] { &self.re }
 
-	fn enabled(&self, mode: &ParseMode, _id: usize) -> bool { !mode.paragraph_only }
+	fn enabled(&self, _unit: &TranslationUnit, mode: &ParseMode, _states: &mut CustomStates, _id: usize) -> bool { !mode.paragraph_only }
 
 	fn on_regex_match<'u>(
 		&self,

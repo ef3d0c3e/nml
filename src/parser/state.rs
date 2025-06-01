@@ -8,6 +8,14 @@ use downcast_rs::Downcast;
 
 use crate::unit::translation::TranslationUnit;
 
+pub type CustomStates = HashMap<String, Box<RefCell<dyn CustomState>>>;
+
+pub trait CustomState: Downcast + core::fmt::Debug
+{
+	/// Name of the state
+	fn name(&self) -> &str;
+}
+impl_downcast!(CustomState);
 
 /// Modifies the parser's behaviour
 ///
@@ -26,6 +34,8 @@ pub struct ParserState {
 	pub matches: Vec<(usize, Option<Box<dyn Any>>)>,
 	/// Current mode for the parser
 	pub mode: ParseMode,
+	/// Custom states
+	pub states: CustomStates,
 }
 
 impl ParserState {
@@ -33,6 +43,7 @@ impl ParserState {
 		Self {
 			matches: Vec::default(),
 			mode,
+			states: CustomStates::default()
 		}
 	}
 

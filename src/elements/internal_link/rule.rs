@@ -2,7 +2,9 @@ use crate::elements::text::elem::Text;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RuleTarget;
+use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
+use crate::parser::state::ParserState;
 use crate::parser::util::escape_source;
 use crate::parser::util::parse_paragraph;
 use crate::unit::element::Element;
@@ -10,7 +12,6 @@ use crate::unit::references::Refname;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
-use crate::unit::unit::Reference;
 use ariadne::Fmt;
 use ariadne::Span;
 use regex::Captures;
@@ -51,7 +52,7 @@ impl RegexRule for InternalLinkRule {
 		&self.re
 	}
 
-	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool {
+	fn enabled(&self, _unit: &TranslationUnit, _mode: &ParseMode, _states: &mut CustomStates, _id: usize) -> bool {
 		true
 	}
 

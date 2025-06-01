@@ -1,11 +1,11 @@
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::parser::source::Source;
-use crate::parser::state::{ParseMode, ParserState};
+use crate::parser::state::{CustomState, ParseMode, ParserState};
 
 use super::element::{ContainerElement, Element};
 use super::variable::{Variable, VariableName, VariableVisibility};
@@ -117,6 +117,11 @@ pub trait ScopeAccessor {
 	/// This will insert the variables defined within `imported`
 	/// into `self`
 	fn add_import(&self, imported: Rc<RefCell<Scope>>);
+
+	fn with_state<F, T, R>(&self, name: &str, f: F) -> R
+		where
+			T: CustomState,
+			F: FnOnce(RefMut<'_, T>) -> R;
 }
 
 impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
@@ -195,6 +200,22 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 				self.insert_variable(var.clone());
 			}
 		});
+	}
+
+	fn with_state<F, T, R>(&self, name: &str, f: F) -> R
+		where
+			T: CustomState,
+			F: FnOnce(RefMut<'_, T>) -> R
+	{
+		let map = self.borrow();
+		let state = map.parser_state.states.get(name).unwrap();
+		let borrow = state.borrow_mut();
+		let mapped = RefMut::map(borrow, |data| {
+			data.as_any_mut()
+				.downcast_mut::<T>()
+				.expect("Mismatch data types")
+		});
+		f(mapped)
 	}
 }
 

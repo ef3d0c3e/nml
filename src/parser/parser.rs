@@ -75,7 +75,7 @@ impl Parser {
 					return;
 				}
 				// Update next match position
-				(*pos, *data) = match rule.next_match(&state.mode, cursor) {
+				(*pos, *data) = match rule.next_match(unit, &state.mode, &mut state.states, cursor) {
 					None => (usize::MAX, None),
 					Some((mut new_pos, mut new_data)) => {
 						let mut local_cursor = cursor.to_owned();
@@ -104,7 +104,7 @@ impl Parser {
 								None => panic!(),
 							};
 							// Find next potential match
-							(new_pos, new_data) = match rule.next_match(&state.mode, &local_cursor) {
+							(new_pos, new_data) = match rule.next_match(unit, &state.mode, &mut state.states, &local_cursor) {
 								None => (usize::MAX, new_data), // Stop iterating
 								Some((new_pos, new_data)) => (new_pos, new_data),
 							};

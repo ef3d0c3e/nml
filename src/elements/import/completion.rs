@@ -15,7 +15,7 @@ impl CompletionProvider for ImportCompletion {
 		["@"].as_slice()
 	}
 
-	fn unit_items(&self, unit: &TranslationUnit, items: &mut Vec<CompletionItem>) {}
+	fn unit_items(&self, _unit: &TranslationUnit, _items: &mut Vec<CompletionItem>) {}
 
 	fn static_items(&self, context: &Option<CompletionContext>, items: &mut Vec<CompletionItem>) {
 		// @import

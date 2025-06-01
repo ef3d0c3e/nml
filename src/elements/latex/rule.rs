@@ -11,7 +11,9 @@ use crate::parser::property::PropertyParser;
 use crate::parser::rule::RegexRule;
 use crate::parser::rule::RuleTarget;
 use crate::parser::source::Token;
+use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
+use crate::parser::state::ParserState;
 use crate::parser::util::escape_source;
 use crate::parser::util::escape_text;
 use crate::report_err;
@@ -70,7 +72,7 @@ impl RegexRule for LatexRule {
 		&self.re
 	}
 
-	fn enabled(&self, _mode: &ParseMode, _index: usize) -> bool {
+	fn enabled(&self, _unit: &TranslationUnit, _mode: &ParseMode, _states: &mut CustomStates, _index: usize) -> bool {
 		true
 	}
 

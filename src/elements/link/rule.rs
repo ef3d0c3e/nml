@@ -4,6 +4,8 @@ use std::sync::Arc;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RuleTarget;
+use crate::parser::state::CustomStates;
+use crate::parser::state::ParseMode;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use ariadne::Fmt;
@@ -12,7 +14,6 @@ use mlua::Error::BadArgument;
 use parser::rule::RegexRule;
 use parser::source::Token;
 use parser::source::VirtualSource;
-use parser::state::ParseMode;
 use parser::util;
 use parser::util::escape_source;
 use parser::util::parse_paragraph;
@@ -29,23 +30,33 @@ pub struct LinkRule {
 impl Default for LinkRule {
 	fn default() -> Self {
 		Self {
-			re: [
-				Regex::new(r"\[((?:\\.|[^\\\\])*?)\]\(((?:\\.|[^\\\\])*?)\)").unwrap()
-			],
+			re: [Regex::new(r"\[((?:\\.|[^\\\\])*?)\]\(((?:\\.|[^\\\\])*?)\)").unwrap()],
 		}
 	}
 }
 
 impl RegexRule for LinkRule {
-	fn name(&self) -> &'static str { "Link" }
-
-	fn target(&self) -> RuleTarget {
-	    RuleTarget::Meta
+	fn name(&self) -> &'static str {
+		"Link"
 	}
 
-	fn regexes(&self) -> &[Regex] { &self.re }
+	fn target(&self) -> RuleTarget {
+		RuleTarget::Meta
+	}
 
-	fn enabled(&self, _mode: &ParseMode, _id: usize) -> bool { true }
+	fn regexes(&self) -> &[Regex] {
+		&self.re
+	}
+
+	fn enabled(
+		&self,
+		_unit: &TranslationUnit,
+		_mode: &ParseMode,
+		_states: &mut CustomStates,
+		_id: usize,
+	) -> bool {
+		true
+	}
 
 	fn on_regex_match<'u>(
 		&self,
@@ -130,7 +141,7 @@ impl RegexRule for LinkRule {
 					span(url_text.range(), err.to_string())
 				);
 				return;
-			},
+			}
 		};
 
 		// Add element
@@ -141,62 +152,63 @@ impl RegexRule for LinkRule {
 		}));
 
 		// Add semantics
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			sems.add(
-				matches.get(1).unwrap().end()..matches.get(1).unwrap().end() + 1,
-				tokens.link_display_sep,
-			);
-			let url = matches.get(2).unwrap().range();
-			sems.add(url.start - 1..url.start, tokens.link_url_sep);
-			sems.add(url.clone(), tokens.link_url);
-			sems.add(url.end..url.end + 1, tokens.link_url_sep);
-		}));
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(
+					matches.get(1).unwrap().end()..matches.get(1).unwrap().end() + 1,
+					tokens.link_display_sep,
+				);
+				let url = matches.get(2).unwrap().range();
+				sems.add(url.start - 1..url.start, tokens.link_url_sep);
+				sems.add(url.clone(), tokens.link_url);
+				sems.add(url.end..url.end + 1, tokens.link_url_sep);
+			})
+		});
 	}
 
 	fn register_bindings(&self, kernel: &Kernel, table: mlua::Table) {
-		kernel.create_function(table, "push", |mut ctx, _, (display, url): (String, String)|  {
-			// Parse display
-			let source = Arc::new(VirtualSource::new(
+		kernel.create_function(
+			table,
+			"push",
+			|mut ctx, _, (display, url): (String, String)| {
+				// Parse display
+				let source = Arc::new(VirtualSource::new(
 					ctx.location.clone(),
 					":LUA:Link Display".to_string(),
 					display,
-			));
-			let display_content = match parse_paragraph(ctx.unit, source)
-			{
-				Err(err) => {
-					return Err(BadArgument {
-						to: Some("push".to_string()),
-						pos: 1,
-						name: Some("display".to_string()),
-						cause: Arc::new(mlua::Error::external(format!(
-									"Failed to parse link display: {err}"
-						))),
-					});
-				}
-				Ok(scope) => scope,
-			};
+				));
+				let display_content = match parse_paragraph(ctx.unit, source) {
+					Err(err) => {
+						return Err(BadArgument {
+							to: Some("push".to_string()),
+							pos: 1,
+							name: Some("display".to_string()),
+							cause: Arc::new(mlua::Error::external(format!(
+								"Failed to parse link display: {err}"
+							))),
+						});
+					}
+					Ok(scope) => scope,
+				};
 
-			// Parse url
-			let url = url::Url::parse(&url).map_err(|err| {
-				BadArgument {
+				// Parse url
+				let url = url::Url::parse(&url).map_err(|err| BadArgument {
 					to: Some("push".to_string()),
 					pos: 2,
 					name: Some("url".to_string()),
-					cause: Arc::new(mlua::Error::external(format!(
-								"Failed to parse url: {err}"
-					))),
-				}
-			})?;
+					cause: Arc::new(mlua::Error::external(format!("Failed to parse url: {err}"))),
+				})?;
 
-			// Add element
-			let location = ctx.location.clone();
-			ctx.unit.add_content(Rc::new(Link {
-				location,
-				display: vec![display_content],
-				url,
-			}));
+				// Add element
+				let location = ctx.location.clone();
+				ctx.unit.add_content(Rc::new(Link {
+					location,
+					display: vec![display_content],
+					url,
+				}));
 
-			Ok(())
-		});
+				Ok(())
+			},
+		);
 	}
 }
