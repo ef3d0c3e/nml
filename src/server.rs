@@ -88,8 +88,6 @@ impl Backend {
 		self.document_map
 			.insert(params.uri.to_string(), params.text.clone());
 
-		// TODO: Create a custom parser for the lsp
-		// Which will require a dyn Document to work
 		let source = Arc::new(SourceFile::with_content(
 			params.uri.to_string(),
 			params.text.clone(),
@@ -257,7 +255,7 @@ impl LanguageServer for Backend {
 				definition_provider: Some(OneOf::Left(true)),
 				completion_provider: Some(CompletionOptions {
 					resolve_provider: Some(false),
-					trigger_characters: Some(vec!["%".to_string(), ":".to_string()]),
+					trigger_characters: Some(vec!["%".to_string(), ":".to_string(), "@".to_string()]),
 					work_done_progress_options: Default::default(),
 					all_commit_characters: None,
 					completion_item: None,

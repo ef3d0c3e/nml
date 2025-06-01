@@ -95,6 +95,9 @@ macro_rules! token {
 pub struct Tokens {
 	pub command: (u32, u32),
 
+	pub import: (u32, u32),
+	pub import_path: (u32, u32),
+
 	pub prop_equal: (u32, u32),
 	pub prop_comma: (u32, u32),
 	pub prop_name: (u32, u32),
@@ -115,6 +118,9 @@ impl Default for Tokens {
 	fn default() -> Self {
 		Self {
 			command: token!("function"),
+
+			import: token!("function"),
+			import_path: token!("string"),
 
 			prop_equal: token!("operator"),
 			prop_comma: token!("operator"),

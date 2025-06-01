@@ -101,6 +101,6 @@ fn from_source_impl<'lsp>(
 	))
 }
 
-pub fn from_source<'lsp>(source: Token, target: &Token, lsp: &'lsp LangServerData) {
+pub(crate) fn from_source<'lsp>(source: Token, target: &Token, lsp: &'lsp LangServerData) {
 	from_source_impl(source.source(), target, lsp, source)
 }

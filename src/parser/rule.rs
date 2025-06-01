@@ -8,7 +8,6 @@ use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
 use std::any::Any;
-use std::collections::HashMap;
 
 macro_rules! create_registry {
 	( $($construct:expr),+ $(,)? ) => {{

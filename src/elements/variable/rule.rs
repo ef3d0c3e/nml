@@ -409,7 +409,7 @@ impl RegexRule for VariableSubstitutionRule {
 		};
 
 		unit.with_lsp(|lsp| {
-			definition::from_source(token.clone(), variable.0.location(), &*lsp);
+			lsp.add_definition(token.clone(), variable.0.location());
 
 			let range = if variable.0.location().end() != 0 {
 				format!(

@@ -18,6 +18,7 @@ use crate::parser::state::ParseMode;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::{TranslationAccessors, TranslationUnit};
 
+use super::completion::ImportCompletion;
 use super::elem::Import;
 
 #[auto_registry::auto_registry(registry = "rules")]
@@ -28,7 +29,7 @@ pub struct ImportRule {
 impl Default for ImportRule {
 	fn default() -> Self {
 		Self {
-			re: [Regex::new(r#"(?:^|\n)@import\s+(")?((?:[^"\\]|\\.)*)(")?([^\n]*)"#).unwrap()],
+			re: [Regex::new(r#"(?:^|\n)(@import)\s+(")?((?:[^"\\]|\\.)*)(")?([^\n]*)"#).unwrap()],
 		}
 	}
 }
@@ -51,10 +52,10 @@ impl RegexRule for ImportRule {
 		token: Token,
 		captures: Captures,
 	) {
-		let path = captures.get(2).unwrap();
+		let path = captures.get(3).unwrap();
 
 		// Missing starting '"'
-		if captures.get(1).is_none()
+		if captures.get(2).is_none()
 		{
 			report_err!(
 				unit,
@@ -69,7 +70,7 @@ impl RegexRule for ImportRule {
 		}
 
 		// Missing ending '"'
-		if captures.get(3).is_none()
+		if captures.get(4).is_none()
 		{
 			report_err!(
 				unit,
@@ -84,26 +85,28 @@ impl RegexRule for ImportRule {
 		}
 
 		// Leftover
-		if !captures.get(4).unwrap().as_str().trim_start().is_empty()
+		if !captures.get(5).unwrap().as_str().trim_start().is_empty()
 		{
 			report_err!(
 				unit,
 				token.source(),
 				"Invalid import".into(),
 				span(
-					captures.get(4).unwrap().range(),
+					captures.get(5).unwrap().range(),
 					format!("Unexpected content here")
 				),
 			);
 			return
 		}
 
-		// Build relative path
+		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens|{
+			sems.add(captures.get(1).unwrap().range(), tokens.import);
+			sems.add(captures.get(2).unwrap().start()..captures.get(5).unwrap().end(), tokens.import_path);
+		}));
+
+		// Build path
 		let path_content = util::escape_text('\\', "\"", path.as_str(), false);
-		let mut rel_path = std::path::PathBuf::from(unit.token().source().name());
-		rel_path.pop();
-		rel_path.push(path_content.as_str());
-		let path_buf = match std::fs::canonicalize(&rel_path) {
+		let path_buf = match std::fs::canonicalize(&path_content) {
 			Ok(path) => path,
 			Err(err) => {
 				report_err!(
@@ -112,7 +115,7 @@ impl RegexRule for ImportRule {
 					"Invalid import".into(),
 					span(
 						path.range(),
-						format!("Failed to canonicalize `{:#?}`: {err}", path_content.fg(unit.colors().highlight))
+						format!("Failed to canonicalize `{}`: {err}", path_content.fg(unit.colors().highlight))
 					),
 					note(format!("Current working directory: {}", current_dir().unwrap().to_string_lossy().fg(unit.colors().info) ))
 				);
@@ -138,6 +141,7 @@ impl RegexRule for ImportRule {
 		};
 
 		let content = unit.with_child(Arc::new(source), ParseMode::default(), true, |unit, scope| {
+			unit.with_lsp(|lsp| lsp.add_definition(token.clone(), &Token::new(0..0, scope.borrow().source())));
 			unit.parser.parse(unit);
 			scope
 		});
@@ -150,4 +154,7 @@ impl RegexRule for ImportRule {
 		}));
 	}
 
+	fn completion(&self) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
+		Some(Box::new(ImportCompletion {}))
+	}
 }

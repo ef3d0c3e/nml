@@ -10,6 +10,7 @@ use crate::parser::source::Token;
 
 use super::code::CodeRangeData;
 use super::conceal::ConcealData;
+use super::definition;
 use super::definition::DefinitionData;
 use super::hints::HintsData;
 use super::hover::Hover;
@@ -87,6 +88,11 @@ impl LangServerData {
 			Some(sems) => Some(f(&sems, &self.semantic_tokens)),
 			None => None,
 		}
+	}
+
+	pub fn add_definition<'lsp>(&'lsp self, source: Token, target: &Token)
+	{
+		definition::from_source(source, target, self);
 	}
 
 	pub fn add_hover<'lsp>(&'lsp self, range: Token, content: String) {

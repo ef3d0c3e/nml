@@ -6,7 +6,6 @@ use tower_lsp::lsp_types::CompletionItem;
 use tower_lsp::lsp_types::CompletionItemKind;
 use tower_lsp::lsp_types::InsertTextFormat;
 use tower_lsp::lsp_types::MarkupContent;
-use tower_lsp::lsp_types::SignatureHelp;
 
 use crate::lsp::completion::context_triggered;
 use crate::lsp::completion::CompletionProvider;
@@ -102,7 +101,7 @@ impl CompletionProvider for VariableCompletion {
 `:set VARNAME = VALUE`
 
 Set variables are available through the current file. They are not inherited by
-`:import`-ing.
+`@import`-ing.
 
 # Examples
 
@@ -122,7 +121,7 @@ Set variables are available through the current file. They are not inherited by
 
  * `:export` *export a variable*".into()
 			})),
-			kind: Some(CompletionItemKind::VALUE),
+			kind: Some(CompletionItemKind::FUNCTION),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
 			insert_text: Some(format!("{}set ${{1:VARIABLE}} = ${{2:VALUE}}", if context_triggered(context, ":") { "" } else { ":" })),
 			..CompletionItem::default()
@@ -139,7 +138,8 @@ Set variables are available through the current file. They are not inherited by
 				
 `:export VARNAME = VALUE`
 
-Exported variables will be available to any subsequent file that `:import`s the file where they are defined.
+Exported variables will be available to any subsequent file that `@import`s the
+file where they are defined.
 
 # Examples
 
@@ -159,7 +159,7 @@ Exported variables will be available to any subsequent file that `:import`s the 
 
  * `:set` *set a variable*".into()
 			})),
-			kind: Some(CompletionItemKind::VALUE),
+			kind: Some(CompletionItemKind::FUNCTION),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
 			insert_text: Some(format!("{}export ${{1:VARIABLE}} = ${{2:VALUE}}", if context_triggered(context, ":") { "" } else { ":" })),
 			..CompletionItem::default()
