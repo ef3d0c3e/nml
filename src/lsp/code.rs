@@ -30,18 +30,10 @@ pub struct CodeRangeInfo {
 }
 
 /// Per file code ranges
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CodeRangeData {
 	/// The ranges
 	pub coderanges: RefCell<Vec<CodeRangeInfo>>,
-}
-
-impl CodeRangeData {
-	pub fn new() -> Self {
-		Self {
-			coderanges: RefCell::new(vec![]),
-		}
-	}
 }
 
 /// Temporary data returned by [`Self::from_source_impl`]

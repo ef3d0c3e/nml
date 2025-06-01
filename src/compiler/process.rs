@@ -199,7 +199,8 @@ impl ProcessQueue {
 				}
 			};
 
-			let unit = unit.consume(output_file);
+			let (reports, unit) = unit.consume(output_file);
+			Report::reports_to_stdout(unit.colors(), reports);
 			if options.debug_ast {
 				println!("{:#?}", unit.get_entry_scope());
 			}

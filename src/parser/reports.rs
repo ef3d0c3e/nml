@@ -181,7 +181,7 @@ impl Report {
 		});
 	}
 
-	fn to_diagnostics(self, diagnostic_map: &DashMap<String, Vec<Diagnostic>>) {
+	pub fn to_diagnostics(self, diagnostic_map: &DashMap<String, Vec<Diagnostic>>) {
 		for span in self.spans {
 			let token = span.token.source().original_range(span.token.range.clone());
 

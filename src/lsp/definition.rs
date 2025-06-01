@@ -17,18 +17,10 @@ use crate::parser::source::VirtualSource;
 use super::data::LangServerData;
 
 /// Per file definitions
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DefinitionData {
 	/// The definitions
 	pub definitions: RefCell<Vec<(Location, Range)>>,
-}
-
-impl DefinitionData {
-	pub fn new() -> Self {
-		Self {
-			definitions: RefCell::new(vec![]),
-		}
-	}
 }
 
 fn from_source_impl<'lsp>(

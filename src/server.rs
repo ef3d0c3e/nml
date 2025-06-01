@@ -22,6 +22,7 @@ use lsp::hover::HoverRange;
 use lsp::styles::StyleInfo;
 use lsp::styles::StyleParams;
 use parser::parser::Parser;
+use parser::reports::Report;
 use parser::source::LineCursor;
 use parser::source::Source;
 use parser::source::SourceFile;
@@ -98,7 +99,7 @@ impl Backend {
 			.insert(params.uri.to_string(), source.clone());
 
 		let parser = Parser::new();
-		let unit = TranslationUnit::new(params.uri.to_string(), &parser, source, true, true);
+		let unit = TranslationUnit::new(params.uri.to_string(), &parser, source, true, false);
 
 		let basename = PathBuf::from(params.uri.as_str())
 			.file_stem()
@@ -106,7 +107,13 @@ impl Backend {
 			.unwrap_or("output")
 			.to_owned();
 		let output_file = format!("{}/{basename}", self.settings.output_path);
-		let unit = unit.consume(output_file);
+		let (reports, unit) = unit.consume(output_file);
+
+		self.diagnostic_map.clear();
+		for report in reports
+		{
+			Report::to_diagnostics(report, &self.diagnostic_map);
+		}
 
 		// TODO: Run resolver
 		unit.with_lsp(|lsp| {
@@ -348,7 +355,7 @@ impl LanguageServer for Backend {
 		let index = hovers.binary_search_by(|hover| {
 			if hover.range.start() > cursor.pos {
 				cmp::Ordering::Greater
-			} else if hover.range.end() < cursor.pos {
+			} else if hover.range.end() <= cursor.pos {
 				cmp::Ordering::Less
 			} else {
 				cmp::Ordering::Equal

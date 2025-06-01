@@ -37,18 +37,10 @@ pub enum Style {
 }
 
 /// Per file styles
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct StylesData {
 	/// The styles
 	pub styles: RefCell<Vec<StyleInfo>>,
-}
-
-impl StylesData {
-	pub fn new() -> Self {
-		Self {
-			styles: RefCell::new(vec![]),
-		}
-	}
 }
 
 /// Temporary data returned by [`Self::from_source_impl`]

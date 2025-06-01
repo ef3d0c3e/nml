@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use tower_lsp::lsp_types::Diagnostic;
+
+use crate::parser::reports::Report;
 use crate::parser::source::Source;
 use crate::parser::source::SourcePosition;
 use crate::parser::source::Token;
@@ -24,6 +27,7 @@ pub struct LangServerData {
 	pub semantic_tokens: Tokens,
 	/// List of semantic tokens for this translatiop unit
 	pub semantic_data: HashMap<Arc<dyn Source>, SemanticsData>,
+	pub diagnostics: HashMap<Arc<dyn Source>, Vec<Diagnostic>>,
 	pub inlay_hints: HashMap<Arc<dyn Source>, HintsData>,
 	pub definitions: HashMap<Arc<dyn Source>, DefinitionData>,
 	pub hovers: HashMap<Arc<dyn Source>, HoverData>,
@@ -39,13 +43,17 @@ impl LangServerData {
 			self.semantic_data
 				.insert(source.clone(), SemanticsData::new(source.clone()));
 		}
+		if !self.diagnostics.contains_key(&source) {
+			self.diagnostics
+				.insert(source.clone(), Vec::default());
+		}
 		if !self.inlay_hints.contains_key(&source) {
 			self.inlay_hints
 				.insert(source.clone(), HintsData::new(source.clone()));
 		}
 		if !self.definitions.contains_key(&source) {
 			self.definitions
-				.insert(source.clone(), DefinitionData::new());
+				.insert(source.clone(), DefinitionData::default());
 		}
 		if !self.hovers.contains_key(&source) {
 			self.hovers.insert(source.clone(), HoverData::default());
@@ -54,10 +62,10 @@ impl LangServerData {
 			self.conceals.insert(source.clone(), ConcealData::default());
 		}
 		if !self.styles.contains_key(&source) {
-			self.styles.insert(source.clone(), StylesData::new());
+			self.styles.insert(source.clone(), StylesData::default());
 		}
 		if !self.coderanges.contains_key(&source) {
-			self.coderanges.insert(source.clone(), CodeRangeData::new());
+			self.coderanges.insert(source.clone(), CodeRangeData::default());
 		}
 	}
 
@@ -82,7 +90,6 @@ impl LangServerData {
 	}
 
 	pub fn add_hover<'lsp>(&'lsp self, range: Token, content: String) {
-		eprintln!("HERE ORIG={range:#?}");
 		let Some (hov) = Hover::from_source(range.source(), self) else { return };
 		let original = range.source().original_range(range.range);
 		hov.add(HoverRange{

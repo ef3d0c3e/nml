@@ -38,8 +38,7 @@ use super::variable::VariableVisibility;
 
 /// Stores output data for [`TranslationUnit`]
 #[derive(Debug)]
-pub struct UnitOutput
-{
+pub struct UnitOutput {
 	pub input_file: String,
 	pub output_file: Option<String>,
 }
@@ -72,7 +71,7 @@ pub struct TranslationUnit<'u> {
 
 	/// Error reports
 	reports: Vec<(Rc<RefCell<Scope>>, Report)>,
-	
+
 	/// Path relative to the database
 	path: String,
 	/// Exported (internal) references
@@ -128,7 +127,6 @@ impl<'u> TranslationUnit<'u> {
 			//blocks: BlockHolder::default(),
 			//elem_styles: StyleHolder::default(),
 			//custom_styles: CustomStyleHolder::default(),
-
 			path,
 			reports: Vec::default(),
 			references: HashMap::default(),
@@ -146,13 +144,19 @@ impl<'u> TranslationUnit<'u> {
 		self.source.clone().into()
 	}
 
-	pub fn parser(&self) -> &'u Parser { &self.parser }
+	pub fn parser(&self) -> &'u Parser {
+		&self.parser
+	}
 
 	/// Gets the current scope
-	pub fn get_scope(&self) -> &Rc<RefCell<Scope>> { &self.current_scope }
+	pub fn get_scope(&self) -> &Rc<RefCell<Scope>> {
+		&self.current_scope
+	}
 
 	/// Gets the entry scope
-	pub fn get_entry_scope(&self) -> &Rc<RefCell<Scope>> { &self.entry_scope }
+	pub fn get_entry_scope(&self) -> &Rc<RefCell<Scope>> {
+		&self.entry_scope
+	}
 
 	/// Runs procedure with a newly created scope from a source file
 	///
@@ -161,7 +165,13 @@ impl<'u> TranslationUnit<'u> {
 	/// - `source` is the source (usually a [`VirtualSource`]) that holds the content
 	/// - `parse_mode` is used to specify a custom parsing mode for the children scope
 	/// - `paragraphing` controls whether paragraphing is enabled for the child scope
-	pub fn with_child<F, R>(&mut self, source: Arc<dyn Source>, parse_mode: ParseMode, paragraphing: bool, f: F) -> R
+	pub fn with_child<F, R>(
+		&mut self,
+		source: Arc<dyn Source>,
+		parse_mode: ParseMode,
+		paragraphing: bool,
+		f: F,
+	) -> R
 	where
 		F: FnOnce(&mut TranslationUnit<'u>, Rc<RefCell<Scope>>) -> R,
 	{
@@ -184,74 +194,68 @@ impl<'u> TranslationUnit<'u> {
 
 	/// Consumes the translation unit with it's current scope
 	/// Returns `None` if an error happened
-	pub fn consume(mut self, output_file: String) -> Self {
+	pub fn consume(mut self, output_file: String) -> (Vec<Report>, Self) {
 		// Insert default variables
 		let token = Token::new(0..0, self.source.clone());
 		self.get_entry_scope()
-			.insert_variable(Rc::new(
-				PropertyVariable {
-					location: token.clone(),
-					name: VariableName::try_from("nml.input_file").unwrap(),
-					visibility: VariableVisibility::Internal,
-					mutability: VariableMutability::Immutable,
-					value: PropertyValue::String(self.source.name().into()),
-					value_token: token.clone(),
-				}));
+			.insert_variable(Rc::new(PropertyVariable {
+				location: token.clone(),
+				name: VariableName::try_from("nml.input_file").unwrap(),
+				visibility: VariableVisibility::Internal,
+				mutability: VariableMutability::Immutable,
+				value: PropertyValue::String(self.source.name().into()),
+				value_token: token.clone(),
+			}));
 		self.get_entry_scope()
-			.insert_variable(Rc::new(
-				PropertyVariable {
-					location: token.clone(),
-					name: VariableName::try_from("nml.output_file").unwrap(),
-					visibility: VariableVisibility::Internal,
-					mutability: VariableMutability::Mutable,
-					value: PropertyValue::String(output_file),
-					value_token: token.clone(),
-				}));
+			.insert_variable(Rc::new(PropertyVariable {
+				location: token.clone(),
+				name: VariableName::try_from("nml.output_file").unwrap(),
+				visibility: VariableVisibility::Internal,
+				mutability: VariableMutability::Mutable,
+				value: PropertyValue::String(output_file),
+				value_token: token.clone(),
+			}));
 		self.get_entry_scope()
-			.insert_variable(Rc::new(
-				PropertyVariable {
-					location: token.clone(),
-					name: VariableName::try_from("nml.reference_key").unwrap(),
-					visibility: VariableVisibility::Internal,
-					mutability: VariableMutability::Mutable,
-					value: PropertyValue::String(self.path.to_string()),
-					value_token: token.clone(),
-				}));
+			.insert_variable(Rc::new(PropertyVariable {
+				location: token.clone(),
+				name: VariableName::try_from("nml.reference_key").unwrap(),
+				visibility: VariableVisibility::Internal,
+				mutability: VariableMutability::Mutable,
+				value: PropertyValue::String(self.path.to_string()),
+				value_token: token.clone(),
+			}));
 
 		self.with_lsp(|mut lsp| lsp.on_new_source(self.source.clone()));
 		self.parser.parse(&mut self);
 		self.with_lsp(|mut lsp| lsp.on_source_end(self.source.clone()));
 
-		if let Some(lsp) = &mut self.lsp {
-			// TODO: send to lsp
-		} else {
-			let reports = self.reports.drain(..).map(|(_, report)| report).collect::<Vec<_>>();
-			Report::reports_to_stdout(&self.colors, reports);
-		}
-
-		let output_file = self.get_scope().get_variable(&VariableName("nml.output_file".into()));
+		let output_file = self
+			.get_scope()
+			.get_variable(&VariableName("nml.output_file".into()));
 		let output = UnitOutput {
 			input_file: self.path.clone(),
 			output_file: output_file.map(|(var, _)| var.to_string()),
 		};
 		self.output.set(output).unwrap();
-		self
+		(self.reports.drain(..).map(|(_, report)| report).collect::<Vec<_>>(), self)
 	}
 	pub fn colors<'s>(&'s self) -> &'s ReportColors {
 		&self.colors
 	}
 
-	pub fn report(&mut self, report: Report) { self.reports.push((self.current_scope.clone(), report)); }
+	pub fn report(&mut self, report: Report) {
+		self.reports.push((self.current_scope.clone(), report));
+	}
 
 	/// Returns the path of the unit relative to the project's root. This is used to uniquely identify each units.
 	pub fn input_path(&self) -> &String {
 		&self.path
 	}
-	
+
 	/// Gets the output path for this unit
-	pub fn output_path(&self) -> Option<&String>
-	{
-		self.output.get()
+	pub fn output_path(&self) -> Option<&String> {
+		self.output
+			.get()
 			.map(|out| out.output_file.as_ref().unwrap())
 	}
 
@@ -264,8 +268,7 @@ impl<'u> TranslationUnit<'u> {
 	}
 
 	/// Export all references of this [`TranslationUnit`]
-	pub fn export_references(&self, cache: Arc<Cache>) -> Result<(), String>
-	{
+	pub fn export_references(&self, cache: Arc<Cache>) -> Result<(), String> {
 		let output = self.output.get().unwrap();
 
 		cache.export_ref_unit(&self, &output.input_file, &output.output_file);
@@ -295,30 +298,26 @@ pub trait TranslationAccessors {
 
 impl TranslationAccessors for TranslationUnit<'_> {
 	fn add_content(&mut self, elem: Rc<dyn Element>) {
-		if let Some(reference) = elem.clone().as_referenceable()
-		{
+		if let Some(reference) = elem.clone().as_referenceable() {
 			self.add_reference(reference);
 		}
 		self.current_scope.add_content(elem);
 	}
 
-	fn add_reference(&mut self, elem: Rc<dyn ReferenceableElement>)
-	{
-		self.references.insert(elem.reference().name().to_string(), elem);
+	fn add_reference(&mut self, elem: Rc<dyn ReferenceableElement>) {
+		self.references
+			.insert(elem.reference().name().to_string(), elem);
 	}
 
-	fn get_reference<S: AsRef<str>>(&self, name: S) -> Option<Rc<dyn ReferenceableElement>>
-	{
+	fn get_reference<S: AsRef<str>>(&self, name: S) -> Option<Rc<dyn ReferenceableElement>> {
 		self.references.get(name.as_ref()).cloned()
 	}
 
-	fn references(&self) -> &HashMap<String, Rc<dyn ReferenceableElement>>
-	{
+	fn references(&self) -> &HashMap<String, Rc<dyn ReferenceableElement>> {
 		&self.references
 	}
 
-	fn update_settings(&self, mut settings: ProjectSettings)
-	{
+	fn update_settings(&self, mut settings: ProjectSettings) {
 		let scope = self.get_scope();
 
 		match &mut settings.output {
