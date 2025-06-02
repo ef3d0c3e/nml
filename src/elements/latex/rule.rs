@@ -129,7 +129,7 @@ impl RegexRule for LatexRule {
 			'\\',
 			"]",
 		);
-		let Some(properties) = self.properties.parse(
+		let Some(mut properties) = self.properties.parse(
 			"Raw Code",
 			unit,
 			Token::new(0..prop_source.content().len(), prop_source),

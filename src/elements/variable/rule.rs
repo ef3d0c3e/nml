@@ -79,7 +79,9 @@ impl Rule for VariableRule {
 	    RuleTarget::Command
 	}
 
-	fn next_match(&self, _unit: &TranslationUnit, _mode: &ParseMode, _states: &mut CustomStates, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _unit: &TranslationUnit, mode: &ParseMode, _states: &mut CustomStates, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+		if mode.paragraph_only { return None }
+
 		self.decl_re
 			.find_at(cursor.source().content(), cursor.pos())
 			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))

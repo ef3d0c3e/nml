@@ -141,7 +141,7 @@ impl<'u> TranslationUnit<'u> {
 		};
 
 		let main_kernel = Kernel::new(&s);
-		s.lua_kernels.insert("main".into(), main_kernel);
+		s.lua_kernels.insert("main".to_string().try_into().unwrap(), main_kernel);
 		s
 	}
 
@@ -313,6 +313,13 @@ impl<'u> TranslationUnit<'u> {
 	pub fn new_data(&self, data: Rc<RefCell<dyn CustomData>>) {
 		let key = data.borrow().name().to_owned();
 		self.custom_data.borrow_mut().insert(key, data);
+	}
+
+	/// Get custom data
+	pub fn get_data(&self, name: &str) -> Rc<RefCell<dyn CustomData>>
+	{
+		let map = self.custom_data.borrow();
+		map.get(name).unwrap().clone()
 	}
 
 	/// Evaluates closure `f` with data downcasted to concrete type `T`

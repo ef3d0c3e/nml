@@ -22,3 +22,4 @@ pub mod text;
 //pub mod toc;
 pub mod variable;
 pub mod eof;
+pub mod lua;

@@ -13,6 +13,32 @@ use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crate::unit::translation::TranslationUnit;
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct KernelName(pub String);
+
+impl TryFrom<String> for KernelName {
+	type Error = String;
+
+	fn try_from(s: String) -> Result<Self, Self::Error> {
+		for c in s.chars() {
+			if c.is_whitespace() {
+				return Err(format!(
+					"Kernel names cannot contain whitespaces, found `{c}`"
+				));
+			}
+			if c.is_ascii_control() {
+				return Err(format!("Kernel names cannot contain control sequences"));
+			}
+			if c.is_ascii_punctuation() {
+				return Err(format!(
+					"Kernel names cannot contain punctuaction, found `{c}`"
+				));
+			}
+		}
+		Ok(KernelName(s))
+	}
+}
+
 /// Redirected data from lua execution
 pub struct KernelRedirect {
 	/// Message source e.g print()
@@ -22,15 +48,15 @@ pub struct KernelRedirect {
 }
 
 /// Lua execution context
-pub struct KernelContext<'u> {
+pub struct KernelContext<'ctx, 'u> {
 	pub location: Token,
-	pub unit: &'u mut TranslationUnit<'u>,
+	pub unit: &'ctx mut TranslationUnit<'u>,
 	pub redirects: Vec<KernelRedirect>,
 	pub reports: Vec<Report>,
 }
 
-impl<'u> KernelContext<'u> {
-	pub fn new(location: Token, unit: &'u mut TranslationUnit<'u>) -> Self {
+impl<'ctx, 'u> KernelContext<'ctx, 'u> {
+	pub fn new(location: Token, unit: &'ctx mut TranslationUnit<'u>) -> Self {
 		Self {
 			location,
 			unit,
@@ -43,13 +69,13 @@ impl<'u> KernelContext<'u> {
 pub trait ContextAccessor {
 	fn with_context_mut<F, R>(&self, f: F) -> R
 	where
-		F: FnOnce(RefMut<'_, KernelContext<'static>>) -> R;
+		F: FnOnce(RefMut<'_, KernelContext<'static, 'static>>) -> R;
 }
 
-impl ContextAccessor for Rc<RefCell<Option<KernelContext<'static>>>> {
+impl ContextAccessor for Rc<RefCell<Option<KernelContext<'static, 'static>>>> {
 	fn with_context_mut<F, R>(&self, f: F) -> R
 	where
-		F: FnOnce(RefMut<'_, KernelContext<'static>>) -> R,
+		F: FnOnce(RefMut<'_, KernelContext<'static, 'static>>) -> R,
 	{
 		todo!();
 	}
@@ -58,7 +84,7 @@ impl ContextAccessor for Rc<RefCell<Option<KernelContext<'static>>>> {
 /// Stores lua related informations for a translation unit
 pub struct Kernel {
 	lua: Lua,
-	context: Rc<RefCell<Option<KernelContext<'static>>>>,
+	context: Rc<RefCell<Option<KernelContext<'static, 'static>>>>,
 }
 
 impl Kernel {
@@ -80,6 +106,7 @@ impl Kernel {
 					.create_function({
 						let ctx = kernel.context.clone();
 						move |lua, msg: String| {
+							// TODO
 							//kernel.with_context_mut(|mut ctx| {
 							//	ctx.redirects.push(KernelRedirect {
 							//		source: "print".into(),
@@ -121,21 +148,19 @@ impl Kernel {
 	///
 	/// This is the only way lua code should be ran, because exported
 	/// functions may require the context in order to operate
-	pub fn run_with_context<'lua, 'ctx, F, R>(
+	pub fn run_with_context<'lua, 'ctx, 'u, F, R>(
 		&'lua self,
-		ctx: KernelContext<'ctx>,
+		ctx: KernelContext<'ctx, 'u>,
 		f: F,
-	) -> Result<R, mlua::Error>
+	) -> R
 	where
 		F: FnOnce(&'lua Lua) -> R,
 	{
 		self.context
 			.replace(unsafe { std::mem::transmute(Some(ctx)) });
-
 		let val = f(&self.lua);
-
 		self.context.replace(None);
-		return Ok(val);
+		val
 	}
 
 	/// Exports a table to lua
@@ -161,7 +186,8 @@ impl Kernel {
 	where
 		A: mlua::FromLuaMulti<'lua>,
 		R: mlua::IntoLuaMulti<'lua>,
-		F: Fn(RefMut<'_, KernelContext<'static>>, &'lua Lua, A) -> mlua::Result<R> + 'static,
+		F: Fn(RefMut<'_, KernelContext<'static, 'static>>, &'lua Lua, A) -> mlua::Result<R>
+			+ 'static,
 	{
 		let ctx = self.context.clone();
 		let fun = self
@@ -179,12 +205,11 @@ pub struct KernelHolder {
 }
 
 impl KernelHolder {
-	/// Call this function after [`KernelHolder`] creation to create the default `main` lua kernel
-	pub fn initialize_main(&mut self, unit: &TranslationUnit) {
-		self.kernels.insert("main".into(), Kernel::new(unit));
+	pub fn get(&self, name: &str) -> Option<&Kernel> {
+		self.kernels.get(name)
 	}
 
-	pub fn get<S: AsRef<str>>(&self, name: S) -> Option<&Kernel> { self.kernels.get(name.as_ref()) }
-
-	pub fn insert(&mut self, name: String, kernel: Kernel) { self.kernels.insert(name, kernel); }
+	pub fn insert(&mut self, name: KernelName, kernel: Kernel) {
+		self.kernels.insert(name.0, kernel);
+	}
 }

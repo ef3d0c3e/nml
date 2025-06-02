@@ -119,6 +119,11 @@ pub struct Tokens {
 	pub internal_link_display_sep: (u32, u32),
 	pub internal_link_ref: (u32, u32),
 
+	pub style_marker: (u32, u32),
+
+	pub lua_delimiter: (u32, u32),
+	pub lua_content: (u32, u32),
+
 	pub tex_sep: (u32, u32),
 	pub tex_content: (u32, u32),
 	pub tex_prop_sep: (u32, u32),
@@ -152,6 +157,11 @@ impl Default for Tokens {
 			internal_link_ref_sep: token!("macro"),
 			internal_link_display_sep: token!("macro"),
 			internal_link_ref: token!("parameter"),
+
+			style_marker: token!("decorator"),
+
+			lua_delimiter: token!("macro"),
+			lua_content: token!("regexp"),
 
 			tex_sep: token!("property"),
 			tex_content: token!("regexp"),

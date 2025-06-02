@@ -71,39 +71,39 @@ impl<'s> PropertyMap<'s> {
 	///  * `Some(T)` on success
 	///  * `None` if the key is not found or the parsing function `f` fails
 	/// 	(Note) In this case, reports should have been set
-	pub fn get<T, E, F>(&self, unit: &mut TranslationUnit, key: &str, f: F) -> Option<T>
+	pub fn get<T, E, F>(&mut self, unit: &mut TranslationUnit, key: &str, f: F) -> Option<T>
 	where
-		F: FnOnce(&Property, &PropertyValue) -> Result<T, E>,
+		F: FnOnce(&Property, PropertyValue) -> Result<T, E>,
 		E: Display,
 	{
-		match self.properties.get(key) {
+		match self.properties.remove(key) {
 			None => report_err!(
 				unit,
 				self.token.source(),
 				format!("Failed to parse {} properties", self.rule_name),
 				span(
 					self.token.range.clone(),
-					format!(
-						"Missing property {}",
-						key.fg(self.colors.info),
-					)
+					format!("Missing property {}", key.fg(self.colors.info),)
 				),
 			),
-			Some((prop, val)) => match f(prop, val) {
-				Err(err) => report_err!(
-					unit,
-					self.token.source(),
-					format!("Failed to parse {} properties", self.rule_name),
-					span(
-						val.value_range.clone(),
-						format!(
-							"Unable to parse property {}: {err}",
-							key.fg(self.colors.info),
-						)
+			Some((prop, val)) => {
+				let range = val.value_range.clone();
+				match f(prop, val) {
+					Err(err) => report_err!(
+						unit,
+						self.token.source(),
+						format!("Failed to parse {} properties", self.rule_name),
+						span(
+							range,
+							format!(
+								"Unable to parse property {}: {err}",
+								key.fg(self.colors.info),
+							)
+						),
 					),
-				),
-				Ok(parsed) => return Some(parsed),
-			},
+					Ok(parsed) => return Some(parsed),
+				}
+			}
 		}
 		None
 	}
@@ -116,33 +116,36 @@ impl<'s> PropertyMap<'s> {
 	///  * `None` if the parsing function `f` fails
 	/// 	(Note) In this case, reports should have been set
 	pub fn get_or<T, E, F>(
-		&self,
+		&mut self,
 		unit: &mut TranslationUnit,
 		key: &str,
 		default: T,
 		f: F,
 	) -> Option<T>
 	where
-		F: FnOnce(&Property, &PropertyValue) -> Result<T, E>,
+		F: FnOnce(&Property, PropertyValue) -> Result<T, E>,
 		E: Display,
 	{
-		match self.properties.get(key) {
+		match self.properties.remove(key) {
 			None => return Some(default),
-			Some((prop, val)) => match f(prop, val) {
-				Err(err) => report_err!(
-					unit,
-					self.token.source(),
-					format!("Failed to parse {} properties", self.rule_name),
-					span(
-						val.value_range.clone(),
-						format!(
-							"Unable to parse property {}: {err}",
-							key.fg(self.colors.info),
-						)
+			Some((prop, val)) => {
+				let range = val.value_range.clone();
+				match f(prop, val) {
+					Err(err) => report_err!(
+						unit,
+						self.token.source(),
+						format!("Failed to parse {} properties", self.rule_name),
+						span(
+							range,
+							format!(
+								"Unable to parse property {}: {err}",
+								key.fg(self.colors.info),
+							)
+						),
 					),
-				),
-				Ok(parsed) => return Some(parsed),
-			},
+					Ok(parsed) => return Some(parsed),
+				}
+			}
 		}
 		None
 	}
@@ -155,32 +158,35 @@ impl<'s> PropertyMap<'s> {
 	///  * `None` if the parsing function `f` fails
 	/// 	(Note) In this case, reports should have been set
 	pub fn get_opt<T, E, F>(
-		&self,
+		&mut self,
 		unit: &mut TranslationUnit,
 		key: &str,
 		f: F,
 	) -> Option<Option<T>>
 	where
-		F: FnOnce(&Property, &PropertyValue) -> Result<T, E>,
+		F: FnOnce(&Property, PropertyValue) -> Result<T, E>,
 		E: Display,
 	{
-		match self.properties.get(key) {
+		match self.properties.remove(key) {
 			None => return Some(None),
-			Some((prop, val)) => match f(prop, val) {
-				Err(err) => report_err!(
-					unit,
-					self.token.source(),
-					format!("Failed to parse {} properties", self.rule_name),
-					span(
-						val.value_range.clone(),
-						format!(
-							"Unable to parse property {}: {err}",
-							key.fg(self.colors.info),
-						)
+			Some((prop, val)) => {
+				let range = val.value_range.clone();
+				match f(prop, val) {
+					Err(err) => report_err!(
+						unit,
+						self.token.source(),
+						format!("Failed to parse {} properties", self.rule_name),
+						span(
+							range,
+							format!(
+								"Unable to parse property {}: {err}",
+								key.fg(self.colors.info),
+							)
+						),
 					),
-				),
-				Ok(parsed) => return Some(Some(parsed)),
-			},
+					Ok(parsed) => return Some(Some(parsed)),
+				}
+			}
 		}
 		None
 	}
@@ -198,12 +204,7 @@ impl PropertyParser {
 		self.properties
 			.iter()
 			.fold(String::new(), |out, (name, prop)| {
-				out + format!(
-					"\n - {} : {}",
-					name.fg(colors.info),
-					prop.description
-				)
-				.as_str()
+				out + format!("\n - {} : {}", name.fg(colors.info), prop.description).as_str()
 			})
 	}
 
@@ -300,10 +301,7 @@ impl PropertyParser {
 					),
 					span(
 						previous.value_range.clone(),
-						format!(
-							"Previous value: {}",
-							previous.value.fg(unit.colors().info),
-						)
+						format!("Previous value: {}", previous.value.fg(unit.colors().info),)
 					)
 				);
 			}
@@ -378,7 +376,7 @@ impl PropertyParser {
 					format!("Failed to parse {rule_name} properties"),
 					span(
 						name_range.start..token.end(),
-						format!("Expected name/value pair after last ','",)
+						format!("Expected name/value pair separated by ','",)
 					),
 				);
 				return None;
@@ -390,22 +388,24 @@ impl PropertyParser {
 			}
 		}
 
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			for (_, value) in pm.properties.values() {
-				if value.name_range.start != 0 {
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				for (_, value) in pm.properties.values() {
+					if value.name_range.start != 0 {
+						sems.add_to_queue(
+							value.name_range.start - 1..value.name_range.start,
+							tokens.prop_comma,
+						);
+					}
+					sems.add_to_queue(value.name_range.clone(), tokens.prop_name);
 					sems.add_to_queue(
-						value.name_range.start - 1..value.name_range.start,
-						tokens.prop_comma,
+						value.name_range.end..value.value_range.start,
+						tokens.prop_equal,
 					);
+					sems.add_to_queue(value.value_range.clone(), tokens.prop_value);
 				}
-				sems.add_to_queue(value.name_range.clone(), tokens.prop_name);
-				sems.add_to_queue(
-					value.name_range.end..value.value_range.start,
-					tokens.prop_equal,
-				);
-				sems.add_to_queue(value.value_range.clone(), tokens.prop_value);
-			}
-		}));
+			})
+		});
 
 		// Insert missing properties with a default
 		for (name, prop) in &self.properties {

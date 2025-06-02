@@ -170,7 +170,7 @@ impl Report {
 			builder.set_note(note);
 		}
 
-		println!("Report cache={cache:#?}");
+		eprintln!("Report cache={cache:#?}");
 		(builder.finish(), ariadne::sources(cache))
 	}
 

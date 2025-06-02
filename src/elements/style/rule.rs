@@ -123,7 +123,7 @@ impl Rule for StyleRule {
 						.iter()
 						.enumerate()
 						.rev()
-						.find(|(idx, (name, _))| name == &rule.name)
+						.find(|(_, (name, _))| name == &rule.name)
 					else {
 						panic!()
 					};
@@ -133,6 +133,9 @@ impl Rule for StyleRule {
 				}
 			});
 
+		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
+			sems.add(token.range.clone(), tokens.style_marker);
+		}));
 		unit.add_content(Rc::new(StyleElem {
 			location: token,
 			style: rule.clone(),
