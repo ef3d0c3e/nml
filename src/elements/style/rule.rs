@@ -5,8 +5,6 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::usize;
 
-use regex::Regex;
-
 use crate::parser::rule::Rule;
 use crate::parser::rule::RuleTarget;
 use crate::parser::source::Cursor;
@@ -17,39 +15,13 @@ use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 
+use super::custom::StyleData;
+use super::custom::STYLE_CUSTOM;
 use super::elem::StyleElem;
 use super::state::Style;
-use super::state::StyleData;
 use super::state::StyleState;
-use super::state::STYLE_CUSTOM;
 use super::state::STYLE_STATE;
 
-fn default_styles() -> StyleData {
-	let mut registered = Vec::default();
-
-	registered.push(Rc::new(Style {
-		name: "bold".into(),
-		start_re: Regex::new(r"\*\*").unwrap(),
-		end_re: Regex::new(r"\*\*").unwrap(),
-	}));
-	registered.push(Rc::new(Style {
-		name: "italic".into(),
-		start_re: Regex::new(r"\*").unwrap(),
-		end_re: Regex::new(r"\*").unwrap(),
-	}));
-	registered.push(Rc::new(Style {
-		name: "underline".into(),
-		start_re: Regex::new(r"__").unwrap(),
-		end_re: Regex::new(r"__").unwrap(),
-	}));
-	registered.push(Rc::new(Style {
-		name: "marked".into(),
-		start_re: Regex::new(r"`").unwrap(),
-		end_re: Regex::new(r"`").unwrap(),
-	}));
-
-	StyleData { registered }
-}
 
 #[derive(Default)]
 #[auto_registry::auto_registry(registry = "rules")]
@@ -75,7 +47,7 @@ impl Rule for StyleRule {
 		let content = source.content();
 
 		if !unit.has_data(STYLE_CUSTOM) {
-			unit.new_data(Rc::new(RefCell::new(default_styles())));
+			unit.new_data(Rc::new(RefCell::new(StyleData::default())));
 		}
 
 		let enabled = {

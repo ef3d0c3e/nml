@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, scope}};
+use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, scope::{self, Scope}}};
 
 use super::state::Style;
 
@@ -30,11 +30,11 @@ impl Element for StyleElem {
 
     fn compile(
 		    &self,
-		    scope: Rc<RefCell<scope::Scope>>,
+		    scope: Rc<RefCell<Scope>>,
 		    compiler: &Compiler,
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {
-        todo!()
+        (self.style.compile)(self.enable, scope, compiler, output)
     }
 
     fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> {

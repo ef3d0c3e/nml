@@ -1,24 +1,22 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::fmt::Error;
+use std::fmt::Formatter;
 use std::rc::Rc;
 
 use ariadne::Fmt;
 use ariadne::Span;
 use regex::Regex;
 
+use crate::compiler::compiler::Compiler;
+use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::Report;
 use crate::parser::reports::*;
 use crate::parser::source::Token;
 use crate::parser::state::CustomState;
-use crate::report_err;
 use crate::unit::scope::Scope;
-use crate::unit::scope::ScopeAccessor;
-use crate::unit::translation::CustomData;
 use crate::unit::translation::TranslationUnit;
 
-#[derive(Debug)]
 pub struct Style {
 	/// Style name
 	pub(crate) name: String,
@@ -26,6 +24,30 @@ pub struct Style {
 	pub(crate) start_re: Regex,
 	/// Style disable regex
 	pub(crate) end_re: Regex,
+	/// Compile function
+	pub(crate) compile: Box<
+		dyn Fn(bool, Rc<RefCell<Scope>>, &Compiler, &mut CompilerOutput) -> Result<(), Vec<Report>>,
+	>,
+}
+
+impl core::fmt::Debug for Style {
+	fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+		#[derive(Debug)]
+		struct Wrapper<'a> {
+			name: &'a String,
+			start_re: &'a Regex,
+			end_re: &'a Regex,
+		}
+
+		core::fmt::Debug::fmt(
+			&Wrapper {
+				name: &self.name,
+				start_re: &self.start_re,
+				end_re: &self.end_re,
+			},
+			f,
+		)
+	}
 }
 
 pub static STYLE_STATE: &str = "nml.style.state";
@@ -48,32 +70,19 @@ impl CustomState for StyleState {
 
 		self.enabled.iter().for_each(|(name, location)| {
 			reports.push(make_err!(
-					location.source(),
-					"Unterminated style".into(),
-					span(
-						location.range.clone(),
-						format!("Style {} starts here", name.fg(unit.colors().info))
-					),
-					span(
-						scope_token.range.end()..scope_token.range.end(),
-						"Scope ends here".into()
-					)
+				location.source(),
+				"Unterminated style".into(),
+				span(
+					location.range.clone(),
+					format!("Style {} starts here", name.fg(unit.colors().info))
+				),
+				span(
+					scope_token.range.end()..scope_token.range.end(),
+					"Scope ends here".into()
+				)
 			));
 		});
 
 		reports
-	}
-}
-
-pub static STYLE_CUSTOM: &str = "nml.style.registered";
-/// Data for styles
-pub struct StyleData {
-	/// All registered styles
-	pub(crate) registered: Vec<Rc<Style>>,
-}
-
-impl CustomData for StyleData {
-	fn name(&self) -> &str {
-		STYLE_CUSTOM
 	}
 }
