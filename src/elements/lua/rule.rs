@@ -225,7 +225,7 @@ impl Default for InlineLuaRule {
 			Property::new("Lua kernel".to_string(), Some("main".to_string())),
 		);
 		InlineLuaRule {
-			re: [Regex::new(r"(\{:lua)(?:\[((?:\\.|[^\\\\])*?)\])?(!|')?\s((?:\\.|[^\\\\])*?):\}").unwrap()],
+			re: [Regex::new(r"(\{:lua)(?:\[((?:\\.|[^\\\\])*?)\])?(!|')?\s(?:((?:\\.|[^\\\\])*?)(:\}))?").unwrap()],
 			properties: PropertyParser { properties },
 		}
 	}
@@ -273,6 +273,16 @@ impl RegexRule for InlineLuaRule {
 				}
 			})
 		});
+
+		if captures.get(5).is_none() {
+			report_err!(
+				unit,
+				token.source(),
+				"Invalid inline Lua".into(),
+				span(token.range.clone(), format!("Expected terminating `{}`", ":}".fg(unit.colors().highlight)))
+			);
+			return
+		}
 
 		// Parse properties
 		let prop_source = escape_source(
