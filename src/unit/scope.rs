@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::parser::reports::Report;
-use crate::parser::source::Source;
+use crate::parser::source::{Source, Token};
 use crate::parser::state::{CustomState, ParseMode, ParserState};
 
 use super::element::{ContainerElement, Element};
@@ -42,7 +42,6 @@ pub struct Scope {
 impl core::fmt::Debug for Scope
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-
         write!(f, "Scope{{\n\tcontent {:#?}\nrange {:#?}\nsource: {:#?}}}", self.content, self.range, self.source)
     }
 }
@@ -129,6 +128,8 @@ pub trait ScopeAccessor {
 		where
 			T: CustomState,
 			F: FnOnce(RefMut<'_, T>) -> R;
+
+	fn token(&self) -> Token;
 }
 
 impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
@@ -138,20 +139,6 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		parse_mode: ParseMode,
 		paragraphing: bool,
 	) -> Rc<RefCell<Scope>> {
-		// Close active paragraph
-		//if (*self.clone()).borrow().active_paragraph.is_some()
-		//{
-		//	let elem = {
-		//		let rc_ref : Rc<RefCell<Scope>> = self.to_owned();
-		//		let scope : std::cell::Ref<Scope> = (*rc_ref).borrow();
-		//		Arc::new(Paragraph {
-		//			location: Token::new(scope.range.end..scope.range.end, scope.source.clone()),
-		//			token: ParagraphToken::End,
-		//		})
-		//	};
-		//	self.add_content(elem)
-		//}
-
 		let range = (*self.clone()).borrow().range.clone();
 		let mut child = Scope::new(Some(self.clone()), source, parse_mode, range.end);
 		child.paragraphing = paragraphing;
@@ -240,6 +227,11 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 				.expect("Mismatch data types")
 		});
 		f(mapped)
+	}
+
+	fn token(&self) -> Token {
+		let scope = self.borrow();
+		Token::new(scope.range.clone(), scope.source.clone())
 	}
 }
 

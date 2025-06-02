@@ -1,14 +1,21 @@
 use std::any::Any;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 
+use ariadne::Span;
+use regex::escape;
+use regex::Captures;
 use regex::Regex;
 
+use crate::elements::meta::scope::ScopeElement;
+use crate::elements::text::elem::Text;
 use crate::lua::kernel;
 use crate::lua::kernel::KernelContext;
 use crate::lua::kernel::KernelName;
 use crate::parser::property::Property;
 use crate::parser::property::PropertyParser;
+use crate::parser::rule::RegexRule;
 use crate::parser::rule::Rule;
 use crate::parser::rule::RuleTarget;
 use crate::parser::source::Cursor;
@@ -91,6 +98,13 @@ impl Rule for LuaRule {
 			.unwrap();
 		let end_cursor = cursor.at(captures.get(0).unwrap().end());
 
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(source.clone(), |sems, tokens| {
+				sems.add(captures.get(1).unwrap().range(), tokens.command);
+			})
+		});
+
+		// Parse properties
 		let prop_source = escape_source(
 			source.clone(),
 			captures.get(2).unwrap().range(),
@@ -98,13 +112,6 @@ impl Rule for LuaRule {
 			'\\',
 			"",
 		);
-
-		unit.with_lsp(|lsp| {
-			lsp.with_semantics(source.clone(), |sems, tokens| {
-				sems.add(captures.get(1).unwrap().range(), tokens.command);
-			})
-		});
-
 		let Some(mut properties) = self.properties.parse("Lua", unit, prop_source.into()) else {
 			return end_cursor;
 		};
@@ -145,10 +152,10 @@ impl Rule for LuaRule {
 				break;
 			}
 		}
-		let lua_content = Token::new(end_cursor.pos()..content_end, cursor.source());
+		let lua_range = Token::new(end_cursor.pos()..content_end, cursor.source());
 		unit.with_lsp(|lsp| {
 			lsp.with_semantics(source.clone(), |sems, tokens| {
-				sems.add(lua_content.range.clone(), tokens.lua_content);
+				sems.add(lua_range.range.clone(), tokens.lua_content);
 				sems.add(
 					content_end..content_end + delimiter.len(),
 					tokens.lua_delimiter,
@@ -156,9 +163,13 @@ impl Rule for LuaRule {
 			})
 		});
 		let lua_source = Arc::new(VirtualSource::new(
-			lua_content.clone(),
-			format!(":LUA:Block({}..{})", lua_content.start(), lua_content.end()),
-			lua_content.content().to_owned(),
+			lua_range.clone(),
+			format!(
+				":LUA:Block ({}..{})",
+				lua_range.start(),
+				lua_range.end()
+			),
+			lua_range.content().to_owned(),
 		)) as Arc<dyn Source>;
 
 		// Evaluate
@@ -172,9 +183,9 @@ impl Rule for LuaRule {
 			}) {
 				report_err!(
 					unit,
-					lua_content.source(),
+					lua_range.source(),
 					"Lua error".into(),
-					span(lua_content.range.clone(), err.to_string())
+					span(lua_range.range.clone(), err.to_string())
 				);
 			}
 		});
@@ -201,5 +212,153 @@ impl Rule for LuaRule {
 		&self,
 	) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
 		Some(Box::new(LuaCompletion {}))
+	}
+}
+
+#[auto_registry::auto_registry(registry = "rules")]
+pub struct InlineLuaRule {
+	re: [Regex; 1],
+	properties: PropertyParser,
+}
+
+impl Default for InlineLuaRule {
+	fn default() -> Self {
+		let mut properties = HashMap::new();
+		properties.insert(
+			"kernel".to_string(),
+			Property::new("Lua kernel".to_string(), Some("main".to_string())),
+		);
+		InlineLuaRule {
+			re: [Regex::new(r"(\{:lua)(?:\[(.*)\])?(!|')?((?:\s|.)*):\}").unwrap()],
+			properties: PropertyParser { properties },
+		}
+	}
+}
+
+impl RegexRule for InlineLuaRule {
+	fn name(&self) -> &'static str {
+		"Inline Lua"
+	}
+
+	fn target(&self) -> RuleTarget {
+		RuleTarget::Inline
+	}
+
+	fn regexes(&self) -> &[regex::Regex] {
+		&self.re
+	}
+
+	fn enabled(
+		&self,
+		_unit: &TranslationUnit,
+		mode: &ParseMode,
+		_states: &mut CustomStates,
+		_index: usize,
+	) -> bool {
+		!mode.paragraph_only
+	}
+
+	fn on_regex_match<'u>(
+		&self,
+		_index: usize,
+		unit: &mut TranslationUnit<'u>,
+		token: Token,
+		captures: Captures,
+	) {
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(captures.get(1).unwrap().range(), tokens.lua_delimiter);
+			})
+		});
+
+		// Parse properties
+		let prop_source = escape_source(
+			token.source(),
+			captures.get(2).map_or(0..0, |m| m.range()),
+			"Properties for Lua".into(),
+			'\\',
+			"]",
+		);
+		let Some(mut properties) = self.properties.parse("Lua", unit, prop_source.into()) else {
+			return;
+		};
+		let Some(kernel_name) = properties.get_or(
+			unit,
+			"kernel",
+			KernelName("main".to_string()),
+			|_, value| KernelName::try_from(value.value),
+		) else {
+			return;
+		};
+
+		// Get evaluation kind
+		let eval_kind = captures.get(3).map_or("", |m| m.as_str());
+
+		// Get content
+		let lua_range = captures.get(4).unwrap().range();
+		let lua_source = escape_source(
+			token.source(),
+			lua_range.clone(),
+			format!(":LUA:Inline ({}..{})", lua_range.start(), lua_range.end()),
+			'\\',
+			":}",
+		);
+
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(
+					token.range.end() - 2..token.range.end(),
+					tokens.lua_delimiter,
+				);
+			})
+		});
+
+		// Evaluate
+		LuaData::initialize(unit);
+		LuaData::with_kernel(unit, &kernel_name, |unit, kernel| {
+			let ctx = KernelContext::new(lua_source.clone().into(), unit);
+			match kernel.run_with_context(ctx, |lua| {
+				match eval_kind
+				{
+					"" => lua.load(lua_source.content())
+						.set_name(lua_source.name())
+						.eval::<()>()
+						.map(|_| String::default()),
+					"'" | "!" => lua.load(lua_source.content())
+						.set_name(lua_source.name())
+						.eval::<String>(),
+					_ => panic!(),
+				}
+			})
+			{
+				Err(err) => {
+					report_err!(
+						unit,
+						token.source(),
+						"Lua error".into(),
+						span(lua_range.clone(), err.to_string())
+					);
+				},
+				Ok(result) => {
+					if eval_kind == "'" && !result.is_empty()
+					{
+						unit.add_content(Rc::new(Text{
+							location: token,
+							content: result,
+						}));
+					}
+					else if eval_kind == "!" && !result.is_empty()
+					{
+						let content = Arc::new(VirtualSource::new(token.clone(), ":LUA:Inline lua result".into(), result));
+						let mode = unit.get_scope().borrow().parser_state().mode.clone();
+						let scope = unit.with_child(content as Arc<dyn Source>, mode, true, |unit, scope| {
+							unit.parser.parse(unit);
+							scope
+						});
+						unit.add_content(Rc::new(ScopeElement { token, scope: [scope] }));
+					}
+				}
+			}
+		});
 	}
 }

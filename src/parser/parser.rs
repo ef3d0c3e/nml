@@ -1,12 +1,10 @@
 use std::any::Any;
-use std::borrow::Borrow;
 use std::ops::Range;
 use std::rc::Rc;
 use std::slice::Iter;
 
-use tower_lsp::lsp_types::CompletionItem;
 
-use crate::elements::eof::elem::Eof;
+use crate::elements::meta::eof::Eof;
 use crate::elements::text::elem::Text;
 use crate::lsp::completion::CompletionProvider;
 use crate::unit::element::Element;

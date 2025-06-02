@@ -27,7 +27,7 @@ impl_downcast!(CustomState);
 ///
 /// This is useful when the parser is invoked recursively as it can modify how the parser
 /// processes text.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct ParseMode {
 	/// Sets the parser to only parse elements compatible with paragraphs.
 	pub paragraph_only: bool,

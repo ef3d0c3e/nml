@@ -197,19 +197,3 @@ impl Kernel {
 		table.set(name, fun);
 	}
 }
-
-/// Holds all the lua kernels
-#[derive(Default)]
-pub struct KernelHolder {
-	kernels: HashMap<String, Kernel>,
-}
-
-impl KernelHolder {
-	pub fn get(&self, name: &str) -> Option<&Kernel> {
-		self.kernels.get(name)
-	}
-
-	pub fn insert(&mut self, name: KernelName, kernel: Kernel) {
-		self.kernels.insert(name.0, kernel);
-	}
-}

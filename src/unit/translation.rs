@@ -10,8 +10,6 @@ use downcast_rs::Downcast;
 
 use crate::cache::cache::Cache;
 use crate::lsp::data::LangServerData;
-use crate::lua::kernel::Kernel;
-use crate::lua::kernel::KernelHolder;
 use crate::parser::parser::Parser;
 use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
@@ -32,6 +30,9 @@ use super::variable::VariableName;
 use super::variable::VariableVisibility;
 
 /// Custom data populated by rules, stored in [`TranslationUnit::custom_data`]
+///
+/// This trait is used to store data on a per-rule basis, that a rule can access
+/// whenever it needs to.
 pub trait CustomData: Downcast {
 	/// Name of this custom data
 	fn name(&self) -> &str;
@@ -60,8 +61,6 @@ pub struct TranslationUnit<'u> {
 	/// Lsp data for this unit (shared with children scopes)
 	lsp: Option<RefCell<LangServerData>>,
 
-	/// Available kernels for this translation unit
-	lua_kernels: KernelHolder,
 	/// Available layouts
 	//layouts: LayoutHolder,
 	/// Available blocks
@@ -70,6 +69,7 @@ pub struct TranslationUnit<'u> {
 	//elem_styles: StyleHolder,
 	/// User-defined styles
 	//custom_styles: CustomStyleHolder,
+
 	/// Custom data stored by rules
 	custom_data: RefCell<HashMap<String, Rc<RefCell<dyn CustomData>>>>,
 
@@ -116,7 +116,7 @@ impl<'u> TranslationUnit<'u> {
 			ParseMode::default(),
 			0,
 		)));
-		let mut s = Self {
+		Self {
 			parser,
 			source,
 			colors: with_colors
@@ -126,7 +126,6 @@ impl<'u> TranslationUnit<'u> {
 			current_scope: scope,
 			lsp: with_lsp.then(|| RefCell::new(LangServerData::default())),
 
-			lua_kernels: KernelHolder::default(),
 			custom_data: RefCell::default(),
 			//layouts: LayoutHolder::default(),
 			//blocks: BlockHolder::default(),
@@ -138,11 +137,7 @@ impl<'u> TranslationUnit<'u> {
 			output: OnceCell::default(),
 
 			settings: OnceCell::default(),
-		};
-
-		let main_kernel = Kernel::new(&s);
-		s.lua_kernels.insert("main".to_string().try_into().unwrap(), main_kernel);
-		s
+		}
 	}
 
 	pub fn token(&self) -> Token {
