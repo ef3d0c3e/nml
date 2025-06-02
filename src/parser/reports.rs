@@ -6,6 +6,7 @@ use ariadne::Color;
 use ariadne::IndexType;
 use ariadne::ReportBuilder;
 use dashmap::DashMap;
+use downcast_rs::Downcast;
 use tower_lsp::lsp_types::Diagnostic;
 use url::Origin;
 
@@ -72,8 +73,7 @@ impl From<&ReportKind> for tower_lsp::lsp_types::DiagnosticSeverity {
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SpanColor
-{
+pub enum SpanColor {
 	Error,
 	Info,
 	Highlight,
@@ -98,15 +98,19 @@ pub struct Report {
 
 impl Report {
 	/// Recursively add the origin of a scope to a report
-	fn add_origin<'a>(mut builder: ReportBuilder<'a, (Arc<dyn Source>, Range<usize>)>, cache: &mut HashMap<Arc<dyn Source>, String>, location: Option<&Token>, colors: &ReportColors)
-		-> ReportBuilder<'a, (Arc<dyn Source>, Range<usize>)>  {
-		if let Some(location) = location
-		{
+	fn add_origin<'a>(
+		mut builder: ReportBuilder<'a, (Arc<dyn Source>, Range<usize>)>,
+		cache: &mut HashMap<Arc<dyn Source>, String>,
+		location: Option<&Token>,
+		colors: &ReportColors,
+	) -> ReportBuilder<'a, (Arc<dyn Source>, Range<usize>)> {
+		if let Some(location) = location {
 			cache.insert(location.source(), location.source().content().clone());
-			builder = builder
-				.with_label(ariadne::Label::new((location.source(), location.range.clone()))
+			builder = builder.with_label(
+				ariadne::Label::new((location.source(), location.range.clone()))
 					.with_message("Originating from")
-					.with_color(Self::ariadne_color(SpanColor::Highlight, colors)));
+					.with_color(Self::ariadne_color(SpanColor::Highlight, colors)),
+			);
 			return Self::add_origin(builder, cache, location.source().location(), colors);
 		}
 		builder
@@ -117,9 +121,9 @@ impl Report {
 			SpanColor::Error => colors.error,
 			SpanColor::Info => colors.info,
 			SpanColor::Highlight => colors.highlight,
-		}.unwrap_or(ariadne::Color::Primary)
+		}
+		.unwrap_or(ariadne::Color::Primary)
 	}
-
 
 	fn to_ariadne(
 		self,
@@ -129,18 +133,12 @@ impl Report {
 		impl ariadne::Cache<Arc<dyn Source>>,
 	) {
 		let mut cache = HashMap::new();
-		let source = self.source.original_position(0).0;
-		let mut start = usize::MAX;
-		for span in &self.spans {
-			let (osource, opos) = span.token.source().original_position(span.token.start());
-
-			if osource == source.clone() && opos < start {
-				start = opos;
-			}
-		}
-		if start == usize::MAX {
-			start = 0;
-		}
+		let source = self.source.clone();
+		let start = self
+			.spans
+			.iter()
+			.min_by_key(|span| span.token.start())
+			.map_or(0, |min| min.token.start());
 		cache.insert(source.clone(), source.content().clone());
 
 		let cfg = ariadne::Config::default()
@@ -154,7 +152,7 @@ impl Report {
 
 		for span in self.spans {
 			cache.insert(span.token.source(), span.token.source().content().clone());
-			let token = span.token.source().original_range(span.token.range);
+			let token = span.token.clone();
 			builder = builder.with_label(
 				ariadne::Label::new((token.source(), token.range))
 					.with_message(span.message)
