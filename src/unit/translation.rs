@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
@@ -36,7 +35,6 @@ use super::variable::VariableVisibility;
 pub trait CustomData: Downcast {
 	/// Name of this custom data
 	fn name(&self) -> &str;
-
 }
 impl_downcast!(CustomData);
 
@@ -186,7 +184,13 @@ impl<'u> TranslationUnit<'u> {
 
 		self.current_scope = prev_scope.new_child(source, parse_mode, paragraphing);
 		let ret = f(self, self.current_scope.clone());
-		self.current_scope = prev_scope;
+		let scope = std::mem::replace(&mut self.current_scope, prev_scope);
+		let reports = scope
+			.on_end(self)
+			.drain(..)
+			.map(|report| (scope.clone(), report))
+			.collect::<Vec<_>>();
+		self.reports.extend(reports);
 
 		ret
 	}
@@ -234,6 +238,18 @@ impl<'u> TranslationUnit<'u> {
 
 		self.with_lsp(|mut lsp| lsp.on_new_source(self.source.clone()));
 		self.parser.parse(&mut self);
+		// Terminates entry scope
+		{
+			let temp_scope = self.entry_scope.new_child(self.source.clone(), ParseMode::default(), false);
+			let scope = std::mem::replace(&mut self.entry_scope, temp_scope);
+			let reports = scope
+				.on_end(&mut self)
+				.drain(..)
+				.map(|report| (scope.clone(), report))
+				.collect::<Vec<_>>();
+			self.reports.extend(reports);
+			self.entry_scope = scope;
+		}
 		self.with_lsp(|mut lsp| lsp.on_source_end(self.source.clone()));
 
 		let output_file = self
@@ -244,7 +260,13 @@ impl<'u> TranslationUnit<'u> {
 			output_file: output_file.map(|(var, _)| var.to_string()),
 		};
 		self.output.set(output).unwrap();
-		(self.reports.drain(..).map(|(_, report)| report).collect::<Vec<_>>(), self)
+		(
+			self.reports
+				.drain(..)
+				.map(|(_, report)| report)
+				.collect::<Vec<_>>(),
+			self,
+		)
 	}
 	pub fn colors<'s>(&'s self) -> &'s ReportColors {
 		&self.colors
@@ -283,28 +305,24 @@ impl<'u> TranslationUnit<'u> {
 	}
 
 	/// Checks if [`Self::custom_data`] contains data `key`
-	pub fn has_data(&self, name: &str) -> bool
-	{
+	pub fn has_data(&self, name: &str) -> bool {
 		self.custom_data.borrow().contains_key(name)
 	}
 
 	/// Inserts new custom data
-	pub fn new_data(&self, data: Rc<RefCell<dyn CustomData>>)
-	{
+	pub fn new_data(&self, data: Rc<RefCell<dyn CustomData>>) {
 		let key = data.borrow().name().to_owned();
 		self.custom_data.borrow_mut().insert(key, data);
 	}
 
 	/// Evaluates closure `f` with data downcasted to concrete type `T`
 	pub fn with_data<T, F, R>(&self, name: &str, f: F) -> R
-		where
-			T: CustomData,
-			F: FnOnce(RefMut<'_, T>) -> R,
+	where
+		T: CustomData,
+		F: FnOnce(RefMut<'_, T>) -> R,
 	{
 		let map = self.custom_data.borrow();
-		let data = map.get(name)
-			.unwrap()
-			.clone();
+		let data = map.get(name).unwrap().clone();
 		let borrowed = data.borrow_mut();
 		let mapped = RefMut::map(borrowed, |data| {
 			data.as_any_mut()

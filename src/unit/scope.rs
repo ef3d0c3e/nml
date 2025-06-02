@@ -4,10 +4,12 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::parser::reports::Report;
 use crate::parser::source::Source;
 use crate::parser::state::{CustomState, ParseMode, ParserState};
 
 use super::element::{ContainerElement, Element};
+use super::translation::TranslationUnit;
 use super::variable::{Variable, VariableName, VariableVisibility};
 
 /// The scope from a translation unit
@@ -92,6 +94,9 @@ pub trait ScopeAccessor {
 		visible: bool,
 	) -> Rc<RefCell<Scope>>;
 
+	/// Method called when the scope ends
+	fn on_end(&self, unit: &mut TranslationUnit) -> Vec<Report>;
+
 	/// Returns a variable as well as it's declaring scope
 	fn get_variable(&self, name: &VariableName) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)>;
 
@@ -118,7 +123,9 @@ pub trait ScopeAccessor {
 	/// into `self`
 	fn add_import(&self, imported: Rc<RefCell<Scope>>);
 
-	fn with_state<F, T, R>(&self, name: &str, f: F) -> R
+	fn has_state(&self, name: &str) -> bool;
+
+	fn with_state<T, F, R>(&self, name: &str, f: F) -> R
 		where
 			T: CustomState,
 			F: FnOnce(RefMut<'_, T>) -> R;
@@ -150,6 +157,18 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		child.paragraphing = paragraphing;
 
 		Rc::new(RefCell::new(child))
+	}
+
+	fn on_end(&self, unit: &mut TranslationUnit) -> Vec<Report> {
+		let states = {
+			let mut scope = self.borrow_mut();
+			std::mem::replace(&mut scope.parser_state.states, HashMap::default())
+		};
+		let mut reports = vec![];
+		states.iter().for_each(|(_, state)| {
+			reports.extend(state.borrow().on_scope_end(unit, self.clone()));
+		});
+		reports
 	}
 
 	fn get_variable(&self, name: &VariableName) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)> {
@@ -202,7 +221,12 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 		});
 	}
 
-	fn with_state<F, T, R>(&self, name: &str, f: F) -> R
+	fn has_state(&self, name: &str) -> bool {
+		let borrow = self.borrow();
+		borrow.parser_state.states.contains_key(name)
+	}
+
+	fn with_state<T, F, R>(&self, name: &str, f: F) -> R
 		where
 			T: CustomState,
 			F: FnOnce(RefMut<'_, T>) -> R

@@ -1,12 +1,16 @@
 use std::any::Any;
 use std::cell::RefCell;
+use std::cell::RefMut;
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
+use crate::unit::scope::Scope;
 use crate::unit::translation::TranslationUnit;
+
+use super::reports::Report;
 
 pub type CustomStates = HashMap<String, Box<RefCell<dyn CustomState>>>;
 
@@ -14,6 +18,8 @@ pub trait CustomState: Downcast + core::fmt::Debug
 {
 	/// Name of the state
 	fn name(&self) -> &str;
+	/// Method called when the scope of this state ends
+	fn on_scope_end(&self, unit: &mut TranslationUnit, scope: Rc<RefCell<Scope>>) -> Vec<Report>;
 }
 impl_downcast!(CustomState);
 
