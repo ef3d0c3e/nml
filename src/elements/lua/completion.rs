@@ -64,11 +64,53 @@ You can define and use multiple kernels to separate lua code.
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
 			insert_text: Some(format!(
 				"{}lua\n${{1:CONTENT}}\nEOF",
-				if context_triggered(context, ":") {
-					""
-				} else {
-					":"
-				}
+				context_triggered(context, ":").then_some("").unwrap_or(":")
+			)),
+			..CompletionItem::default()
+		});
+
+		// {:lua :}
+		items.push(CompletionItem {
+			label: "{:lua:}".to_string(),
+			detail: Some("Lua inline code".into()),
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(
+				MarkupContent {
+					kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+					value: "# Usage
+
+Inline Lua:
+`{:lua `**CONTENT**`}`
+Inline Lua with properties:
+`{:lua[`**PROPERTIES**`] `**CONTENT**`}`
+Inline Lua with custom kind:
+`{:lua`**KIND**` `**CONTENT**`}`
+Inline Lua with custom kind and properties:
+`{:lua[`**PROPERTIES**`]`**KIND**` `**CONTENT**`}`
+
+# Examples
+
+ * `{:lua' \"Hello World\"}` *create a text element with `Hello World` as content*
+ * `{:lua! \"**bar**\"}` *parse `**bar**` and create an element from the result*
+ * `{:lua[kernel=foo] print(\"bar\"):}` *evaluates `print(\"bar\")` in lua kernel **foo***
+
+# Kind
+
+The inline lua element supports the following kinds:
+ * `(None)`: Only evaluate lua, discard the result.
+ * `'`: Evaluate and displays the result as text.
+ * `!`: Evaluate and parse the result
+
+# Properties
+
+ * `kernel` Lua kernel to use (defaults to **main**)
+ "
+					.into(),
+				},
+			)),
+			kind: Some(CompletionItemKind::FUNCTION),
+			insert_text_format: Some(InsertTextFormat::SNIPPET),
+			insert_text: Some(format!(
+				"{{:lua ${{1:CONTENT}}:}}",
 			)),
 			..CompletionItem::default()
 		});

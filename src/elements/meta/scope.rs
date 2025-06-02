@@ -35,7 +35,7 @@ impl Element for ScopeElement
 
     fn compile(
 		    &self,
-		    scope: Rc<RefCell<Scope>>,
+		    _scope: Rc<RefCell<Scope>>,
 		    compiler: &Compiler,
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {

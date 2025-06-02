@@ -122,6 +122,8 @@ pub struct Tokens {
 	pub style_marker: (u32, u32),
 
 	pub lua_delimiter: (u32, u32),
+	pub lua_prop_sep: (u32, u32),
+	pub lua_kind: (u32, u32),
 	pub lua_content: (u32, u32),
 
 	pub tex_sep: (u32, u32),
@@ -160,7 +162,9 @@ impl Default for Tokens {
 
 			style_marker: token!("decorator"),
 
-			lua_delimiter: token!("macro"),
+			lua_delimiter: token!("function"),
+			lua_prop_sep: token!("macro"),
+			lua_kind: token!("property"),
 			lua_content: token!("regexp"),
 
 			tex_sep: token!("property"),
