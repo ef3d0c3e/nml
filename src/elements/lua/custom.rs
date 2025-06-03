@@ -1,14 +1,10 @@
-use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use mlua::ffi::LUA_UTF8LIBNAME;
-
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelName;
-use crate::lua::kernel::{self};
 use crate::unit::translation::CustomData;
 use crate::unit::translation::TranslationUnit;
 

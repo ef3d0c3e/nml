@@ -31,8 +31,7 @@ use super::variable::VariableVisibility;
 
 /// Custom data populated by rules, stored in [`TranslationUnit::custom_data`]
 ///
-/// This trait is used to store data on a per-rule basis, that a rule can access
-/// whenever it needs to.
+/// This trait is used to store data on a per-unit basis.
 pub trait CustomData: Downcast {
 	/// Name of this custom data
 	fn name(&self) -> &str;

@@ -166,6 +166,7 @@ impl RegexRule for LinkRule {
 		});
 	}
 
+	/*
 	fn register_bindings(&self, kernel: &Kernel, table: mlua::Table) {
 		kernel.create_function(
 			table,
@@ -211,4 +212,5 @@ impl RegexRule for LinkRule {
 			},
 		);
 	}
+	*/
 }
