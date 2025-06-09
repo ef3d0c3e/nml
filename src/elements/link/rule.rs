@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::parser::reports::macros::*;
@@ -9,11 +8,8 @@ use crate::parser::state::ParseMode;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use ariadne::Fmt;
-use lua::kernel::Kernel;
-use mlua::Error::BadArgument;
 use parser::rule::RegexRule;
 use parser::source::Token;
-use parser::source::VirtualSource;
 use parser::util;
 use parser::util::escape_source;
 use parser::util::parse_paragraph;

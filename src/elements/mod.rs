@@ -20,6 +20,6 @@ pub mod style;
 pub mod latex;
 pub mod text;
 //pub mod toc;
-pub mod variable;
-pub mod meta;
 pub mod lua;
+pub mod meta;
+pub mod variable;

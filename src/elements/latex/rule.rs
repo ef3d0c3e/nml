@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -14,7 +13,6 @@ use crate::parser::rule::RuleTarget;
 use crate::parser::source::Token;
 use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
-use crate::parser::state::ParserState;
 use crate::parser::util::escape_source;
 use crate::parser::util::escape_text;
 use crate::report_err;
@@ -55,7 +53,7 @@ impl Default for LatexRule {
 					.unwrap(),
 				Regex::new(r"\$(?:\[((?:\\.|[^\\\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\$)?").unwrap(),
 			],
-			properties: PropertyParser { properties: props }
+			properties: PropertyParser { properties: props },
 		}
 	}
 }
@@ -66,14 +64,20 @@ impl RegexRule for LatexRule {
 	}
 
 	fn target(&self) -> RuleTarget {
-	    RuleTarget::Inline
+		RuleTarget::Inline
 	}
 
 	fn regexes(&self) -> &[regex::Regex] {
 		&self.re
 	}
 
-	fn enabled(&self, _unit: &TranslationUnit, _mode: &ParseMode, _states: &mut CustomStates, _index: usize) -> bool {
+	fn enabled(
+		&self,
+		_unit: &TranslationUnit,
+		_mode: &ParseMode,
+		_states: &mut CustomStates,
+		_index: usize,
+	) -> bool {
 		true
 	}
 
@@ -100,7 +104,7 @@ impl RegexRule for LatexRule {
 						)
 					)
 				);
-				return
+				return;
 			}
 			Some(content) => {
 				let processed = escape_text(
@@ -134,7 +138,9 @@ impl RegexRule for LatexRule {
 			"Raw Code",
 			unit,
 			Token::new(0..prop_source.content().len(), prop_source),
-		) else { return };
+		) else {
+			return;
+		};
 
 		let (Some(tex_kind), Some(tex_caption), Some(tex_env)) = (
 			properties.get_or(
@@ -153,7 +159,9 @@ impl RegexRule for LatexRule {
 			properties.get(unit, "env", |_, value| {
 				Result::<_, String>::Ok(value.value.clone())
 			}),
-		) else { return };
+		) else {
+			return;
+		};
 
 		// Code ranges
 		/*
@@ -204,22 +212,24 @@ impl RegexRule for LatexRule {
 			);
 		}
 		*/
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			let range = &token.range;
-			sems.add(
-				range.start..range.start + if index == 0 { 2 } else { 1 },
-				tokens.tex_sep,
-			);
-			if let Some(props) = captures.get(1).map(|m| m.range()) {
-				sems.add(props.start - 1..props.start, tokens.tex_prop_sep);
-				sems.add(props.end..props.end + 1, tokens.tex_prop_sep);
-			}
-			sems.add(captures.get(2).unwrap().range(), tokens.tex_content);
-			sems.add(
-				range.end - if index == 0 { 2 } else { 1 }..range.end,
-				tokens.tex_sep,
-			);
-		}));
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				let range = &token.range;
+				sems.add(
+					range.start..range.start + if index == 0 { 2 } else { 1 },
+					tokens.tex_sep,
+				);
+				if let Some(props) = captures.get(1).map(|m| m.range()) {
+					sems.add(props.start - 1..props.start, tokens.tex_prop_sep);
+					sems.add(props.end..props.end + 1, tokens.tex_prop_sep);
+				}
+				sems.add(captures.get(2).unwrap().range(), tokens.tex_content);
+				sems.add(
+					range.end - if index == 0 { 2 } else { 1 }..range.end,
+					tokens.tex_sep,
+				);
+			})
+		});
 
 		unit.add_content(Arc::new(Latex {
 			location: token,
@@ -231,7 +241,9 @@ impl RegexRule for LatexRule {
 		}));
 	}
 
-	fn completion(&self) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
-	    Some(Box::new(LatexCompletion{}))
+	fn completion(
+		&self,
+	) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
+		Some(Box::new(LatexCompletion {}))
 	}
 }

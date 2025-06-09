@@ -73,15 +73,28 @@ impl Rule for VariableRule {
 	}
 
 	fn target(&self) -> RuleTarget {
-	    RuleTarget::Command
+		RuleTarget::Command
 	}
 
-	fn next_match(&self, _unit: &TranslationUnit, mode: &ParseMode, _states: &mut CustomStates, cursor: &Cursor) -> Option<(usize, Box<dyn Any + Send + Sync>)> {
-		if mode.paragraph_only { return None }
+	fn next_match(
+		&self,
+		_unit: &TranslationUnit,
+		mode: &ParseMode,
+		_states: &mut CustomStates,
+		cursor: &Cursor,
+	) -> Option<(usize, Box<dyn Any + Send + Sync>)> {
+		if mode.paragraph_only {
+			return None;
+		}
 
 		self.decl_re
 			.find_at(cursor.source().content(), cursor.pos())
-			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any + Send + Sync>))
+			.map(|m| {
+				(
+					m.start(),
+					Box::new([false; 0]) as Box<dyn Any + Send + Sync>,
+				)
+			})
 	}
 
 	fn on_match<'u>(
@@ -337,14 +350,20 @@ impl RegexRule for VariableSubstitutionRule {
 	}
 
 	fn target(&self) -> RuleTarget {
-	    RuleTarget::Inline
+		RuleTarget::Inline
 	}
 
 	fn regexes(&self) -> &[regex::Regex] {
 		&self.re
 	}
 
-	fn enabled(&self, _unit: &TranslationUnit, _mode: &ParseMode, _states: &mut CustomStates, _id: usize) -> bool {
+	fn enabled(
+		&self,
+		_unit: &TranslationUnit,
+		_mode: &ParseMode,
+		_states: &mut CustomStates,
+		_id: usize,
+	) -> bool {
 		true
 	}
 

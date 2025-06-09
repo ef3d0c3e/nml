@@ -25,7 +25,7 @@ impl VariableCompletion {
 		MarkupContent {
 			kind: tower_lsp::lsp_types::MarkupKind::Markdown,
 			value: format!(
-"# Value
+				"# Value
 
 ```{0}```
 

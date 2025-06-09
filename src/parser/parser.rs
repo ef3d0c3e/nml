@@ -1,14 +1,11 @@
 use std::any::Any;
 use std::ops::Range;
-use std::rc::Rc;
 use std::slice::Iter;
 use std::sync::Arc;
-
 
 use crate::elements::meta::eof::Eof;
 use crate::elements::text::elem::Text;
 use crate::lsp::completion::CompletionProvider;
-use crate::unit::element::Element;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
@@ -57,7 +54,11 @@ impl Parser {
 		&self,
 		unit: &mut TranslationUnit,
 		cursor: &Cursor,
-	) -> Option<(Cursor, &Box<dyn Rule + Send + Sync>, Box<dyn Any + Send + Sync>)> {
+	) -> Option<(
+		Cursor,
+		&Box<dyn Rule + Send + Sync>,
+		Box<dyn Any + Send + Sync>,
+	)> {
 		let mut scope = unit.get_scope().write();
 		let state = scope.parser_state_mut();
 		// Initialize state if required
@@ -74,7 +75,8 @@ impl Parser {
 					return;
 				}
 				// Update next match position
-				(*pos, *data) = match rule.next_match(unit, &state.mode, &mut state.states, cursor) {
+				(*pos, *data) = match rule.next_match(unit, &state.mode, &mut state.states, cursor)
+				{
 					None => (usize::MAX, None),
 					Some((mut new_pos, mut new_data)) => {
 						let mut local_cursor = cursor.to_owned();
@@ -97,13 +99,20 @@ impl Parser {
 								break;
 							}
 							// Advance by 1 codepoint if escaped
-							match content[new_pos..].chars().next()
-							{
-								Some(ch) => local_cursor = local_cursor.at(local_cursor.pos() + ch.len_utf8()),
+							match content[new_pos..].chars().next() {
+								Some(ch) => {
+									local_cursor =
+										local_cursor.at(local_cursor.pos() + ch.len_utf8())
+								}
 								None => panic!(),
 							};
 							// Find next potential match
-							(new_pos, new_data) = match rule.next_match(unit, &state.mode, &mut state.states, &local_cursor) {
+							(new_pos, new_data) = match rule.next_match(
+								unit,
+								&state.mode,
+								&mut state.states,
+								&local_cursor,
+							) {
 								None => (usize::MAX, new_data), // Stop iterating
 								Some((new_pos, new_data)) => (new_pos, new_data),
 							};
@@ -185,12 +194,13 @@ impl Parser {
 	}
 
 	/// Get completion providers for this parser
-	pub fn get_completors(&self) -> Vec<Box<dyn CompletionProvider + 'static + Send + Sync>>
-	{
+	pub fn get_completors(&self) -> Vec<Box<dyn CompletionProvider + 'static + Send + Sync>> {
 		let mut completors = vec![];
 
 		self.rules.iter().for_each(|rule| {
-			let Some(completor) = rule.completion() else { return };
+			let Some(completor) = rule.completion() else {
+				return;
+			};
 			completors.push(completor);
 		});
 		completors
@@ -202,5 +212,7 @@ pub trait ParserRuleAccessor {
 }
 
 impl ParserRuleAccessor for Parser {
-	fn rules_iter(&self) -> Iter<Box<dyn Rule + Send + Sync>> { self.rules.iter() }
+	fn rules_iter(&self) -> Iter<Box<dyn Rule + Send + Sync>> {
+		self.rules.iter()
+	}
 }

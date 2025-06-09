@@ -7,9 +7,13 @@ pub struct Sanitizer {
 }
 
 impl Sanitizer {
-	pub fn new(target: Target) -> Self { Self { target } }
+	pub fn new(target: Target) -> Self {
+		Self { target }
+	}
 
-	pub fn target(&self) -> Target { self.target }
+	pub fn target(&self) -> Target {
+		self.target
+	}
 
 	pub fn sanitize<S: AsRef<str>>(&self, str: S) -> String {
 		match self.target {

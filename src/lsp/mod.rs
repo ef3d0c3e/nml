@@ -1,10 +1,10 @@
 pub mod code;
+pub mod completion;
 pub mod conceal;
 pub mod data;
 pub mod definition;
 pub mod hints;
-pub mod semantic;
-pub mod styles;
-pub mod completion;
 pub mod hover;
 pub mod reference;
+pub mod semantic;
+pub mod styles;

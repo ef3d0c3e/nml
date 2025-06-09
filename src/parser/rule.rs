@@ -90,10 +90,12 @@ pub trait Rule: Downcast {
 
 	/// Registers lua bindings for this rule on the given kernel
 	#[allow(unused_variables)]
-	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) { }
+	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) {}
 
 	/// Creates the completion provided associated with the rule
-	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> { None }
+	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> {
+		None
+	}
 }
 impl_downcast!(Rule);
 
@@ -119,7 +121,13 @@ pub trait RegexRule {
 	///
 	/// `index` represents the index of the regex (given by [`Self::regexes`]) that is checked
 	/// against.
-	fn enabled(&self, unit: &TranslationUnit, mode: &ParseMode, states: &mut CustomStates, index: usize) -> bool;
+	fn enabled(
+		&self,
+		unit: &TranslationUnit,
+		mode: &ParseMode,
+		states: &mut CustomStates,
+		index: usize,
+	) -> bool;
 
 	/// Method called when the rule is chosen by the parser
 	///
@@ -137,15 +145,21 @@ pub trait RegexRule {
 	);
 
 	#[allow(unused_variables)]
-	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) { }
+	fn register_bindings<'lua>(&self, kernel: &'lua Kernel, table: mlua::Table) {}
 
-	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> { None }
+	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> {
+		None
+	}
 }
 
 impl<T: RegexRule + 'static> Rule for T {
-	fn name(&self) -> &'static str { RegexRule::name(self) }
+	fn name(&self) -> &'static str {
+		RegexRule::name(self)
+	}
 
-	fn target(&self) -> RuleTarget { RegexRule::target(self) }
+	fn target(&self) -> RuleTarget {
+		RegexRule::target(self)
+	}
 
 	/// Finds the next match starting from [`Cursor`]
 	fn next_match(
@@ -203,13 +217,15 @@ impl<T: RegexRule + 'static> Rule for T {
 		self.register_bindings(kernel, table)
 	}
 
-	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> { self.completion() }
+	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> {
+		self.completion()
+	}
 }
 
 #[cfg(test)]
 mod tests {
 
-	use super::*;
+	
 
 	#[test]
 	fn registry() {

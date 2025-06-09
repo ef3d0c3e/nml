@@ -1,13 +1,15 @@
-use std::{cell::{Ref, RefCell}, sync::Arc};
+use std::cell::RefCell;
+use std::sync::Arc;
 
-use tower_lsp::lsp_types::MarkupContent;
 
-use crate::parser::source::{Source, SourceFile, Token, VirtualSource};
+use crate::parser::source::Source;
+use crate::parser::source::SourceFile;
+use crate::parser::source::Token;
+use crate::parser::source::VirtualSource;
 
 use super::data::LangServerData;
 
-pub struct HoverRange
-{
+pub struct HoverRange {
 	pub range: Token,
 	pub content: String,
 	//provider: Arc<dyn Fn() + Send + Sync>,
@@ -15,13 +17,11 @@ pub struct HoverRange
 
 /// Per unit data
 #[derive(Default)]
-pub struct HoverData
-{
+pub struct HoverData {
 	pub hovers: RefCell<Vec<HoverRange>>,
 }
 
-pub struct Hover<'lsp>
-{
+pub struct Hover<'lsp> {
 	hovers: &'lsp HoverData,
 	// The source used when resolving the parent source
 	original_source: Arc<dyn Source>,
@@ -29,8 +29,7 @@ pub struct Hover<'lsp>
 	source: Arc<dyn Source>,
 }
 
-impl<'lsp> Hover<'lsp>
-{
+impl<'lsp> Hover<'lsp> {
 	fn from_source_impl(
 		source: Arc<dyn Source>,
 		lsp: &'lsp LangServerData,
@@ -50,8 +49,7 @@ impl<'lsp> Hover<'lsp>
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if source.downcast_ref::<SourceFile>().is_some() {
-			return lsp.hovers.get(&source)
-			.map(|hovers| Self {
+			return lsp.hovers.get(&source).map(|hovers| Self {
 				hovers,
 				source,
 				original_source,
@@ -64,8 +62,7 @@ impl<'lsp> Hover<'lsp>
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
-	pub fn add(&'lsp self, range: HoverRange)
-	{
+	pub fn add(&'lsp self, range: HoverRange) {
 		self.hovers.hovers.borrow_mut().push(range);
 	}
 }

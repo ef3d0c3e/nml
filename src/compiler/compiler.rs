@@ -1,7 +1,4 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::Arc;
-
 
 use parking_lot::RwLock;
 
@@ -14,7 +11,6 @@ use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use crate::util::settings::ProjectOutput;
-use crate::util::settings::ProjectSettings;
 
 use super::output::CompilerOutput;
 use super::sanitize::Sanitizer;
@@ -27,11 +23,11 @@ pub enum Target {
 }
 
 impl From<&ProjectOutput> for Target {
-    fn from(value: &ProjectOutput) -> Self {
+	fn from(value: &ProjectOutput) -> Self {
 		match value {
 			ProjectOutput::Html(_) => Target::HTML,
 		}
-    }
+	}
 }
 
 pub struct Compiler {
@@ -158,7 +154,7 @@ impl Compiler {
 			Ok(output) => {
 				println!("output={:#?}", output.content);
 				Ok(())
-			},
+			}
 			Err(reports) => Err(reports),
 		}
 

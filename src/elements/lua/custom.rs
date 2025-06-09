@@ -31,12 +31,13 @@ impl LuaData {
 		F: FnOnce(&mut TranslationUnit, RwLockWriteGuard<'_, Kernel>) -> R,
 	{
 		let kernels = unit.get_data(LUA_CUSTOM);
-		let mut kernels = RwLockWriteGuard::map(kernels.write(), |b| {
-			b.downcast_mut::<LuaData>().unwrap()
-		});
+		let mut kernels =
+			RwLockWriteGuard::map(kernels.write(), |b| b.downcast_mut::<LuaData>().unwrap());
 
 		if !kernels.registered.contains_key(&name.0) {
-			kernels.registered.insert(name.0.clone(), Arc::new(RwLock::new(Kernel::new(unit))));
+			kernels
+				.registered
+				.insert(name.0.clone(), Arc::new(RwLock::new(Kernel::new(unit))));
 		}
 		let kernel = kernels.registered.get(&name.0).unwrap();
 		f(unit, kernel.write())

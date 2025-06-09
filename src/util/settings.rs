@@ -1,15 +1,9 @@
 use std::env::current_dir;
-use std::fmt::format;
 use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::compiler::compiler::Target;
-use crate::compiler::output;
-use crate::unit::scope::ScopeAccessor;
-use crate::unit::translation::TranslationUnit;
-use crate::unit::variable::VariableName;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HtmlOutput {
@@ -52,7 +46,7 @@ impl ProjectSettings {
 	pub fn set_root_path(&mut self, path: &String) -> Result<(), String> {
 		fn get_path(name: &str, mut base: PathBuf, component: &str) -> Result<String, String> {
 			base.push(component);
-			
+
 			base.to_str()
 				.ok_or(format!(
 					"Invalid unicode in {name} path: {}",

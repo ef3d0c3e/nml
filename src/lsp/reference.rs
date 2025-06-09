@@ -1,8 +1,7 @@
 use std::ops::Range;
 
 /// Reference in the language server
-pub struct LsReference
-{
+pub struct LsReference {
 	/// Reference name
 	pub name: String,
 	/// Range in the defining document

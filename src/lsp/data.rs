@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::Range;
 use std::sync::Arc;
 
 use tower_lsp::lsp_types::Diagnostic;
@@ -47,9 +46,10 @@ pub struct LangServerData {
 impl LangServerData {
 	/// Method that must be called when a source is added
 	pub fn on_new_source(&mut self, source: Arc<dyn Source>) {
-		if source.downcast_ref::<SourceFile>().is_some()
-		{
-			self.sources.borrow_mut().insert(source.name().to_owned(), source.clone());
+		if source.downcast_ref::<SourceFile>().is_some() {
+			self.sources
+				.borrow_mut()
+				.insert(source.name().to_owned(), source.clone());
 		}
 
 		if !self.semantic_data.contains_key(&source) {
@@ -57,8 +57,7 @@ impl LangServerData {
 				.insert(source.clone(), SemanticsData::new(source.clone()));
 		}
 		if !self.diagnostics.contains_key(&source) {
-			self.diagnostics
-				.insert(source.clone(), Vec::default());
+			self.diagnostics.insert(source.clone(), Vec::default());
 		}
 		if !self.inlay_hints.contains_key(&source) {
 			self.inlay_hints
@@ -78,7 +77,8 @@ impl LangServerData {
 			self.styles.insert(source.clone(), StylesData::default());
 		}
 		if !self.coderanges.contains_key(&source) {
-			self.coderanges.insert(source.clone(), CodeRangeData::default());
+			self.coderanges
+				.insert(source.clone(), CodeRangeData::default());
 		}
 	}
 
@@ -95,16 +95,23 @@ impl LangServerData {
 
 	/// Gets a source file by name, or insert a new file
 	pub fn get_source<'lsp>(&'lsp self, name: &str) -> Option<Arc<dyn Source>> {
-		if let Some(found) = self.sources.borrow().get(name) { return Some(found.to_owned()) }
-		
-		let Ok(file) = SourceFile::new(name.to_string(), None) else { return None };
+		if let Some(found) = self.sources.borrow().get(name) {
+			return Some(found.to_owned());
+		}
+
+		let Ok(file) = SourceFile::new(name.to_string(), None) else {
+			return None;
+		};
 		let source = Arc::new(file);
-		self.sources.borrow_mut().insert(source.name().to_owned(), source.clone());
+		self.sources
+			.borrow_mut()
+			.insert(source.name().to_owned(), source.clone());
 		Some(source)
 	}
 
 	pub fn with_semantics<'lsp, F, R>(&'lsp self, source: Arc<dyn Source>, f: F) -> Option<R>
-		where F: FnOnce(&Semantics, &'lsp Tokens) -> R
+	where
+		F: FnOnce(&Semantics, &'lsp Tokens) -> R,
 	{
 		match Semantics::from_source(source, self) {
 			Some(sems) => Some(f(&sems, &self.semantic_tokens)),
@@ -112,15 +119,16 @@ impl LangServerData {
 		}
 	}
 
-	pub fn add_definition<'lsp>(&'lsp self, source: Token, target: &Token)
-	{
+	pub fn add_definition<'lsp>(&'lsp self, source: Token, target: &Token) {
 		definition::from_source(source, target, self);
 	}
 
 	pub fn add_hover<'lsp>(&'lsp self, range: Token, content: String) {
-		let Some (hov) = Hover::from_source(range.source(), self) else { return };
+		let Some(hov) = Hover::from_source(range.source(), self) else {
+			return;
+		};
 		let original = range.source().original_range(range.range);
-		hov.add(HoverRange{
+		hov.add(HoverRange {
 			range: original,
 			content,
 		});

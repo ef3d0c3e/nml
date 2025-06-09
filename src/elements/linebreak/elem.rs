@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -9,7 +7,11 @@ use crate::compiler::compiler::Target::HTML;
 use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
-use crate::unit::element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement};
+use crate::unit::element::ContainerElement;
+use crate::unit::element::ElemKind;
+use crate::unit::element::Element;
+use crate::unit::element::LinkableElement;
+use crate::unit::element::ReferenceableElement;
 use crate::unit::scope::Scope;
 
 #[derive(Debug)]
@@ -19,11 +21,17 @@ pub struct LineBreak {
 }
 
 impl Element for LineBreak {
-	fn location(&self) -> &Token { &self.location }
+	fn location(&self) -> &Token {
+		&self.location
+	}
 
-	fn kind(&self) -> ElemKind { ElemKind::Invisible }
+	fn kind(&self) -> ElemKind {
+		ElemKind::Invisible
+	}
 
-	fn element_name(&self) -> &'static str { "Break" }
+	fn element_name(&self) -> &'static str {
+		"Break"
+	}
 
 	fn compile<'e>(
 		&'e self,
@@ -33,18 +41,23 @@ impl Element for LineBreak {
 	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			HTML => {
-				if output.in_paragraph(&scope)
-				{
+				if output.in_paragraph(&scope) {
 					output.add_content("</p>");
 					output.set_paragraph(&scope, false);
 				}
-			},
+			}
 			_ => todo!("Unimplemented compiler"),
 		}
 		Ok(())
 	}
 
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> { None }
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> { None }
-	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> { None }
+	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
+		None
+	}
+	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
+		None
+	}
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
+		None
+	}
 }

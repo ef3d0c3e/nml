@@ -351,14 +351,12 @@ impl LineCursor {
 	) -> LineCursor {
 		let mut cursor = Self::new(source.clone(), encoding);
 
-		while cursor.line < line as usize
-		{
+		while cursor.line < line as usize {
 			let left = &cursor.source.content()[cursor.pos..];
 			let c = left.chars().next().unwrap();
 			cursor.move_to(cursor.pos + c.len_utf8());
 		}
-		while cursor.line_pos < column as usize
-		{
+		while cursor.line_pos < column as usize {
 			let left = &cursor.source.content()[cursor.pos..];
 			let c = left.chars().next().unwrap();
 			cursor.move_to(cursor.pos + c.len_utf8());

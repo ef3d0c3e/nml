@@ -1,15 +1,10 @@
-use core::time;
 use std::cell::OnceCell;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::future::Future;
 use std::future::IntoFuture;
-use std::hash::Hasher;
 use std::hash::Hash;
+use std::hash::Hasher;
 use std::pin::Pin;
-use std::process::exit;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
@@ -35,23 +30,22 @@ use super::compiler::Target;
 struct ArcKey<T>(Arc<RwLock<T>>);
 
 impl<T> PartialEq for ArcKey<T> {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) // Compare Rc pointer addresses
-    }
+	fn eq(&self, other: &Self) -> bool {
+		Arc::ptr_eq(&self.0, &other.0) // Compare Rc pointer addresses
+	}
 }
 
 impl<T> Eq for ArcKey<T> {}
 
 impl<T> Hash for ArcKey<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_usize(Arc::as_ptr(&self.0) as usize); // Hash the pointer address
-    }
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		state.write_usize(Arc::as_ptr(&self.0) as usize); // Hash the pointer address
+	}
 }
 
 /// Async task processed by the output
 #[derive(Debug)]
-pub struct OutputTask
-{
+pub struct OutputTask {
 	/// Task handle
 	handle: OnceCell<JoinHandle<Result<String, Vec<Report>>>>,
 	/// Task location in it's original scope
@@ -85,7 +79,11 @@ impl CompilerOutput {
 	/// Run work function `f` with the task processor running
 	///
 	/// The result of async taks will be inserted into the output
-	pub fn run_with_processor<F>(target: Target, colors: &ReportColors, f: F) -> Result<CompilerOutput, Vec<Report>>
+	pub fn run_with_processor<F>(
+		target: Target,
+		colors: &ReportColors,
+		f: F,
+	) -> Result<CompilerOutput, Vec<Report>>
 	where
 		F: FnOnce(CompilerOutput) -> CompilerOutput,
 	{
@@ -109,64 +107,91 @@ impl CompilerOutput {
 		// Wait for all tasks to finish
 		let mut finished = 0;
 		let time_start = Instant::now();
-		while finished != output.tasks.len()
-		{
+		while finished != output.tasks.len() {
 			for task in &mut output.tasks {
-				if task.result.get().is_some() || !task.handle.get().is_some() { continue }
+				if task.result.get().is_some() || !task.handle.get().is_some() {
+					continue;
+				}
 
-				if task.handle.get().map_or(false, |handle| handle.is_finished()) {
-					output.runtime.block_on(async {
-						task.result.set(task.handle.take().unwrap().into_future().await.unwrap())
-					}).unwrap();
+				if task
+					.handle
+					.get()
+					.map_or(false, |handle| handle.is_finished())
+				{
+					output
+						.runtime
+						.block_on(async {
+							task.result
+								.set(task.handle.take().unwrap().into_future().await.unwrap())
+						})
+						.unwrap();
 					task.handle.take();
 					finished += 1;
 					continue;
+				} else if time_start.elapsed().as_millis() < task.timeout {
+					continue;
 				}
-				else if time_start.elapsed().as_millis() < task.timeout { continue; }
 
 				task.handle.get().unwrap().abort();
 				task.handle.take();
 				println!("Aborted task `{}`, timeout exceeded", task.name);
 				finished += 1;
 			}
-			println!("[{}/{}] Waiting for tasks... ({}ms)", finished, output.tasks.len(), time_start.elapsed().as_millis());
+			println!(
+				"[{}/{}] Waiting for tasks... ({}ms)",
+				finished,
+				output.tasks.len(),
+				time_start.elapsed().as_millis()
+			);
 			sleep(Duration::from_millis(500));
 		}
 
 		// Check for errors
 		let mut reports = vec![];
-		for task in &mut output.tasks
-		{
-			if task.result.get().is_some_and(Result::is_ok) { continue }
-
-			if task.result.get().is_none()
-			{
-				reports.push(make_err!(
-						task.location.source(),
-						"Task processing failed".into(),
-						span(
-							task.location.range.clone(),
-							format!(
-								"Processing for task `{}` timed out",
-								(&task.name).fg(Color::Green),
-							)
-						)));
-				continue ;
+		for task in &mut output.tasks {
+			if task.result.get().is_some_and(Result::is_ok) {
+				continue;
 			}
-			let Some(Err(mut err)) = task.result.take() else { panic!() };
+
+			if task.result.get().is_none() {
+				reports.push(make_err!(
+					task.location.source(),
+					"Task processing failed".into(),
+					span(
+						task.location.range.clone(),
+						format!(
+							"Processing for task `{}` timed out",
+							(&task.name).fg(Color::Green),
+						)
+					)
+				));
+				continue;
+			}
+			let Some(Err(mut err)) = task.result.take() else {
+				panic!()
+			};
 			reports.extend(err.drain(..));
 		}
-		if !reports.is_empty() { return Err(reports) }
+		if !reports.is_empty() {
+			return Err(reports);
+		}
 
 		// Insert tasks results into output & offset references positions
-		for (pos, content) in output.tasks.iter().rev().map(|task| (task.pos, task.result.get().unwrap().as_ref().unwrap())) {
+		for (pos, content) in output
+			.tasks
+			.iter()
+			.rev()
+			.map(|task| (task.pos, task.result.get().unwrap().as_ref().unwrap()))
+		{
 			output.content.insert_str(pos, content.as_str());
 		}
 		Ok(output)
 	}
 
 	/// Appends content to the output
-	pub fn add_content<S: AsRef<str>>(&mut self, s: S) { self.content.push_str(s.as_ref()); }
+	pub fn add_content<S: AsRef<str>>(&mut self, s: S) {
+		self.content.push_str(s.as_ref());
+	}
 
 	/// Adds an async task to the output. The task's result will be appended at the current output position
 	///
@@ -183,12 +208,10 @@ impl CompilerOutput {
 			name,
 			timeout: 1500,
 			result: OnceCell::default(),
-		});	
+		});
 	}
 
-	pub fn content(
-		&self,
-	) -> &String {
+	pub fn content(&self) -> &String {
 		&self.content
 	}
 
@@ -197,12 +220,9 @@ impl CompilerOutput {
 	}
 
 	pub fn set_paragraph(&mut self, scope: &Arc<RwLock<Scope>>, value: bool) {
-		if value
-		{
+		if value {
 			self.paragraph.insert(ArcKey(scope.to_owned()));
-		}
-		else
-		{
+		} else {
 			self.paragraph.remove(&ArcKey(scope.to_owned()));
 		}
 	}

@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Span;
@@ -101,10 +100,10 @@ impl CompletionProvider for ReferenceCompletion {
 		items.push(CompletionItem {
 			label: "&{ref}".to_string(),
 			detail: Some("Link to reference".into()),
-			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(MarkupContent {
-				kind: tower_lsp::lsp_types::MarkupKind::Markdown,
-				value:
-					"# Usage
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(
+				MarkupContent {
+					kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+					value: "# Usage
 
 `&{REF}` Link to reference `REF`
 `&{REF}[DISP]` Link to reference `REF` displayed using `DISP`
@@ -115,11 +114,20 @@ Create a link to a reference.
 
  * `&{foo}` *Will display a link to reference **foo***
  * `&{bar}[click me]` *Will display `click me` that will link to reference **bar***
- * `&{source#baz}` *Will display a link to reference **baz** declared in unit **source***".into()
-			})),
+ * `&{source#baz}` *Will display a link to reference **baz** declared in unit **source***"
+						.into(),
+				},
+			)),
 			kind: Some(CompletionItemKind::SNIPPET),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
-			insert_text: Some(format!("{}{{${{1:REFNAME}}}}", if context_triggered(context, "&") { "" } else { "&" })),
+			insert_text: Some(format!(
+				"{}{{${{1:REFNAME}}}}",
+				if context_triggered(context, "&") {
+					""
+				} else {
+					"&"
+				}
+			)),
 			..CompletionItem::default()
 		});
 
@@ -127,10 +135,10 @@ Create a link to a reference.
 		items.push(CompletionItem {
 			label: "&{ref}[disp]".to_string(),
 			detail: Some("Link to reference with display".into()),
-			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(MarkupContent {
-				kind: tower_lsp::lsp_types::MarkupKind::Markdown,
-				value:
-					"# Usage
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(
+				MarkupContent {
+					kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+					value: "# Usage
 
 `&{REF}` Link to reference `REF`
 `&{REF}[DISP]` Link to reference `REF` displayed using `DISP`
@@ -141,11 +149,20 @@ Create a link to a reference.
 
  * `&{foo}` *Will display a link to reference **foo***
  * `&{bar}[click me]` *Will display `click me` that will link to reference **bar***
- * `&{source#baz}` *Will display a link to reference **baz** declared in unit **source***".into()
-			})),
+ * `&{source#baz}` *Will display a link to reference **baz** declared in unit **source***"
+						.into(),
+				},
+			)),
 			kind: Some(CompletionItemKind::SNIPPET),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
-			insert_text: Some(format!("{}{{${{1:REFNAME}}}}[${{2:DISPLAY}}]", if context_triggered(context, "&") { "" } else { "&" })),
+			insert_text: Some(format!(
+				"{}{{${{1:REFNAME}}}}[${{2:DISPLAY}}]",
+				if context_triggered(context, "&") {
+					""
+				} else {
+					"&"
+				}
+			)),
 			..CompletionItem::default()
 		});
 	}

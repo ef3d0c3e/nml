@@ -5,7 +5,6 @@ use std::time::UNIX_EPOCH;
 
 use ariadne::Color;
 use ariadne::Fmt;
-use graphviz_rust::print;
 
 use crate::cache::cache::Cache;
 use crate::parser::parser::Parser;
@@ -21,8 +20,7 @@ use super::compiler::Compiler;
 use super::compiler::Target;
 
 #[derive(Default)]
-pub struct ProcessOptions
-{
+pub struct ProcessOptions {
 	pub debug_ast: bool,
 }
 
@@ -63,7 +61,8 @@ pub fn output_message<'u>(message: ProcessQueueMessage<'u>, perc: f64) {
 		ProcessQueueMessage::Parsing(source) => {
 			println!("{}", format!("Parsing '{}'", source).fg(Color::Green))
 		}
-		ProcessQueueMessage::Resolving(unit) => println!("{} {}",
+		ProcessQueueMessage::Resolving(unit) => println!(
+			"{} {}",
 			format!("Resolving '{}'", unit.input_path()).fg(Color::Green),
 			format!("[{}]", unit.reference_key()).fg(Color::Blue)
 		),
@@ -92,7 +91,12 @@ pub struct ProcessQueue {
 }
 
 impl ProcessQueue {
-	pub fn new(target: Target, project_path: String, settings: ProjectSettings, inputs: Vec<PathBuf>) -> Self {
+	pub fn new(
+		target: Target,
+		project_path: String,
+		settings: ProjectSettings,
+		inputs: Vec<PathBuf>,
+	) -> Self {
 		let cache = Arc::new(Cache::new(settings.db_path.as_str()).unwrap());
 		cache.setup_tables();
 
@@ -110,7 +114,11 @@ impl ProcessQueue {
 		}
 	}
 
-	pub fn process(&mut self, output: ProcessOutputOptions, options: ProcessOptions) -> Result<Vec<()>, ProcessError> {
+	pub fn process(
+		&mut self,
+		output: ProcessOutputOptions,
+		options: ProcessOptions,
+	) -> Result<Vec<()>, ProcessError> {
 		match &output {
 			ProcessOutputOptions::Directory(dir) => {}
 			ProcessOutputOptions::File(file) => {
@@ -231,9 +239,11 @@ impl ProcessQueue {
 		if !missing.is_empty() {
 			let mut reports = vec![];
 			missing.iter().for_each(|(unit_file, list)| {
-				for item in list
-				{
-					let source = Arc::new(SourceFile::new(format!("{}/{unit_file}", self.project_path), None).unwrap());
+				for item in list {
+					let source = Arc::new(
+						SourceFile::new(format!("{}/{unit_file}", self.project_path), None)
+							.unwrap(),
+					);
 					reports.push(make_err!(
 						source.clone(),
 						"Missing references".into(),
@@ -244,15 +254,14 @@ impl ProcessQueue {
 								(&item.depends_for).fg(Color::Blue),
 							)
 						)
-							));
+					));
 				}
 			});
-			return Err(ProcessError::LinkError(reports))
+			return Err(ProcessError::LinkError(reports));
 		}
 
 		// Apply settings
-		for unit in &mut processed
-		{
+		for unit in &mut processed {
 			unit.update_settings(self.settings.clone());
 		}
 
@@ -266,11 +275,13 @@ impl ProcessQueue {
 			match self.compiler.compile(unit) {
 				Ok(_) => {
 					// TODO
-				},
-				Err(err) => reports.extend(err)
+				}
+				Err(err) => reports.extend(err),
 			}
 		}
-		if !reports.is_empty() { return Err(ProcessError::CompileError(reports)) }
+		if !reports.is_empty() {
+			return Err(ProcessError::CompileError(reports));
+		}
 
 		let time_now = SystemTime::now()
 			.duration_since(UNIX_EPOCH)

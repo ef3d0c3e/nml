@@ -1,6 +1,5 @@
 use std::any::Any;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use ariadne::Span;
@@ -81,7 +80,12 @@ impl Rule for LuaRule {
 
 		self.start_re
 			.find_at(cursor.source().content(), cursor.pos())
-			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any + Send + Sync>))
+			.map(|m| {
+				(
+					m.start(),
+					Box::new([false; 0]) as Box<dyn Any + Send + Sync>,
+				)
+			})
 	}
 
 	fn on_match<'u>(

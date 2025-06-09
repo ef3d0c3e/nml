@@ -1,6 +1,4 @@
-use std::cell::Ref;
 use std::cell::RefCell;
-use std::cell::RefMut;
 use std::collections::VecDeque;
 use std::ops::Range;
 use std::sync::Arc;
@@ -227,13 +225,10 @@ impl<'lsp> Semantics<'lsp> {
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if source.downcast_ref::<SourceFile>().is_some() {
-			return lsp.semantic_data.get(&(source.clone()))
-			.map(|sems| {
-					Self {
-						sems,
-						source,
-						original_source,
-					}
+			return lsp.semantic_data.get(&(source.clone())).map(|sems| Self {
+				sems,
+				source,
+				original_source,
 			});
 		}
 		None

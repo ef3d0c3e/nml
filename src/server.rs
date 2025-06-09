@@ -49,7 +49,6 @@ pub struct Backend<'s> {
 	completors: DashMap<String, Vec<Box<dyn CompletionProvider + 'static + Send + Sync>>>,
 
 	//units: DashMap<String, Arc<TranslationUnit<'s>>>,
-
 	document_map: DashMap<String, String>,
 	definition_map: DashMap<String, Vec<(Location, Range)>>,
 	semantic_token_map: DashMap<String, Vec<SemanticToken>>,
@@ -84,7 +83,6 @@ impl<'s> Backend<'s> {
 			completors: DashMap::default(),
 
 			//units: DashMap::default(),
-
 			document_map: DashMap::default(),
 			definition_map: DashMap::default(),
 			semantic_token_map: DashMap::default(),
@@ -115,16 +113,22 @@ impl<'s> Backend<'s> {
 			.insert(params.uri.to_string(), source.clone());
 
 		let parser = Parser::new();
-		let path = pathdiff::diff_paths(params.uri.to_string().replace("file:///", "/"), &self.root_path)
-			.map(|path| path.to_str().unwrap().to_string())
-			.unwrap();
+		let path = pathdiff::diff_paths(
+			params.uri.to_string().replace("file:///", "/"),
+			&self.root_path,
+		)
+		.map(|path| path.to_str().unwrap().to_string())
+		.unwrap();
 		let unit = TranslationUnit::new(path, &parser, source, true, false);
 
 		// Set references
 		unit.with_lsp(move |mut lsp| {
 			lsp.external_refs.clear();
 			external_refs.drain(..).for_each(|reference| {
-				lsp.external_refs.insert(format!("{}#{}", reference.source_refkey, reference.name), reference);
+				lsp.external_refs.insert(
+					format!("{}#{}", reference.source_refkey, reference.name),
+					reference,
+				);
 			});
 		});
 
@@ -137,11 +141,10 @@ impl<'s> Backend<'s> {
 		let (reports, unit) = unit.consume(output_file);
 
 		self.diagnostic_map.clear();
-		for report in reports
-		{
+		for report in reports {
 			Report::to_diagnostics(report, &self.diagnostic_map);
 		}
-		
+
 		// Completion
 		let completors = parser.get_completors();
 		let mut items = vec![];
@@ -284,7 +287,13 @@ impl<'s> LanguageServer for Backend<'s> {
 				definition_provider: Some(OneOf::Left(true)),
 				completion_provider: Some(CompletionOptions {
 					resolve_provider: Some(false),
-					trigger_characters: Some(vec!["%".to_string(), ":".to_string(), "@".to_string(), "&".to_string(), "$".to_string()]),
+					trigger_characters: Some(vec![
+						"%".to_string(),
+						":".to_string(),
+						"@".to_string(),
+						"&".to_string(),
+						"$".to_string(),
+					]),
 					work_done_progress_options: Default::default(),
 					all_commit_characters: None,
 					completion_item: None,

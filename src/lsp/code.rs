@@ -79,7 +79,10 @@ impl<'a> CodeRange<'a> {
 		None
 	}
 
-	pub fn from_source(source: Arc<dyn Source>, lsp: &'a Option<RefCell<LangServerData>>) -> Option<Self> {
+	pub fn from_source(
+		source: Arc<dyn Source>,
+		lsp: &'a Option<RefCell<LangServerData>>,
+	) -> Option<Self> {
 		if lsp.is_none() {
 			return None;
 		}

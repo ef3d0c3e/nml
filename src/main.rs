@@ -13,7 +13,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use compiler::compiler::Target;
-use compiler::process::{ProcessError, ProcessOptions};
+use compiler::process::ProcessError;
+use compiler::process::ProcessOptions;
 use compiler::process::ProcessOutputOptions;
 use compiler::process::ProcessQueue;
 use getopts::Matches;
@@ -322,7 +323,9 @@ fn main() -> ExitCode {
 	let mut options = ProcessOptions::default();
 	let force_rebuild = matches.opt_present("force-rebuild");
 	let debug_opts = matches.opt_strs("z");
-	if debug_opts.contains(&"ast".into()) { options.debug_ast = true }
+	if debug_opts.contains(&"ast".into()) {
+		options.debug_ast = true
+	}
 
 	// Check that all files have a valid unicode path
 	for file in &files {

@@ -1,9 +1,9 @@
 pub mod parser;
 pub mod property;
 pub mod reports;
+pub mod resolver;
 pub mod rule;
 pub mod source;
 pub mod state;
 pub mod style;
 pub mod util;
-pub mod resolver;

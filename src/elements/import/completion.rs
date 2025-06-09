@@ -22,10 +22,10 @@ impl CompletionProvider for ImportCompletion {
 		items.push(CompletionItem {
 			label: "@import ".to_string(),
 			detail: Some("Import a file".into()),
-			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(MarkupContent {
-				kind: tower_lsp::lsp_types::MarkupKind::Markdown,
-				value:
-"# Usage
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(
+				MarkupContent {
+					kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+					value: "# Usage
 
 `@import FILE`
 
@@ -56,11 +56,20 @@ Will result in:
 
 # See also
 
- * `:export` *export a variable*".into()
-			})),
+ * `:export` *export a variable*"
+						.into(),
+				},
+			)),
 			kind: Some(CompletionItemKind::FUNCTION),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
-			insert_text: Some(format!("{}import \"${{1:FILE}}\"", if context_triggered(context, "@") { "" } else { "@" })),
+			insert_text: Some(format!(
+				"{}import \"${{1:FILE}}\"",
+				if context_triggered(context, "@") {
+					""
+				} else {
+					"@"
+				}
+			)),
 			..CompletionItem::default()
 		});
 	}

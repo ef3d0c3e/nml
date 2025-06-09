@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use rusqlite::params;
@@ -300,23 +298,28 @@ impl Cache {
 	}
 
 	/// Gets all exported references in the project
-	pub async fn get_references(&self) -> Vec<LsReference>
-	{
+	pub async fn get_references(&self) -> Vec<LsReference> {
 		let con = self.get_connection().await;
 
-		let mut stmt = con.prepare("SELECT
+		let mut stmt = con
+			.prepare(
+				"SELECT
 			name, unit_ref, token_start, token_end, type, ru.input_file
 		FROM exported_references
-		LEFT JOIN referenceable_units ru ON unit_ref = ru.reference_key;").unwrap();
-		let res = stmt.query_map((), |row| {
-			Ok(LsReference {
-				name: row.get_unwrap::<_, String>(0),
-				range: row.get_unwrap::<_, usize>(2)..row.get_unwrap::<_, usize>(3),
-				source_path: row.get_unwrap::<_, String>(5),
-				source_refkey: row.get_unwrap::<_, String>(1),
-				reftype: row.get_unwrap::<_, String>(4),
+		LEFT JOIN referenceable_units ru ON unit_ref = ru.reference_key;",
+			)
+			.unwrap();
+		let res = stmt
+			.query_map((), |row| {
+				Ok(LsReference {
+					name: row.get_unwrap::<_, String>(0),
+					range: row.get_unwrap::<_, usize>(2)..row.get_unwrap::<_, usize>(3),
+					source_path: row.get_unwrap::<_, String>(5),
+					source_refkey: row.get_unwrap::<_, String>(1),
+					reftype: row.get_unwrap::<_, String>(4),
+				})
 			})
-		}).unwrap();
+			.unwrap();
 
 		let mut result = vec![];
 		for r in res {
@@ -374,7 +377,7 @@ impl Cache {
 			.block_on(self.get_connection());
 
 		let tx = con.transaction().unwrap();
-		let mut delete_stmt = tx
+		let delete_stmt = tx
 			.prepare(
 				"DELETE
 			FROM dependencies

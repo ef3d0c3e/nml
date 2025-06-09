@@ -15,12 +15,15 @@ use super::reports::Report;
 
 pub type CustomStates = HashMap<String, Arc<RwLock<dyn CustomState>>>;
 
-pub trait CustomState: Downcast + core::fmt::Debug + Send + Sync
-{
+pub trait CustomState: Downcast + core::fmt::Debug + Send + Sync {
 	/// Name of the state
 	fn name(&self) -> &str;
 	/// Method called when the scope of this state ends
-	fn on_scope_end(&mut self, unit: &mut TranslationUnit, scope: Arc<RwLock<Scope>>) -> Vec<Report>;
+	fn on_scope_end(
+		&mut self,
+		unit: &mut TranslationUnit,
+		scope: Arc<RwLock<Scope>>,
+	) -> Vec<Report>;
 }
 impl_downcast!(CustomState);
 
@@ -50,7 +53,7 @@ impl ParserState {
 		Self {
 			matches: Vec::default(),
 			mode,
-			states: CustomStates::default()
+			states: CustomStates::default(),
 		}
 	}
 
@@ -58,7 +61,6 @@ impl ParserState {
 		Self::new(mode)
 	}
 }
-
 
 // ----------- REFACTOR BELOW ------------
 
@@ -114,16 +116,10 @@ impl RuleStateHolder {
 	/// Method called when the current [`StateScope`] ends.
 	///
 	/// Calling this methods will call into handlers for states going out of scopes
-	pub fn on_scope_end<'u>(
-		&mut self,
-		unit: &mut TranslationUnit<'u>,
-		scope: StateScope,
-	) {
+	pub fn on_scope_end<'u>(&mut self, unit: &mut TranslationUnit<'u>, scope: StateScope) {
 		self.states.retain(|_name, rule_state| {
 			if rule_state.borrow().scope() >= scope {
-				rule_state
-					.borrow_mut()
-					.on_remove(unit);
+				rule_state.borrow_mut().on_remove(unit);
 				false
 			} else {
 				true

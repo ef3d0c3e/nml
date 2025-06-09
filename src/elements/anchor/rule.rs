@@ -4,7 +4,6 @@ use crate::parser::rule::RuleTarget;
 use crate::parser::source::SourcePosition;
 use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
-use crate::parser::state::ParserState;
 use crate::unit::references::InternalReference;
 use crate::unit::references::Refname;
 use crate::unit::translation::TranslationAccessors;
@@ -12,8 +11,6 @@ use crate::unit::translation::TranslationUnit;
 use ariadne::Fmt;
 use regex::Captures;
 use regex::Regex;
-use std::cell::OnceCell;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
@@ -50,7 +47,13 @@ impl RegexRule for AnchorRule {
 		&self.re
 	}
 
-	fn enabled(&self, _unit: &TranslationUnit, _mode: &ParseMode, _states: &mut CustomStates, _id: usize) -> bool {
+	fn enabled(
+		&self,
+		_unit: &TranslationUnit,
+		_mode: &ParseMode,
+		_states: &mut CustomStates,
+		_id: usize,
+	) -> bool {
 		true
 	}
 

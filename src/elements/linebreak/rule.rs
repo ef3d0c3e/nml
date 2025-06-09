@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 
 use regex::Captures;
@@ -28,18 +27,26 @@ impl Default for BreakRule {
 }
 
 impl RegexRule for BreakRule {
-	fn name(&self) -> &'static str { "Break" }
+	fn name(&self) -> &'static str {
+		"Break"
+	}
 
 	fn target(&self) -> RuleTarget {
-	    RuleTarget::Meta
+		RuleTarget::Meta
 	}
 
 	fn regexes(&self) -> &[regex::Regex] {
 		&self.re
 	}
 
-	fn enabled(&self, _unit: &TranslationUnit, mode: &ParseMode, _states: &mut CustomStates, _index: usize) -> bool {
-		return !mode.paragraph_only
+	fn enabled(
+		&self,
+		_unit: &TranslationUnit,
+		mode: &ParseMode,
+		_states: &mut CustomStates,
+		_index: usize,
+	) -> bool {
+		return !mode.paragraph_only;
 	}
 
 	fn on_regex_match<'u>(
@@ -49,7 +56,12 @@ impl RegexRule for BreakRule {
 		token: Token,
 		captures: Captures,
 	) {
-		let length = captures.get(1).unwrap().as_str().chars().fold(0usize, |count, c| count + (c == '\n') as usize);
+		let length = captures
+			.get(1)
+			.unwrap()
+			.as_str()
+			.chars()
+			.fold(0usize, |count, c| count + (c == '\n') as usize);
 
 		unit.add_content(Arc::new(LineBreak {
 			location: token.clone(),

@@ -1,8 +1,6 @@
 use core::panic;
 use std::any::Any;
-use std::cell::RefCell;
 use std::collections::HashSet;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::usize;
 
@@ -24,7 +22,6 @@ use super::elem::StyleElem;
 use super::state::Style;
 use super::state::StyleState;
 use super::state::STYLE_STATE;
-
 
 #[derive(Default)]
 #[auto_registry::auto_registry(registry = "rules")]
@@ -93,7 +90,10 @@ impl Rule for StyleRule {
 				return None;
 			};
 			let active = enabled.contains(&matched.name);
-			Some((closest, Box::new((matched, active)) as Box<dyn Any + Send + Sync>))
+			Some((
+				closest,
+				Box::new((matched, active)) as Box<dyn Any + Send + Sync>,
+			))
 		})
 	}
 
@@ -136,9 +136,11 @@ impl Rule for StyleRule {
 				}
 			});
 
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			sems.add(token.range.clone(), tokens.style_marker);
-		}));
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(token.range.clone(), tokens.style_marker);
+			})
+		});
 		unit.add_content(Arc::new(StyleElem {
 			location: token,
 			style: rule.clone(),

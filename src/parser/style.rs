@@ -54,7 +54,9 @@ impl Default for StyleHolder {
 
 impl StyleHolder {
 	/// Checks if a given style key is registered
-	pub fn is_registered(&self, style_key: &str) -> bool { self.styles.contains_key(style_key) }
+	pub fn is_registered(&self, style_key: &str) -> bool {
+		self.styles.contains_key(style_key)
+	}
 
 	/// Gets the current active style for an element
 	/// If you need to process user input, use [`Self::is_registered`]
@@ -77,10 +79,14 @@ impl StyleHolder {
 macro_rules! impl_elementstyle {
 	($t:ty, $key:expr) => {
 		impl $t {
-			pub fn key() -> &'static str { $key }
+			pub fn key() -> &'static str {
+				$key
+			}
 		}
 		impl $crate::parser::style::ElementStyle for $t {
-			fn key(&self) -> &'static str { $key }
+			fn key(&self) -> &'static str {
+				$key
+			}
 
 			fn from_json(
 				&self,

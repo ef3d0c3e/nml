@@ -1,4 +1,3 @@
-use std::cell::RefMut;
 
 use mlua::IntoLua;
 use mlua::LightUserData;
@@ -131,7 +130,8 @@ impl Kernel {
 
 	/// Evaluates callback with context
 	pub fn with_context<'lua, F, R>(lua: &'lua Lua, f: F) -> R
-		where F: FnOnce(&mut KernelContext<'lua, 'lua>) -> R
+	where
+		F: FnOnce(&mut KernelContext<'lua, 'lua>) -> R,
 	{
 		let data: LightUserData = lua.named_registry_value("__REGISTRY_NML_CTX").unwrap();
 		let ctx = data.0 as *mut KernelContext;
@@ -151,11 +151,15 @@ impl Kernel {
 	where
 		F: FnOnce(&'lua Lua) -> R,
 	{
-		let ctx_ptr : *mut KernelContext = &mut ctx as *mut _;
+		let ctx_ptr: *mut KernelContext = &mut ctx as *mut _;
 		let data = LightUserData(ctx_ptr as _);
-		self.lua.set_named_registry_value("__REGISTRY_NML_CTX", data).unwrap();
+		self.lua
+			.set_named_registry_value("__REGISTRY_NML_CTX", data)
+			.unwrap();
 		let val = f(&self.lua);
-		self.lua.unset_named_registry_value("__REGISTRY_NML_CTX").unwrap();
+		self.lua
+			.unset_named_registry_value("__REGISTRY_NML_CTX")
+			.unwrap();
 		//self.context
 		//	.replace(unsafe { std::mem::transmute(Some(ctx)) });
 		//self.context.replace(None);
@@ -187,10 +191,7 @@ impl Kernel {
 		R: mlua::IntoLuaMulti<'lua>,
 		F: Fn(&'lua Lua, A) -> mlua::Result<R> + 'static,
 	{
-		let fun = self
-			.lua
-			.create_function(f)
-			.unwrap();
+		let fun = self.lua.create_function(f).unwrap();
 		table.set(name, fun).unwrap();
 	}
 }

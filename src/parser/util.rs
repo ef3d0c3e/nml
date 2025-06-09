@@ -1,6 +1,4 @@
-use std::cell::RefCell;
 use std::ops::Range;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -153,7 +151,7 @@ pub fn escape_source(
 	token: &'static str,
 ) -> Arc<dyn Source> {
 	let content = &source.content()[range.clone()];
- 
+
 	let mut processed = String::new();
 	let mut escaped = 0;
 	let mut token_it = token.chars().peekable();

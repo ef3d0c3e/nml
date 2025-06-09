@@ -1,3 +1,3 @@
+pub mod completion;
 pub mod elem;
 pub mod rule;
-pub mod completion;

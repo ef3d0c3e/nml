@@ -15,18 +15,17 @@ impl CompletionProvider for LatexCompletion {
 		["$"].as_slice()
 	}
 
-	fn unit_items(&self, _unit: &TranslationUnit, _items: &mut Vec<CompletionItem>) {
-	}
+	fn unit_items(&self, _unit: &TranslationUnit, _items: &mut Vec<CompletionItem>) {}
 
 	fn static_items(&self, context: &Option<CompletionContext>, items: &mut Vec<CompletionItem>) {
 		// $LaTeX$
 		items.push(CompletionItem {
 			label: "$LaTeX$".to_string(),
 			detail: Some("Mathmode LaTeX".into()),
-			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(MarkupContent {
-				kind: tower_lsp::lsp_types::MarkupKind::Markdown,
-				value:
-					"# Usage
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(
+				MarkupContent {
+					kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+					value: "# Usage
 
 `$LaTeX$` *render LaTeX content in mathmode, displays inline*
 `$[kind=block]LaTeX$` *render LaTeX content in mathmode, displays as a block*
@@ -49,11 +48,20 @@ impl CompletionProvider for LatexCompletion {
 
  * `$|LaTeX|$` *normal mode LaTeX*
 
-".into()
-			})),
+"
+					.into(),
+				},
+			)),
 			kind: Some(CompletionItemKind::SNIPPET),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
-			insert_text: Some(format!("{}${{1:LATEX}}$", if context_triggered(context, "$") { "" } else { "$" })),
+			insert_text: Some(format!(
+				"{}${{1:LATEX}}$",
+				if context_triggered(context, "$") {
+					""
+				} else {
+					"$"
+				}
+			)),
 			..CompletionItem::default()
 		});
 
@@ -61,10 +69,10 @@ impl CompletionProvider for LatexCompletion {
 		items.push(CompletionItem {
 			label: "$|LaTeX|$".to_string(),
 			detail: Some("Normal LaTeX".into()),
-			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(MarkupContent {
-				kind: tower_lsp::lsp_types::MarkupKind::Markdown,
-				value:
-					"# Usage
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(
+				MarkupContent {
+					kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+					value: "# Usage
 
 `$|LaTeX|$` *render LaTeX content, displays as a block*
 `$|[kind=inline]|LaTeX|$` *render LaTeX content, displays inline*
@@ -87,11 +95,20 @@ impl CompletionProvider for LatexCompletion {
 
  * `$LaTeX$` *mathmode LaTeX*
 
-".into()
-			})),
+"
+					.into(),
+				},
+			)),
 			kind: Some(CompletionItemKind::SNIPPET),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
-			insert_text: Some(format!("{}|${{1:LATEX}}|$", if context_triggered(context, "$") { "" } else { "$" })),
+			insert_text: Some(format!(
+				"{}|${{1:LATEX}}|$",
+				if context_triggered(context, "$") {
+					""
+				} else {
+					"$"
+				}
+			)),
 			..CompletionItem::default()
 		});
 	}

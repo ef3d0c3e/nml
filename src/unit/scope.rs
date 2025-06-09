@@ -1,17 +1,24 @@
-use std::cell::{RefMut};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
-use parking_lot::{MappedRwLockWriteGuard, RwLock, RwLockWriteGuard};
+use parking_lot::MappedRwLockWriteGuard;
+use parking_lot::RwLock;
+use parking_lot::RwLockWriteGuard;
 
 use crate::parser::reports::Report;
-use crate::parser::source::{Source, Token};
-use crate::parser::state::{CustomState, ParseMode, ParserState};
+use crate::parser::source::Source;
+use crate::parser::source::Token;
+use crate::parser::state::CustomState;
+use crate::parser::state::ParseMode;
+use crate::parser::state::ParserState;
 
-use super::element::{ContainerElement, Element};
+use super::element::ContainerElement;
+use super::element::Element;
 use super::translation::TranslationUnit;
-use super::variable::{Variable, VariableName, VariableVisibility};
+use super::variable::Variable;
+use super::variable::VariableName;
+use super::variable::VariableVisibility;
 
 /// The scope from a translation unit
 /// Each scope is tied to a unique [`Source`]
@@ -40,11 +47,14 @@ pub struct Scope {
 	paragraphing: bool,
 }
 
-impl core::fmt::Debug for Scope
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Scope{{\n\tcontent {:#?}\nrange {:#?}\nsource: {:#?}}}", self.content, self.range, self.source)
-    }
+impl core::fmt::Debug for Scope {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"Scope{{\n\tcontent {:#?}\nrange {:#?}\nsource: {:#?}}}",
+			self.content, self.range, self.source
+		)
+	}
 }
 
 impl Scope {
@@ -66,23 +76,33 @@ impl Scope {
 	}
 
 	/// The name of this scope (which corresponds to the name of the source)
-	pub fn name(&self) -> &String { self.source.name() }
+	pub fn name(&self) -> &String {
+		self.source.name()
+	}
 
 	/// Returns the source of this scope
-	pub fn source(&self) -> Arc<dyn Source> { self.source.clone() }
+	pub fn source(&self) -> Arc<dyn Source> {
+		self.source.clone()
+	}
 
 	/// Returns the parser's state
-	pub fn parser_state(&self) -> &ParserState { &self.parser_state }
+	pub fn parser_state(&self) -> &ParserState {
+		&self.parser_state
+	}
 
 	/// Returns a mutable parser state
-	pub fn parser_state_mut(&mut self) -> &mut ParserState { &mut self.parser_state }
+	pub fn parser_state_mut(&mut self) -> &mut ParserState {
+		&mut self.parser_state
+	}
 
 	/// Sets the parser state for this scope
 	pub fn set_parser_state(&mut self, parser_state: ParserState) {
-        self.parser_state = parser_state;
-    }
+		self.parser_state = parser_state;
+	}
 
-	pub fn parent(&self) -> &Option<Arc<RwLock<Scope>>> { &self.parent }
+	pub fn parent(&self) -> &Option<Arc<RwLock<Scope>>> {
+		&self.parent
+	}
 }
 
 pub trait ScopeAccessor {
@@ -126,9 +146,9 @@ pub trait ScopeAccessor {
 	fn has_state(&self, name: &str) -> bool;
 
 	fn with_state<T, F, R>(&self, name: &str, f: F) -> R
-		where
-			T: CustomState,
-			F: FnOnce(MappedRwLockWriteGuard<'_, T>) -> R;
+	where
+		T: CustomState,
+		F: FnOnce(MappedRwLockWriteGuard<'_, T>) -> R;
 
 	fn token(&self) -> Token;
 }
@@ -172,8 +192,7 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 		return None;
 	}
 
-	fn insert_variable(&self, var: Arc<dyn Variable>) -> Option<Arc<dyn Variable>>
-	{
+	fn insert_variable(&self, var: Arc<dyn Variable>) -> Option<Arc<dyn Variable>> {
 		let mut scope = Arc::as_ref(self).write();
 		scope.variables.insert(var.name().to_owned(), var)
 	}
@@ -196,15 +215,14 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 		return (*self.clone()).read().content.last().cloned();
 	}
 
-	fn content_iter(&self, recurse: bool) -> ScopeIterator { ScopeIterator::new(self.clone(), recurse) }
+	fn content_iter(&self, recurse: bool) -> ScopeIterator {
+		ScopeIterator::new(self.clone(), recurse)
+	}
 
-	fn add_import(&self, imported: Arc<RwLock<Scope>>)
-	{
+	fn add_import(&self, imported: Arc<RwLock<Scope>>) {
 		let borrow = imported.read();
-		borrow.variables.iter()
-			.for_each(|(_, var)| {
-			if *var.visility() == VariableVisibility::Exported
-			{
+		borrow.variables.iter().for_each(|(_, var)| {
+			if *var.visility() == VariableVisibility::Exported {
 				self.insert_variable(var.clone());
 			}
 		});
@@ -216,9 +234,9 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 	}
 
 	fn with_state<T, F, R>(&self, name: &str, f: F) -> R
-		where
-			T: CustomState,
-			F: FnOnce(MappedRwLockWriteGuard<'_, T>) -> R
+	where
+		T: CustomState,
+		F: FnOnce(MappedRwLockWriteGuard<'_, T>) -> R,
 	{
 		let map = self.read();
 		let state = map.parser_state.states.get(name).unwrap();
@@ -251,7 +269,7 @@ impl ScopeIterator {
 			scope,
 			position: vec![(0usize, 0usize); 1],
 			depth: vec![],
-			recurse
+			recurse,
 		}
 	}
 }
@@ -287,13 +305,10 @@ impl Iterator for ScopeIterator {
 			let elem = (*self.scope.clone()).read().content[self.position[0].1].clone();
 			self.position[0].1 += 1;
 
-			if self.recurse
-			{
+			if self.recurse {
 				if let Some(container) = elem.clone().as_container() {
-
 					self.position.push((0, 0));
-					self.depth
-						.push(container);
+					self.depth.push(container);
 				}
 			}
 

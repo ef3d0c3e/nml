@@ -1,7 +1,6 @@
 use core::panic;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::hash::Hash;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -285,7 +284,7 @@ impl<'u> Resolver<'u> {
 								UnitDependency {
 									depends_for: reference.refname.clone(),
 									range: linkable.original_location().range,
-								}
+								},
 							);
 							linkable.set_link(reference, link);
 						}

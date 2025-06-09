@@ -234,7 +234,9 @@ impl<'u> TranslationUnit<'u> {
 		self.parser.parse(&mut self);
 		// Terminates entry scope
 		{
-			let temp_scope = self.entry_scope.new_child(self.source.clone(), ParseMode::default(), false);
+			let temp_scope =
+				self.entry_scope
+					.new_child(self.source.clone(), ParseMode::default(), false);
 			let scope = std::mem::replace(&mut self.entry_scope, temp_scope);
 			let reports = scope
 				.on_end(&mut self)
@@ -310,8 +312,7 @@ impl<'u> TranslationUnit<'u> {
 	}
 
 	/// Get custom data
-	pub fn get_data(&self, name: &str) -> Arc<RwLock<dyn CustomData>>
-	{
+	pub fn get_data(&self, name: &str) -> Arc<RwLock<dyn CustomData>> {
 		let map = self.custom_data.read();
 		map.get(name).unwrap().clone()
 	}

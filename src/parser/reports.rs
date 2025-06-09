@@ -6,9 +6,7 @@ use ariadne::Color;
 use ariadne::IndexType;
 use ariadne::ReportBuilder;
 use dashmap::DashMap;
-use downcast_rs::Downcast;
 use tower_lsp::lsp_types::Diagnostic;
-use url::Origin;
 
 use crate::parser::source::LineCursor;
 

@@ -109,9 +109,7 @@ The inline lua element supports the following kinds:
 			)),
 			kind: Some(CompletionItemKind::FUNCTION),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
-			insert_text: Some(format!(
-				"{{:lua ${{1:CONTENT}}:}}",
-			)),
+			insert_text: Some(format!("{{:lua ${{1:CONTENT}}:}}",)),
 			..CompletionItem::default()
 		});
 	}
