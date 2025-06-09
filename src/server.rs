@@ -37,7 +37,9 @@ use tower_lsp::Server;
 use unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;
 
-pub struct Backend {
+pub struct Backend<'s> {
+	parser: Parser,
+
 	source_files: DashMap<String, Arc<dyn Source>>,
 	client: Client,
 	settings: ProjectSettings,
@@ -45,6 +47,8 @@ pub struct Backend {
 	cache: Arc<Cache>,
 
 	completors: DashMap<String, Vec<Box<dyn CompletionProvider + 'static + Send + Sync>>>,
+
+	//units: DashMap<String, Arc<TranslationUnit<'s>>>,
 
 	document_map: DashMap<String, String>,
 	definition_map: DashMap<String, Vec<(Location, Range)>>,
@@ -64,12 +68,13 @@ struct TextDocumentItem {
 	text: String,
 }
 
-impl Backend {
+impl<'s> Backend<'s> {
 	pub fn new(client: Client, settings: ProjectSettings, root_path: PathBuf) -> Self {
 		let cache = Arc::new(Cache::new(settings.db_path.as_str()).unwrap());
 		//cache.setup_tables();
 
 		Self {
+			parser: Parser::new(),
 			source_files: DashMap::default(),
 			client,
 			settings,
@@ -77,6 +82,8 @@ impl Backend {
 			cache,
 
 			completors: DashMap::default(),
+
+			//units: DashMap::default(),
 
 			document_map: DashMap::default(),
 			definition_map: DashMap::default(),
@@ -264,7 +271,7 @@ impl Backend {
 }
 
 #[tower_lsp::async_trait]
-impl LanguageServer for Backend {
+impl<'s> LanguageServer for Backend<'s> {
 	async fn initialize(
 		&self,
 		_params: InitializeParams,

@@ -1,6 +1,10 @@
 use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::OnceLock;
+
+use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
@@ -21,8 +25,8 @@ use crate::unit::unit::Reference;
 pub struct InternalLink {
 	pub(crate) location: Token,
 	pub(crate) refname: Refname,
-	pub(crate) display: Vec<Rc<RefCell<Scope>>>,
-	pub(crate) reference: OnceCell<(String, Reference)>,
+	pub(crate) display: Vec<Arc<RwLock<Scope>>>,
+	pub(crate) reference: OnceLock<(String, Reference)>,
 }
 
 impl Element for InternalLink {
@@ -40,7 +44,7 @@ impl Element for InternalLink {
 
 	fn compile(
 		&self,
-		_scope: Rc<RefCell<Scope>>,
+		_scope: Arc<RwLock<Scope>>,
 		compiler: &Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
@@ -60,19 +64,19 @@ impl Element for InternalLink {
 		Ok(())
 	}
 
-	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> {
+	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
 		None
 	}
-	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> {
+	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
 		Some(self)
 	}
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> {
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		Some(self)
 	}
 }
 
 impl ContainerElement for InternalLink {
-	fn contained(&self) -> &[Rc<RefCell<Scope>>] {
+	fn contained(&self) -> &[Arc<RwLock<Scope>>] {
 		&self.display
 	}
 }

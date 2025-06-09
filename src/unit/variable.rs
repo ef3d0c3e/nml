@@ -1,5 +1,6 @@
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
@@ -68,7 +69,7 @@ pub struct VariableExpansion
 {
 	location: Token,
 	variable_name: VariableName,
-	content: Vec<Rc<RefCell<Scope>>>,
+	content: Vec<Arc<RwLock<Scope>>>,
 }
 
 impl Element for VariableExpansion {
@@ -86,7 +87,7 @@ impl Element for VariableExpansion {
 
     fn compile(
 		    &self,
-		    _scope: Rc<RefCell<Scope>>,
+		    _scope: Arc<RwLock<Scope>>,
 		    compiler: &Compiler,
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<crate::parser::reports::Report>> {
@@ -97,13 +98,13 @@ impl Element for VariableExpansion {
 		Ok(())
     }
 
-	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
-	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { Some(self) }
+	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> { None }
+	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> { None }
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> { Some(self) }
 }
 
 impl ContainerElement for VariableExpansion {
-    fn contained(&self) -> &[Rc<RefCell<Scope>>] {
+    fn contained(&self) -> &[Arc<RwLock<Scope>>] {
         self.content.as_slice()
     }
 }
@@ -145,7 +146,7 @@ impl std::fmt::Display for VariableMutability {
 }
 
 /// Trait for document variables
-pub trait Variable : Downcast + core::fmt::Debug {
+pub trait Variable : Downcast + core::fmt::Debug + Send + Sync {
 	/// Gets the definition location of the variable
 	fn location(&self) -> &Token;
 
@@ -220,7 +221,7 @@ impl Variable for ContentVariable {
 			content: vec![content],
 		};
 		unit.get_scope()
-			.add_content(Rc::new(expansion));
+			.add_content(Arc::new(expansion));
     }
 
 	fn to_string(&self) -> String {
@@ -298,10 +299,10 @@ impl Variable for PropertyVariable {
 			)) as Arc<dyn Source>;
 		// Add content to scope
 		let content = unit.with_child(definition_source.clone(), ParseMode::default(), true, |unit, scope| {
-			scope.add_content(Rc::new(Text{
+			scope.add_content(Arc::new(Text{
 				location: definition_source.into(),
 				content: self.value.to_string(),
-			}) as Rc<dyn Element>);
+			}));
 			scope
 		});
 		let expansion = VariableExpansion {
@@ -310,7 +311,7 @@ impl Variable for PropertyVariable {
 			content: vec![content],
 		};
 		unit.get_scope()
-			.add_content(Rc::new(expansion));
+			.add_content(Arc::new(expansion));
     }
 
 	fn to_string(&self) -> String {

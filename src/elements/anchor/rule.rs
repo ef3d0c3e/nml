@@ -14,6 +14,8 @@ use regex::Captures;
 use regex::Regex;
 use std::cell::OnceCell;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::OnceLock;
 
 use crate::parser::reports::Report;
 use crate::parser::rule::RegexRule;
@@ -120,17 +122,16 @@ impl RegexRule for AnchorRule {
 			})
 		});
 
-		let reference = Rc::new(InternalReference::new(
+		let reference = Arc::new(InternalReference::new(
 			token.source().original_range(token.range.clone()),
 			anchor_refname.clone(),
 		));
-		let mut elem = Rc::new(Anchor {
+		unit.add_content(Arc::new(Anchor {
 			location: token.clone(),
 			refname: anchor_refname.clone(),
 			reference: reference.clone(),
-			link: OnceCell::default(),
-		});
-		unit.add_content(elem);
+			link: OnceLock::default(),
+		}));
 	}
 
 	fn completion(

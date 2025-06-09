@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use ariadne::Span;
 use tower_lsp::lsp_types::CompletionContext;
@@ -40,7 +41,7 @@ Full name: [{label}]()
 	pub(crate) fn export_internal_ref(
 		unit: &TranslationUnit,
 		lsp: &mut LangServerData,
-		elem: Rc<dyn ReferenceableElement>,
+		elem: Arc<dyn ReferenceableElement>,
 	) {
 		let Some(referenceable) = elem.as_referenceable() else {
 			return;

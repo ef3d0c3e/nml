@@ -1,25 +1,26 @@
 use std::any::Any;
 use std::cell::RefCell;
-use std::cell::RefMut;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use parking_lot::RwLock;
 
 use crate::unit::scope::Scope;
 use crate::unit::translation::TranslationUnit;
 
 use super::reports::Report;
 
-pub type CustomStates = HashMap<String, Box<RefCell<dyn CustomState>>>;
+pub type CustomStates = HashMap<String, Arc<RwLock<dyn CustomState>>>;
 
-pub trait CustomState: Downcast + core::fmt::Debug
+pub trait CustomState: Downcast + core::fmt::Debug + Send + Sync
 {
 	/// Name of the state
 	fn name(&self) -> &str;
 	/// Method called when the scope of this state ends
-	fn on_scope_end(&self, unit: &mut TranslationUnit, scope: Rc<RefCell<Scope>>) -> Vec<Report>;
+	fn on_scope_end(&mut self, unit: &mut TranslationUnit, scope: Arc<RwLock<Scope>>) -> Vec<Report>;
 }
 impl_downcast!(CustomState);
 
@@ -37,7 +38,7 @@ pub struct ParseMode {
 #[derive(Debug)]
 pub struct ParserState {
 	/// Stores the match data, with the next match position and the data to pass to the processing function
-	pub matches: Vec<(usize, Option<Box<dyn Any>>)>,
+	pub matches: Vec<(usize, Option<Box<dyn Any + Send + Sync>>)>,
 	/// Current mode for the parser
 	pub mode: ParseMode,
 	/// Custom states

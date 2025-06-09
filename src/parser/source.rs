@@ -1,12 +1,10 @@
 use core::fmt::Debug;
 use std::fs;
-use std::mem::offset_of;
 use std::ops::Range;
 use std::sync::Arc;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
-use toml::value::Offset;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Trait for source content

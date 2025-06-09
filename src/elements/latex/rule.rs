@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use ariadne::Fmt;
 use regex::Captures;
@@ -220,7 +221,7 @@ impl RegexRule for LatexRule {
 			);
 		}));
 
-		unit.add_content(Rc::new(Latex {
+		unit.add_content(Arc::new(Latex {
 			location: token,
 			mathmode: index == 1,
 			kind: tex_kind,

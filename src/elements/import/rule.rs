@@ -139,14 +139,14 @@ impl RegexRule for ImportRule {
 		};
 
 		let content = unit.with_child(Arc::new(source), ParseMode::default(), true, |unit, scope| {
-			unit.with_lsp(|lsp| lsp.add_definition(token.clone(), &Token::new(0..0, scope.borrow().source())));
+			unit.with_lsp(|lsp| lsp.add_definition(token.clone(), &Token::new(0..0, scope.read().source())));
 			unit.parser.parse(unit);
 			scope
 		});
 
 		unit.get_scope()
 			.add_import(content.clone());
-		unit.add_content(Rc::new(Import {
+		unit.add_content(Arc::new(Import {
 			location: token,
 			content: vec![content],
 		}));

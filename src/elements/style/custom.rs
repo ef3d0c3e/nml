@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use regex::Regex;
 
@@ -12,18 +12,18 @@ pub static STYLE_CUSTOM: &str = "nml.style.registered";
 /// Data for styles
 pub struct StyleData {
 	/// All registered styles
-	pub(crate) registered: Vec<Rc<Style>>,
+	pub(crate) registered: Vec<Arc<Style>>,
 }
 
 impl Default for StyleData {
 	fn default() -> Self {
 		Self {
 			registered: vec![
-				Rc::new(Style {
+				Arc::new(Style {
 					name: "bold".into(),
 					start_re: Regex::new(r"\*\*").unwrap(),
 					end_re: Regex::new(r"\*\*").unwrap(),
-					compile: Box::new(|enable, _, compiler, output| {
+					compile: Arc::new(|enable, _, compiler, output| {
 						output.add_content(match compiler.target() {
 							Target::HTML => enable.then_some("<b>").unwrap_or("</b>"),
 							_ => todo!(),
@@ -31,11 +31,11 @@ impl Default for StyleData {
 						Ok(())
 					}),
 				}),
-				Rc::new(Style {
+				Arc::new(Style {
 					name: "italic".into(),
 					start_re: Regex::new(r"\*").unwrap(),
 					end_re: Regex::new(r"\*").unwrap(),
-					compile: Box::new(|enable, _, compiler, output| {
+					compile: Arc::new(|enable, _, compiler, output| {
 						output.add_content(match compiler.target() {
 							Target::HTML => enable.then_some("<i>").unwrap_or("</i>"),
 							_ => todo!(),
@@ -43,11 +43,11 @@ impl Default for StyleData {
 						Ok(())
 					}),
 				}),
-				Rc::new(Style {
+				Arc::new(Style {
 					name: "underline".into(),
 					start_re: Regex::new(r"__").unwrap(),
 					end_re: Regex::new(r"__").unwrap(),
-					compile: Box::new(|enable, _, compiler, output| {
+					compile: Arc::new(|enable, _, compiler, output| {
 						output.add_content(match compiler.target() {
 							Target::HTML => enable.then_some("<u>").unwrap_or("</u>"),
 							_ => todo!(),
@@ -55,11 +55,11 @@ impl Default for StyleData {
 						Ok(())
 					}),
 				}),
-				Rc::new(Style {
+				Arc::new(Style {
 					name: "marked".into(),
 					start_re: Regex::new(r"`").unwrap(),
 					end_re: Regex::new(r"`").unwrap(),
-					compile: Box::new(|enable, _, compiler, output| {
+					compile: Arc::new(|enable, _, compiler, output| {
 						output.add_content(match compiler.target() {
 							Target::HTML => enable.then_some("<em>").unwrap_or("</em>"),
 							_ => todo!(),

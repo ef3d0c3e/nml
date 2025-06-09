@@ -1,4 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+
+use parking_lot::RwLock;
 
 use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, scope::{Scope, ScopeAccessor}}};
 
@@ -7,7 +9,7 @@ use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{rep
 pub struct Import
 {
 	pub(crate) location: Token,
-	pub(crate) content: Vec<Rc<RefCell<Scope>>>,
+	pub(crate) content: Vec<Arc<RwLock<Scope>>>,
 }
 
 impl Element for Import {
@@ -25,7 +27,7 @@ impl Element for Import {
 
     fn compile(
 		    &self,
-		    scope: Rc<RefCell<Scope>>,
+		    scope: Arc<RwLock<Scope>>,
 		    compiler: &Compiler,
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {
@@ -38,13 +40,13 @@ impl Element for Import {
 		Ok(())
     }
 
-	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
-	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { Some(self) }
+	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> { None }
+	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> { None }
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> { Some(self) }
 }
 
 impl ContainerElement for Import {
-    fn contained(&self) -> &[Rc<RefCell<Scope>>] {
+    fn contained(&self) -> &[Arc<RwLock<Scope>>] {
         self.content.as_slice()
     }
 }

@@ -1,5 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
+
+use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
@@ -13,7 +16,7 @@ use crate::unit::scope::{Scope, ScopeAccessor};
 pub struct Link {
 	pub(crate) location: Token,
 	/// Link display content
-	pub(crate) display: Vec<Rc<RefCell<Scope>>>,
+	pub(crate) display: Vec<Arc<RwLock<Scope>>>,
 	/// Url of link
 	pub(crate) url: url::Url,
 }
@@ -24,7 +27,7 @@ impl Element for Link {
 	fn element_name(&self) -> &'static str { "Link" }
 	fn compile<'e>(
 		&'e self,
-		_scope: Rc<RefCell<Scope>>,
+		_scope: Arc<RwLock<Scope>>,
 		compiler: &'e Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
@@ -47,13 +50,13 @@ impl Element for Link {
 		Ok(())
 	}
 
-	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
-	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { Some(self) }
+	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> { None }
+	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> { None }
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> { Some(self) }
 }
 
 impl ContainerElement for Link {
-    fn contained(&self) -> &[Rc<RefCell<Scope>>] {
+    fn contained(&self) -> &[Arc<RwLock<Scope>>] {
 		self.display.as_slice()
     }
 

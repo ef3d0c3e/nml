@@ -14,7 +14,7 @@ macro_rules! create_registry {
 	( $($construct:expr),+ $(,)? ) => {{
 		let mut vec = Vec::new();
 		$(
-			let boxed = Box::new($construct) as Box<dyn Rule>;
+			let boxed = Box::new($construct) as Box<dyn Rule + Send + Sync>;
 			vec.push(boxed);
 		)+
 		vec
@@ -23,8 +23,8 @@ macro_rules! create_registry {
 
 /// Gets the list of all rules exported with the [`auto_registry`] proc macro.
 /// Rules are sorted according to topological order using the [`Rule::previous`] method.
-#[auto_registry::generate_registry(registry = "rules", target = make_rules, return_type = Vec<Box<dyn Rule>>, maker = create_registry)]
-pub fn get_rule_registry() -> Vec<Box<dyn Rule>> {
+#[auto_registry::generate_registry(registry = "rules", target = make_rules, return_type = Vec<Box<dyn Rule + Send + Sync>>, maker = create_registry)]
+pub fn get_rule_registry() -> Vec<Box<dyn Rule + Send + Sync>> {
 	let mut vec = make_rules();
 	vec.sort_by_key(|rule| rule.target());
 	vec
@@ -68,7 +68,7 @@ pub trait Rule: Downcast {
 		mode: &ParseMode,
 		states: &mut CustomStates,
 		cursor: &Cursor,
-	) -> Option<(usize, Box<dyn Any>)>;
+	) -> Option<(usize, Box<dyn Any + Send + Sync>)>;
 
 	/// Method called when the rule is chosen by the parser.
 	///
@@ -85,7 +85,7 @@ pub trait Rule: Downcast {
 		&self,
 		unit: &mut TranslationUnit<'u>,
 		cursor: &Cursor,
-		match_data: Box<dyn Any>,
+		match_data: Box<dyn Any + Send + Sync>,
 	) -> Cursor;
 
 	/// Registers lua bindings for this rule on the given kernel
@@ -154,7 +154,7 @@ impl<T: RegexRule + 'static> Rule for T {
 		mode: &ParseMode,
 		states: &mut CustomStates,
 		cursor: &Cursor,
-	) -> Option<(usize, Box<dyn Any>)> {
+	) -> Option<(usize, Box<dyn Any + Send + Sync>)> {
 		let source = cursor.source();
 		let content = source.content();
 
@@ -176,14 +176,14 @@ impl<T: RegexRule + 'static> Rule for T {
 			}
 		});
 
-		found.map(|(pos, id)| (pos, Box::new(id) as Box<dyn Any>))
+		found.map(|(pos, id)| (pos, Box::new(id) as Box<dyn Any + Send + Sync>))
 	}
 
 	fn on_match<'u>(
 		&self,
 		unit: &mut TranslationUnit<'u>,
 		cursor: &Cursor,
-		match_data: Box<dyn Any>,
+		match_data: Box<dyn Any + Send + Sync>,
 	) -> Cursor {
 		let source = cursor.source();
 		let content = source.content();

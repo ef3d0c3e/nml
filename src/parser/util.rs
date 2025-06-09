@@ -3,6 +3,8 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
+
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationUnit;
@@ -14,7 +16,7 @@ use super::state::ParseMode;
 
 /// Processes text for escape characters and paragraphing
 /*
-pub fn process_text(scope: Rc<RefCell<Scope>>, content: &str) -> String {
+pub fn process_text(scope: Arc<RwLock<Scope>>, content: &str) -> String {
 	let mut escaped = false;
 	let mut newlines = 0usize; // Consecutive newlines
 							//println!("Processing: [{content}]");
@@ -250,7 +252,7 @@ pub fn escape_text<S: AsRef<str>>(
 pub fn parse_paragraph<'u>(
 	unit: &mut TranslationUnit<'u>,
 	source: Arc<dyn Source>,
-) -> Result<Rc<RefCell<Scope>>, String> {
+) -> Result<Arc<RwLock<Scope>>, String> {
 	unit.with_child(
 		source,
 		ParseMode {

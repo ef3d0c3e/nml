@@ -2,6 +2,7 @@ use std::any::Any;
 use std::ops::Range;
 use std::rc::Rc;
 use std::slice::Iter;
+use std::sync::Arc;
 
 
 use crate::elements::meta::eof::Eof;
@@ -17,7 +18,7 @@ use super::source::Cursor;
 use super::source::Token;
 
 pub struct Parser {
-	rules: Vec<Box<dyn Rule>>,
+	rules: Vec<Box<dyn Rule + Send + Sync>>,
 }
 
 impl Parser {
@@ -56,8 +57,8 @@ impl Parser {
 		&self,
 		unit: &mut TranslationUnit,
 		cursor: &Cursor,
-	) -> Option<(Cursor, &Box<dyn Rule>, Box<dyn Any>)> {
-		let mut scope = unit.get_scope().borrow_mut();
+	) -> Option<(Cursor, &Box<dyn Rule + Send + Sync>, Box<dyn Any + Send + Sync>)> {
+		let mut scope = unit.get_scope().write();
 		let state = scope.parser_state_mut();
 		// Initialize state if required
 		while state.matches.len() < self.rules.len() {
@@ -155,12 +156,12 @@ impl Parser {
 			return;
 		}
 
-		unit.add_content(Rc::new(Text::new(token, content.into())) as Rc<dyn Element>);
+		unit.add_content(Arc::new(Text::new(token, content.into())));
 	}
 
 	/// Parses the current scope in the translation unit
 	pub fn parse<'u>(&'u self, unit: &mut TranslationUnit<'u>) {
-		let mut cursor = Cursor::new(0, Rc::as_ref(unit.get_scope()).borrow().source().into());
+		let mut cursor = Cursor::new(0, Arc::as_ref(unit.get_scope()).read().source().into());
 
 		while let Some((next_cursor, rule, rule_data)) = self.next_match(unit, &cursor) {
 			// Unmatched content added as text
@@ -173,7 +174,7 @@ impl Parser {
 		let end_cursor = cursor.at(cursor.source().content().len());
 		self.add_text(unit, cursor..end_cursor.clone());
 
-		unit.get_scope().add_content(Rc::new(Eof {
+		unit.get_scope().add_content(Arc::new(Eof {
 			location: Token::new(end_cursor.pos()..end_cursor.pos(), end_cursor.source()),
 		}));
 
@@ -197,9 +198,9 @@ impl Parser {
 }
 
 pub trait ParserRuleAccessor {
-	fn rules_iter(&self) -> Iter<Box<dyn Rule>>;
+	fn rules_iter(&self) -> Iter<Box<dyn Rule + Send + Sync>>;
 }
 
 impl ParserRuleAccessor for Parser {
-	fn rules_iter(&self) -> Iter<Box<dyn Rule>> { self.rules.iter() }
+	fn rules_iter(&self) -> Iter<Box<dyn Rule + Send + Sync>> { self.rules.iter() }
 }

@@ -1,4 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+
+use parking_lot::RwLock;
 
 use crate::{compiler::{compiler::Compiler, output::CompilerOutput}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, scope::{self, Scope}}};
 
@@ -10,7 +12,7 @@ pub struct StyleElem {
 	/// Elem location
 	pub(crate) location: Token,
 	/// Linked style
-	pub(crate) style: Rc<Style>,
+	pub(crate) style: Arc<Style>,
 	/// Whether to enable or disable
 	pub(crate) enable: bool,
 }
@@ -30,22 +32,22 @@ impl Element for StyleElem {
 
     fn compile(
 		    &self,
-		    scope: Rc<RefCell<Scope>>,
+		    scope: Arc<RwLock<Scope>>,
 		    compiler: &Compiler,
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {
         (self.style.compile)(self.enable, scope, compiler, output)
     }
 
-    fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> {
+    fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
         None
     }
 
-    fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> {
+    fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
         None
     }
 
-    fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> {
+    fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
         None
     }
 }

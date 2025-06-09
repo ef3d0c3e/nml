@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use tower_lsp::lsp_types::CompletionContext;
 use tower_lsp::lsp_types::CompletionItem;
@@ -16,7 +16,7 @@ use crate::unit::variable::VariableName;
 pub struct VariableCompletion;
 
 impl VariableCompletion {
-	fn get_documentation(_name: &VariableName, var: &Rc<dyn Variable>) -> MarkupContent {
+	fn get_documentation(_name: &VariableName, var: &Arc<dyn Variable>) -> MarkupContent {
 		let range = if var.location().end() != 0 {
 			format!(" ({}..{})", var.location().start(), var.location().end())
 		} else {
@@ -66,7 +66,7 @@ impl CompletionProvider for VariableCompletion {
 		let mut set = HashSet::new();
 		let mut scope = unit.get_scope().clone();
 		loop {
-			let borrow = scope.borrow();
+			let borrow = scope.read();
 			for (name, var) in &borrow.variables {
 				set.insert(Item(CompletionItem {
 					label: name.to_string(),

@@ -1,8 +1,9 @@
-use std::cell::{RefCell, RefMut};
+use std::cell::{RefMut};
 use std::collections::HashMap;
 use std::ops::Range;
-use std::rc::Rc;
 use std::sync::Arc;
+
+use parking_lot::{MappedRwLockWriteGuard, RwLock, RwLockWriteGuard};
 
 use crate::parser::reports::Report;
 use crate::parser::source::{Source, Token};
@@ -19,10 +20,10 @@ pub struct Scope {
 	range: Range<usize>,
 
 	/// Parent scope
-	parent: Option<Rc<RefCell<Scope>>>,
+	parent: Option<Arc<RwLock<Scope>>>,
 
 	/// Content of this scope
-	content: Vec<Rc<dyn Element>>,
+	content: Vec<Arc<dyn Element>>,
 
 	/// State of the parser
 	parser_state: ParserState,
@@ -31,7 +32,7 @@ pub struct Scope {
 	source: Arc<dyn Source>,
 
 	/// Variables declared within the scope
-	pub variables: HashMap<VariableName, Rc<dyn Variable>>,
+	pub variables: HashMap<VariableName, Arc<dyn Variable>>,
 
 	/// Enables paragraphing
 	///
@@ -48,7 +49,7 @@ impl core::fmt::Debug for Scope
 
 impl Scope {
 	pub fn new(
-		parent: Option<Rc<RefCell<Scope>>>,
+		parent: Option<Arc<RwLock<Scope>>>,
 		source: Arc<dyn Source>,
 		parse_mode: ParseMode,
 		start: usize,
@@ -81,7 +82,7 @@ impl Scope {
         self.parser_state = parser_state;
     }
 
-	pub fn parent(&self) -> &Option<Rc<RefCell<Scope>>> { &self.parent }
+	pub fn parent(&self) -> &Option<Arc<RwLock<Scope>>> { &self.parent }
 }
 
 pub trait ScopeAccessor {
@@ -91,25 +92,25 @@ pub trait ScopeAccessor {
 		source: Arc<dyn Source>,
 		parse_mode: ParseMode,
 		visible: bool,
-	) -> Rc<RefCell<Scope>>;
+	) -> Arc<RwLock<Scope>>;
 
 	/// Method called when the scope ends
 	fn on_end(&self, unit: &mut TranslationUnit) -> Vec<Report>;
 
 	/// Returns a variable as well as it's declaring scope
-	fn get_variable(&self, name: &VariableName) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)>;
+	fn get_variable(&self, name: &VariableName) -> Option<(Arc<dyn Variable>, Arc<RwLock<Scope>>)>;
 
 	/// Inserts a variable
-	fn insert_variable(&self, var: Rc<dyn Variable>) -> Option<Rc<dyn Variable>>;
+	fn insert_variable(&self, var: Arc<dyn Variable>) -> Option<Arc<dyn Variable>>;
 
 	/// Should be called by the owning [`TranslationUnit`] to acknowledge an element being added
-	fn add_content(&self, elem: Rc<dyn Element>);
+	fn add_content(&self, elem: Arc<dyn Element>);
 
 	/// Get an element from an id
-	fn get_content(&self, id: usize) -> Option<Rc<dyn Element>>;
+	fn get_content(&self, id: usize) -> Option<Arc<dyn Element>>;
 
 	/// Gets the last element of this scope
-	fn content_last(&self) -> Option<Rc<dyn Element>>;
+	fn content_last(&self) -> Option<Arc<dyn Element>>;
 
 	/// Gets an iterator over scope elements
 	///
@@ -120,85 +121,86 @@ pub trait ScopeAccessor {
 	/// Add an imported scope to this scope
 	/// This will insert the variables defined within `imported`
 	/// into `self`
-	fn add_import(&self, imported: Rc<RefCell<Scope>>);
+	fn add_import(&self, imported: Arc<RwLock<Scope>>);
 
 	fn has_state(&self, name: &str) -> bool;
 
 	fn with_state<T, F, R>(&self, name: &str, f: F) -> R
 		where
 			T: CustomState,
-			F: FnOnce(RefMut<'_, T>) -> R;
+			F: FnOnce(MappedRwLockWriteGuard<'_, T>) -> R;
 
 	fn token(&self) -> Token;
 }
 
-impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
+impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 	fn new_child(
 		&self,
 		source: Arc<dyn Source>,
 		parse_mode: ParseMode,
 		paragraphing: bool,
-	) -> Rc<RefCell<Scope>> {
-		let range = (*self.clone()).borrow().range.clone();
+	) -> Arc<RwLock<Scope>> {
+		let range = (*self.clone()).read().range.clone();
 		let mut child = Scope::new(Some(self.clone()), source, parse_mode, range.end);
 		child.paragraphing = paragraphing;
 
-		Rc::new(RefCell::new(child))
+		Arc::new(RwLock::new(child))
 	}
 
 	fn on_end(&self, unit: &mut TranslationUnit) -> Vec<Report> {
 		let states = {
-			let mut scope = self.borrow_mut();
+			let mut scope = self.write();
 			std::mem::replace(&mut scope.parser_state.states, HashMap::default())
 		};
 		let mut reports = vec![];
 		states.iter().for_each(|(_, state)| {
-			reports.extend(state.borrow().on_scope_end(unit, self.clone()));
+			let mut lock = state.write();
+			reports.extend(lock.on_scope_end(unit, self.clone()));
 		});
 		reports
 	}
 
-	fn get_variable(&self, name: &VariableName) -> Option<(Rc<dyn Variable>, Rc<RefCell<Scope>>)> {
-		if let Some(variable) = (*self.clone()).borrow().variables.get(name) {
+	fn get_variable(&self, name: &VariableName) -> Option<(Arc<dyn Variable>, Arc<RwLock<Scope>>)> {
+		if let Some(variable) = (*self.clone()).read().variables.get(name) {
 			return Some((variable.clone(), self.clone()));
 		}
 
-		if let Some(parent) = &(*self.clone()).borrow().parent {
+		if let Some(parent) = &(*self.clone()).read().parent {
 			return parent.get_variable(name);
 		}
 
 		return None;
 	}
 
-	fn insert_variable(&self, var: Rc<dyn Variable>) -> Option<Rc<dyn Variable>>
+	fn insert_variable(&self, var: Arc<dyn Variable>) -> Option<Arc<dyn Variable>>
 	{
-		let mut scope = Rc::as_ref(self).borrow_mut();
+		let mut scope = Arc::as_ref(self).write();
 		scope.variables.insert(var.name().to_owned(), var)
 	}
 
-	fn add_content(&self, elem: Rc<dyn Element>) {
-		let mut scope = Rc::as_ref(self).borrow_mut();
+	fn add_content(&self, elem: Arc<dyn Element>) {
+		let mut scope = Arc::as_ref(self).write();
 		assert_eq!(*elem.location().source(), *scope.source);
 		scope.range.end = elem.location().end();
 		scope.content.push(elem);
 	}
 
-	fn get_content(&self, id: usize) -> Option<Rc<dyn Element>> {
-		if (*self.clone()).borrow().content.len() <= id {
+	fn get_content(&self, id: usize) -> Option<Arc<dyn Element>> {
+		if (*self.clone()).read().content.len() <= id {
 			return None;
 		}
-		return Some((*self.clone()).borrow().content[id].clone());
+		return Some((*self.clone()).read().content[id].clone());
 	}
 
-	fn content_last(&self) -> Option<Rc<dyn Element>> {
-		return (*self.clone()).borrow().content.last().cloned();
+	fn content_last(&self) -> Option<Arc<dyn Element>> {
+		return (*self.clone()).read().content.last().cloned();
 	}
 
 	fn content_iter(&self, recurse: bool) -> ScopeIterator { ScopeIterator::new(self.clone(), recurse) }
 
-	fn add_import(&self, imported: Rc<RefCell<Scope>>)
+	fn add_import(&self, imported: Arc<RwLock<Scope>>)
 	{
-		let borrow = imported.borrow();
+		let borrow = imported.read();
 		borrow.variables.iter()
 			.for_each(|(_, var)| {
 			if *var.visility() == VariableVisibility::Exported
@@ -209,19 +211,19 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	}
 
 	fn has_state(&self, name: &str) -> bool {
-		let borrow = self.borrow();
+		let borrow = self.read();
 		borrow.parser_state.states.contains_key(name)
 	}
 
 	fn with_state<T, F, R>(&self, name: &str, f: F) -> R
 		where
 			T: CustomState,
-			F: FnOnce(RefMut<'_, T>) -> R
+			F: FnOnce(MappedRwLockWriteGuard<'_, T>) -> R
 	{
-		let map = self.borrow();
+		let map = self.read();
 		let state = map.parser_state.states.get(name).unwrap();
-		let borrow = state.borrow_mut();
-		let mapped = RefMut::map(borrow, |data| {
+		let lock = state.write();
+		let mapped = RwLockWriteGuard::map(lock, |data| {
 			data.as_any_mut()
 				.downcast_mut::<T>()
 				.expect("Mismatch data types")
@@ -230,21 +232,21 @@ impl<'s> ScopeAccessor for Rc<RefCell<Scope>> {
 	}
 
 	fn token(&self) -> Token {
-		let scope = self.borrow();
+		let scope = self.read();
 		Token::new(scope.range.clone(), scope.source.clone())
 	}
 }
 
 /// DFS iterator for the syntax tree
 pub struct ScopeIterator {
-	scope: Rc<RefCell<Scope>>,
+	scope: Arc<RwLock<Scope>>,
 	position: Vec<(usize, usize)>,
-	depth: Vec<Rc<dyn ContainerElement>>,
+	depth: Vec<Arc<dyn ContainerElement>>,
 	recurse: bool,
 }
 
 impl ScopeIterator {
-	pub fn new(scope: Rc<RefCell<Scope>>, recurse: bool) -> Self {
+	pub fn new(scope: Arc<RwLock<Scope>>, recurse: bool) -> Self {
 		Self {
 			scope,
 			position: vec![(0usize, 0usize); 1],
@@ -255,7 +257,7 @@ impl ScopeIterator {
 }
 
 impl Iterator for ScopeIterator {
-	type Item = (Rc<RefCell<Scope>>, Rc<dyn Element>);
+	type Item = (Arc<RwLock<Scope>>, Arc<dyn Element>);
 
 	fn next(&mut self) -> Option<Self::Item> {
 		// Pop at the end of scope
@@ -263,10 +265,10 @@ impl Iterator for ScopeIterator {
 			(self.depth.last(), self.position.last_mut())
 		{
 			let scope = last_depth.contained()[*scope_id].clone();
-			let scope_len = (*scope.clone()).borrow().content.len();
+			let scope_len = (*scope.clone()).read().content.len();
 
 			if *last_idx < scope_len {
-				let elem = (*scope.clone()).borrow().content[*last_idx].clone();
+				let elem = (*scope.clone()).read().content[*last_idx].clone();
 				*last_idx += 1;
 				return Some((scope.clone(), elem));
 			}
@@ -280,9 +282,9 @@ impl Iterator for ScopeIterator {
 			}
 		}
 
-		let scope_len = (*self.scope.clone()).borrow().content.len();
+		let scope_len = (*self.scope.clone()).read().content.len();
 		if self.position[0].1 < scope_len {
-			let elem = (*self.scope.clone()).borrow().content[self.position[0].1].clone();
+			let elem = (*self.scope.clone()).read().content[self.position[0].1].clone();
 			self.position[0].1 += 1;
 
 			if self.recurse

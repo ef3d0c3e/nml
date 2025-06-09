@@ -18,6 +18,8 @@ use regex::Captures;
 use regex::Regex;
 use std::cell::OnceCell;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::OnceLock;
 
 use crate::parser::reports::Report;
 use crate::parser::rule::RegexRule;
@@ -201,10 +203,10 @@ impl RegexRule for InternalLinkRule {
 				ParseMode::default(),
 				true,
 				|_unit, scope| {
-					scope.add_content(Rc::new(Text {
+					scope.add_content(Arc::new(Text {
 						location: display_source.into(),
 						content: link_refname.to_string(),
-					}) as Rc<dyn Element>);
+					}));
 					scope
 				},
 			)
@@ -230,11 +232,11 @@ impl RegexRule for InternalLinkRule {
 			);
 		});
 
-		unit.add_content(Rc::new(InternalLink {
+		unit.add_content(Arc::new(InternalLink {
 			location: token.clone(),
 			refname: link_refname,
 			display: vec![display],
-			reference: OnceCell::new(),
+			reference: OnceLock::new(),
 		}));
 	}
 

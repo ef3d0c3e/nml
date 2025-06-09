@@ -1,5 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
+
+use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
@@ -16,7 +19,7 @@ use crate::unit::scope::ScopeAccessor;
 #[derive(Debug)]
 pub struct ScopeElement {
 	pub token: Token,
-	pub scope: [Rc<RefCell<Scope>>; 1],
+	pub scope: [Arc<RwLock<Scope>>; 1],
 }
 
 impl Element for ScopeElement
@@ -35,7 +38,7 @@ impl Element for ScopeElement
 
     fn compile(
 		    &self,
-		    _scope: Rc<RefCell<Scope>>,
+		    _scope: Arc<RwLock<Scope>>,
 		    compiler: &Compiler,
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {
@@ -46,21 +49,21 @@ impl Element for ScopeElement
 		Ok(())
     }
 
-    fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> {
+    fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
         None
     }
 
-    fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> {
+    fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
         None
     }
 
-    fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> {
+    fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
         Some(self)
     }
 }
 
 impl ContainerElement for ScopeElement {
-    fn contained(&self) -> &[Rc<RefCell<Scope>>] {
+    fn contained(&self) -> &[Arc<RwLock<Scope>>] {
         &self.scope
     }
 }

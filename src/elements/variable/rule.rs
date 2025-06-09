@@ -1,6 +1,4 @@
 use crate::lsp::completion::CompletionProvider;
-use crate::lsp::data::LangServerData;
-use crate::lsp::definition;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
@@ -9,7 +7,6 @@ use crate::parser::rule::RuleTarget;
 use crate::parser::source::Cursor;
 use crate::parser::source::Token;
 use crate::parser::state::CustomStates;
-use crate::parser::state::ParserState;
 use crate::parser::util::escape_source;
 use crate::parser::util::escape_text;
 use crate::unit::scope::ScopeAccessor;
@@ -27,7 +24,7 @@ use parser::state::ParseMode;
 use regex::Captures;
 use regex::Regex;
 use std::any::Any;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use super::completion::VariableCompletion;
 
@@ -79,19 +76,19 @@ impl Rule for VariableRule {
 	    RuleTarget::Command
 	}
 
-	fn next_match(&self, _unit: &TranslationUnit, mode: &ParseMode, _states: &mut CustomStates, cursor: &Cursor) -> Option<(usize, Box<dyn Any>)> {
+	fn next_match(&self, _unit: &TranslationUnit, mode: &ParseMode, _states: &mut CustomStates, cursor: &Cursor) -> Option<(usize, Box<dyn Any + Send + Sync>)> {
 		if mode.paragraph_only { return None }
 
 		self.decl_re
 			.find_at(cursor.source().content(), cursor.pos())
-			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
+			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any + Send + Sync>))
 	}
 
 	fn on_match<'u>(
 		&self,
 		unit: &mut TranslationUnit<'u>,
 		cursor: &Cursor,
-		_match_data: Box<dyn Any>,
+		_match_data: Box<dyn Any + Send + Sync>,
 	) -> Cursor {
 		let source = cursor.source();
 		let content = source.content();
@@ -235,7 +232,7 @@ impl Rule for VariableRule {
 					sems.add(value.range(), tokens.variable_val_int);
 				})
 			});
-			unit.get_scope().insert_variable(Rc::new(PropertyVariable {
+			unit.get_scope().insert_variable(Arc::new(PropertyVariable {
 				location: Token::new(
 					keyword.start() - 1..val_captures.get(0).unwrap().end() - 1,
 					cursor.source(),
@@ -284,13 +281,13 @@ impl Rule for VariableRule {
 				'\\',
 				delim,
 			);
-			unit.get_scope().insert_variable(Rc::new(ContentVariable {
+			unit.get_scope().insert_variable(Arc::new(ContentVariable {
 				location: Token::new(keyword.start() - 1..content_range.end, cursor.source()),
 				name,
 				visibility,
 				mutability: VariableMutability::Mutable,
 				content: content_source,
-			}) as Rc<dyn Variable>);
+			}) as Arc<dyn Variable>);
 		}
 		// Insert as string property
 		else {
@@ -308,14 +305,14 @@ impl Rule for VariableRule {
 				content[content_range.clone()].to_string(),
 				false,
 			);
-			unit.get_scope().insert_variable(Rc::new(PropertyVariable {
+			unit.get_scope().insert_variable(Arc::new(PropertyVariable {
 				location: Token::new(keyword.start() - 1..content_range.end, cursor.source()),
 				name,
 				visibility,
 				mutability: VariableMutability::Mutable,
 				value: PropertyValue::String(value),
 				value_token: Token::new(content_range, cursor.source()),
-			}) as Rc<dyn Variable>);
+			}) as Arc<dyn Variable>);
 		}
 		return cursor.at(end_pos + value_len + 2 * delim.len());
 	}

@@ -69,6 +69,9 @@ pub struct Kernel {
 	//context: Rc<RefCell<Option<KernelContext<'static, 'static>>>>,
 }
 
+unsafe impl Send for Kernel {}
+unsafe impl Sync for Kernel {}
+
 impl Kernel {
 	pub fn new(unit: &TranslationUnit) -> Self {
 		let kernel = Self {

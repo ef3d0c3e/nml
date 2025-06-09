@@ -1,5 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
+
+use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target::HTML;
@@ -24,7 +27,7 @@ impl Element for LineBreak {
 
 	fn compile<'e>(
 		&'e self,
-		scope: Rc<RefCell<Scope>>,
+		scope: Arc<RwLock<Scope>>,
 		compiler: &'e Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
@@ -41,7 +44,7 @@ impl Element for LineBreak {
 		Ok(())
 	}
 
-	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { None }
-	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { None }
+	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> { None }
+	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> { None }
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> { None }
 }

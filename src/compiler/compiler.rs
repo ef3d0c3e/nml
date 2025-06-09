@@ -3,6 +3,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 
+use parking_lot::RwLock;
+
 use crate::cache::cache::Cache;
 use crate::parser::reports::Report;
 use crate::unit::element::nested_kind;
@@ -22,6 +24,14 @@ pub enum Target {
 	HTML,
 	#[allow(unused)]
 	LATEX,
+}
+
+impl From<&ProjectOutput> for Target {
+    fn from(value: &ProjectOutput) -> Self {
+		match value {
+			ProjectOutput::Html(_) => Target::HTML,
+		}
+    }
 }
 
 pub struct Compiler {
@@ -72,7 +82,7 @@ impl Compiler {
 	pub fn compile_scope(
 		&self,
 		mut output: CompilerOutput,
-		scope: Rc<RefCell<Scope>>,
+		scope: Arc<RwLock<Scope>>,
 	) -> CompilerOutput {
 		let mut reports = vec![];
 		for (scope, elem) in scope.content_iter(false) {

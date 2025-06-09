@@ -328,7 +328,7 @@ impl Cache {
 
 	pub fn export_references<'a, I>(&self, reference_key: &String, refs: I) -> Result<(), String>
 	where
-		I: Iterator<Item = (&'a String, &'a Rc<dyn ReferenceableElement>)>,
+		I: Iterator<Item = (&'a String, &'a Arc<dyn ReferenceableElement>)>,
 	{
 		let con = tokio::runtime::Runtime::new()
 			.unwrap()

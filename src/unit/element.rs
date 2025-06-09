@@ -1,6 +1,5 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
@@ -9,6 +8,7 @@ use crate::parser::source::SourcePosition;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use parking_lot::RwLock;
 
 use super::references::InternalReference;
 use super::references::Refname;
@@ -45,7 +45,7 @@ impl FromStr for ElemKind {
 	}
 }
 
-pub trait Element: Downcast + core::fmt::Debug {
+pub trait Element: Downcast + core::fmt::Debug + Send + Sync {
 	/// Gets the element defined location i.e token without filename
 	fn location(&self) -> &Token;
 
@@ -65,26 +65,26 @@ pub trait Element: Downcast + core::fmt::Debug {
 	/// Compiles element
 	fn compile(
 		&self,
-		scope: Rc<RefCell<Scope>>,
+		scope: Arc<RwLock<Scope>>,
 		compiler: &Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>>;
 
 	/// Gets the element as a referenceable i.e an element that can be referenced
-	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>>;
+	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>>;
 
 	/// Gets the element as a linkable element, i.e needs to be resolved to an appropriate reference
-	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>>;
+	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>>;
 
 	/// Gets the element as a container containing other elements
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>>;
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>>;
 }
 impl_downcast!(Element);
 
 /// An element from which a reference can be extracted
 pub trait ReferenceableElement: Element {
 	/// Returns the internal reference
-	fn reference(&self) -> Rc<InternalReference>;
+	fn reference(&self) -> Arc<InternalReference>;
 
 	/// Key for refcounting
 	///
@@ -116,7 +116,7 @@ pub trait LinkableElement: Element {
 /// An element containing at least one scope
 pub trait ContainerElement: Element {
 	/// Gets the contained elements
-	fn contained(&self) -> &[Rc<RefCell<Scope>>];
+	fn contained(&self) -> &[Arc<RwLock<Scope>>];
 
 	/// Determines the element kind made up by the content of this element
 	/// This is only used when the kind of an element is [`ElemKind::Compound`]
@@ -144,9 +144,9 @@ pub trait ContainerElement: Element {
 	}
 }
 
-/// Gets the nested kind of an [`Rc<dyn Element>`] this will either call
+/// Gets the nested kind of an [`Arc<dyn Element>`] this will either call
 /// [`Element::kind`] or (if the element is a container) [`ContainerElement::nested_kind`].
-pub fn nested_kind(elem: Rc<dyn Element>) -> ElemKind {
+pub fn nested_kind(elem: Arc<dyn Element>) -> ElemKind {
 	let Some(container) = elem.clone().as_container() else {
 		return elem.kind();
 	};

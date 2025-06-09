@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use regex::Captures;
 use regex::Regex;
@@ -50,7 +51,7 @@ impl RegexRule for BreakRule {
 	) {
 		let length = captures.get(1).unwrap().as_str().chars().fold(0usize, |count, c| count + (c == '\n') as usize);
 
-		unit.add_content(Rc::new(LineBreak {
+		unit.add_content(Arc::new(LineBreak {
 			location: token.clone(),
 			length,
 		}))

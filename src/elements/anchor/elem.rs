@@ -1,5 +1,6 @@
-use std::{cell::{OnceCell, RefCell}, rc::{Rc, Weak}};
+use std::{cell::{OnceCell, RefCell}, rc::{Rc, Weak}, sync::{Arc, OnceLock}};
 
+use parking_lot::RwLock;
 use url::Url;
 
 use crate::{compiler::{compiler::{Compiler, Target}, output::{self, CompilerOutput}}, parser::{reports::Report, source::Token}, unit::{element::{ContainerElement, ElemKind, Element, LinkableElement, ReferenceableElement}, references::{InternalReference, Refname}, scope::Scope}};
@@ -9,8 +10,8 @@ use crate::{compiler::{compiler::{Compiler, Target}, output::{self, CompilerOutp
 pub struct Anchor {
 	pub(crate) location: Token,
 	pub(crate) refname: Refname,
-	pub(crate) reference: Rc<InternalReference>,
-	pub(crate) link: OnceCell<String>
+	pub(crate) reference: Arc<InternalReference>,
+	pub(crate) link: OnceLock<String>
 }
 
 impl Element for Anchor {
@@ -28,7 +29,7 @@ impl Element for Anchor {
 
     fn compile(
 		    &self,
-		    _scope: Rc<RefCell<Scope>>,
+		    _scope: Arc<RwLock<Scope>>,
 		    compiler: &Compiler,
 		    output: &mut CompilerOutput,
 	    ) -> Result<(), Vec<Report>> {
@@ -46,14 +47,14 @@ impl Element for Anchor {
 		Ok(())
 	}
 
-	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> { Some(self) }
-	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> { None }
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> { None }
+	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> { Some(self) }
+	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> { None }
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> { None }
 }
 
 impl ReferenceableElement for Anchor
 {
-    fn reference(&self) -> Rc<InternalReference> {
+    fn reference(&self) -> Arc<InternalReference> {
         self.reference.clone()
     }
 

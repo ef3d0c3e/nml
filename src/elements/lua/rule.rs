@@ -74,21 +74,21 @@ impl Rule for LuaRule {
 		mode: &ParseMode,
 		_states: &mut CustomStates,
 		cursor: &Cursor,
-	) -> Option<(usize, Box<dyn Any>)> {
+	) -> Option<(usize, Box<dyn Any + Send + Sync>)> {
 		if mode.paragraph_only {
 			return None;
 		}
 
 		self.start_re
 			.find_at(cursor.source().content(), cursor.pos())
-			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any>))
+			.map(|m| (m.start(), Box::new([false; 0]) as Box<dyn Any + Send + Sync>))
 	}
 
 	fn on_match<'u>(
 		&self,
 		unit: &mut TranslationUnit<'u>,
 		cursor: &Cursor,
-		_match_data: Box<dyn Any>,
+		_match_data: Box<dyn Any + Send + Sync>,
 	) -> Cursor {
 		let source = cursor.source();
 		let captures = self
@@ -206,7 +206,7 @@ impl Rule for LuaRule {
 	fn register_bindings<'lua>(&self, kernel: &'lua lua::kernel::Kernel, table: mlua::Table) {
 		kernel.create_function(table, "foo", |lua, ()| {
 			Kernel::with_context(lua, |ctx| {
-				ctx.unit.add_content(Rc::new(Text {
+				ctx.unit.add_content(Arc::new(Text {
 					location: ctx.location.clone(),
 					content: format!("Foo called!"),
 				}));
@@ -378,8 +378,8 @@ impl RegexRule for InlineLuaRule {
 						}
 						Ok(result) => {
 							if eval_kind == "'" && !result.is_empty() {
-								unit.add_content(Rc::new(Text {
-									location: token.clone(),
+								unit.add_content(Arc::new(Text {
+									location: lua_source.into(),
 									content: result,
 								}));
 							} else if eval_kind == "!" && !result.is_empty() {
@@ -388,7 +388,7 @@ impl RegexRule for InlineLuaRule {
 									":LUA:Inline lua result".into(),
 									result,
 								));
-								let mode = unit.get_scope().borrow().parser_state().mode.clone();
+								let mode = unit.get_scope().read().parser_state().mode.clone();
 								let scope = unit.with_child(
 									content as Arc<dyn Source>,
 									mode,
@@ -398,8 +398,8 @@ impl RegexRule for InlineLuaRule {
 										scope
 									},
 								);
-								unit.add_content(Rc::new(ScopeElement {
-									token: token.clone(),
+								unit.add_content(Arc::new(ScopeElement {
+									token: lua_source.into(),
 									scope: [scope],
 								}));
 							}
@@ -408,7 +408,7 @@ impl RegexRule for InlineLuaRule {
 					scope
 				},
 			);
-			unit.add_content(Rc::new(ScopeElement {
+			unit.add_content(Arc::new(ScopeElement {
 				token,
 				scope: [parsed],
 			}));

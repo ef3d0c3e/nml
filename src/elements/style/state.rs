@@ -2,9 +2,11 @@ use std::cell::RefCell;
 use std::fmt::Error;
 use std::fmt::Formatter;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use ariadne::Fmt;
 use ariadne::Span;
+use parking_lot::RwLock;
 use regex::Regex;
 
 use crate::compiler::compiler::Compiler;
@@ -25,8 +27,8 @@ pub struct Style {
 	/// Style disable regex
 	pub(crate) end_re: Regex,
 	/// Compile function
-	pub(crate) compile: Box<
-		dyn Fn(bool, Rc<RefCell<Scope>>, &Compiler, &mut CompilerOutput) -> Result<(), Vec<Report>>,
+	pub(crate) compile: Arc<
+		dyn Fn(bool, Arc<RwLock<Scope>>, &Compiler, &mut CompilerOutput) -> Result<(), Vec<Report>> + Send + Sync,
 	>,
 }
 
@@ -64,9 +66,9 @@ impl CustomState for StyleState {
 		STYLE_STATE
 	}
 
-	fn on_scope_end(&self, unit: &mut TranslationUnit, scope: Rc<RefCell<Scope>>) -> Vec<Report> {
+	fn on_scope_end(&mut self, unit: &mut TranslationUnit, scope: Arc<RwLock<Scope>>) -> Vec<Report> {
 		let mut reports = vec![];
-		let scope_token: Token = scope.borrow().source().clone().into();
+		let scope_token: Token = scope.read().source().clone().into();
 
 		self.enabled.iter().for_each(|(name, location)| {
 			reports.push(make_err!(

@@ -1,12 +1,12 @@
-use std::cell::OnceCell;
-use std::cell::RefCell;
-use std::cell::RefMut;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use parking_lot::MappedRwLockWriteGuard;
+use parking_lot::RwLock;
+use parking_lot::RwLockWriteGuard;
 
 use crate::cache::cache::Cache;
 use crate::lsp::data::LangServerData;
@@ -32,7 +32,7 @@ use super::variable::VariableVisibility;
 /// Custom data populated by rules, stored in [`TranslationUnit::custom_data`]
 ///
 /// This trait is used to store data on a per-unit basis.
-pub trait CustomData: Downcast {
+pub trait CustomData: Downcast + Send {
 	/// Name of this custom data
 	fn name(&self) -> &str;
 }
@@ -54,11 +54,11 @@ pub struct TranslationUnit<'u> {
 	/// Reporting colors defined for this translation unit
 	colors: ReportColors,
 	/// Entry scope of the translation unit
-	entry_scope: Rc<RefCell<Scope>>,
+	entry_scope: Arc<RwLock<Scope>>,
 	/// Current scope of the translation unit
-	current_scope: Rc<RefCell<Scope>>,
+	current_scope: Arc<RwLock<Scope>>,
 	/// Lsp data for this unit (shared with children scopes)
-	lsp: Option<RefCell<LangServerData>>,
+	lsp: Option<RwLock<LangServerData>>,
 
 	/// Available layouts
 	//layouts: LayoutHolder,
@@ -70,20 +70,20 @@ pub struct TranslationUnit<'u> {
 	//custom_styles: CustomStyleHolder,
 
 	/// Custom data stored by rules
-	custom_data: RefCell<HashMap<String, Rc<RefCell<dyn CustomData>>>>,
+	custom_data: RwLock<HashMap<String, Arc<RwLock<dyn CustomData>>>>,
 
 	/// Error reports
-	reports: Vec<(Rc<RefCell<Scope>>, Report)>,
+	reports: Vec<(Arc<RwLock<Scope>>, Report)>,
 
 	/// Path relative to the database
 	path: String,
 	/// Exported (internal) references
-	references: HashMap<String, Rc<dyn ReferenceableElement>>,
+	references: HashMap<String, Arc<dyn ReferenceableElement>>,
 	/// Output data extracted from parsing
-	output: OnceCell<UnitOutput>,
+	output: OnceLock<UnitOutput>,
 
 	/// Per unit project settings
-	settings: OnceCell<ProjectSettings>,
+	settings: OnceLock<ProjectSettings>,
 }
 
 ///
@@ -109,7 +109,7 @@ impl<'u> TranslationUnit<'u> {
 		with_lsp: bool,
 		with_colors: bool,
 	) -> Self {
-		let scope = Rc::new(RefCell::new(Scope::new(
+		let scope = Arc::new(RwLock::new(Scope::new(
 			None,
 			source.clone(),
 			ParseMode::default(),
@@ -123,9 +123,9 @@ impl<'u> TranslationUnit<'u> {
 				.unwrap_or(ReportColors::without_colors()),
 			entry_scope: scope.clone(),
 			current_scope: scope,
-			lsp: with_lsp.then(|| RefCell::new(LangServerData::default())),
+			lsp: with_lsp.then(|| RwLock::new(LangServerData::default())),
 
-			custom_data: RefCell::default(),
+			custom_data: RwLock::default(),
 			//layouts: LayoutHolder::default(),
 			//blocks: BlockHolder::default(),
 			//elem_styles: StyleHolder::default(),
@@ -133,9 +133,9 @@ impl<'u> TranslationUnit<'u> {
 			path,
 			reports: Vec::default(),
 			references: HashMap::default(),
-			output: OnceCell::default(),
+			output: OnceLock::default(),
 
-			settings: OnceCell::default(),
+			settings: OnceLock::default(),
 		}
 	}
 
@@ -148,12 +148,12 @@ impl<'u> TranslationUnit<'u> {
 	}
 
 	/// Gets the current scope
-	pub fn get_scope(&self) -> &Rc<RefCell<Scope>> {
+	pub fn get_scope(&self) -> &Arc<RwLock<Scope>> {
 		&self.current_scope
 	}
 
 	/// Gets the entry scope
-	pub fn get_entry_scope(&self) -> &Rc<RefCell<Scope>> {
+	pub fn get_entry_scope(&self) -> &Arc<RwLock<Scope>> {
 		&self.entry_scope
 	}
 
@@ -172,7 +172,7 @@ impl<'u> TranslationUnit<'u> {
 		f: F,
 	) -> R
 	where
-		F: FnOnce(&mut TranslationUnit<'u>, Rc<RefCell<Scope>>) -> R,
+		F: FnOnce(&mut TranslationUnit<'u>, Arc<RwLock<Scope>>) -> R,
 	{
 		let prev_scope = self.current_scope.clone();
 
@@ -192,9 +192,9 @@ impl<'u> TranslationUnit<'u> {
 	/// Runs procedure with the language server, if language server processing is enabled
 	pub fn with_lsp<F, R>(&self, f: F) -> Option<R>
 	where
-		F: FnOnce(RefMut<'_, LangServerData>) -> R,
+		F: FnOnce(RwLockWriteGuard<LangServerData>) -> R,
 	{
-		self.lsp.as_ref().map(|data| f(data.borrow_mut()))
+		self.lsp.as_ref().map(|data| f(data.write()))
 	}
 
 	/// Consumes the translation unit with it's current scope
@@ -203,7 +203,7 @@ impl<'u> TranslationUnit<'u> {
 		// Insert default variables
 		let token = Token::new(0..0, self.source.clone());
 		self.get_entry_scope()
-			.insert_variable(Rc::new(PropertyVariable {
+			.insert_variable(Arc::new(PropertyVariable {
 				location: token.clone(),
 				name: VariableName::try_from("nml.input_file").unwrap(),
 				visibility: VariableVisibility::Internal,
@@ -212,7 +212,7 @@ impl<'u> TranslationUnit<'u> {
 				value_token: token.clone(),
 			}));
 		self.get_entry_scope()
-			.insert_variable(Rc::new(PropertyVariable {
+			.insert_variable(Arc::new(PropertyVariable {
 				location: token.clone(),
 				name: VariableName::try_from("nml.output_file").unwrap(),
 				visibility: VariableVisibility::Internal,
@@ -221,7 +221,7 @@ impl<'u> TranslationUnit<'u> {
 				value_token: token.clone(),
 			}));
 		self.get_entry_scope()
-			.insert_variable(Rc::new(PropertyVariable {
+			.insert_variable(Arc::new(PropertyVariable {
 				location: token.clone(),
 				name: VariableName::try_from("nml.reference_key").unwrap(),
 				visibility: VariableVisibility::Internal,
@@ -300,19 +300,19 @@ impl<'u> TranslationUnit<'u> {
 
 	/// Checks if [`Self::custom_data`] contains data `key`
 	pub fn has_data(&self, name: &str) -> bool {
-		self.custom_data.borrow().contains_key(name)
+		self.custom_data.read().contains_key(name)
 	}
 
 	/// Inserts new custom data
-	pub fn new_data(&self, data: Rc<RefCell<dyn CustomData>>) {
-		let key = data.borrow().name().to_owned();
-		self.custom_data.borrow_mut().insert(key, data);
+	pub fn new_data(&self, data: Arc<RwLock<dyn CustomData>>) {
+		let key = data.read().name().to_owned();
+		self.custom_data.write().insert(key, data);
 	}
 
 	/// Get custom data
-	pub fn get_data(&self, name: &str) -> Rc<RefCell<dyn CustomData>>
+	pub fn get_data(&self, name: &str) -> Arc<RwLock<dyn CustomData>>
 	{
-		let map = self.custom_data.borrow();
+		let map = self.custom_data.read();
 		map.get(name).unwrap().clone()
 	}
 
@@ -320,12 +320,12 @@ impl<'u> TranslationUnit<'u> {
 	pub fn with_data<T, F, R>(&self, name: &str, f: F) -> R
 	where
 		T: CustomData,
-		F: FnOnce(RefMut<'_, T>) -> R,
+		F: FnOnce(MappedRwLockWriteGuard<'_, T>) -> R,
 	{
-		let map = self.custom_data.borrow();
+		let map = self.custom_data.read();
 		let data = map.get(name).unwrap().clone();
-		let borrowed = data.borrow_mut();
-		let mapped = RefMut::map(borrowed, |data| {
+		let lock = data.write();
+		let mapped = RwLockWriteGuard::map(lock, |data| {
 			data.as_any_mut()
 				.downcast_mut::<T>()
 				.expect("Mismatch data types")
@@ -336,16 +336,16 @@ impl<'u> TranslationUnit<'u> {
 
 pub trait TranslationAccessors {
 	/// Adds content to the translation unit's current scope
-	fn add_content(&mut self, elem: Rc<dyn Element>);
+	fn add_content(&mut self, elem: Arc<dyn Element>);
 
 	/// Adds a reference, note that this is not necessary to call
-	fn add_reference(&mut self, elem: Rc<dyn ReferenceableElement>);
+	fn add_reference(&mut self, elem: Arc<dyn ReferenceableElement>);
 
 	/// Finds an internal reference, with name `name`, declared in this document
-	fn get_reference<S: AsRef<str>>(&self, refname: S) -> Option<Rc<dyn ReferenceableElement>>;
+	fn get_reference<S: AsRef<str>>(&self, refname: S) -> Option<Arc<dyn ReferenceableElement>>;
 
 	/// Returns the hashmap containing all referenceables in this unit
-	fn references(&self) -> &HashMap<String, Rc<dyn ReferenceableElement>>;
+	fn references(&self) -> &HashMap<String, Arc<dyn ReferenceableElement>>;
 
 	/// Update unit project setting
 	fn update_settings(&self, settings: ProjectSettings);
@@ -355,23 +355,23 @@ pub trait TranslationAccessors {
 }
 
 impl TranslationAccessors for TranslationUnit<'_> {
-	fn add_content(&mut self, elem: Rc<dyn Element>) {
+	fn add_content(&mut self, elem: Arc<dyn Element>) {
 		if let Some(reference) = elem.clone().as_referenceable() {
 			self.add_reference(reference);
 		}
 		self.current_scope.add_content(elem);
 	}
 
-	fn add_reference(&mut self, elem: Rc<dyn ReferenceableElement>) {
+	fn add_reference(&mut self, elem: Arc<dyn ReferenceableElement>) {
 		self.references
 			.insert(elem.reference().name().to_string(), elem);
 	}
 
-	fn get_reference<S: AsRef<str>>(&self, name: S) -> Option<Rc<dyn ReferenceableElement>> {
+	fn get_reference<S: AsRef<str>>(&self, name: S) -> Option<Arc<dyn ReferenceableElement>> {
 		self.references.get(name.as_ref()).cloned()
 	}
 
-	fn references(&self) -> &HashMap<String, Rc<dyn ReferenceableElement>> {
+	fn references(&self) -> &HashMap<String, Arc<dyn ReferenceableElement>> {
 		&self.references
 	}
 

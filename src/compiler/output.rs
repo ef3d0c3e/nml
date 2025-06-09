@@ -10,6 +10,7 @@ use std::hash::Hash;
 use std::pin::Pin;
 use std::process::exit;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
@@ -19,31 +20,31 @@ use crate::parser::reports::*;
 
 use ariadne::Color;
 use ariadne::Fmt;
+use parking_lot::RwLock;
 use tokio::task::JoinHandle;
 
 use crate::make_err;
 use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
 use crate::parser::source::Token;
-use crate::report_err;
 use crate::unit::scope::Scope;
 
 use super::compiler::Target;
 
 #[derive(Debug)]
-struct RcKey<T>(Rc<RefCell<T>>);
+struct ArcKey<T>(Arc<RwLock<T>>);
 
-impl<T> PartialEq for RcKey<T> {
+impl<T> PartialEq for ArcKey<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0) // Compare Rc pointer addresses
+        Arc::ptr_eq(&self.0, &other.0) // Compare Rc pointer addresses
     }
 }
 
-impl<T> Eq for RcKey<T> {}
+impl<T> Eq for ArcKey<T> {}
 
-impl<T> Hash for RcKey<T> {
+impl<T> Hash for ArcKey<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_usize(Rc::as_ptr(&self.0) as usize); // Hash the pointer address
+        state.write_usize(Arc::as_ptr(&self.0) as usize); // Hash the pointer address
     }
 }
 
@@ -69,7 +70,7 @@ pub struct CompilerOutput {
 	/// Compilation target
 	target: Target,
 	/// Paragraph state of the output
-	paragraph: HashSet<RcKey<Scope>>,
+	paragraph: HashSet<ArcKey<Scope>>,
 
 	// Holds the content of the resulting document
 	pub(crate) content: String,
@@ -191,18 +192,18 @@ impl CompilerOutput {
 		&self.content
 	}
 
-	pub fn in_paragraph(&mut self, scope: &Rc<RefCell<Scope>>) -> bool {
-		self.paragraph.contains(&RcKey(scope.to_owned()))
+	pub fn in_paragraph(&mut self, scope: &Arc<RwLock<Scope>>) -> bool {
+		self.paragraph.contains(&ArcKey(scope.to_owned()))
 	}
 
-	pub fn set_paragraph(&mut self, scope: &Rc<RefCell<Scope>>, value: bool) {
+	pub fn set_paragraph(&mut self, scope: &Arc<RwLock<Scope>>, value: bool) {
 		if value
 		{
-			self.paragraph.insert(RcKey(scope.to_owned()));
+			self.paragraph.insert(ArcKey(scope.to_owned()));
 		}
 		else
 		{
-			self.paragraph.remove(&RcKey(scope.to_owned()));
+			self.paragraph.remove(&ArcKey(scope.to_owned()));
 		}
 	}
 }

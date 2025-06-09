@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::compiler::compiler::Target;
 use crate::compiler::output;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationUnit;

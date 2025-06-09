@@ -5,10 +5,12 @@ use std::process::Command;
 use std::process::Stdio;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::sync::Once;
 
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
+use parking_lot::RwLock;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
@@ -145,7 +147,7 @@ impl Element for Latex {
 
 	fn compile<'e>(
 		&'e self,
-		scope: Rc<RefCell<Scope>>,
+		scope: Arc<RwLock<Scope>>,
 		compiler: &'e Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
@@ -227,13 +229,13 @@ impl Element for Latex {
 		Ok(())
 	}
 
-	fn as_referenceable(self: Rc<Self>) -> Option<Rc<dyn ReferenceableElement>> {
+	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
 		None
 	}
-	fn as_linkable(self: Rc<Self>) -> Option<Rc<dyn LinkableElement>> {
+	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
 		None
 	}
-	fn as_container(self: Rc<Self>) -> Option<Rc<dyn ContainerElement>> {
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		None
 	}
 }

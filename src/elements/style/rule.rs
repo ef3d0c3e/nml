@@ -3,7 +3,10 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::usize;
+
+use parking_lot::RwLock;
 
 use crate::parser::rule::Rule;
 use crate::parser::rule::RuleTarget;
@@ -42,22 +45,22 @@ impl Rule for StyleRule {
 		_mode: &ParseMode,
 		states: &mut CustomStates,
 		cursor: &Cursor,
-	) -> Option<(usize, Box<dyn std::any::Any>)> {
+	) -> Option<(usize, Box<dyn std::any::Any + Send + Sync>)> {
 		let source = cursor.source();
 		let content = source.content();
 
 		if !unit.has_data(STYLE_CUSTOM) {
-			unit.new_data(Rc::new(RefCell::new(StyleData::default())));
+			unit.new_data(Arc::new(RwLock::new(StyleData::default())));
 		}
 
 		let enabled = {
 			if !states.contains_key(STYLE_STATE) {
 				states.insert(
 					STYLE_STATE.to_string(),
-					Box::new(RefCell::new(StyleState::default())),
+					Arc::new(RwLock::new(StyleState::default())),
 				);
 			}
-			let borrow = states.get(STYLE_STATE).unwrap().borrow();
+			let borrow = states.get(STYLE_STATE).unwrap().read();
 			borrow
 				.downcast_ref::<StyleState>()
 				.unwrap()
@@ -90,7 +93,7 @@ impl Rule for StyleRule {
 				return None;
 			};
 			let active = enabled.contains(&matched.name);
-			Some((closest, Box::new((matched, active)) as Box<dyn Any>))
+			Some((closest, Box::new((matched, active)) as Box<dyn Any + Send + Sync>))
 		})
 	}
 
@@ -98,13 +101,13 @@ impl Rule for StyleRule {
 		&self,
 		unit: &mut TranslationUnit<'u>,
 		cursor: &Cursor,
-		match_data: Box<dyn std::any::Any>,
+		match_data: Box<dyn std::any::Any + Send + Sync>,
 	) -> Cursor {
 		let source = cursor.source();
 		let content = source.content();
 
 		// Get matching rule
-		let (rule, active) = match_data.downcast_ref::<(Rc<Style>, bool)>().unwrap();
+		let (rule, active) = match_data.downcast_ref::<(Arc<Style>, bool)>().unwrap();
 		let captures = if *active {
 			&rule.end_re
 		} else {
@@ -136,7 +139,7 @@ impl Rule for StyleRule {
 		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
 			sems.add(token.range.clone(), tokens.style_marker);
 		}));
-		unit.add_content(Rc::new(StyleElem {
+		unit.add_content(Arc::new(StyleElem {
 			location: token,
 			style: rule.clone(),
 			enable: !*active,
