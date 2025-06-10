@@ -4,6 +4,7 @@ use std::sync::Arc;
 use rusqlite::params;
 use rusqlite::types::FromSql;
 use rusqlite::Connection;
+use rusqlite::OptionalExtension;
 use rusqlite::ToSql;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
@@ -252,6 +253,23 @@ impl Cache {
 		let con = tokio::runtime::Runtime::new()
 			.unwrap()
 			.block_on(self.get_connection());
+
+		// Find if unit reference key changed
+		if let Some(previous) = 
+			con.query_row(
+		"SELECT reference_key
+		FROM referenceable_units
+		WHERE input_file = (?1)",
+		[input], |row| {
+			Ok(row.get_unwrap::<_, String>(0))
+		}).optional().unwrap() {
+			con.execute(
+				"DELETE
+				FROM referenceable_units
+				WHERE reference_key = (?1);",
+				[previous],
+			).unwrap();
+		}
 
 		// Delete previous unit-related data
 		con.execute(
