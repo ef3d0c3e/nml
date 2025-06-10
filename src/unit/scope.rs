@@ -279,21 +279,22 @@ impl Iterator for ScopeIterator {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		// Pop at the end of scope
-		while let (Some(last_depth), Some((scope_id, last_idx))) =
+		while let (Some(last_depth), Some((cur_scope, cur_pos))) =
 			(self.depth.last(), self.position.last_mut())
 		{
-			let scope = last_depth.contained()[*scope_id].clone();
+			let scope = last_depth.contained()[*cur_scope].clone();
 			let scope_len = (*scope.clone()).read().content.len();
 
-			if *last_idx < scope_len {
-				let elem = (*scope.clone()).read().content[*last_idx].clone();
-				*last_idx += 1;
+			if *cur_pos < scope_len {
+				let elem = (*scope.clone()).read().content[*cur_pos].clone();
+				*cur_pos += 1;
 				return Some((scope.clone(), elem));
 			}
 
-			if *scope_id + 1 < last_depth.contained().len() {
-				*last_idx = 0;
-				*scope_id += 1;
+			// Check if there are more contained scopes to iterate
+			if *cur_scope + 1 < last_depth.contained().len() {
+				*cur_pos = 0;
+				*cur_scope += 1;
 			} else {
 				self.depth.pop();
 				self.position.pop();
@@ -301,9 +302,10 @@ impl Iterator for ScopeIterator {
 		}
 
 		let scope_len = (*self.scope.clone()).read().content.len();
-		if self.position[0].1 < scope_len {
-			let elem = (*self.scope.clone()).read().content[self.position[0].1].clone();
-			self.position[0].1 += 1;
+		let cur_pos = &mut self.position[0].1;
+		if *cur_pos < scope_len {
+			let elem = (*self.scope.clone()).read().content[*cur_pos].clone();
+			*cur_pos += 1;
 
 			if self.recurse {
 				if let Some(container) = elem.clone().as_container() {

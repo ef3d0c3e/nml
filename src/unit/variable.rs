@@ -5,6 +5,7 @@ use parking_lot::RwLock;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::elements::text::elem::Text;
+use crate::elements::variable::elem::VariableSubstitution;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
@@ -55,56 +56,6 @@ impl TryFrom<&str> for VariableName {
 			}
 		}
 		Ok(VariableName(value.into()))
-	}
-}
-
-/// Holds the generated ast from a variable invocation
-#[derive(Debug)]
-pub struct VariableExpansion {
-	location: Token,
-	variable_name: VariableName,
-	content: Vec<Arc<RwLock<Scope>>>,
-}
-
-impl Element for VariableExpansion {
-	fn location(&self) -> &Token {
-		&self.location
-	}
-
-	fn kind(&self) -> ElemKind {
-		ElemKind::Compound
-	}
-
-	fn element_name(&self) -> &'static str {
-		"Variable Expansion"
-	}
-
-	fn compile(
-		&self,
-		_scope: Arc<RwLock<Scope>>,
-		compiler: &Compiler,
-		output: &mut CompilerOutput,
-	) -> Result<(), Vec<crate::parser::reports::Report>> {
-		for (scope, elem) in self.content[0].content_iter(false) {
-			elem.compile(scope, compiler, output)?;
-		}
-		Ok(())
-	}
-
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		None
-	}
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
-		None
-	}
-	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
-		Some(self)
-	}
-}
-
-impl ContainerElement for VariableExpansion {
-	fn contained(&self) -> &[Arc<RwLock<Scope>>] {
-		self.content.as_slice()
 	}
 }
 
@@ -164,7 +115,7 @@ pub trait Variable: Downcast + core::fmt::Debug + Send + Sync {
 	fn value_token(&self) -> &Token;
 
 	/// Expands the variable when it is requested
-	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token);
+	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token) -> Arc<RwLock<Scope>>;
 
 	fn to_string(&self) -> String;
 }
@@ -205,7 +156,7 @@ impl Variable for ContentVariable {
 		self.content.location().map_or(&self.location, |loc| &loc)
 	}
 
-	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token) {
+	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token) -> Arc<RwLock<Scope>> {
 		// Parse content
 		let content = unit.with_child(
 			self.content.clone(),
@@ -216,12 +167,7 @@ impl Variable for ContentVariable {
 				scope
 			},
 		);
-		let expansion = VariableExpansion {
-			location,
-			variable_name: self.name.to_owned(),
-			content: vec![content],
-		};
-		unit.get_scope().add_content(Arc::new(expansion));
+		content
 	}
 
 	fn to_string(&self) -> String {
@@ -288,7 +234,7 @@ impl Variable for PropertyVariable {
 		&self.value_token
 	}
 
-	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token) {
+	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token) -> Arc<RwLock<Scope>> {
 		// Generate source for scope
 		let definition_source = Arc::new(VirtualSource::new(
 			self.location.clone(),
@@ -308,12 +254,7 @@ impl Variable for PropertyVariable {
 				scope
 			},
 		);
-		let expansion = VariableExpansion {
-			location,
-			variable_name: self.name.to_owned(),
-			content: vec![content],
-		};
-		unit.get_scope().add_content(Arc::new(expansion));
+		content
 	}
 
 	fn to_string(&self) -> String {

@@ -47,15 +47,11 @@ impl Element for StyleElem {
 		(self.style.compile)(self.enable, scope, compiler, output)
 	}
 
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		None
-	}
+	fn provide_hover(&self) -> Option<String> {
+	    Some(format!("Style Toggle
 
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
-		None
-	}
-
-	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
-		None
+# Properties
+ * **Name**: `{}`
+ * **Status**: *{}*", self.style.name, ["disable", "enable"][self.enable as usize]))
 	}
 }

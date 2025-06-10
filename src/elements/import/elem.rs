@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ariadne::Span;
 use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
@@ -47,12 +48,18 @@ impl Element for Import {
 		Ok(())
 	}
 
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		None
+	fn provide_hover(&self) -> Option<String> {
+		Some(format!(
+			"Import
+
+# Properties
+ * **Location**: [{}] ({}..{})",
+			self.location.source().name(),
+			self.location().range.start(),
+			self.location().range.end(),
+		))
 	}
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
-		None
-	}
+
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		Some(self)
 	}

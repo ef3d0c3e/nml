@@ -389,6 +389,7 @@ impl LanguageServer for Backend {
 			pos.line,
 			pos.character,
 		);
+		eprintln!("HOVER: {cursor:#?}");
 		let hovers_from_map = || -> Option<Hover> {
 			let Some(hovers) = self.hovers_map.get(uri.as_str()) else {
 				return None;
@@ -411,21 +412,30 @@ impl LanguageServer for Backend {
 				range: None,
 			})
 		};
-		if let Some(from_maps) = hovers_from_map() { return Ok(Some(from_maps)) }
+		if let Some(from_maps) = hovers_from_map() {
+			return Ok(Some(from_maps));
+		}
 
 		// Get hovers from document
-		let Some(unit) = self.units.get(uri.as_str()) else { return Ok(None) };
-		let scope = unit.get_entry_scope();
+		let Some(unit) = self.units.get(uri.as_str()) else {
+			return Ok(None);
+		};
 		let mut found = None;
-		for (_, elem) in scope.content_iter(true) {
+		for (_, elem) in unit.get_entry_scope().content_iter(true) {
+			if elem.location().source() != unit.get_entry_scope().token().source() {
+				continue;
+			}
 			let location = elem.original_location();
-			if location.start() <= cursor.pos && location.end() > cursor.pos
-			{
+			if location.start() <= cursor.pos && location.end() > cursor.pos {
 				found = Some(elem);
 			}
-			if location.start() > cursor.pos { break }
+			if location.start() > cursor.pos {
+				break;
+			}
 		}
-		let Some(hover) = found.map(|elem| elem.provide_hover()).flatten() else { return Ok(None) };
+		let Some(hover) = found.map(|elem| elem.provide_hover()).flatten() else {
+			return Ok(None);
+		};
 		Ok(Some(Hover {
 			contents: HoverContents::Markup(MarkupContent {
 				kind: MarkupKind::Markdown,

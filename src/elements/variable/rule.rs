@@ -1,3 +1,4 @@
+use crate::elements::variable::elem::VariableDefinition;
 use crate::lsp::completion::CompletionProvider;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
@@ -10,6 +11,7 @@ use crate::parser::state::CustomStates;
 use crate::parser::util::escape_source;
 use crate::parser::util::escape_text;
 use crate::unit::scope::ScopeAccessor;
+use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use crate::unit::variable::ContentVariable;
 use crate::unit::variable::PropertyValue;
@@ -27,6 +29,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use super::completion::VariableCompletion;
+use super::elem::VariableSubstitution;
 
 fn parse_delimited(content: &str, delim: &str) -> Option<usize> {
 	let mut escaped = 0usize;
@@ -318,14 +321,19 @@ impl Rule for VariableRule {
 				content[content_range.clone()].to_string(),
 				false,
 			);
-			unit.get_scope().insert_variable(Arc::new(PropertyVariable {
+			let variable = Arc::new(PropertyVariable {
 				location: Token::new(keyword.start() - 1..content_range.end, cursor.source()),
 				name,
 				visibility,
 				mutability: VariableMutability::Mutable,
 				value: PropertyValue::String(value),
 				value_token: Token::new(content_range, cursor.source()),
-			}) as Arc<dyn Variable>);
+			});
+			unit.get_scope().insert_variable(variable.clone());
+			unit.add_content(Arc::new(VariableDefinition {
+				location: variable.location().clone(),
+				variable,
+			}));
 		}
 		return cursor.at(end_pos + value_len + 2 * delim.len());
 	}
@@ -430,41 +438,15 @@ impl RegexRule for VariableSubstitutionRule {
 
 		unit.with_lsp(|lsp| {
 			lsp.add_definition(token.clone(), variable.0.location());
-
-			let range = if variable.0.location().end() != 0 {
-				format!(
-					" ({}..{})",
-					variable.0.location().start(),
-					variable.0.location().end()
-				)
-			} else {
-				"".into()
-			};
-			lsp.add_hover(
-				token.clone(),
-				format!(
-					"**Variable `{0}`**
-
-# Value
-
-`{1}`
-
-# Properties
- * **Type**: *{2}*
- * **Definition**: [{3}](){range}
- * **Visibility**: *{4}*
- * **Mutability**: *{5}*",
-					variable.0.name(),
-					variable.0.to_string(),
-					variable.0.variable_typename(),
-					variable.0.location().source().name(),
-					variable.0.visility(),
-					variable.0.mutability()
-				),
-			);
 		});
 
-		variable.0.expand(unit, token);
+		let content = variable.0.expand(unit, token.clone());
+		unit.add_content(Arc::new(VariableSubstitution {
+			location: token,
+			variable: variable.0.clone(),
+			content: vec![content],
+		}));
+
 	}
 
 	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> {

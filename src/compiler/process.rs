@@ -12,6 +12,7 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::resolver::Resolver;
 use crate::parser::source::SourceFile;
+use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;

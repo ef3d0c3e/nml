@@ -16,7 +16,7 @@ use crate::unit::variable::VariableName;
 pub struct VariableCompletion;
 
 impl VariableCompletion {
-	fn get_documentation(_name: &VariableName, var: &Arc<dyn Variable>) -> MarkupContent {
+	fn get_documentation(var: &Arc<dyn Variable>) -> MarkupContent {
 		let range = if var.location().end() != 0 {
 			format!(" ({}..{})", var.location().start(), var.location().end())
 		} else {
@@ -72,7 +72,7 @@ impl CompletionProvider for VariableCompletion {
 					label: name.to_string(),
 					detail: Some(format!("Variable {name}")),
 					documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(
-						Self::get_documentation(name, var),
+						Self::get_documentation(var),
 					)),
 					kind: Some(CompletionItemKind::VARIABLE),
 					..CompletionItem::default()

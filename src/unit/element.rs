@@ -74,13 +74,13 @@ pub trait Element: Downcast + core::fmt::Debug + Send + Sync {
 	fn provide_hover(&self) -> Option<String> { None }
 
 	/// Gets the element as a referenceable i.e an element that can be referenced
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>>;
+	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> { None }
 
 	/// Gets the element as a linkable element, i.e needs to be resolved to an appropriate reference
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>>;
+	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> { None }
 
 	/// Gets the element as a container containing other elements
-	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>>;
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> { None }
 }
 impl_downcast!(Element);
 
