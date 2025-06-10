@@ -33,6 +33,7 @@ use tower_lsp::Client;
 use tower_lsp::LanguageServer;
 use tower_lsp::LspService;
 use tower_lsp::Server;
+use unit::scope::ScopeAccessor;
 use unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;
 
@@ -382,30 +383,53 @@ impl LanguageServer for Backend {
 		let Some(source) = self.source_files.get(uri.as_str()).map(|v| v.clone()) else {
 			return Ok(None);
 		};
-		let Some(hovers) = self.hovers_map.get(uri.as_str()) else {
-			return Ok(None);
-		};
-
 		let cursor = LineCursor::from_position(
 			source,
 			parser::source::OffsetEncoding::Utf16,
 			pos.line,
 			pos.character,
 		);
-		let index = hovers.binary_search_by(|hover| {
-			if hover.range.start() > cursor.pos {
-				cmp::Ordering::Greater
-			} else if hover.range.end() <= cursor.pos {
-				cmp::Ordering::Less
-			} else {
-				cmp::Ordering::Equal
+		let hovers_from_map = || -> Option<Hover> {
+			let Some(hovers) = self.hovers_map.get(uri.as_str()) else {
+				return None;
+			};
+			let index = hovers.binary_search_by(|hover| {
+				if hover.range.start() > cursor.pos {
+					cmp::Ordering::Greater
+				} else if hover.range.end() <= cursor.pos {
+					cmp::Ordering::Less
+				} else {
+					cmp::Ordering::Equal
+				}
+			});
+			let Ok(index) = index else { return None };
+			Some(Hover {
+				contents: HoverContents::Markup(MarkupContent {
+					kind: MarkupKind::Markdown,
+					value: hovers[index].content.clone(),
+				}),
+				range: None,
+			})
+		};
+		if let Some(from_maps) = hovers_from_map() { return Ok(Some(from_maps)) }
+
+		// Get hovers from document
+		let Some(unit) = self.units.get(uri.as_str()) else { return Ok(None) };
+		let scope = unit.get_entry_scope();
+		let mut found = None;
+		for (_, elem) in scope.content_iter(true) {
+			let location = elem.original_location();
+			if location.start() <= cursor.pos && location.end() > cursor.pos
+			{
+				found = Some(elem);
 			}
-		});
-		let Ok(index) = index else { return Ok(None) };
+			if location.start() > cursor.pos { break }
+		}
+		let Some(hover) = found.map(|elem| elem.provide_hover()).flatten() else { return Ok(None) };
 		Ok(Some(Hover {
 			contents: HoverContents::Markup(MarkupContent {
 				kind: MarkupKind::Markdown,
-				value: hovers[index].content.clone(),
+				value: hover,
 			}),
 			range: None,
 		}))

@@ -1,3 +1,5 @@
+use std::fmt::write;
+use std::fmt::Display;
 use std::io::Read;
 use std::io::Write;
 use std::process::Command;
@@ -6,6 +8,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Once;
 
+use ariadne::Span;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use parking_lot::RwLock;
@@ -53,6 +56,15 @@ impl FromStr for TexKind {
 			"inline" => Ok(TexKind::Inline),
 			"block" => Ok(TexKind::Block),
 			_ => Err(format!("Unknown kind: {s}")),
+		}
+	}
+}
+
+impl Display for TexKind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			TexKind::Block => write!(f, "Block"),
+			TexKind::Inline => write!(f, "Inline"),
 		}
 	}
 }
@@ -225,6 +237,26 @@ impl Element for Latex {
 			_ => todo!(),
 		}
 		Ok(())
+	}
+
+	fn provide_hover(&self) -> Option<String> {
+		Some(format!(
+			"LaTeX
+
+# Properties
+ * **Location**: [{}] ({}..{})
+ * **Kind**: {}
+ * **Mathmode**: {}
+ * **Environment**: {}
+ * **Caption**: {}",
+			self.location.source().name(),
+			self.location().range.start(),
+			self.location().range.end(),
+			self.kind,
+			self.mathmode,
+			self.env,
+			self.caption.as_ref().unwrap_or(&"*<none>*".to_string())
+		))
 	}
 
 	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {

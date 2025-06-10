@@ -224,6 +224,7 @@ impl RegexRule for InternalLinkRule {
 			};
 
 			let source = Token::new(link.range(), token.source());
+			eprintln!("ADD REF: {source:#?} to {ref_source:#?} {:#?}", reference.range);
 			lsp.add_definition(
 				source.clone(),
 				&Token::new(reference.range.clone(), ref_source),

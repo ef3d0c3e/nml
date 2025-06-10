@@ -70,6 +70,9 @@ pub trait Element: Downcast + core::fmt::Debug + Send + Sync {
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>>;
 
+	/// Provides hover for the lsp
+	fn provide_hover(&self) -> Option<String> { None }
+
 	/// Gets the element as a referenceable i.e an element that can be referenced
 	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>>;
 

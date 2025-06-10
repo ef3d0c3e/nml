@@ -55,7 +55,7 @@ impl<'u> Resolver<'u> {
 				panic!("Duplicate units in database");
 			}
 			Result::<(), ()>::Ok(())
-		});
+		}).unwrap();
 
 		// Add provided units
 		for loaded in provided {
