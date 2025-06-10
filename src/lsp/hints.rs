@@ -1,33 +1,29 @@
 use std::cell::Ref;
-use std::cell::RefCell;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
 use tower_lsp::lsp_types::InlayHint;
 
 use crate::parser::source::LineCursor;
 use crate::parser::source::OffsetEncoding;
 use crate::parser::source::Source;
-use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
-use crate::parser::source::VirtualSource;
-
-use super::data::LangServerData;
 
 /// Per file hints
 #[derive(Debug)]
 pub struct HintsData {
 	/// The current cursor
-	cursor: RefCell<LineCursor>,
+	cursor: RwLock<LineCursor>,
 
 	/// The hints
-	pub hints: RefCell<Vec<InlayHint>>,
+	pub hints: RwLock<Vec<InlayHint>>,
 }
 
 impl HintsData {
 	pub fn new(source: Arc<dyn Source>) -> Self {
 		Self {
-			cursor: RefCell::new(LineCursor::new(source, OffsetEncoding::Utf16)),
-			hints: RefCell::new(vec![]),
+			cursor: RwLock::new(LineCursor::new(source, OffsetEncoding::Utf16)),
+			hints: RwLock::new(vec![]),
 		}
 	}
 }
@@ -43,6 +39,7 @@ pub struct Hints<'a> {
 }
 
 impl<'a> Hints<'a> {
+	/*
 	fn from_source_impl(
 		source: Arc<dyn Source>,
 		lsp: &'a Option<RefCell<LangServerData>>,
@@ -84,13 +81,14 @@ impl<'a> Hints<'a> {
 		}
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
+	*/
 
 	pub fn add(&self, position: usize, label: String) {
 		let position = self.original_source.original_position(position).1;
-		let mut cursor = self.hints.cursor.borrow_mut();
+		let mut cursor = self.hints.cursor.write();
 		cursor.move_to(position);
 
-		self.hints.hints.borrow_mut().push(InlayHint {
+		self.hints.hints.write().push(InlayHint {
 			position: tower_lsp::lsp_types::Position {
 				line: cursor.line as u32,
 				character: cursor.line_pos as u32,

@@ -9,7 +9,6 @@ mod util;
 
 use std::cmp;
 use std::env::current_dir;
-use std::fmt::format;
 use std::fs::read;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -37,8 +36,8 @@ use tower_lsp::Server;
 use unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;
 
-pub struct Backend<'s> {
-	parser: Parser,
+pub struct Backend {
+	parser: Arc<Parser>,
 
 	source_files: DashMap<String, Arc<dyn Source>>,
 	client: Client,
@@ -48,7 +47,8 @@ pub struct Backend<'s> {
 
 	completors: DashMap<String, Vec<Box<dyn CompletionProvider + 'static + Send + Sync>>>,
 
-	//units: DashMap<String, Arc<TranslationUnit<'s>>>,
+	units: DashMap<String, TranslationUnit>,
+
 	document_map: DashMap<String, String>,
 	definition_map: DashMap<String, Vec<(Location, Range)>>,
 	semantic_token_map: DashMap<String, Vec<SemanticToken>>,
@@ -67,13 +67,13 @@ struct TextDocumentItem {
 	text: String,
 }
 
-impl<'s> Backend<'s> {
+impl Backend {
 	pub fn new(client: Client, settings: ProjectSettings, root_path: PathBuf) -> Self {
 		let cache = Arc::new(Cache::new(settings.db_path.as_str()).unwrap());
 		//cache.setup_tables();
 
 		Self {
-			parser: Parser::new(),
+			parser: Arc::new(Parser::new()),
 			source_files: DashMap::default(),
 			client,
 			settings,
@@ -82,7 +82,7 @@ impl<'s> Backend<'s> {
 
 			completors: DashMap::default(),
 
-			//units: DashMap::default(),
+			units: DashMap::default(),
 			document_map: DashMap::default(),
 			definition_map: DashMap::default(),
 			semantic_token_map: DashMap::default(),
@@ -112,14 +112,13 @@ impl<'s> Backend<'s> {
 		self.source_files
 			.insert(params.uri.to_string(), source.clone());
 
-		let parser = Parser::new();
 		let path = pathdiff::diff_paths(
 			params.uri.to_string().replace("file:///", "/"),
 			&self.root_path,
 		)
 		.map(|path| path.to_str().unwrap().to_string())
 		.unwrap();
-		let unit = TranslationUnit::new(path, &parser, source, true, false);
+		let unit = TranslationUnit::new(path, self.parser.clone(), source.clone(), true, false);
 
 		// Set references
 		unit.with_lsp(move |mut lsp| {
@@ -146,7 +145,7 @@ impl<'s> Backend<'s> {
 		}
 
 		// Completion
-		let completors = parser.get_completors();
+		let completors = self.parser.get_completors();
 		let mut items = vec![];
 		for comp in &completors {
 			comp.unit_items(&unit, &mut items);
@@ -164,7 +163,7 @@ impl<'s> Backend<'s> {
 					.map(|source| source.path().to_owned())
 				{
 					self.semantic_token_map
-						.insert(path, sem.tokens.replace(vec![]));
+						.insert(path, std::mem::take(&mut *sem.tokens.write()));
 				}
 			}
 
@@ -175,7 +174,8 @@ impl<'s> Backend<'s> {
 					.downcast_ref::<SourceFile>()
 					.map(|source| source.path().to_owned())
 				{
-					self.hints_map.insert(path, hints.hints.replace(vec![]));
+					self.hints_map
+						.insert(path, std::mem::take(&mut *hints.hints.write()));
 				}
 			}
 
@@ -187,7 +187,7 @@ impl<'s> Backend<'s> {
 					.map(|source| source.path().to_owned())
 				{
 					self.definition_map
-						.insert(path, definitions.definitions.replace(vec![]));
+						.insert(path, std::mem::take(&mut *definitions.definitions.write()));
 				}
 			}
 
@@ -199,7 +199,7 @@ impl<'s> Backend<'s> {
 					.map(|source| source.path().to_owned())
 				{
 					self.conceals_map
-						.insert(path, conceals.conceals.replace(vec![]));
+						.insert(path, std::mem::take(&mut *conceals.conceals.write()));
 				}
 			}
 
@@ -210,7 +210,8 @@ impl<'s> Backend<'s> {
 					.downcast_ref::<SourceFile>()
 					.map(|source| source.path().to_owned())
 				{
-					self.styles_map.insert(path, styles.styles.replace(vec![]));
+					self.styles_map
+						.insert(path, std::mem::take(&mut *styles.styles.write()));
 				}
 			}
 
@@ -222,7 +223,7 @@ impl<'s> Backend<'s> {
 					.map(|source| source.path().to_owned())
 				{
 					self.coderanges_map
-						.insert(path, coderanges.coderanges.replace(vec![]));
+						.insert(path, std::mem::take(&mut *coderanges.coderanges.write()));
 				}
 			}
 
@@ -233,10 +234,13 @@ impl<'s> Backend<'s> {
 					.downcast_ref::<SourceFile>()
 					.map(|source| source.path().to_owned())
 				{
-					self.hovers_map.insert(path, hovers.hovers.replace(vec![]));
+					self.hovers_map
+						.insert(path, std::mem::take(&mut *hovers.hovers.write()));
 				}
 			}
 		});
+
+		self.units.insert(source.clone().path().to_owned(), unit);
 	}
 
 	async fn handle_conceal_request(
@@ -274,7 +278,7 @@ impl<'s> Backend<'s> {
 }
 
 #[tower_lsp::async_trait]
-impl<'s> LanguageServer for Backend<'s> {
+impl LanguageServer for Backend {
 	async fn initialize(
 		&self,
 		_params: InitializeParams,

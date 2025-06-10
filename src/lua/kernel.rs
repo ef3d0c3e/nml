@@ -1,4 +1,3 @@
-
 use mlua::IntoLua;
 use mlua::LightUserData;
 use mlua::Lua;
@@ -44,15 +43,15 @@ pub struct KernelRedirect {
 }
 
 /// Lua execution context
-pub struct KernelContext<'ctx, 'u> {
+pub struct KernelContext<'ctx> {
 	pub location: Token,
-	pub unit: &'ctx mut TranslationUnit<'u>,
+	pub unit: &'ctx mut TranslationUnit,
 	pub redirects: Vec<KernelRedirect>,
 	pub reports: Vec<Report>,
 }
 
-impl<'ctx, 'u> KernelContext<'ctx, 'u> {
-	pub fn new(location: Token, unit: &'ctx mut TranslationUnit<'u>) -> Self {
+impl<'ctx> KernelContext<'ctx> {
+	pub fn new(location: Token, unit: &'ctx mut TranslationUnit) -> Self {
 		Self {
 			location,
 			unit,
@@ -131,7 +130,7 @@ impl Kernel {
 	/// Evaluates callback with context
 	pub fn with_context<'lua, F, R>(lua: &'lua Lua, f: F) -> R
 	where
-		F: FnOnce(&mut KernelContext<'lua, 'lua>) -> R,
+		F: FnOnce(&mut KernelContext<'lua>) -> R,
 	{
 		let data: LightUserData = lua.named_registry_value("__REGISTRY_NML_CTX").unwrap();
 		let ctx = data.0 as *mut KernelContext;
@@ -143,11 +142,7 @@ impl Kernel {
 	///
 	/// This is the only way lua code should be ran, because exported
 	/// functions may require the context in order to operate
-	pub fn run_with_context<'lua, 'ctx, 'u, F, R>(
-		&'lua self,
-		mut ctx: KernelContext<'ctx, 'u>,
-		f: F,
-	) -> R
+	pub fn run_with_context<'lua, 'ctx, F, R>(&'lua self, mut ctx: KernelContext<'ctx>, f: F) -> R
 	where
 		F: FnOnce(&'lua Lua) -> R,
 	{

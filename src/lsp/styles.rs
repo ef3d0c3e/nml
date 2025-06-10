@@ -1,8 +1,8 @@
 use std::cell::Ref;
-use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
 use tower_lsp::lsp_types::Position;
@@ -10,11 +10,7 @@ use tower_lsp::lsp_types::Position;
 use crate::parser::source::LineCursor;
 use crate::parser::source::OffsetEncoding;
 use crate::parser::source::Source;
-use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
-use crate::parser::source::VirtualSource;
-
-use super::data::LangServerData;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,7 +36,7 @@ pub enum Style {
 #[derive(Debug, Default)]
 pub struct StylesData {
 	/// The styles
-	pub styles: RefCell<Vec<StyleInfo>>,
+	pub styles: RwLock<Vec<StyleInfo>>,
 }
 
 /// Temporary data returned by [`Self::from_source_impl`]
@@ -54,6 +50,7 @@ pub struct Styles<'a> {
 }
 
 impl<'a> Styles<'a> {
+	/*
 	fn from_source_impl(
 		source: Arc<dyn Source>,
 		lsp: &'a Option<RefCell<LangServerData>>,
@@ -95,6 +92,7 @@ impl<'a> Styles<'a> {
 		}
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
+	*/
 
 	pub fn add(&self, range: Range<usize>, style: Style) {
 		let range = self.original_source.original_range(range).range;
@@ -108,7 +106,7 @@ impl<'a> Styles<'a> {
 		let end_line = cursor.line;
 		let end_char = cursor.line_pos;
 
-		self.styles.styles.borrow_mut().push(StyleInfo {
+		self.styles.styles.write().push(StyleInfo {
 			range: tower_lsp::lsp_types::Range {
 				start: Position {
 					line: start_line as u32,

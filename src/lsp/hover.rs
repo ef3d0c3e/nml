@@ -1,6 +1,6 @@
-use std::cell::RefCell;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
 
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
@@ -18,7 +18,7 @@ pub struct HoverRange {
 /// Per unit data
 #[derive(Default)]
 pub struct HoverData {
-	pub hovers: RefCell<Vec<HoverRange>>,
+	pub hovers: RwLock<Vec<HoverRange>>,
 }
 
 pub struct Hover<'lsp> {
@@ -63,6 +63,6 @@ impl<'lsp> Hover<'lsp> {
 	}
 
 	pub fn add(&'lsp self, range: HoverRange) {
-		self.hovers.hovers.borrow_mut().push(range);
+		self.hovers.hovers.write().push(range);
 	}
 }

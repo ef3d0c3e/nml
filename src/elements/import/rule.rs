@@ -60,7 +60,7 @@ impl RegexRule for ImportRule {
 	fn on_regex_match<'u>(
 		&self,
 		_index: usize,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		token: Token,
 		captures: Captures,
 	) {
@@ -177,7 +177,7 @@ impl RegexRule for ImportRule {
 				unit.with_lsp(|lsp| {
 					lsp.add_definition(token.clone(), &Token::new(0..0, scope.read().source()))
 				});
-				unit.parser.parse(unit);
+				unit.parser.clone().parse(unit);
 				scope
 			},
 		);

@@ -80,7 +80,7 @@ pub trait RuleState: Downcast {
 	fn scope(&self) -> StateScope;
 
 	/// Callback called when state goes out of scope
-	fn on_remove<'u>(&self, unit: &mut TranslationUnit<'u>);
+	fn on_remove<'u>(&self, unit: &mut TranslationUnit);
 }
 impl_downcast!(RuleState);
 
@@ -116,7 +116,7 @@ impl RuleStateHolder {
 	/// Method called when the current [`StateScope`] ends.
 	///
 	/// Calling this methods will call into handlers for states going out of scopes
-	pub fn on_scope_end<'u>(&mut self, unit: &mut TranslationUnit<'u>, scope: StateScope) {
+	pub fn on_scope_end<'u>(&mut self, unit: &mut TranslationUnit, scope: StateScope) {
 		self.states.retain(|_name, rule_state| {
 			if rule_state.borrow().scope() >= scope {
 				rule_state.borrow_mut().on_remove(unit);

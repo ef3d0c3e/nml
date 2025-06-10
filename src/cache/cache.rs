@@ -210,7 +210,7 @@ impl Cache {
 	/// Export units
 	pub fn export_units<'a, I>(&self, it: I, time_now: u64)
 	where
-		I: Iterator<Item = &'a TranslationUnit<'a>>,
+		I: Iterator<Item = &'a TranslationUnit>,
 	{
 		let con = tokio::runtime::Runtime::new()
 			.unwrap()

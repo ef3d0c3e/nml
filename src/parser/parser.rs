@@ -141,7 +141,7 @@ impl Parser {
 	}
 
 	/// Adds content from `range` as text to `unit`
-	fn add_text<'u>(&'u self, unit: &mut TranslationUnit<'u>, range: Range<Cursor>) {
+	fn add_text<'u>(&'u self, unit: &mut TranslationUnit, range: Range<Cursor>) {
 		let token: Token = (&range).into();
 		let mut content = token.content().chars().fold(String::default(), {
 			let mut escaped = false;
@@ -169,7 +169,7 @@ impl Parser {
 	}
 
 	/// Parses the current scope in the translation unit
-	pub fn parse<'u>(&'u self, unit: &mut TranslationUnit<'u>) {
+	pub fn parse(&self, unit: &mut TranslationUnit) {
 		let mut cursor = Cursor::new(0, Arc::as_ref(unit.get_scope()).read().source().into());
 
 		while let Some((next_cursor, rule, rule_data)) = self.next_match(unit, &cursor) {

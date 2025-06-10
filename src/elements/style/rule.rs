@@ -99,7 +99,7 @@ impl Rule for StyleRule {
 
 	fn on_match<'u>(
 		&self,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		cursor: &Cursor,
 		match_data: Box<dyn std::any::Any + Send + Sync>,
 	) -> Cursor {

@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -48,7 +49,7 @@ pub enum ConcealTarget {
 #[derive(Debug, Default)]
 pub struct ConcealData {
 	/// The conceals
-	pub conceals: RefCell<Vec<ConcealInfo>>,
+	pub conceals: RwLock<Vec<ConcealInfo>>,
 }
 
 /// Temporary data returned by [`Self::from_source_impl`]
@@ -116,7 +117,7 @@ impl<'a> Conceals<'a> {
 		assert_eq!(line, cursor.line);
 		let end_char = cursor.line_pos;
 
-		self.conceals.conceals.borrow_mut().push(ConcealInfo {
+		self.conceals.conceals.write().push(ConcealInfo {
 			range: tower_lsp::lsp_types::Range {
 				start: Position {
 					line: line as u32,

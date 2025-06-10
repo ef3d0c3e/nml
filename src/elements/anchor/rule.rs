@@ -60,7 +60,7 @@ impl RegexRule for AnchorRule {
 	fn on_regex_match<'u>(
 		&self,
 		_index: usize,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		token: Token,
 		captures: Captures,
 	) {

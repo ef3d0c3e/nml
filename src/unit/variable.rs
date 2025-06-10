@@ -164,7 +164,7 @@ pub trait Variable: Downcast + core::fmt::Debug + Send + Sync {
 	fn value_token(&self) -> &Token;
 
 	/// Expands the variable when it is requested
-	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token);
+	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token);
 
 	fn to_string(&self) -> String;
 }
@@ -205,14 +205,14 @@ impl Variable for ContentVariable {
 		self.content.location().map_or(&self.location, |loc| &loc)
 	}
 
-	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token) {
+	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token) {
 		// Parse content
 		let content = unit.with_child(
 			self.content.clone(),
 			ParseMode::default(),
 			true,
 			|unit, scope| {
-				unit.parser.parse(unit);
+				unit.parser.clone().parse(unit);
 				scope
 			},
 		);
@@ -288,7 +288,7 @@ impl Variable for PropertyVariable {
 		&self.value_token
 	}
 
-	fn expand<'u>(&self, unit: &mut TranslationUnit<'u>, location: Token) {
+	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token) {
 		// Generate source for scope
 		let definition_source = Arc::new(VirtualSource::new(
 			self.location.clone(),

@@ -245,7 +245,7 @@ impl PropertyParser {
 	pub fn parse<'s, 'u>(
 		&'s self,
 		rule_name: &'s str,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		token: Token,
 	) -> Option<PropertyMap<'s>> {
 		let mut pm = PropertyMap::new(token.clone(), rule_name, unit.colors().to_owned());

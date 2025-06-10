@@ -43,7 +43,7 @@ impl<'u> Resolver<'u> {
 	pub fn new(
 		colors: &ReportColors,
 		cache: Arc<Cache>,
-		provided: &'u Vec<TranslationUnit<'u>>,
+		provided: &'u Vec<TranslationUnit>,
 	) -> Result<Self, Report> {
 		let mut units = HashMap::default();
 

@@ -32,7 +32,7 @@ use super::variable::VariableVisibility;
 /// Custom data populated by rules, stored in [`TranslationUnit::custom_data`]
 ///
 /// This trait is used to store data on a per-unit basis.
-pub trait CustomData: Downcast + Send {
+pub trait CustomData: Downcast + Send + Sync {
 	/// Name of this custom data
 	fn name(&self) -> &str;
 }
@@ -46,9 +46,9 @@ pub struct UnitOutput {
 }
 
 /// Stores the data required by the parser
-pub struct TranslationUnit<'u> {
+pub struct TranslationUnit {
 	/// Parser for this translation unit
-	pub parser: &'u Parser,
+	pub parser: Arc<Parser>,
 	/// Entry point of this translation unit
 	source: Arc<dyn Source>,
 	/// Reporting colors defined for this translation unit
@@ -58,7 +58,7 @@ pub struct TranslationUnit<'u> {
 	/// Current scope of the translation unit
 	current_scope: Arc<RwLock<Scope>>,
 	/// Lsp data for this unit (shared with children scopes)
-	lsp: Option<RwLock<LangServerData>>,
+	lsp: Option<Arc<RwLock<LangServerData>>>,
 
 	/// Available layouts
 	//layouts: LayoutHolder,
@@ -98,13 +98,13 @@ pub struct TranslationUnit<'u> {
 ///  * Calling a variable or reference will result in a recursive search in the current scope and all parent of that scope.
 /// Whenever a variable is defined, it will overwrite the previously defined variable, if they have the same key in the current scope.
 ///
-impl<'u> TranslationUnit<'u> {
+impl TranslationUnit {
 	/// Creates a new translation unit
 	///
 	/// Should be called once for each distinct source file
 	pub fn new(
 		path: String,
-		parser: &'u Parser,
+		parser: Arc<Parser>,
 		source: Arc<dyn Source>,
 		with_lsp: bool,
 		with_colors: bool,
@@ -123,7 +123,7 @@ impl<'u> TranslationUnit<'u> {
 				.unwrap_or(ReportColors::without_colors()),
 			entry_scope: scope.clone(),
 			current_scope: scope,
-			lsp: with_lsp.then(|| RwLock::new(LangServerData::default())),
+			lsp: with_lsp.then(|| Arc::new(RwLock::new(LangServerData::default()))),
 
 			custom_data: RwLock::default(),
 			//layouts: LayoutHolder::default(),
@@ -143,7 +143,7 @@ impl<'u> TranslationUnit<'u> {
 		self.source.clone().into()
 	}
 
-	pub fn parser(&self) -> &'u Parser {
+	pub fn parser(&self) -> &Parser {
 		&self.parser
 	}
 
@@ -172,7 +172,7 @@ impl<'u> TranslationUnit<'u> {
 		f: F,
 	) -> R
 	where
-		F: FnOnce(&mut TranslationUnit<'u>, Arc<RwLock<Scope>>) -> R,
+		F: FnOnce(&mut TranslationUnit, Arc<RwLock<Scope>>) -> R,
 	{
 		let prev_scope = self.current_scope.clone();
 
@@ -231,7 +231,7 @@ impl<'u> TranslationUnit<'u> {
 			}));
 
 		self.with_lsp(|mut lsp| lsp.on_new_source(self.source.clone()));
-		self.parser.parse(&mut self);
+		self.parser.clone().parse(&mut self);
 		// Terminates entry scope
 		{
 			let temp_scope =
@@ -355,7 +355,7 @@ pub trait TranslationAccessors {
 	fn get_settings(&self) -> &ProjectSettings;
 }
 
-impl TranslationAccessors for TranslationUnit<'_> {
+impl TranslationAccessors for TranslationUnit {
 	fn add_content(&mut self, elem: Arc<dyn Element>) {
 		if let Some(reference) = elem.clone().as_referenceable() {
 			self.add_reference(reference);

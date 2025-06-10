@@ -90,7 +90,7 @@ impl Rule for LuaRule {
 
 	fn on_match<'u>(
 		&self,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		cursor: &Cursor,
 		_match_data: Box<dyn Any + Send + Sync>,
 	) -> Cursor {
@@ -275,7 +275,7 @@ impl RegexRule for InlineLuaRule {
 	fn on_regex_match<'u>(
 		&self,
 		_index: usize,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		token: Token,
 		captures: Captures,
 	) {
@@ -398,7 +398,7 @@ impl RegexRule for InlineLuaRule {
 									mode,
 									true,
 									|unit, scope| {
-										unit.parser.parse(unit);
+										unit.parser.clone().parse(unit);
 										scope
 									},
 								);

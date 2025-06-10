@@ -99,7 +99,7 @@ impl Rule for VariableRule {
 
 	fn on_match<'u>(
 		&self,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		cursor: &Cursor,
 		_match_data: Box<dyn Any + Send + Sync>,
 	) -> Cursor {

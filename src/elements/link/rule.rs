@@ -57,7 +57,7 @@ impl RegexRule for LinkRule {
 	fn on_regex_match<'u>(
 		&self,
 		_: usize,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		token: Token,
 		matches: regex::Captures,
 	) {

@@ -83,7 +83,7 @@ pub trait Rule: Downcast {
 	/// `match_data` is the temporary returned by [`Self::on_match`].
 	fn on_match<'u>(
 		&self,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		cursor: &Cursor,
 		match_data: Box<dyn Any + Send + Sync>,
 	) -> Cursor;
@@ -139,7 +139,7 @@ pub trait RegexRule {
 	fn on_regex_match<'u>(
 		&self,
 		index: usize,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		token: Token,
 		captures: regex::Captures,
 	);
@@ -195,7 +195,7 @@ impl<T: RegexRule + 'static> Rule for T {
 
 	fn on_match<'u>(
 		&self,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		cursor: &Cursor,
 		match_data: Box<dyn Any + Send + Sync>,
 	) -> Cursor {
@@ -224,8 +224,6 @@ impl<T: RegexRule + 'static> Rule for T {
 
 #[cfg(test)]
 mod tests {
-
-	
 
 	#[test]
 	fn registry() {

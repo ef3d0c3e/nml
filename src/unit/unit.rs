@@ -34,7 +34,7 @@ pub struct DatabaseUnit {
 /// Wrapper units that may be present in memory or in the database
 pub enum OffloadedUnit<'u> {
 	/// In-memory translation unit
-	Loaded(&'u TranslationUnit<'u>),
+	Loaded(&'u TranslationUnit),
 	/// In-database translation unit
 	Unloaded(DatabaseUnit),
 }

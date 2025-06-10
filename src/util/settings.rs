@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HtmlOutput {
 	pub language: String,

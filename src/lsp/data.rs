@@ -1,7 +1,7 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
 use tower_lsp::lsp_types::Diagnostic;
 
 use crate::parser::source::Source;
@@ -40,7 +40,7 @@ pub struct LangServerData {
 
 	pub external_refs: HashMap<String, LsReference>,
 
-	pub sources: RefCell<HashMap<String, Arc<dyn Source>>>,
+	pub sources: RwLock<HashMap<String, Arc<dyn Source>>>,
 }
 
 impl LangServerData {
@@ -48,7 +48,7 @@ impl LangServerData {
 	pub fn on_new_source(&mut self, source: Arc<dyn Source>) {
 		if source.downcast_ref::<SourceFile>().is_some() {
 			self.sources
-				.borrow_mut()
+				.write()
 				.insert(source.name().to_owned(), source.clone());
 		}
 
@@ -95,7 +95,7 @@ impl LangServerData {
 
 	/// Gets a source file by name, or insert a new file
 	pub fn get_source<'lsp>(&'lsp self, name: &str) -> Option<Arc<dyn Source>> {
-		if let Some(found) = self.sources.borrow().get(name) {
+		if let Some(found) = self.sources.read().get(name) {
 			return Some(found.to_owned());
 		}
 
@@ -104,7 +104,7 @@ impl LangServerData {
 		};
 		let source = Arc::new(file);
 		self.sources
-			.borrow_mut()
+			.write()
 			.insert(source.name().to_owned(), source.clone());
 		Some(source)
 	}

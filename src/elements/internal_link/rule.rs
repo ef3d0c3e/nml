@@ -63,7 +63,7 @@ impl RegexRule for InternalLinkRule {
 	fn on_regex_match<'u>(
 		&self,
 		_index: usize,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		token: Token,
 		captures: Captures,
 	) {

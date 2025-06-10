@@ -1,6 +1,6 @@
-use std::cell::RefCell;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
 use tower_lsp::lsp_types::Location;
 use tower_lsp::lsp_types::Position;
 use tower_lsp::lsp_types::Range;
@@ -20,7 +20,7 @@ use super::data::LangServerData;
 #[derive(Debug, Default)]
 pub struct DefinitionData {
 	/// The definitions
-	pub definitions: RefCell<Vec<(Location, Range)>>,
+	pub definitions: RwLock<Vec<(Location, Range)>>,
 }
 
 fn from_source_impl<'lsp>(
@@ -49,7 +49,7 @@ fn from_source_impl<'lsp>(
 	let Some(def_data) = lsp.definitions.get(&original.source()) else {
 		return;
 	};
-	let mut db = def_data.definitions.borrow_mut();
+	let mut db = def_data.definitions.write();
 	let token = original.source().original_range(original.range).range;
 
 	// Resolve target

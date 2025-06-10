@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
 use tower_lsp::lsp_types::Position;
@@ -33,7 +34,7 @@ pub struct CodeRangeInfo {
 #[derive(Debug, Default)]
 pub struct CodeRangeData {
 	/// The ranges
-	pub coderanges: RefCell<Vec<CodeRangeInfo>>,
+	pub coderanges: RwLock<Vec<CodeRangeInfo>>,
 }
 
 /// Temporary data returned by [`Self::from_source_impl`]
@@ -101,7 +102,7 @@ impl<'a> CodeRange<'a> {
 		let end_line = cursor.line;
 		let end_char = cursor.line_pos;
 
-		self.coderanges.coderanges.borrow_mut().push(CodeRangeInfo {
+		self.coderanges.coderanges.write().push(CodeRangeInfo {
 			range: tower_lsp::lsp_types::Range {
 				start: Position {
 					line: start_line as u32,

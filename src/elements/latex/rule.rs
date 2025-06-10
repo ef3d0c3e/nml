@@ -84,7 +84,7 @@ impl RegexRule for LatexRule {
 	fn on_regex_match<'u>(
 		&self,
 		index: usize,
-		unit: &mut TranslationUnit<'u>,
+		unit: &mut TranslationUnit,
 		token: Token,
 		captures: Captures,
 	) {

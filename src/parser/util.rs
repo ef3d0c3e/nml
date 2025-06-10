@@ -247,8 +247,8 @@ pub fn escape_text<S: AsRef<str>>(
 	processed
 }
 
-pub fn parse_paragraph<'u>(
-	unit: &mut TranslationUnit<'u>,
+pub fn parse_paragraph(
+	unit: &mut TranslationUnit,
 	source: Arc<dyn Source>,
 ) -> Result<Arc<RwLock<Scope>>, String> {
 	unit.with_child(
@@ -259,7 +259,7 @@ pub fn parse_paragraph<'u>(
 		false,
 		|unit, scope| {
 			// Parse into scope
-			unit.parser.parse(unit);
+			unit.parser.clone().parse(unit);
 
 			// Iterate over parsed content
 			let mut iter = scope.content_iter(true);

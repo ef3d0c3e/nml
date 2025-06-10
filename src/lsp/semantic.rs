@@ -1,8 +1,8 @@
-use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::ops::Range;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
 use tower_lsp::lsp_types::SemanticToken;
 use tower_lsp::lsp_types::SemanticTokenModifier;
 use tower_lsp::lsp_types::SemanticTokenType;
@@ -176,21 +176,21 @@ impl Default for Tokens {
 #[derive(Debug)]
 pub struct SemanticsData {
 	/// The current cursor
-	cursor: RefCell<LineCursor>,
+	cursor: RwLock<LineCursor>,
 
 	/// Semantic tokens that can't be added directly
-	pub semantic_queue: RefCell<VecDeque<(Range<usize>, (u32, u32))>>,
+	pub semantic_queue: RwLock<VecDeque<(Range<usize>, (u32, u32))>>,
 
 	/// Semantic tokens
-	pub tokens: RefCell<Vec<SemanticToken>>,
+	pub tokens: RwLock<Vec<SemanticToken>>,
 }
 
 impl SemanticsData {
 	pub fn new(source: Arc<dyn Source>) -> Self {
 		Self {
-			cursor: RefCell::new(LineCursor::new(source, OffsetEncoding::Utf16)),
-			semantic_queue: RefCell::new(VecDeque::new()),
-			tokens: RefCell::new(vec![]),
+			cursor: RwLock::new(LineCursor::new(source, OffsetEncoding::Utf16)),
+			semantic_queue: RwLock::new(VecDeque::new()),
+			tokens: RwLock::new(vec![]),
 		}
 	}
 }
@@ -256,7 +256,7 @@ impl<'lsp> Semantics<'lsp> {
 
 	/// Processes the semantic queue up to a certain position
 	pub fn process_queue(&self, pos: usize) {
-		let mut queue = self.sems.semantic_queue.borrow_mut();
+		let mut queue = self.sems.semantic_queue.write();
 		while !queue.is_empty() {
 			let (range, token) = queue.front().unwrap();
 			if range.start > pos {
@@ -269,8 +269,8 @@ impl<'lsp> Semantics<'lsp> {
 	}
 
 	fn add_impl(&self, range: Range<usize>, token: (u32, u32)) {
-		let mut tokens = self.sems.tokens.borrow_mut();
-		let mut cursor = self.sems.cursor.borrow_mut();
+		let mut tokens = self.sems.tokens.write();
+		let mut cursor = self.sems.cursor.write();
 		let mut current = cursor.clone();
 		cursor.move_to(range.start);
 
@@ -320,7 +320,7 @@ impl<'lsp> Semantics<'lsp> {
 	/// Add a semantic token to be processed in a future call to `add()`
 	pub fn add_to_queue(&self, range: Range<usize>, token: (u32, u32)) {
 		let range = self.original_source.original_range(range).range;
-		let mut queue = self.sems.semantic_queue.borrow_mut();
+		let mut queue = self.sems.semantic_queue.write();
 		match queue.binary_search_by_key(&range.start, |(range, _)| range.start) {
 			Ok(pos) | Err(pos) => queue.insert(pos, (range, token)),
 		}

@@ -46,9 +46,9 @@ pub enum ProcessQueueMessage<'u> {
 	/// Source file being parsed
 	Parsing(&'u String),
 	/// Unit being resolved
-	Resolving(&'u TranslationUnit<'u>),
+	Resolving(&'u TranslationUnit),
 	/// Unit being compiled
-	Compiling(&'u TranslationUnit<'u>),
+	Compiling(&'u TranslationUnit),
 }
 
 /// Displays message to stdout
@@ -86,7 +86,7 @@ pub struct ProcessQueue {
 
 	cache: Arc<Cache>,
 	project_path: String,
-	parser: Parser,
+	parser: Arc<Parser>,
 	compiler: Compiler,
 }
 
@@ -100,7 +100,7 @@ impl ProcessQueue {
 		let cache = Arc::new(Cache::new(settings.db_path.as_str()).unwrap());
 		cache.setup_tables();
 
-		let parser = Parser::new();
+		let parser = Arc::new(Parser::new());
 		let compiler = Compiler::new(target, cache.clone());
 
 		Self {
@@ -188,7 +188,8 @@ impl ProcessQueue {
 
 			// Create unit
 			let source = Arc::new(SourceFile::new(input_string.clone(), None).unwrap());
-			let unit = TranslationUnit::new(local_path.clone(), &self.parser, source, false, true);
+			let unit =
+				TranslationUnit::new(local_path.clone(), self.parser.clone(), source, false, true);
 
 			let output_file = match &output {
 				ProcessOutputOptions::Directory(dir) => {
