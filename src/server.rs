@@ -422,10 +422,10 @@ impl LanguageServer for Backend {
 		};
 		let mut found = None;
 		for (_, elem) in unit.get_entry_scope().content_iter(true) {
-			if elem.location().source() != unit.get_entry_scope().token().source() {
+			let location = elem.original_location();
+			if location.source() != unit.get_entry_scope().token().source() {
 				continue;
 			}
-			let location = elem.original_location();
 			if location.start() <= cursor.pos && location.end() > cursor.pos {
 				found = Some(elem);
 			}

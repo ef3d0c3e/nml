@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use ariadne::Span;
 use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
@@ -56,14 +57,21 @@ impl Element for Anchor {
 		Ok(())
 	}
 
+	fn provide_hover(&self) -> Option<String> {
+	    Some(format!(
+"Anchor
+
+# Properties
+ * **Location**: {} ({}..{})
+ * **Name**: {}",
+			self.location.source().name(),
+			self.location().range.start(),
+			self.location().range.end(),
+			self.refname.to_string()))
+	}
+
 	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
 		Some(self)
-	}
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
-		None
-	}
-	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
-		None
 	}
 }
 
