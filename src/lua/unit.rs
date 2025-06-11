@@ -1,0 +1,36 @@
+use crate::unit::scope::ScopeAccessor;
+use crate::unit::translation::TranslationUnit;
+use crate::unit::variable::VariableName;
+use mlua::UserData;
+
+use super::{scope::{IteratorWrapper, ScopeWrapper}, variable::VariableWrapper};
+
+pub struct UnitWrapper<'a> {
+	pub inner: &'a mut TranslationUnit,
+}
+
+impl<'a> UserData for UnitWrapper<'a> {
+	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
+
+	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+		methods.add_method("entry_scope", |_lua, this, ()| {
+			Ok(ScopeWrapper {
+				inner: this.inner.get_entry_scope().clone(),
+			})
+		});
+		methods.add_method("content", |_lua, this, (recurse,): (bool,)| {
+			let it = this.inner.get_entry_scope().content_iter(recurse);
+			Ok(IteratorWrapper { iter: Box::new(it) })
+		});
+		methods.add_method("get_variable", |_lua, this, (name,): (String,)| {
+			let Some((var, _)) = this
+				.inner
+				.get_entry_scope()
+				.get_variable(&VariableName(name))
+			else {
+				return Ok(None);
+			};
+			Ok(Some(VariableWrapper { inner: var }))
+		});
+	}
+}

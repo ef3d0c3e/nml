@@ -37,7 +37,6 @@ end:}"#
 			.to_string(),
 		None,
 	));
-
 	let parser = Parser::new();
 	let unit = TranslationUnit::new("".into(), Arc::new(parser), source, false, false);
 	let (reports, unit) = unit.consume("".into());

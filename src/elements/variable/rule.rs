@@ -297,13 +297,18 @@ impl Rule for VariableRule {
 				'\\',
 				delim,
 			);
-			unit.get_scope().insert_variable(Arc::new(ContentVariable {
+			let variable = Arc::new(ContentVariable {
 				location: Token::new(keyword.start() - 1..content_range.end, cursor.source()),
 				name,
 				visibility,
 				mutability: VariableMutability::Mutable,
 				content: content_source,
-			}) as Arc<dyn Variable>);
+			});
+			unit.get_scope().insert_variable(variable.clone());
+			unit.add_content(Arc::new(VariableDefinition {
+				location: variable.location().clone(),
+				variable,
+			}));
 		}
 		// Insert as string property
 		else {

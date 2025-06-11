@@ -8,7 +8,7 @@ use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crate::unit::translation::TranslationUnit;
 
-use super::unitwrapper::UnitWrapper;
+use super::unit::UnitWrapper;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct KernelName(pub String);

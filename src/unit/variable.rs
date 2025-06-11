@@ -1,6 +1,9 @@
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use mlua::UserData;
 use parking_lot::RwLock;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
@@ -61,7 +64,7 @@ impl TryFrom<&str> for VariableName {
 
 /// Visibility attributes for variables
 /// Variables tagged `Internal` may only be accessed from the scope and its children.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VariableVisibility {
 	/// Available from parent scope
 	Exported,
