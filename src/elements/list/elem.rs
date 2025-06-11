@@ -35,6 +35,7 @@ pub struct ListMarker {
 
 #[derive(Debug)]
 pub struct ListEntry {
+	#[allow(unused)]
 	pub(crate) location: Token,
 	pub(crate) bullet: BulletMarker,
 	pub(crate) content: Arc<RwLock<Scope>>,
@@ -120,29 +121,29 @@ impl Element for List {
 					if has_offset {
 						output.add_content(format!(r#"<li value="{}">"#, stack.last().unwrap().1));
 					}
-					output.add_content("<li>")
+					output.add_content("<li>");
+					match &entry.bullet {
+						BulletMarker::Checkbox(state) => match state {
+							CheckboxState::Unchecked => {
+								output.add_content(
+									r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#,
+								);
+							}
+							CheckboxState::Partial => {
+								output.add_content(
+									r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#,
+								);
+							}
+							CheckboxState::Checked => {
+								output.add_content(
+									r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#,
+								);
+							}
+						},
+						_ => {}
+					}
 				}
 				_ => todo!(),
-			}
-			match &entry.bullet {
-				BulletMarker::Checkbox(state) => match state {
-					CheckboxState::Unchecked => {
-						output.add_content(
-							r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#,
-						);
-					}
-					CheckboxState::Partial => {
-						output.add_content(
-							r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#,
-						);
-					}
-					CheckboxState::Checked => {
-						output.add_content(
-							r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#,
-						);
-					}
-				},
-				_ => {}
 			}
 			for (scope, elem) in entry.content.content_iter(false) {
 				elem.compile(scope, compiler, output)?;

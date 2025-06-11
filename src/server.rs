@@ -298,6 +298,8 @@ impl LanguageServer for Backend {
 						"@".to_string(),
 						"&".to_string(),
 						"$".to_string(),
+						"-".to_string(),
+						"*".to_string(),
 					]),
 					work_done_progress_options: Default::default(),
 					all_commit_characters: None,

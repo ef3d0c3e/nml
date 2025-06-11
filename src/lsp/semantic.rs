@@ -127,6 +127,10 @@ pub struct Tokens {
 	pub tex_sep: (u32, u32),
 	pub tex_content: (u32, u32),
 	pub tex_prop_sep: (u32, u32),
+
+	pub list_bullet: (u32, u32),
+	pub list_prop_sep: (u32, u32),
+	pub list_bullet_type: (u32, u32),
 }
 
 impl Default for Tokens {
@@ -168,6 +172,10 @@ impl Default for Tokens {
 			tex_sep: token!("property"),
 			tex_content: token!("regexp"),
 			tex_prop_sep: token!("macro"),
+
+			list_bullet: token!("macro"),
+			list_prop_sep: token!("macro"),
+			list_bullet_type: token!("float"),
 		}
 	}
 }

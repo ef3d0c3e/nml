@@ -21,6 +21,7 @@ use crate::parser::util::parse_paragraph;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 
+use super::completion::ListCompletion;
 use super::elem::BulletMarker;
 use super::elem::CheckboxState;
 use super::elem::List;
@@ -143,6 +144,18 @@ impl Rule for ListRule {
 			}
 			end_cursor = end_cursor.at(captures.get(0).unwrap().end());
 
+			// Semantic
+			unit.with_lsp(|lsp| lsp.with_semantics(end_cursor.source(), |sems, tokens| {
+				sems.add(captures.get(1).unwrap().range(), tokens.list_bullet);
+				if let Some(props) = captures.get(2).map(|m| m.range()) {
+					sems.add(props.start - 1..props.start, tokens.list_prop_sep);
+					sems.add_to_queue(props.end..props.end + 1, tokens.list_prop_sep);
+				}
+				if let Some(props) = captures.get(3).map(|m| m.start()-1..m.end()+1) {
+					sems.add_to_queue(props, tokens.list_bullet_type);
+				}
+			}));
+
 			// Properties
 			let prop_source = escape_source(
 				end_cursor.source().clone(),
@@ -189,12 +202,12 @@ impl Rule for ListRule {
 						report_err!(
 							unit,
 							end_cursor.source().clone(),
-							"Unknown custom list data".into(),
+							"Unknown list bullet type".into(),
 							span(
 								bullet_range,
 								format!(
-									"Cannot understand custom list data: `{}`",
-									content.fg(unit.colors().highlight),
+									"Unknown bullet type: `{}`",
+									bullet_content.fg(unit.colors().highlight),
 								)
 							)
 						);
@@ -225,23 +238,7 @@ impl Rule for ListRule {
 				BulletMarker::Bullet
 			};
 
-			// Custom list data
 			/*
-
-			// Semantic
-			if let Some((sems, tokens)) =
-				Semantics::from_source(cursor.source.clone(), &state.shared.lsp)
-			{
-				sems.add(captures.get(1).unwrap().range(), tokens.list_bullet);
-				if let Some(props) = captures.get(2).map(|m| m.range()) {
-					sems.add(props.start - 1..props.start, tokens.list_props_sep);
-					sems.add(props.end..props.end + 1, tokens.list_props_sep);
-				}
-				if let Some(props) = captures.get(3).map(|m| m.range()) {
-					sems.add(props, tokens.list_entry_type);
-				}
-			}
-
 			if let Some(conceals) =
 				Conceals::from_source(cursor.source.clone(), &state.shared.lsp)
 			{
@@ -334,5 +331,9 @@ impl Rule for ListRule {
 		list.location.range = cursor.pos()..end_cursor.pos();
 		unit.add_content(Arc::new(list));
 		end_cursor
+	}
+
+	fn completion(&self) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
+		Some(Box::new(ListCompletion {}))
 	}
 }

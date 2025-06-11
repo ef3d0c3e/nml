@@ -282,6 +282,11 @@ impl Iterator for ScopeIterator {
 		while let (Some(last_depth), Some((cur_scope, cur_pos))) =
 			(self.depth.last(), self.position.last_mut())
 		{
+			if last_depth.contained().is_empty() {
+				self.depth.pop();
+				self.position.pop();
+				continue;
+			}
 			let scope = last_depth.contained()[*cur_scope].clone();
 			let scope_len = (*scope.clone()).read().content.len();
 
