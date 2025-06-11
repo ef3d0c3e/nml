@@ -28,7 +28,7 @@ impl Element for Eof {
 	}
 
 	fn element_name(&self) -> &'static str {
-		"Enf of File"
+		"EOF"
 	}
 
 	fn compile<'e>(
