@@ -1,6 +1,6 @@
 # NML -- Not a markup language!
 
-This branch is for development, check out the [stable](nml/tree/stable) branch.
+This branch is for development, check out the [stable](https://github.com/ef3d0c3e/nml/tree/stable) branch.
 
 ![Screenshot of NML in NeoVim](./showcase.png)
 
