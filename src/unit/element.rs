@@ -8,7 +8,11 @@ use crate::parser::source::SourcePosition;
 use crate::parser::source::Token;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use mlua::AnyUserData;
+use mlua::Lua;
 use parking_lot::RwLock;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::references::InternalReference;
 use super::references::Refname;
@@ -19,7 +23,7 @@ use super::unit::Reference;
 /// The kind for an element
 ///
 /// The kind of an element determines how it affects paragraphing as well as nested elements.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum ElemKind {
 	/// An invisible element (e.g comment)
 	Invisible,
@@ -81,6 +85,10 @@ pub trait Element: Downcast + core::fmt::Debug + Send + Sync {
 
 	/// Gets the element as a container containing other elements
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> { None }
+
+	/// Gets the userdata of the underlying concreate type
+	#[allow(unused)]
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> { None }
 }
 impl_downcast!(Element);
 

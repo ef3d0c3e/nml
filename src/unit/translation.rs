@@ -4,6 +4,7 @@ use std::sync::OnceLock;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use mlua::UserData;
 use parking_lot::MappedRwLockWriteGuard;
 use parking_lot::RwLock;
 use parking_lot::RwLockWriteGuard;

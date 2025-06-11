@@ -8,6 +8,8 @@ use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crate::unit::translation::TranslationUnit;
 
+use super::unitwrapper::UnitWrapper;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct KernelName(pub String);
 
@@ -110,6 +112,22 @@ impl Kernel {
 		nml_table
 			.set("tables", kernel.lua.create_table().unwrap())
 			.unwrap();
+
+		// Register accessors
+		nml_table.set("unit", kernel.lua.create_function(|lua, ()| {
+				// Get KernelContext from registry
+				let ctx: LightUserData = lua.named_registry_value("__REGISTRY_NML_CTX")?;
+				let ctx = ctx.0 as *mut KernelContext;
+				let ctx_ref = unsafe { &mut *ctx };
+
+				// Wrap the unit (not as userdata! use a light proxy)
+				// Instead of passing a reference directly, create a proxy object with dynamic dispatch
+				let wrapper = lua.create_userdata(UnitWrapper {
+					inner: &mut ctx_ref.unit,
+				})?;
+
+				Ok(wrapper)
+		}).unwrap()).unwrap();
 
 		// Register functions from parser rules
 		unit.parser().rules_iter().for_each(|rule| {

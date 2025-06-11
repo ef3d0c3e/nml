@@ -3,8 +3,11 @@ use std::fs;
 use std::ops::Range;
 use std::sync::Arc;
 
+use ariadne::Span;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use mlua::LuaSerdeExt;
+use mlua::UserData;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Trait for source content
@@ -532,5 +535,22 @@ impl From<&Range<Cursor>> for Token {
 			range: range.start.pos..range.end.pos,
 			source: range.start.source.clone(),
 		}
+	}
+}
+
+impl UserData for Token {
+    fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {
+	}
+
+    fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+		methods.add_method("start_byte", |lua, this, ()| {
+			Ok(lua.to_value(&this.range.start))
+		});
+		methods.add_method("end_byte", |lua, this, ()| {
+			Ok(lua.to_value(&this.range.end))
+		});
+		methods.add_method("source", |lua, this, ()| {
+			Ok(lua.to_value(this.source().name()))
+		});
 	}
 }
