@@ -70,6 +70,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "auto-userdata"
+version = "0.0.1"
+dependencies = [
+ "lazy_static",
+ "mlua",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "auto_impl"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -822,6 +833,7 @@ version = "0.1.0"
 dependencies = [
  "ariadne",
  "auto-registry",
+ "auto-userdata",
  "dashmap 6.1.0",
  "downcast-rs",
  "getopts",
