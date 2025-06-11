@@ -1,5 +1,7 @@
 # NML -- Not a markup language!
 
+This branch is for development, check out the [stable](nml/tree/stable) branch.
+
 ![Screenshot of NML in NeoVim](./showcase.png)
 
 NML is a language server that comes with a tool for rendering to HTML. The goal of NML is to be a org mode replacement compatible with any editor supporting the language server protocol.
