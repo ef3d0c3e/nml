@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ariadne::Span;
 use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
@@ -59,12 +60,18 @@ impl Element for Link {
 		Ok(())
 	}
 
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		None
+	fn provide_hover(&self) -> Option<String> {
+	    Some(format!("Link
+
+# Properties
+ * **Location**: [{0}] ({1}..{2})
+ * **Url**: [{3}]({3})",
+				self.location.source().name(),
+				self.location().range.start(),
+				self.location().range.end(),
+				self.url.to_string()))
 	}
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
-		None
-	}
+
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		Some(self)
 	}
