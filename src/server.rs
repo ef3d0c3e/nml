@@ -11,6 +11,8 @@ use std::cmp;
 use std::env::current_dir;
 use std::fs::read;
 use std::path::PathBuf;
+use std::process::ChildStdin;
+use std::process::ChildStdout;
 use std::sync::Arc;
 
 use cache::cache::Cache;
@@ -22,11 +24,16 @@ use lsp::conceal::ConcealParams;
 use lsp::hover::HoverRange;
 use lsp::styles::StyleInfo;
 use lsp::styles::StyleParams;
+use lsp_server::Connection;
+use lsp_server::Message;
 use parser::parser::Parser;
 use parser::reports::Report;
 use parser::source::LineCursor;
 use parser::source::Source;
 use parser::source::SourceFile;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::sync::mpsc;
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
@@ -60,6 +67,10 @@ pub struct Backend {
 	coderanges_map: DashMap<String, Vec<CodeRangeInfo>>,
 	completions_map: DashMap<String, Vec<CompletionItem>>,
 	hovers_map: DashMap<String, Vec<HoverRange>>,
+
+	// Lua ls
+	lua_ranges: DashMap<String, Vec<std::ops::Range<usize>>>,
+	lua_conn: Connection,
 }
 
 #[derive(Debug)]
@@ -68,8 +79,66 @@ struct TextDocumentItem {
 	text: String,
 }
 
+async fn spawn_lua_ls(root: &PathBuf) -> anyhow::Result<Connection> {
+	let mut child = tokio::process::Command::new("lua-language-server")
+		.arg("--stdio")
+		.current_dir(root)
+		.stdin(std::process::Stdio::piped())
+		.stdout(std::process::Stdio::piped())
+		.spawn()?;
+
+	let mut lua_stdin = child.stdin.take().unwrap();
+	let mut lua_stdout = child.stdout.take().unwrap();
+
+	// Create an in‑memory Connection
+	let (lua_conn, mut server_conn) = lsp_server::Connection::memory();
+
+	// 1) Pump requests from our LSP client → lua_ls.stdin
+	tokio::spawn(async move {
+		loop {
+			// blocking recv on a crossbeam channel:
+			let msg = match server_conn.receiver.recv() {
+				Ok(msg) => msg,
+				Err(_) => break, // channel closed
+			};
+			let data = match serde_json::to_vec(&msg) {
+				Ok(d) => d,
+				Err(_) => break,
+			};
+			// write to lua_ls stdin (async)
+			if lua_stdin.write_all(&data).await.is_err() {
+				break;
+			}
+		}
+	});
+
+	// 2) Pump lua_ls.stdout → our in‑memory sender
+	tokio::spawn(async move {
+		let mut buf = vec![0u8; 8 * 1024];
+		loop {
+			let n = match lua_stdout.read(&mut buf).await {
+				Ok(0) | Err(_) => break, // EOF or error
+				Ok(n) => n,
+			};
+			if let Ok(text) = std::str::from_utf8(&buf[..n]) {
+				if let Ok(msg) = serde_json::from_str::<Message>(text) {
+					// synchronous send, no await:
+					let _ = server_conn.sender.send(msg);
+				}
+			}
+		}
+	});
+
+	Ok(lua_conn)
+}
+
 impl Backend {
-	pub fn new(client: Client, settings: ProjectSettings, root_path: PathBuf) -> Self {
+	pub fn new(
+		client: Client,
+		settings: ProjectSettings,
+		root_path: PathBuf,
+		lua_conn: Connection,
+	) -> Self {
 		let cache = Arc::new(Cache::new(settings.db_path.as_str()).unwrap());
 		//cache.setup_tables();
 
@@ -94,6 +163,9 @@ impl Backend {
 			coderanges_map: DashMap::default(),
 			completions_map: DashMap::default(),
 			hovers_map: DashMap::default(),
+
+			lua_ranges: DashMap::new(),
+			lua_conn,
 		}
 	}
 
@@ -391,7 +463,6 @@ impl LanguageServer for Backend {
 			pos.line,
 			pos.character,
 		);
-		eprintln!("HOVER: {cursor:#?}");
 		let hovers_from_map = || -> Option<Hover> {
 			let Some(hovers) = self.hovers_map.get(uri.as_str()) else {
 				return None;
@@ -561,7 +632,7 @@ impl LanguageServer for Backend {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
 	// Find project root
 	let mut path = current_dir().unwrap();
 	let mut settings = ProjectSettings::default();
@@ -578,7 +649,7 @@ async fn main() {
 				Ok(r) => settings = r,
 				Err(err) => {
 					eprintln!("Failed to parse {}: {err}", file.display());
-					return;
+					return Ok(());
 				}
 			}
 			break;
@@ -586,14 +657,18 @@ async fn main() {
 		let Some(parent) = path.parent() else { break };
 		path = parent.into();
 	}
-
-	let (service, socket) = LspService::build(|client| Backend::new(client, settings, path))
-		.custom_method("textDocument/conceal", Backend::handle_conceal_request)
-		.custom_method("textDocument/style", Backend::handle_style_request)
-		.custom_method("textDocument/codeRange", Backend::handle_coderange_request)
-		.finish();
+	let lua_conn = spawn_lua_ls(&path).await?;
 
 	let stdin = tokio::io::stdin();
 	let stdout = tokio::io::stdout();
+	let (service, socket) =
+		LspService::build(|client| Backend::new(client, settings, path, lua_conn))
+			//let (service, socket) = LspService::build(|client| Backend::new(client, settings, path))
+			.custom_method("textDocument/conceal", Backend::handle_conceal_request)
+			.custom_method("textDocument/style", Backend::handle_style_request)
+			.custom_method("textDocument/codeRange", Backend::handle_coderange_request)
+			.finish();
+
 	Server::new(stdin, stdout, socket).serve(service).await;
+	Ok(())
 }

@@ -81,29 +81,27 @@ impl Kernel {
 
 		// Export modified print function to redirect it's output
 
-		//kernel
-		//	.lua
-		//	.globals()
-		//	.set(
-		//		"print",
-		//		kernel
-		//			.lua
-		//			.create_function({
-		//				let ctx = kernel.context.clone();
-		//				move |lua, msg: String| {
-		//					// TODO
-		//					//kernel.with_context_mut(|mut ctx| {
-		//					//	ctx.redirects.push(KernelRedirect {
-		//					//		source: "print".into(),
-		//					//		content: msg,
-		//					//	});
-		//					//});
-		//					Ok(())
-		//				}
-		//			})
-		//			.unwrap(),
-		//	)
-		//	.unwrap();
+		kernel
+			.lua
+			.globals()
+			.set(
+				"print",
+				kernel
+					.lua
+					.create_function({
+						move |lua, msg: String| {
+							Kernel::with_context(lua, |ctx| {
+								ctx.redirects.push(KernelRedirect {
+									source: "print".into(),
+									content: msg,
+								});
+							});
+							Ok(())
+						}
+					})
+					.unwrap(),
+			)
+			.unwrap();
 
 		// Create `nml` table
 		let nml_table = kernel.lua.create_table().unwrap();

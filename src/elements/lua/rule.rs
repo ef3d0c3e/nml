@@ -8,6 +8,7 @@ use regex::Regex;
 
 use crate::elements::meta::scope::ScopeElement;
 use crate::elements::text::elem::Text;
+use crate::lsp::ranges::CustomRange;
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelContext;
 use crate::lua::kernel::KernelName;
@@ -190,6 +191,7 @@ impl Rule for LuaRule {
 		});
 
 		unit.with_lsp(|lsp| {
+			lsp.add_range(end_cursor.source(), lua_range.range, CustomRange::Lua);
 			lsp.add_hover(
 				Token::new(cursor.pos()..content_end + delimiter.len(), cursor.source()),
 				format!(

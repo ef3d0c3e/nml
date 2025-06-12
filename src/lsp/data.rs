@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -17,6 +18,9 @@ use super::hints::HintsData;
 use super::hover::Hover;
 use super::hover::HoverData;
 use super::hover::HoverRange;
+use super::ranges::CustomRange;
+use super::ranges::Range;
+use super::ranges::RangeData;
 use super::reference::LsReference;
 use super::semantic::Semantics;
 use super::semantic::SemanticsData;
@@ -37,6 +41,7 @@ pub struct LangServerData {
 	pub conceals: HashMap<Arc<dyn Source>, ConcealData>,
 	pub styles: HashMap<Arc<dyn Source>, StylesData>,
 	pub coderanges: HashMap<Arc<dyn Source>, CodeRangeData>,
+	pub ranges: HashMap<Arc<dyn Source>, RangeData>,
 
 	pub external_refs: HashMap<String, LsReference>,
 
@@ -132,5 +137,12 @@ impl LangServerData {
 			range: original,
 			content,
 		});
+	}
+	
+	pub fn add_range<'lsp>(&'lsp self, source: Arc<dyn Source>, range: std::ops::Range<usize>, data: CustomRange)
+	{
+		let Some(r) = Range::from_source(source.clone(), self) else { return };
+		let original = source.original_range(range);
+		r.add(original.range, data);
 	}
 }

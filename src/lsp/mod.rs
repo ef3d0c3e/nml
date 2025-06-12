@@ -8,3 +8,4 @@ pub mod hover;
 pub mod reference;
 pub mod semantic;
 pub mod styles;
+pub mod ranges;
