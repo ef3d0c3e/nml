@@ -19,41 +19,79 @@ impl UserData for VariableWrapper {
 	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
 
 	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-		add_documented_method!(methods,
+		add_documented_method!(
+			methods,
 			"Variable",
 			"location",
-			|_lua, this, ()| {
-				Ok(this.inner.location().clone())
-			},
+			|_lua, this, ()| { Ok(this.inner.location().clone()) },
 			"Returns the location where the variable is defined",
 			vec!["self"],
 			Some("Token")
-			);
-		//methods.add_method("location", |_lua, this, ()| {
-		//	Ok(this.inner.location().clone())
-		//});
-		methods.add_method("typename", |lua, this, ()| {
-			lua.to_value(this.inner.variable_typename())
-		});
-		methods.add_method("name", |lua, this, ()| lua.to_value(&this.inner.name().0));
-		methods.add_method("value_token", |_lua, this, ()| {
-			Ok(this.inner.value_token().clone())
-		});
-		methods.add_method("expand", |lua, this, ()| {
-			Kernel::with_context(lua, |ctx| {
-				let result = this.inner.expand(ctx.unit, ctx.location.clone());
+		);
+		add_documented_method!(
+			methods,
+			"Variable",
+			"typename",
+			|lua, this, ()| {
+				lua.to_value(this.inner.variable_typename())
+			},
+			"Returns the name of this variable's type",
+			vec!["self"],
+			Some("String")
+		);
+		add_documented_method!(
+			methods,
+			"Variable",
+			"name",
+			|lua, this, ()| {
+				lua.to_value(&this.inner.name().0)
+			},
+			"Returns the name of this variable",
+			vec!["self"],
+			Some("String")
+		);
+		add_documented_method!(
+			methods,
+			"Variable",
+			"value_token",
+			|_lua, this, ()| {
+				Ok(this.inner.value_token().clone())
+			},
+			"Returns the token of this variable's value",
+			vec!["self"],
+			Some("Token")
+		);
+		add_documented_method!(
+			methods,
+			"Variable",
+			"expand",
+			|lua, this, ()| {
+				Kernel::with_context(lua, |ctx| {
+					let result = this.inner.expand(ctx.unit, ctx.location.clone());
 
-				ctx.unit.add_content(Arc::new(VariableSubstitution {
-					location: ctx.location.clone(),
-					variable: this.inner.clone(),
-					content: vec![result],
-				}));
-			});
-			Ok(())
-		});
-		methods.add_method("to_string", |lua, this, ()| {
-			lua.to_value(&this.inner.to_string())
-		});
+					ctx.unit.add_content(Arc::new(VariableSubstitution {
+						location: ctx.location.clone(),
+						variable: this.inner.clone(),
+						content: vec![result],
+					}));
+				});
+				Ok(())
+			},
+			"Expands the variable in place",
+			vec!["self"],
+			None
+		);
+		add_documented_method!(
+			methods,
+			"Variable",
+			"expand",
+			|lua, this, ()| {
+				lua.to_value(&this.inner.to_string())
+			},
+			"Converts this variable's content to a string",
+			vec!["self"],
+			Some("String")
+		);
 	}
 }
 

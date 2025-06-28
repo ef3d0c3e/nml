@@ -293,7 +293,9 @@ macro_rules! get_lua_docs {
 #[auto_registry::generate_registry(registry = "lua", mapper = get_lua_docs, output = make_lua_docs)]
 fn output_luals()
 {
-	make_lua_docs!();
+	{
+		make_lua_docs!();
+	}
 	let docs = lua::doc::LUA_DOCS.lock().unwrap();
 	for (name, d) in docs.iter()
 	{
