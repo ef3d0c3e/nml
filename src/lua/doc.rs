@@ -1,4 +1,5 @@
 use std::{collections::HashMap, sync::{LazyLock, Mutex}};
+use mlua::Lua;
 
 /// Documented userdata method
 #[derive(Debug)]
@@ -48,4 +49,49 @@ macro_rules! add_documented_method {
 					});
 			}
     }};
+}
+
+macro_rules! add_lua_docs {
+	($t:ty) => {{
+		let lua = Lua::new();
+
+		lua.register_userdata_type::<$t>(|reg| <$t as mlua::UserData>::add_methods(reg)).unwrap();
+		0
+	}};
+}
+
+#[auto_registry::generate_registry(registry = "lua", mapper = add_lua_docs, output = make_lua_docs)]
+pub fn get_lua_docs()
+{
+	make_lua_docs!();
+	fn document_class(doc: &UserDataDoc) -> String
+	{
+		let mut buf = String::new();
+		// Class header
+		buf += &format!("--- @class {}\n", doc.type_name);
+		buf += &format!("local {} = {{}}\n\n", doc.type_name);
+
+		// Methods
+		for m in &doc.methods {
+			// doc comment
+			buf += &format!("--- {}\n", m.doc);
+			// @return if any
+			if let Some(ret) = &m.returns {
+				buf += &format!("--- @return {}\n", ret);
+			}
+			// function signature
+			// we ignore args other than self, since Lua methods always get :self
+			buf += &format!(
+				"function {}:{}() end\n\n",
+				doc.type_name, m.name
+			);
+		}
+		buf
+	}
+
+	let docs = LUA_DOCS.lock().unwrap();
+	for (_, doc) in docs.iter()
+	{
+		println!("{}", document_class(doc));
+	}
 }
