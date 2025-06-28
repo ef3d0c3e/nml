@@ -1,7 +1,12 @@
+use std::cell::LazyCell;
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
 use mlua::IntoLua;
 use mlua::LightUserData;
 use mlua::Lua;
 use mlua::Table;
+use parking_lot::Mutex;
 
 use crate::parser::parser::ParserRuleAccessor;
 use crate::parser::reports::Report;

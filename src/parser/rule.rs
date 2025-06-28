@@ -11,7 +11,7 @@ use downcast_rs::Downcast;
 use std::any::Any;
 
 macro_rules! create_registry {
-	( $($construct:expr),+ $(,)? ) => {{
+	($($construct:expr);+ $(;)?) => {{
 		let mut vec = Vec::new();
 		$(
 			let boxed = Box::new($construct) as Box<dyn Rule + Send + Sync>;
@@ -23,9 +23,11 @@ macro_rules! create_registry {
 
 /// Gets the list of all rules exported with the [`auto_registry`] proc macro.
 /// Rules are sorted according to topological order using the [`Rule::previous`] method.
-#[auto_registry::generate_registry(registry = "rules", target = make_rules, return_type = Vec<Box<dyn Rule + Send + Sync>>, maker = create_registry)]
+//#[auto_registry::generate_registry(registry = "rules", target = make_rules, return_type = Vec<Box<dyn Rule + Send + Sync>>, maker = create_registry)]
+#[auto_registry::generate_registry(registry = "rules", collector = create_registry, output = get_rules)]
+
 pub fn get_rule_registry() -> Vec<Box<dyn Rule + Send + Sync>> {
-	let mut vec = make_rules();
+	let mut vec = get_rules!();
 	vec.sort_by_key(|rule| rule.target());
 	vec
 }

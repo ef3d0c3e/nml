@@ -19,8 +19,13 @@ use compiler::process::ProcessOutputOptions;
 use compiler::process::ProcessQueue;
 use getopts::Matches;
 use getopts::Options;
+use lua::kernel::{Kernel, KernelContext};
+use mlua::Lua;
+use parser::parser::Parser;
 use parser::reports::Report;
 use parser::reports::ReportColors;
+use parser::source::SourceFile;
+use unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;
 use walkdir::WalkDir;
 
@@ -275,6 +280,27 @@ fn input_project(
 	))
 }
 
+
+macro_rules! get_lua_docs {
+	($t:ty) => {{
+		let lua = Lua::new();
+
+		lua.register_userdata_type::<$t>(|reg| <$t as mlua::UserData>::add_methods(reg)).unwrap();
+		0
+	}};
+}
+
+#[auto_registry::generate_registry(registry = "lua", mapper = get_lua_docs, output = make_lua_docs)]
+fn output_luals()
+{
+	make_lua_docs!();
+	let docs = lua::doc::LUA_DOCS.lock().unwrap();
+	for (name, d) in docs.iter()
+	{
+		println!("{name}, {d:#?}");
+	}
+}
+
 fn main() -> ExitCode {
 	let args: Vec<String> = env::args().collect();
 	let program = args[0].clone();
@@ -285,6 +311,7 @@ fn main() -> ExitCode {
 	opts.optopt("o", "output", "Output path", "PATH");
 	opts.optopt("d", "database", "Cache database location", "PATH");
 	opts.optflag("", "force-rebuild", "Force rebuilding of cached documents");
+	opts.optflag("", "luals-gen", "Generates lua definitions for LuaLs");
 	opts.optmulti("z", "debug", "Debug options", "[ast,ref,var]");
 	opts.optflag("h", "help", "Print this help menu");
 	opts.optflag("v", "version", "Print program version and licenses");
@@ -301,6 +328,11 @@ fn main() -> ExitCode {
 	}
 	if matches.opt_present("h") {
 		print_usage(&program, opts);
+		return ExitCode::SUCCESS;
+	}
+	if matches.opt_present("luals-gen")
+	{
+		output_luals();
 		return ExitCode::SUCCESS;
 	}
 

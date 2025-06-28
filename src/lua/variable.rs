@@ -3,12 +3,14 @@ use std::sync::Arc;
 use mlua::LuaSerdeExt;
 use mlua::UserData;
 
+use crate::add_documented_method;
 use crate::elements::variable::elem::VariableSubstitution;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::variable::Variable;
 
 use super::kernel::Kernel;
 
+#[auto_registry::auto_registry(registry = "lua")]
 pub struct VariableWrapper {
 	pub inner: Arc<dyn Variable>,
 }
@@ -17,9 +19,19 @@ impl UserData for VariableWrapper {
 	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
 
 	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-		methods.add_method("location", |_lua, this, ()| {
-			Ok(this.inner.location().clone())
-		});
+		add_documented_method!(methods,
+			"Variable",
+			"location",
+			|_lua, this, ()| {
+				Ok(this.inner.location().clone())
+			},
+			"Returns the location where the variable is defined",
+			vec!["self"],
+			Some("Token")
+			);
+		//methods.add_method("location", |_lua, this, ()| {
+		//	Ok(this.inner.location().clone())
+		//});
 		methods.add_method("typename", |lua, this, ()| {
 			lua.to_value(this.inner.variable_typename())
 		});

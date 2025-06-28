@@ -1,22 +1,18 @@
 #![feature(proc_macro_span)]
 use std::cell::RefCell;
+use std::sync::LazyLock;
+use std::sync::Mutex;
 use std::collections::HashMap;
 
-use lazy_static::lazy_static;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::sync::Mutex;
 use syn::parse::Parse;
 use syn::parse::ParseStream;
 use syn::parse_macro_input;
 use syn::ItemStruct;
 
-lazy_static! {
-	/// The registry, each key corresponds to an identifier that needs to be
-	/// valid in the context of the [`genegenerate_registry`] macro.
-	static ref REGISTRY: Mutex<RefCell<HashMap<String, Vec<String>>>> =
-		Mutex::new(RefCell::new(HashMap::new()));
-}
+
+static REGISTRY: LazyLock<Mutex<HashMap<String, Vec<String>>>> = LazyLock::new(|| Mutex::new(HashMap::default()));
 
 /// Arguments for the [`auto_registry`] proc macro
 struct AutoRegistryArgs {
@@ -76,6 +72,14 @@ impl Parse for AutoRegistryArgs {
 ///  - registry: (String) Name of the registry to collect the struct into
 ///  - path: (Optional String) The crate path in which the struct is located
 ///          If left empty, the path will be try to be automatically-deduced
+///
+/// # Example
+///
+/// ```
+/// #[auto_registry::auto_registry(registry = "listeners")]
+/// struct KeyboardListener { ... }
+/// ```
+/// This will register `KeyboardListener` to the `listeners` registry.
 ///
 /// # Note
 ///
@@ -142,12 +146,11 @@ pub fn auto_registry(attr: TokenStream, input: TokenStream) -> TokenStream {
 		}
 	};
 
-	let reg_mtx = REGISTRY.lock().unwrap();
-	let mut reg_borrow = reg_mtx.borrow_mut();
-	if let Some(ref mut vec) = reg_borrow.get_mut(args.registry.value().as_str()) {
+	let mut reg = REGISTRY.lock().unwrap();
+	if let Some(ref mut vec) = reg.get_mut(args.registry.value().as_str()) {
 		vec.push(path);
 	} else {
-		reg_borrow.insert(args.registry.value(), vec![path]);
+		reg.insert(args.registry.value(), vec![path]);
 	}
 
 	quote! {
@@ -160,35 +163,35 @@ pub fn auto_registry(attr: TokenStream, input: TokenStream) -> TokenStream {
 struct GenerateRegistryArgs {
 	/// The registry name
 	registry: syn::LitStr,
-	/// The target, i.e the generated function name
-	target: syn::Ident,
-	/// The maker macro, takes all constructed items and processes them
-	maker: syn::Expr,
-	/// The return type for the function
-	return_type: syn::Type,
+	/// The collector macro, takes all constructed items and processes them
+	collector: Option<syn::Expr>,
+	/// The maper macro, maps types to expressions
+	mapper: Option<syn::Expr>,
+	/// The name of the output macro
+	output: syn::Ident,
 }
 
 /// Parser for [`GenerateRegistryArgs`]
 impl Parse for GenerateRegistryArgs {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		let mut registry = None;
-		let mut target = None;
-		let mut maker = None;
-		let mut return_type = None;
+		let mut collector = None;
+		let mut mapper = None;
+		let mut output = None;
 		loop {
 			let key: syn::Ident = input.parse()?;
 			input.parse::<syn::Token![=]>()?;
 
 			match key.to_string().as_str() {
 				"registry" => registry = Some(input.parse()?),
-				"target" => target = Some(input.parse()?),
-				"maker" => maker = Some(input.parse()?),
-				"return_type" => return_type = Some(input.parse()?),
+				"collector" => collector = Some(input.parse()?),
+				"mapper" => mapper = Some(input.parse()?),
+				"output" => output = Some(input.parse()?),
 				_ => {
 					return Err(syn::Error::new(
 						key.span(),
 						format!(
-							"Unknown attribute `{}`, excepted `registry` or `target`",
+							"Unknown attribute `{}`, excepted `registry`, `collector`, `mapper` or `output`",
 							key.to_string()
 						),
 					))
@@ -205,28 +208,23 @@ impl Parse for GenerateRegistryArgs {
 				input.span(),
 				"Missing required attribute `registry`".to_string(),
 			));
-		} else if target.is_none() {
+		} else if output.is_none() {
 			return Err(syn::Error::new(
 				input.span(),
-				"Missing required attribute `target`".to_string(),
+				"Missing required attribute `output`".to_string(),
 			));
-		} else if maker.is_none() {
+		} else if collector.is_none() && mapper.is_none() {
 			return Err(syn::Error::new(
 				input.span(),
-				"Missing required attribute `maker`".to_string(),
-			));
-		} else if return_type.is_none() {
-			return Err(syn::Error::new(
-				input.span(),
-				"Missing required attribute `return_type`".to_string(),
+				"Macro requires that either `collector` or `mapper` be set".to_string(),
 			));
 		}
 
 		Ok(GenerateRegistryArgs {
 			registry: registry.unwrap(),
-			target: target.unwrap(),
-			maker: maker.unwrap(),
-			return_type: return_type.unwrap(),
+			collector,
+			mapper,
+			output: output.unwrap(),
 		})
 	}
 }
@@ -235,42 +233,93 @@ impl Parse for GenerateRegistryArgs {
 ///
 /// # Attributes
 ///  - registry: (String) Name of the registry to generate
-///  - target: (Identifier) Name of the resulting function
-///  - maker: (Macro) A macro that will take all the newly constructed objects
-///           comma-separated and create the resulting expression
-///  - return_type: (Type) The return type of the generated function.
-///                 Must match the type of the macro invocation
+///  - collector: (Optional Macro) A macro that will take all the newly constructed
+///           objects comma-separated and create the resulting expression
+///  - mapper: (Optional Macro) A macro that will map each registered types to
+///            an expression. By default `$type::default()` will be called.
+///  - output: (Identifier) The generated macro to get access to all registered
+///            values. Calling to this macro is what actually generates the values
+///
+/// Note: Using `mapper` and `collector` will pass the results of calling `mapper`
+/// on all types in the registry to `collector`
 ///
 /// # Example
+///
+/// Basic example
 /// ```
-/// macro_rules! create_listeners {
-/// 	( $($construct:expr),+ $(,)? ) => {{
-/// 		vec![$(Box::new($construct) as Box<dyn Listener>,)+]
+/// #[auto_registry::auto_registry(registry = "listeners")]
+/// #[derive(Default)]
+/// struct KeyboardListener { ... }
+///
+/// #[auto_registry::auto_registry(registry = "listeners")]
+/// #[derive(Default)]
+/// struct MouseListener { ... }
+///
+/// macro_rules! collect_listeners { // Collects to a Vec<Box<dyn Listener>>
+/// 	( $($construct:expr);+ $(;)? ) => {{ // Macro must accepts `;`-separated arguments
+/// 		vec![$(Box::new($construct) as Box<dyn Listener + Send + Sync>,)+]
 /// 	}};
 /// }
-/// #[generate_registry(
-/// 		registry = "listeners",
-/// 		target = build_listeners,
-/// 		return_type = Vec<Box<dyn Listener>>,
-/// 		maker = create_listeners)]
+///
+/// #[auto_registry::generate_registry(registry = "listeners", collector = collect_listeners, output = get_listeners)]
 ///
 /// fn main()
 /// {
-/// 	let all_listeners : Vec<Box<dyn Listener>> = build_listeners();
+/// 	// All listeners will be initialized by calling to `::default()`
+/// 	let listeners = get_listeners!();
+/// }
+/// ```
+///
+/// Example using `mapper`
+/// ```
+/// #[auto_registry::auto_registry(registry = "listeners")]
+/// #[derive(Default)]
+/// struct KeyboardListener { ... }
+///
+/// #[auto_registry::auto_registry(registry = "listeners")]
+/// #[derive(Default)]
+/// struct MouseListener { ... }
+///
+/// // Some global variable that will hold out registered listeners
+/// static LISTENERS: LazyLock<Mutex<Vec<Box<dyn Listener + Send + Sync>>>> = LazyLock::new(|| Mutex::new(Vec::default()));
+///
+/// macro_rules! register_listener { // Register a single listener
+/// 	($t:ty) => {{
+/// 		let mut listeners = LISTENERS.lock();
+/// 		listeners
+/// 			.unwrap()
+/// 			.push(Box::new(<$t>::default()) as Box<dyn Listener + Send + Sync>);
+/// 	}};
+/// }
+///
+/// #[auto_registry::generate_registry(registry = "listeners", mapper = register_listener, output = register_all_listeners)]
+///
+/// fn main()
+/// {
+/// 	register_all_listeners!();
 /// }
 /// ```
 #[proc_macro_attribute]
 pub fn generate_registry(attr: TokenStream, input: TokenStream) -> TokenStream {
 	let args = parse_macro_input!(attr as GenerateRegistryArgs);
-	let reg_mtx = REGISTRY.lock().unwrap();
+	let reg = REGISTRY.lock().unwrap();
 
 	let mut stream = proc_macro2::TokenStream::new();
-	if let Some(names) = reg_mtx.borrow().get(args.registry.value().as_str()) {
+	if let Some(names) = reg.get(args.registry.value().as_str()) {
 		for name in names {
 			let struct_name: proc_macro2::TokenStream = name.parse().unwrap();
-			stream.extend(quote::quote_spanned!(proc_macro2::Span::call_site() =>
-				#struct_name::default(),
-			));
+			if let Some(ref mapper) = args.mapper
+			{
+				stream.extend(quote::quote_spanned!(proc_macro2::Span::call_site() =>
+					#mapper!(#struct_name);
+				));
+			}
+			else
+			{
+				stream.extend(quote::quote_spanned!(proc_macro2::Span::call_site() =>
+					#struct_name::default(),
+				));
+			}
 		}
 	} else {
 		panic!(
@@ -279,18 +328,26 @@ pub fn generate_registry(attr: TokenStream, input: TokenStream) -> TokenStream {
 		);
 	}
 
-	let function = args.target;
-	let return_type = args.return_type;
-	let maker = args.maker;
-
 	let rest: proc_macro2::TokenStream = input.into();
-	quote! {
-		fn #function() -> #return_type {
-			#maker!(
-				#stream
-			)
+	let output = args.output;
+
+	if let Some(collector) = args.collector
+	{
+		quote! {
+			macro_rules! #output  {
+				() => { #collector!(#stream); };
+			}
+			#rest
 		}
-		#rest
+	}
+	else
+	{
+		quote! {
+			macro_rules! #output  {
+				() => { #stream };
+			}
+			#rest
+		}
 	}
 	.into()
 }
