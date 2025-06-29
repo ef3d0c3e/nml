@@ -37,7 +37,7 @@ impl UserData for VariableWrapper {
 			},
 			"Returns the name of this variable's type",
 			vec!["self"],
-			Some("String")
+			Some("string")
 		);
 		add_documented_method!(
 			methods,
@@ -48,7 +48,7 @@ impl UserData for VariableWrapper {
 			},
 			"Returns the name of this variable",
 			vec!["self"],
-			Some("String")
+			Some("string")
 		);
 		add_documented_method!(
 			methods,
@@ -90,7 +90,7 @@ impl UserData for VariableWrapper {
 			},
 			"Converts this variable's content to a string",
 			vec!["self"],
-			Some("String")
+			Some("string")
 		);
 	}
 }

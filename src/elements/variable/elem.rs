@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use auto_userdata::AutoUserData;
 use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
@@ -12,10 +13,12 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::variable::Variable;
+use crate::lua::variable::VariableWrapper;
 
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
 pub struct VariableDefinition {
 	pub(crate) location: Token,
+	#[lua_map(VariableWrapper)]
 	pub(crate) variable: Arc<dyn Variable>,
 }
 

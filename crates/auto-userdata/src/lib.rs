@@ -13,7 +13,7 @@ use syn::DeriveInput;
 use syn::Fields;
 use syn::ItemStruct;
 
-#[proc_macro_derive(AutoUserData, attributes(lua_ignore))]
+#[proc_macro_derive(AutoUserData, attributes(lua_ignore, lua_map))]
 pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 	let ident = input.ident;
@@ -40,21 +40,45 @@ pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 	let mut field_getters = Vec::new();
 
 	for field in fields {
-		let name = field.ident.unwrap();
+		let name = field.ident.clone().unwrap();
 		let field_name_str = name.to_string();
 
-		// Check for #[lua_ignore]
-		let skip = field
-			.attrs
-			.iter()
-			.any(|attr| attr.path.is_ident("lua_ignore"));
+		let mut skip = false;
+		let mut map_wrapper = None;
+
+		for attr in &field.attrs {
+			if attr.path.is_ident("lua_ignore") {
+				skip = true;
+				break;
+			}
+
+			if attr.path.is_ident("lua_map") {
+				let meta = attr.parse_meta();
+				if let Ok(syn::Meta::List(meta_list)) = meta {
+					if let Some(syn::NestedMeta::Meta(syn::Meta::Path(path))) =
+						meta_list.nested.first()
+					{
+						if let Some(ident) = path.get_ident() {
+							map_wrapper = Some(ident.clone());
+						}
+					}
+				}
+			}
+		}
+
 		if skip {
 			continue;
 		}
 
+		let getter_expr = if let Some(wrapper_ident) = map_wrapper {
+			quote! { Ok(#wrapper_ident { inner: this.#name.clone() }) }
+		} else {
+			quote! { Ok(this.#name.clone()) }
+		};
+
 		field_getters.push(quote! {
 			fields.add_field_method_get(#field_name_str, |_, this| {
-				Ok(this.#name.clone())
+				#getter_expr
 			});
 		});
 	}
