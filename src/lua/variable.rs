@@ -84,7 +84,7 @@ impl UserData for VariableWrapper {
 		add_documented_method!(
 			methods,
 			"Variable",
-			"expand",
+			"to_string",
 			|lua, this, ()| {
 				lua.to_value(&this.inner.to_string())
 			},

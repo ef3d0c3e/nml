@@ -222,7 +222,7 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 	fn add_import(&self, imported: Arc<RwLock<Scope>>) {
 		let borrow = imported.read();
 		borrow.variables.iter().for_each(|(_, var)| {
-			if *var.visility() == VariableVisibility::Exported {
+			if *var.visibility() == VariableVisibility::Exported {
 				self.insert_variable(var.clone());
 			}
 		});

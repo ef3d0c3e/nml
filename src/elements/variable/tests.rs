@@ -1,18 +1,18 @@
 use std::sync::Arc;
 
-use crate::elements::meta::scope::ScopeElement;
-use crate::elements::text::elem::Text;
 use crate::elements::variable::elem::VariableDefinition;
 use crate::parser::parser::Parser;
 use crate::parser::source::SourceFile;
 use crate::unit::translation::TranslationUnit;
+use crate::unit::variable::{VariableName, VariableVisibility};
 use crate::validate_ast;
 
 #[test]
 fn parser() {
 	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
-		r#":set var = 'abc'"#.to_string(),
+		r#":set var = 'abc'
+:set"#.to_string(),
 		None,
 	));
 
@@ -22,7 +22,12 @@ fn parser() {
 	assert!(reports.is_empty());
 
 	validate_ast!(unit.get_entry_scope(), 0,
-		VariableDefinition { content == "TEXT" };
+		VariableDefinition {
+			variable.name() == &VariableName("var".into()),
+			variable.visibility() == &VariableVisibility::Internal,
+			variable.to_string() == "abc",
+			variable.variable_typename() == "property",
+		};
 	);
 }
 

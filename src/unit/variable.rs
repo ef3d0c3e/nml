@@ -109,7 +109,7 @@ pub trait Variable: Downcast + core::fmt::Debug + Send + Sync {
 	fn name(&self) -> &VariableName;
 
 	/// Gets the visibility of the variable
-	fn visility(&self) -> &VariableVisibility;
+	fn visibility(&self) -> &VariableVisibility;
 
 	/// Gets the mutability of the variable
 	fn mutability(&self) -> &VariableMutability;
@@ -147,7 +147,7 @@ impl Variable for ContentVariable {
 		&self.name
 	}
 
-	fn visility(&self) -> &VariableVisibility {
+	fn visibility(&self) -> &VariableVisibility {
 		&self.visibility
 	}
 
@@ -225,7 +225,7 @@ impl Variable for PropertyVariable {
 		&self.name
 	}
 
-	fn visility(&self) -> &VariableVisibility {
+	fn visibility(&self) -> &VariableVisibility {
 		&self.visibility
 	}
 

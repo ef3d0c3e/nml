@@ -37,7 +37,7 @@ impl VariableCompletion {
 				var.to_string(),
 				var.variable_typename(),
 				var.location().source().name(),
-				var.visility(),
+				var.visibility(),
 				var.mutability()
 			),
 		}
