@@ -11,8 +11,16 @@ use crate::validate_ast;
 fn parser() {
 	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
-		r#":set var = 'abc'
-:set"#.to_string(),
+		r#":set var = 'foo'
+:export val = "bar"
+:set multi = '''baz
+multi
+
+line'''
+:set content = {{
+TEXT *italic*
+}}
+"#.to_string(),
 		None,
 	));
 
@@ -25,8 +33,26 @@ fn parser() {
 		VariableDefinition {
 			variable.name() == &VariableName("var".into()),
 			variable.visibility() == &VariableVisibility::Internal,
-			variable.to_string() == "abc",
+			variable.to_string() == "foo",
 			variable.variable_typename() == "property",
+		};
+		VariableDefinition {
+			variable.name() == &VariableName("val".into()),
+			variable.visibility() == &VariableVisibility::Exported,
+			variable.to_string() == "bar",
+			variable.variable_typename() == "property",
+		};
+		VariableDefinition {
+			variable.name() == &VariableName("multi".into()),
+			variable.visibility() == &VariableVisibility::Internal,
+			variable.to_string() == "baz\nmulti\n\nline",
+			variable.variable_typename() == "property",
+		};
+		VariableDefinition {
+			variable.name() == &VariableName("content".into()),
+			variable.visibility() == &VariableVisibility::Internal,
+			variable.to_string() == "\nTEXT *italic*\n",
+			variable.variable_typename() == "content",
 		};
 	);
 }
