@@ -24,6 +24,7 @@ use super::compiler::Target;
 #[derive(Default)]
 pub struct ProcessOptions {
 	pub debug_ast: bool,
+	pub force_rebuild: bool,
 }
 
 #[derive(Debug)]
@@ -176,7 +177,7 @@ impl ProcessQueue {
 				})?;
 			let prev_mtime = self.cache.get_mtime(&local_path.to_string()).unwrap_or(0);
 
-			if prev_mtime >= mtime {
+			if !options.force_rebuild && prev_mtime >= mtime {
 				output_message(
 					ProcessQueueMessage::Skipped(&input_string),
 					(1 + idx) as f64 / self.inputs.len() as f64,

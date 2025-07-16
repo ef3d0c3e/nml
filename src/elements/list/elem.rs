@@ -120,8 +120,9 @@ impl Element for List {
 				Target::HTML => {
 					if has_offset {
 						output.add_content(format!(r#"<li value="{}">"#, stack.last().unwrap().1));
+					} else {
+						output.add_content("<li>");
 					}
-					output.add_content("<li>");
 					match &entry.bullet {
 						BulletMarker::Checkbox(state) => match state {
 							CheckboxState::Unchecked => {

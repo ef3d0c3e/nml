@@ -338,7 +338,7 @@ fn main() -> ExitCode {
 	};
 
 	let mut options = ProcessOptions::default();
-	let force_rebuild = matches.opt_present("force-rebuild");
+	options.force_rebuild = matches.opt_present("force-rebuild");
 	let debug_opts = matches.opt_strs("z");
 	if debug_opts.contains(&"ast".into()) {
 		options.debug_ast = true
