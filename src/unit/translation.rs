@@ -391,7 +391,7 @@ impl TranslationAccessors for TranslationUnit {
 					html.icon = Some(var.to_string())
 				}
 				if let Some((var, _)) = scope.get_variable(&VariableName("html.css".to_string())) {
-					html.icon = Some(var.to_string());
+					html.css = Some(var.to_string());
 				}
 			}
 		}

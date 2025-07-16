@@ -5,6 +5,7 @@ use std::time::UNIX_EPOCH;
 
 use ariadne::Color;
 use ariadne::Fmt;
+use graphviz_rust::print;
 
 use crate::cache::cache::Cache;
 use crate::parser::parser::Parser;
@@ -275,8 +276,49 @@ impl ProcessQueue {
 				(1 + idx) as f64 / processed.len() as f64,
 			);
 			match self.compiler.compile(unit) {
-				Ok(_) => {
-					// TODO
+				Ok(content) => {
+					if let Some(output) = unit.output_path()
+					{
+						let mut parent = PathBuf::new();
+						parent.push(output);
+						parent.pop();
+						let parent_exists = if let Ok(meta) = std::fs::metadata(&parent)
+						{
+							meta.is_dir()
+						} else { false };
+						if !parent_exists
+						{
+							if let Err(err) = std::fs::create_dir_all(&parent)
+							{
+								reports.push(make_err!(
+										unit.token().source(),
+										"Invalid output path".into(),
+										span(
+											unit.token().range,
+											format!(
+												"Failed to create output directory {}: {err}",
+												parent.display().fg(Color::Blue),
+											)
+										)
+								));
+								break
+							}
+						}
+						if let Err(err) = std::fs::write(output, content)
+						{
+							reports.push(make_err!(
+								unit.token().source(),
+								"Invalid output path".into(),
+								span(
+									unit.token().range,
+									format!(
+										"Failed to output to {}: {err}",
+										output.fg(Color::Blue),
+									)
+								)
+							));
+						}
+					}
 				}
 				Err(err) => reports.extend(err),
 			}

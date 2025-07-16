@@ -188,11 +188,22 @@ fn input_manual(
 		.split_at(output.rfind(|c| c == '/').unwrap_or(0))
 		.0
 		.to_string();
-	Ok((
-		files,
-		compiler::process::ProcessOutputOptions::Directory(settings.output_path.clone()),
-		settings,
-	))
+	if input_meta.is_dir()
+	{
+		Ok((
+				files,
+				compiler::process::ProcessOutputOptions::Directory(settings.output_path.clone()),
+				settings,
+		))
+	}
+	else
+	{
+		Ok((
+				files,
+				compiler::process::ProcessOutputOptions::File(settings.output_path.clone()),
+				settings,
+		))
+	}
 }
 
 fn input_project(

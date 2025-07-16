@@ -129,7 +129,7 @@ impl Compiler {
 					"".into()
 				};
 				format!(
-					"<!DOCTYPE html><html lang=\"{}\"><meta charset=\"utf-8\">{icon}{css}<head></head><body>",
+					"<!DOCTYPE html><html lang=\"{}\"><head><meta charset=\"utf-8\">{icon}{css}</head><body>",
 					self.sanitize(html.language.as_str())
 				)
 			}
@@ -147,42 +147,13 @@ impl Compiler {
 	}
 
 	/// Compiles a document to it's output
-	pub fn compile(&self, unit: &TranslationUnit) -> Result<(), Vec<Report>> {
-		match CompilerOutput::run_with_processor(self.target, &unit.colors(), |output| {
+	pub fn compile(&self, unit: &TranslationUnit) -> Result<String, Vec<Report>> {
+		let body = CompilerOutput::run_with_processor(self.target, &unit.colors(), |output| {
 			self.compile_scope(output, unit.get_entry_scope().to_owned())
-		}) {
-			Ok(output) => {
-				println!("output={:#?}", output.content);
-				Ok(())
-			}
-			Err(reports) => Err(reports),
-		}
+		})?;
 
-		/*
-		let borrow = document.content().borrow();
-
-		// Header
-		let header = self.header(document);
-
-		// Body
-		let output = CompilerOutput::run_with_processor(colors, |mut output| {
-			{
-				output.add_content(r#"<div class="content">"#);
-				for elem in borrow.iter() {
-					if let Err(reports) = elem.compile(self, document, &mut output) {
-						Report::reports_to_stdout(colors, reports);
-					};
-				}
-				output.add_content(r#"</div>"#);
-			}
-			output
-		});
-
-		// Footer
-		let footer = self.footer(document);
-
-		output.to_compiled(self, document, header, footer)
-		*/
+		let output = format!("{}<main><article>{}</article></main>{}", self.header(unit), body.content(), self.footer(unit));
+		Ok(output)
 	}
 
 	pub fn get_cache(&self) -> Arc<Cache> {
