@@ -1,3 +1,6 @@
+use auto_userdata::AutoUserData;
+use mlua::IntoLua;
+use mlua::LuaSerdeExt;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -9,6 +12,12 @@ pub enum Refname {
 	Internal(String),
 	External(String, String),
 	Bibliography(String, String),
+}
+
+impl<'lua> IntoLua<'lua> for Refname {
+	fn into_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+		lua.to_value(&self.to_string())
+	}
 }
 
 impl core::fmt::Display for Refname {
@@ -84,7 +93,7 @@ impl TryFrom<&str> for Refname {
 }
 
 /// References available inside a document
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
 pub struct InternalReference {
 	// Declaration
 	location: Token,

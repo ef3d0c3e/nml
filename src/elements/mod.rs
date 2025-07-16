@@ -14,7 +14,7 @@ pub mod linebreak;
 pub mod anchor;
 pub mod internal_link;
 //pub mod script;
-//pub mod section;
+pub mod heading;
 pub mod style;
 //pub mod table;
 pub mod latex;
