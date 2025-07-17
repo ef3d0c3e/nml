@@ -10,6 +10,7 @@ use parking_lot::RwLock;
 use parking_lot::RwLockWriteGuard;
 
 use crate::cache::cache::Cache;
+use crate::elements::lua::elem::LuaPostProcess;
 use crate::lsp::data::LangServerData;
 use crate::parser::parser::Parser;
 use crate::parser::reports::Report;
@@ -233,6 +234,13 @@ impl TranslationUnit {
 
 		self.with_lsp(|mut lsp| lsp.on_new_source(self.source.clone()));
 		self.parser.clone().parse(&mut self);
+		// Run post processing tasks
+		for (_, elem) in self.entry_scope.content_iter(true)
+		{
+			let Some(post_process) = elem.downcast_ref::<LuaPostProcess>() else { continue };
+
+			post_process.process(&mut self);
+		}
 		// Terminates entry scope
 		{
 			let temp_scope =

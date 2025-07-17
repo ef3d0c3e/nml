@@ -1,6 +1,8 @@
 use std::any::Any;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use ariadne::Span;
 use regex::Captures;
@@ -34,6 +36,8 @@ use ariadne::Fmt;
 
 use super::completion::LuaCompletion;
 use super::custom::LuaData;
+use super::elem::LuaEvalKind;
+use super::elem::LuaPostProcess;
 
 #[auto_registry::auto_registry(registry = "rules")]
 pub struct LuaRule {
@@ -230,7 +234,7 @@ impl Rule for LuaRule {
 
 #[auto_registry::auto_registry(registry = "rules")]
 pub struct InlineLuaRule {
-	re: [Regex; 1],
+	re: [Regex; 2],
 	properties: PropertyParser,
 }
 
@@ -245,7 +249,12 @@ impl Default for InlineLuaRule {
 			re: [Regex::new(
 				r"(\{:lua)(?:\[((?:\\.|[^\\\\])*?)\])?(!|')?\s(?:((?:\\.|[^\\\\])*?)(:\}))?",
 			)
-			.unwrap()],
+			.unwrap(),
+			Regex::new(
+				r"(\{:lua_post)(?:\[((?:\\.|[^\\\\])*?)\])?(!|')?\s(?:((?:\\.|[^\\\\])*?)(:\}))?",
+			)
+				.unwrap()
+			],
 			properties: PropertyParser { properties },
 		}
 	}
@@ -276,7 +285,7 @@ impl RegexRule for InlineLuaRule {
 
 	fn on_regex_match<'u>(
 		&self,
-		_index: usize,
+		index: usize,
 		unit: &mut TranslationUnit,
 		token: Token,
 		captures: Captures,
@@ -331,7 +340,7 @@ impl RegexRule for InlineLuaRule {
 		};
 
 		// Get evaluation kind
-		let eval_kind = captures.get(3).map_or("", |m| m.as_str());
+		let eval_kind = LuaEvalKind::from_str(captures.get(3).map_or("", |m| m.as_str())).unwrap();
 
 		// Get content
 		let lua_range = captures.get(4).unwrap().range();
@@ -353,6 +362,13 @@ impl RegexRule for InlineLuaRule {
 			})
 		});
 
+		// Add lua post process task
+		if index == 1
+		{
+			unit.add_content(Arc::new(LuaPostProcess{ location: token.clone(), expanded: OnceLock::new(), source: lua_source, kernel_name, eval_kind }));
+			return
+		}
+
 		// Evaluate
 		LuaData::initialize(unit);
 		LuaData::with_kernel(unit, &kernel_name, |unit, kernel| {
@@ -363,12 +379,12 @@ impl RegexRule for InlineLuaRule {
 				|unit, scope| {
 					let ctx = KernelContext::new(lua_source.clone().into(), unit);
 					match kernel.run_with_context(ctx, |lua| match eval_kind {
-						"" => lua
+						LuaEvalKind::None => lua
 							.load(lua_source.content())
 							.set_name(lua_source.name())
 							.eval::<()>()
 							.map(|_| String::default()),
-						"'" | "!" => lua
+						LuaEvalKind::String | LuaEvalKind::StringParse => lua
 							.load(lua_source.content())
 							.set_name(lua_source.name())
 							.eval::<String>(),
@@ -378,17 +394,17 @@ impl RegexRule for InlineLuaRule {
 							report_err!(
 								unit,
 								token.source(),
-								"Lua error".into(),
+								"Lua Error".into(),
 								span(lua_range.clone(), err.to_string())
 							);
 						}
 						Ok(result) => {
-							if eval_kind == "'" && !result.is_empty() {
+							if eval_kind == LuaEvalKind::String && !result.is_empty() {
 								unit.add_content(Arc::new(Text {
 									location: lua_source.into(),
 									content: result,
 								}));
-							} else if eval_kind == "!" && !result.is_empty() {
+							} else if eval_kind == LuaEvalKind::StringParse && !result.is_empty() {
 								let content = Arc::new(VirtualSource::new(
 									token.clone(),
 									":LUA:Inline lua result".into(),

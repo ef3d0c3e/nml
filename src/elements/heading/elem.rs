@@ -3,6 +3,8 @@ use std::sync::OnceLock;
 
 use ariadne::Span;
 use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::Lua;
 use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
@@ -100,6 +102,10 @@ impl Element for Heading {
 		} else {
 			None
 		}
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		Some(lua.create_userdata(self.clone()).unwrap())
 	}
 }
 
