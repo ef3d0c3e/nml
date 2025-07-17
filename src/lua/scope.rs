@@ -1,12 +1,17 @@
 use std::sync::Arc;
 
-use mlua::{UserData, Value};
+use mlua::UserData;
+use mlua::Value;
 use parking_lot::RwLock;
 
-use crate::unit::{element::Element, scope::{Scope, ScopeAccessor}};
+use crate::add_documented_method;
+use crate::unit::element::Element;
+use crate::unit::scope::Scope;
+use crate::unit::scope::ScopeAccessor;
 
 use super::elem::ElemWrapper;
 
+/// Wrapper for Scopes
 pub struct ScopeWrapper {
 	pub inner: Arc<RwLock<Scope>>,
 }
@@ -19,6 +24,38 @@ impl UserData for ScopeWrapper {
 			let it = this.inner.content_iter(recurse);
 			Ok(IteratorWrapper { iter: Box::new(it) })
 		});
+	}
+}
+
+/// Wrapper for `Vec<Arc<RwLock<Scope>>>`
+pub struct VecScopeWrapper {
+	pub inner: Vec<Arc<RwLock<Scope>>>,
+}
+
+impl UserData for VecScopeWrapper {
+	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
+
+	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+		add_documented_method!(
+			methods,
+			"Scope",
+			"scope",
+			|_lua, this, (id,): (usize,)| { 
+				if let Some(scope) = this.inner.get(id).cloned() {
+					Ok(ScopeWrapper { inner: scope })
+				} else {
+					Err(mlua::Error::BadArgument {
+						to: Some("scope".into()),
+						pos: 1,
+						name: Some("id".into()),
+						cause: Arc::new(mlua::Error::RuntimeError("Index out of bounds".into())),
+					})
+				}
+			},
+			"Gets a scope by id",
+			vec!["self", "id: number"],
+			Some("Scope")
+		);
 	}
 }
 

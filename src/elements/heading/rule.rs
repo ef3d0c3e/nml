@@ -118,7 +118,9 @@ impl RegexRule for HeadingRule {
 				}
 			};
 			unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(refname.start()-1..refname.start(), tokens.heading_refname_sep);
 				sems.add(refname.range(), tokens.heading_refname);
+				sems.add(refname.end()..refname.end()+1, tokens.heading_refname_sep);
 			}));
 			Some(name)
 		} else { None };

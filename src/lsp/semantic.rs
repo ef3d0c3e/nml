@@ -133,6 +133,7 @@ pub struct Tokens {
 	pub list_bullet_type: (u32, u32),
 
 	pub heading_depth: (u32, u32),
+	pub heading_refname_sep: (u32, u32),
 	pub heading_refname: (u32, u32),
 	pub heading_kind: (u32, u32),
 }
@@ -182,6 +183,7 @@ impl Default for Tokens {
 			list_bullet_type: token!("float"),
 
 			heading_depth: token!("macro"),
+			heading_refname_sep: token!("macro"),
 			heading_refname: token!("parameter"),
 			heading_kind: token!("operator"),
 		}

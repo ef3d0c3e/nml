@@ -8,6 +8,7 @@ use parking_lot::RwLock;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
+use crate::lua::scope::VecScopeWrapper;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crate::unit::element::ContainerElement;
@@ -22,7 +23,7 @@ use crate::unit::scope::ScopeAccessor;
 pub struct Heading {
 	pub(crate) location: Token,
 	/// Heading display
-	#[lua_ignore]
+	#[lua_map(VecScopeWrapper)]
 	pub(crate) display: Vec<Arc<RwLock<Scope>>>,
 	/// Nesting depth
 	pub(crate) depth: usize,
