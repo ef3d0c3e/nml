@@ -1,7 +1,12 @@
 use std::sync::Arc;
 
+use auto_userdata::AutoUserData;
 use parking_lot::RwLock;
+use serde::Deserialize;
+use serde::Serialize;
+use mlua::serde::LuaSerdeExt;
 
+use crate::lua::scope::ScopeWrapper;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
@@ -13,7 +18,7 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum CheckboxState {
 	Checked,
@@ -21,24 +26,27 @@ pub enum CheckboxState {
 	Partial,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BulletMarker {
 	Bullet,
 	Checkbox(CheckboxState),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListMarker {
 	pub(crate) numbered: bool,
 	pub(crate) offset: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
 pub struct ListEntry {
 	#[allow(unused)]
 	pub(crate) location: Token,
+	#[lua_value]
 	pub(crate) bullet: BulletMarker,
+	#[lua_map(ScopeWrapper)]
 	pub(crate) content: Arc<RwLock<Scope>>,
+	#[lua_value]
 	pub(crate) marker: Vec<ListMarker>,
 }
 

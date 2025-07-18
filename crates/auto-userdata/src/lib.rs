@@ -1,19 +1,19 @@
 #![feature(proc_macro_span)]
-use std::cell::RefCell;
-use std::collections::HashMap;
-
-use lazy_static::lazy_static;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::sync::Mutex;
-use syn::parse::Parse;
-use syn::parse::ParseStream;
+use syn::Ident;
 use syn::parse_macro_input;
 use syn::DeriveInput;
 use syn::Fields;
-use syn::ItemStruct;
 
-#[proc_macro_derive(AutoUserData, attributes(lua_ignore, lua_map))]
+enum ValueMapper
+{
+	Ignore,
+	Value,
+	Map(Ident),
+}
+
+#[proc_macro_derive(AutoUserData, attributes(lua_value, lua_ignore, lua_map))]
 pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 	let ident = input.ident;
@@ -44,14 +44,17 @@ pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 		let field_name_str = name.to_string();
 
 		let mut skip = false;
-		let mut map_wrapper = None;
+		let mut mapper = None;
 
 		for attr in &field.attrs {
 			if attr.path.is_ident("lua_ignore") {
-				skip = true;
+				mapper = Some(ValueMapper::Ignore);
 				break;
 			}
-
+			if attr.path.is_ident("lua_value") {
+				mapper = Some(ValueMapper::Value);
+				break;
+			}
 			if attr.path.is_ident("lua_map") {
 				let meta = attr.parse_meta();
 				if let Ok(syn::Meta::List(meta_list)) = meta {
@@ -59,25 +62,24 @@ pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 						meta_list.nested.first()
 					{
 						if let Some(ident) = path.get_ident() {
-							map_wrapper = Some(ident.clone());
+							mapper = Some(ValueMapper::Map(ident.clone()))
 						}
 					}
 				}
+				break;
 			}
 		}
 
-		if skip {
-			continue;
-		}
-
-		let getter_expr = if let Some(wrapper_ident) = map_wrapper {
-			quote! { Ok(#wrapper_ident { inner: this.#name.clone() }) }
-		} else {
-			quote! { Ok(this.#name.clone()) }
+		let getter_expr = match mapper
+		{
+			Some(ValueMapper::Ignore) => continue,
+			Some(ValueMapper::Map(mapper)) => quote! { Ok(#mapper { inner: this.#name.clone() }) },
+			Some(ValueMapper::Value) => quote! { lua.to_value(&this.#name) },
+			_ => quote! { Ok(this.#name.clone()) },
 		};
 
 		field_getters.push(quote! {
-			fields.add_field_method_get(#field_name_str, |_, this| {
+			fields.add_field_method_get(#field_name_str, |lua, this| {
 				#getter_expr
 			});
 		});
