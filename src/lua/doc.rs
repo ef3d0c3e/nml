@@ -75,6 +75,40 @@ pub fn get_lua_docs()
 		for m in &doc.methods {
 			// doc comment
 			buf += &format!("--- {}\n", m.doc);
+			let mut args = String::default();
+			let mut args_doc = String::default();
+			for arg in &m.args
+			{
+				let (arg, doc) = arg.split_once(" ").map_or_else(
+					|| (arg.trim_start().trim_end(), ""),
+					|(arg, doc)| (arg.trim_start().trim_end(), doc.trim_start().trim_end())
+				);
+				if let Some((name, ty)) = arg.split_once(":") {
+					if !doc.is_empty()
+					{
+						args_doc += format!("--- @param {name} {ty} {doc}\n").as_str();
+					}
+					else
+					{
+						args_doc += format!("--- @param {name} {ty}\n").as_str();
+					}
+					if !args.is_empty() { args += ", " }
+					args += format!("{name}").as_str();
+				}
+				else {
+					if !doc.is_empty()
+					{
+						args_doc += format!("--- @param {arg} {doc}\n").as_str();
+					}
+					else
+					{
+						args_doc += format!("--- @param {arg} {doc}\n").as_str();
+					}
+					if !args.is_empty() { args += ", " }
+					args += format!("{arg}").as_str();
+				}
+			}
+			buf += args_doc.as_str();
 			// @return if any
 			if let Some(ret) = &m.returns {
 				buf += &format!("--- @return {}\n", ret);
@@ -82,7 +116,7 @@ pub fn get_lua_docs()
 			// function signature
 			// we ignore args other than self, since Lua methods always get :self
 			buf += &format!(
-				"function {}:{}() end\n\n",
+				"function {}:{}({args}) end\n\n",
 				doc.type_name, m.name
 			);
 		}

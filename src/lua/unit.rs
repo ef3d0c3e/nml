@@ -3,8 +3,11 @@ use crate::unit::translation::TranslationUnit;
 use crate::unit::variable::VariableName;
 use mlua::UserData;
 
-use super::{scope::{IteratorWrapper, ScopeWrapper}, variable::VariableWrapper};
+use super::scope::IteratorWrapper;
+use super::scope::ScopeWrapper;
+use super::variable::VariableWrapper;
 
+#[auto_registry::auto_registry(registry = "lua")]
 pub struct UnitWrapper<'a> {
 	pub inner: &'a mut TranslationUnit,
 }

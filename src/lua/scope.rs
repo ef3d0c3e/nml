@@ -12,6 +12,7 @@ use crate::unit::scope::ScopeAccessor;
 use super::elem::ElemWrapper;
 
 /// Wrapper for Scopes
+#[auto_registry::auto_registry(registry = "lua")]
 pub struct ScopeWrapper {
 	pub inner: Arc<RwLock<Scope>>,
 }
@@ -28,6 +29,7 @@ impl UserData for ScopeWrapper {
 }
 
 /// Wrapper for `Vec<Arc<RwLock<Scope>>>`
+#[auto_registry::auto_registry(registry = "lua")]
 pub struct VecScopeWrapper {
 	pub inner: Vec<Arc<RwLock<Scope>>>,
 }
@@ -53,7 +55,7 @@ impl UserData for VecScopeWrapper {
 				}
 			},
 			"Gets a scope by id",
-			vec!["self", "id: number"],
+			vec!["self", "id:number Id of the scope to get"],
 			Some("Scope")
 		);
 	}

@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::Lua;
 use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
@@ -73,6 +75,10 @@ impl Element for VariableDefinition {
 
 	fn provide_hover(&self) -> Option<String> {
 		Some(get_documentation(self.element_name(), &self.variable))
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		Some(lua.create_userdata(self.clone()).unwrap())
 	}
 }
 
