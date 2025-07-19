@@ -2,6 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::add_documented_function;
+use crate::lua::elem::ElemWrapper;
 use crate::lua::kernel::Kernel;
 use crate::parser::rule::Rule;
 use crate::parser::rule::RuleTarget;
@@ -49,13 +50,12 @@ impl Rule for TextRule {
 		add_documented_function!(
 			"text.Text",
 			|lua: &mlua::Lua, (content,): (String,)| {
-				Kernel::with_context(lua, |ctx| {
-					ctx.unit.add_content(Arc::new(Text {
+				Ok(Kernel::with_context(lua, |ctx| ElemWrapper {
+					inner: Arc::new(Text {
 						location: ctx.location.clone(),
 						content,
-					}));
-				});
-				Ok(())
+					}),
+				}))
 			},
 			"Creates a new text element",
 			vec!["content:string String content of the created text"],

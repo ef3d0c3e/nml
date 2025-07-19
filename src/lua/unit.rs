@@ -1,4 +1,8 @@
+use crate::add_documented_method;
+use crate::lua::elem::ElemWrapper;
+use crate::lua::kernel::Kernel;
 use crate::unit::scope::ScopeAccessor;
+use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use crate::unit::variable::VariableName;
 use mlua::UserData;
@@ -35,5 +39,19 @@ impl<'a> UserData for UnitWrapper<'a> {
 			};
 			Ok(Some(VariableWrapper { inner: var }))
 		});
+		add_documented_method!(
+			methods,
+			"Unit",
+			"add_content",
+			|lua, _this, (elem,): (ElemWrapper,)| {
+				Kernel::with_context(lua, |ctx| {
+					ctx.unit.add_content(elem.inner.clone());
+				});
+				Ok(())
+			},
+			"Inserts content in the unit at the current position",
+			vec!["self", "elem:Element Element to insert"],
+			None
+		);
 	}
 }

@@ -108,7 +108,7 @@ pub fn get_lua_docs()
 	{
 		let mut buf = String::new();
 		// Class header
-		buf += &format!("--- @class {}\n", doc.type_name);
+		buf += &format!("--- @type {}\n", doc.type_name);
 		buf += &format!("local {} = {{}}\n\n", doc.type_name);
 
 		// Methods
