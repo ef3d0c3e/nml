@@ -22,10 +22,13 @@ pub struct LuaFunc {
 	/// Table path of the function
 	pub name: &'static str,
 	/// Function doc string
+	#[allow(unused)]
 	pub doc: &'static str,
 	/// Funcction arguments doc
+	#[allow(unused)]
 	pub args: Vec<&'static str>,
 	/// Function return value doc
+	#[allow(unused)]
 	pub ret: &'static str,
 	/// Function
 	pub fun: std::sync::Arc<

@@ -58,7 +58,7 @@ impl Rule for TextRule {
 				Ok(())
 			},
 			"Creates a new text element",
-			vec!["content String content of the created text"],
+			vec!["content:string String content of the created text"],
 			"Text"
 		);
 	}
