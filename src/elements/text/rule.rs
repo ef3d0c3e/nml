@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::add_documented_function;
 use crate::lua::kernel::Kernel;
 use crate::parser::rule::Rule;
 use crate::parser::rule::RuleTarget;
@@ -44,15 +45,21 @@ impl Rule for TextRule {
 		panic!("Text cannot match");
 	}
 
-	fn register_bindings(&self, kernel: &Kernel, table: mlua::Table) {
-		kernel.create_function(table.clone(), "push", |lua, content: String| {
-			Kernel::with_context(lua, |ctx| {
-				ctx.unit.add_content(Arc::new(Text {
-					location: ctx.location.clone(),
-					content,
-				}));
-			});
-			Ok(())
-		});
+	fn register_bindings(&self) {
+		add_documented_function!(
+			"text.Text",
+			|lua: &mlua::Lua, (content,): (String,)| {
+				Kernel::with_context(lua, |ctx| {
+					ctx.unit.add_content(Arc::new(Text {
+						location: ctx.location.clone(),
+						content,
+					}));
+				});
+				Ok(())
+			},
+			"Creates a new text element",
+			vec!["content String content of the created text"],
+			"Text"
+		);
 	}
 }

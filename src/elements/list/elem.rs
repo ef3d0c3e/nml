@@ -1,12 +1,16 @@
 use std::sync::Arc;
 
 use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::Lua;
 use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
 use mlua::serde::LuaSerdeExt;
 
+use crate::lua::elem::LuaUDVec;
 use crate::lua::scope::ScopeWrapper;
+use crate::lua::scope::VecScopeWrapper;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
@@ -38,7 +42,7 @@ pub struct ListMarker {
 	pub(crate) offset: usize,
 }
 
-#[derive(Debug, AutoUserData)]
+#[derive(Debug, Clone, AutoUserData)]
 pub struct ListEntry {
 	#[allow(unused)]
 	pub(crate) location: Token,
@@ -50,10 +54,12 @@ pub struct ListEntry {
 	pub(crate) marker: Vec<ListMarker>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
 pub struct List {
 	pub(crate) location: Token,
+	#[lua_map(VecScopeWrapper)]
 	pub(crate) contained: Vec<Arc<RwLock<Scope>>>,
+	#[lua_map(LuaUDVec)]
 	pub(crate) entries: Vec<ListEntry>,
 }
 
@@ -168,6 +174,10 @@ impl Element for List {
 
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		Some(self)
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		Some(lua.create_userdata(self.clone()).unwrap())
 	}
 }
 

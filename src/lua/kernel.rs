@@ -2,10 +2,12 @@ use std::cell::LazyCell;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use graphviz_rust::print;
 use mlua::IntoLua;
 use mlua::LightUserData;
 use mlua::Lua;
 use mlua::Table;
+use mlua::Value;
 use parking_lot::Mutex;
 
 use crate::parser::parser::ParserRuleAccessor;
@@ -14,6 +16,66 @@ use crate::parser::source::Token;
 use crate::unit::translation::TranslationUnit;
 
 use super::unit::UnitWrapper;
+
+/// Lua function
+pub struct LuaFunc {
+	/// Table path of the function
+	pub name: &'static str,
+	/// Function doc string
+	pub doc: &'static str,
+	/// Funcction arguments doc
+	pub args: Vec<&'static str>,
+	/// Function return value doc
+	pub ret: &'static str,
+	/// Function
+	pub fun: std::sync::Arc<
+		dyn for<'lua> Fn(&'lua Lua, mlua::MultiValue<'lua>) -> mlua::Result<mlua::MultiValue<'lua>>
+			+ Send
+			+ Sync,
+	>,
+}
+
+pub static LUA_FUNC: LazyLock<Mutex<HashMap<&'static str, LuaFunc>>> =
+	LazyLock::new(|| Mutex::new(HashMap::default()));
+
+#[macro_export]
+macro_rules! add_documented_function {
+	($name:literal, $handler:expr, $documentation:expr, $args:expr, $ret:expr) => {{
+		fn wrap_lua_fn<A, R, F>(
+			f: F,
+		) -> std::sync::Arc<
+			dyn for<'lua> Fn(
+					&'lua mlua::Lua,
+					mlua::MultiValue<'lua>,
+				) -> mlua::Result<mlua::MultiValue<'lua>>
+				+ Send
+				+ Sync,
+		>
+		where
+			A: for<'lua> mlua::FromLuaMulti<'lua> + 'static,
+			R: for<'lua> mlua::IntoLuaMulti<'lua> + 'static,
+			F: for<'lua> Fn(&'lua mlua::Lua, A) -> mlua::Result<R> + Send + Sync + 'static,
+		{
+			std::sync::Arc::new(move |lua, args| {
+				let a = A::from_lua_multi(args, lua)?;
+				let r = f(lua, a)?;
+				r.into_lua_multi(lua)
+			})
+		}
+		let mut funs = crate::lua::kernel::LUA_FUNC.lock();
+		let fun_name = $name.split_once(".").map_or($name, |(_, last)| last);
+		funs.insert(
+			$name,
+			crate::lua::kernel::LuaFunc {
+				name: fun_name,
+				doc: $documentation,
+				args: $args,
+				ret: $ret,
+				fun: wrap_lua_fn($handler),
+			},
+		);
+	}};
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct KernelName(pub String);
@@ -117,32 +179,71 @@ impl Kernel {
 			.unwrap();
 
 		// Register accessors
-		nml_table.set("unit", kernel.lua.create_function(|lua, ()| {
-				// Get KernelContext from registry
-				let ctx: LightUserData = lua.named_registry_value("__REGISTRY_NML_CTX")?;
-				let ctx = ctx.0 as *mut KernelContext;
-				let ctx_ref = unsafe { &mut *ctx };
+		nml_table
+			.set(
+				"unit",
+				kernel
+					.lua
+					.create_function(|lua, ()| {
+						// Get KernelContext from registry
+						let ctx: LightUserData = lua.named_registry_value("__REGISTRY_NML_CTX")?;
+						let ctx = ctx.0 as *mut KernelContext;
+						let ctx_ref = unsafe { &mut *ctx };
 
-				// Wrap the unit (not as userdata! use a light proxy)
-				// Instead of passing a reference directly, create a proxy object with dynamic dispatch
-				let wrapper = lua.create_userdata(UnitWrapper {
-					inner: &mut ctx_ref.unit,
-				})?;
+						// Wrap the unit (not as userdata! use a light proxy)
+						// Instead of passing a reference directly, create a proxy object with dynamic dispatch
+						let wrapper = lua.create_userdata(UnitWrapper {
+							inner: &mut ctx_ref.unit,
+						})?;
 
-				Ok(wrapper)
-		}).unwrap()).unwrap();
+						Ok(wrapper)
+					})
+					.unwrap(),
+			)
+			.unwrap();
 
 		// Register functions from parser rules
-		unit.parser().rules_iter().for_each(|rule| {
-			let table = kernel.lua.create_table().unwrap();
+		let lock = LUA_FUNC.lock();
+		for (name, fun) in lock.iter() {
+			let mut stack = vec![nml_table.clone()];
+			let mut path = *name;
+			loop {
+				let (name, rest) = path.split_once(".").unwrap_or((path, ""));
+				path = rest;
+				let top = stack.last().unwrap();
 
-			rule.register_bindings(&kernel, table.clone());
+				if rest.is_empty() {
+					// Check for duplicate
+					match top.get::<_, Value>(name) {
+						Ok(Value::Nil) => {}
+						_ => panic!("Duplicate binding: {}", fun.name),
+					}
 
-			// TODO: Export this so we can check for duplicate rules based on this name
-			let name = rule.name().to_lowercase().replace(' ', "_");
-			nml_table.set(name, table).unwrap();
-		});
+					// Insert handler
+					let handler = fun.fun.clone();
+					top.set(
+						name,
+						kernel
+							.lua
+							.create_function(move |lua, args: mlua::MultiValue| {
+								(handler)(lua, args)
+							})
+							.unwrap(),
+					)
+					.unwrap();
+					break;
+				}
 
+				match top.get::<_, Value>(name) {
+					Ok(Value::Nil) => {
+						let table = kernel.lua.create_table().unwrap();
+						top.set(name, table.clone());
+						stack.push(table);
+					}
+					_ => {}
+				}
+			}
+		}
 		kernel.lua.globals().set("nml", nml_table).unwrap();
 
 		kernel
@@ -198,16 +299,5 @@ impl Kernel {
 		}
 
 		Ok(())
-	}
-
-	/// Creates a function and inserts it into a table
-	pub fn create_function<'lua, A, R, F>(&'lua self, table: mlua::Table, name: &str, f: F)
-	where
-		A: mlua::FromLuaMulti<'lua>,
-		R: mlua::IntoLuaMulti<'lua>,
-		F: Fn(&'lua Lua, A) -> mlua::Result<R> + 'static,
-	{
-		let fun = self.lua.create_function(f).unwrap();
-		table.set(name, fun).unwrap();
 	}
 }

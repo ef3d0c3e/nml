@@ -2,10 +2,10 @@ mod cache;
 mod compiler;
 mod elements;
 mod lsp;
-mod lua;
 mod parser;
 mod unit;
 mod util;
+mod lua;
 
 use std::env::{self};
 use std::fs;

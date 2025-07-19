@@ -213,16 +213,7 @@ impl Rule for LuaRule {
 		end_cursor.at(content_end + delimiter.len())
 	}
 
-	fn register_bindings<'lua>(&self, kernel: &'lua lua::kernel::Kernel, table: mlua::Table) {
-		kernel.create_function(table, "foo", |lua, ()| {
-			Kernel::with_context(lua, |ctx| {
-				ctx.unit.add_content(Arc::new(Text {
-					location: ctx.location.clone(),
-					content: format!("Foo called!"),
-				}));
-			});
-			Ok(())
-		});
+	fn register_bindings(&self) {
 	}
 
 	fn completion(

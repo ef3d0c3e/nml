@@ -21,9 +21,12 @@ pub struct Parser {
 impl Parser {
 	/// Constructs a new parser that will automatically fetch all exported rules
 	pub fn new() -> Self {
-		Self {
-			rules: super::rule::get_rule_registry(),
+		let rules = super::rule::get_rule_registry();
+		// Register lua bindings
+		for rule in &rules {
+			rule.register_bindings();
 		}
+		Self { rules }
 	}
 
 	/// Updates matches from a given start position e.g [`Cursor`]

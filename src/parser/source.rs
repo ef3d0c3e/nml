@@ -10,6 +10,8 @@ use mlua::LuaSerdeExt;
 use mlua::UserData;
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::add_documented_method;
+
 /// Trait for source content
 pub trait Source: Downcast + Send + Sync {
 	/// Gets the source's location
@@ -427,6 +429,7 @@ impl LineCursor {
 
 /// A token is a [`Range<usize>`] in a [`Source`]
 #[derive(Debug, Clone)]
+#[auto_registry::auto_registry(registry = "lua")]
 pub struct Token {
 	pub range: Range<usize>,
 	source: Arc<dyn Source>,
@@ -539,18 +542,44 @@ impl From<&Range<Cursor>> for Token {
 }
 
 impl UserData for Token {
-    fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {
-	}
+	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
 
-    fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-		methods.add_method("start_byte", |lua, this, ()| {
-			Ok(lua.to_value(&this.range.start))
-		});
-		methods.add_method("end_byte", |lua, this, ()| {
-			Ok(lua.to_value(&this.range.end))
-		});
-		methods.add_method("source", |lua, this, ()| {
-			Ok(lua.to_value(this.source().name()))
-		});
+	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+		add_documented_method!(
+			methods,
+			"Token",
+			"start_byte",
+			|lua, this, ()| { Ok(lua.to_value(&this.range.start)) },
+			"Gets the start byte of this token",
+			vec!["self"],
+			Some("number")
+		);
+		add_documented_method!(
+			methods,
+			"Token",
+			"end_byte",
+			|lua, this, ()| { Ok(lua.to_value(&this.range.end)) },
+			"Gets the end byte of this token",
+			vec!["self"],
+			Some("number")
+		);
+		add_documented_method!(
+			methods,
+			"Token",
+			"source",
+			|lua, this, ()| { Ok(lua.to_value(this.source().name())) },
+			"Gets the source name of this token",
+			vec!["self"],
+			Some("string")
+		);
+		add_documented_method!(
+			methods,
+			"Token",
+			"content",
+			|lua, this, ()| { Ok(lua.to_value(&this.source().content()[this.range.clone()])) },
+			"Gets the content of this token",
+			vec!["self"],
+			Some("string")
+		);
 	}
 }
