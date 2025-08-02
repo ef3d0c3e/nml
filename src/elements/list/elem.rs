@@ -51,7 +51,7 @@ pub struct ListEntry {
 	#[lua_map(ScopeWrapper)]
 	pub(crate) content: Arc<RwLock<Scope>>,
 	#[lua_value]
-	pub(crate) marker: Vec<ListMarker>,
+	pub(crate) markers: Vec<ListMarker>,
 }
 
 #[derive(Debug, AutoUserData)]
@@ -129,7 +129,7 @@ impl Element for List {
 		};
 
 		for entry in &self.entries {
-			let has_offset = match_stack(&mut stack, &entry.marker, output);
+			let has_offset = match_stack(&mut stack, &entry.markers, output);
 			match compiler.target() {
 				Target::HTML => {
 					if has_offset {

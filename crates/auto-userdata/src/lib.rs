@@ -43,7 +43,6 @@ pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 		let name = field.ident.clone().unwrap();
 		let field_name_str = name.to_string();
 
-		let mut skip = false;
 		let mut mapper = None;
 
 		for attr in &field.attrs {

@@ -3,8 +3,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use ariadne::Fmt;
+use mlua::LuaSerdeExt;
 use regex::Regex;
 
+use crate::lua::elem::ElemWrapper;
+use crate::lua::kernel::Kernel;
+use crate::lua::scope::ScopeWrapper;
 use crate::parser::property::Property;
 use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
@@ -184,7 +188,7 @@ impl Rule for ListRule {
 			// Depth
 			let depth = {
 				let empty = vec![];
-				let previous = list.entries.last().map(|ent| &ent.marker).unwrap_or(&empty);
+				let previous = list.entries.last().map(|ent| &ent.markers).unwrap_or(&empty);
 				parse_depth(
 					captures.get(1).unwrap().as_str(),
 					offset.unwrap_or(1),
@@ -324,7 +328,7 @@ impl Rule for ListRule {
 				location: Token::new(entry_start..end_cursor.pos(), end_cursor.source()),
 				bullet,
 				content: parsed_content,
-				marker: depth,
+				markers: depth,
 			});
 			true
 		};
@@ -336,6 +340,33 @@ impl Rule for ListRule {
 	}
 
 	fn register_bindings(&self) {
+		add_documented_function_values!(
+			"list.Entry",
+			|lua: &mlua::Lua, args: mlua::MultiValue| {
+				let (bullet, content, markers) = convert_lua_args!(lua, args, (BulletMarker, "bullet"), (ScopeWrapper, "content", userdata), (Vec<ListMarker>, "markers"));
+				Ok(Kernel::with_context(lua, |ctx|
+					ListEntry { location: ctx.location.clone(), bullet, content: content.inner.clone(), markers }
+				))
+			},
+			"Creates a new list entry",
+			vec!["bullet BulletMarker Type of list bullet for this entry", "content Scope Content of this entry", "markers ListMarker[] Markers to this entry"],
+			"ListEntry"
+		);
+		add_documented_function_values!(
+			"list.List",
+			|lua: &mlua::Lua, args: mlua::MultiValue| {
+				let entries = convert_lua_args!(lua, args, (ListEntry, "entries", vuserdata));
+				let contained = entries.iter()
+					.map(|ent| ent.content.clone())
+					.collect::<Vec<_>>();
+				Ok(Kernel::with_context(lua, |ctx|
+					ElemWrapper { inner: Arc::new(List { location: ctx.location.clone(), contained, entries: entries.to_owned() }) }
+				))
+			},
+			"Creates a new list entry",
+			vec!["entries ListEntry[] Entries for the list"],
+			"List"
+		);
 	}
 
 	fn completion(

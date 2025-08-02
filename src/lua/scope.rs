@@ -21,10 +21,18 @@ impl UserData for ScopeWrapper {
 	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
 
 	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-		methods.add_method("content", |_lua, this, (recurse,): (bool,)| {
-			let it = this.inner.content_iter(recurse);
-			Ok(IteratorWrapper { iter: Box::new(it) })
-		});
+		add_documented_method!(
+			methods,
+			"Scope",
+			"content",
+			|_lua, this, (recurse,): (bool,)| {
+				let it = this.inner.content_iter(recurse);
+				Ok(IteratorWrapper { iter: Box::new(it) })
+			},
+			"Gets an iterator to the scope's content",
+			vec!["self", "recurse:bool Recursively iterate over nested scopes"],
+			None
+		);
 	}
 }
 
@@ -40,7 +48,7 @@ impl UserData for VecScopeWrapper {
 	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
 		add_documented_method!(
 			methods,
-			"Scope",
+			"Scope[]",
 			"scope",
 			|_lua, this, (id,): (usize,)| { 
 				if let Some(scope) = this.inner.get(id).cloned() {
