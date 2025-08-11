@@ -3,7 +3,7 @@
 //pub mod comment;
 //pub mod customstyle;
 //pub mod elemstyle;
-//pub mod graphviz;
+pub mod graphviz;
 pub mod import;
 //pub mod layout;
 pub mod link;

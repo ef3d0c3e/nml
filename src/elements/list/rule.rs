@@ -188,7 +188,11 @@ impl Rule for ListRule {
 			// Depth
 			let depth = {
 				let empty = vec![];
-				let previous = list.entries.last().map(|ent| &ent.markers).unwrap_or(&empty);
+				let previous = list
+					.entries
+					.last()
+					.map(|ent| &ent.markers)
+					.unwrap_or(&empty);
 				parse_depth(
 					captures.get(1).unwrap().as_str(),
 					offset.unwrap_or(1),
@@ -344,24 +348,36 @@ impl Rule for ListRule {
 			"list.Entry",
 			|lua: &mlua::Lua, args: mlua::MultiValue| {
 				let (bullet, content, markers) = convert_lua_args!(lua, args, (BulletMarker, "bullet"), (ScopeWrapper, "content", userdata), (Vec<ListMarker>, "markers"));
-				Ok(Kernel::with_context(lua, |ctx|
-					ListEntry { location: ctx.location.clone(), bullet, content: content.inner.clone(), markers }
-				))
+				Ok(Kernel::with_context(lua, |ctx| ListEntry {
+					location: ctx.location.clone(),
+					bullet,
+					content: content.inner.clone(),
+					markers,
+				}))
 			},
 			"Creates a new list entry",
-			vec!["bullet BulletMarker Type of list bullet for this entry", "content Scope Content of this entry", "markers ListMarker[] Markers to this entry"],
+			vec![
+				"bullet BulletMarker Type of list bullet for this entry",
+				"content Scope Content of this entry",
+				"markers ListMarker[] Markers to this entry"
+			],
 			"ListEntry"
 		);
 		add_documented_function_values!(
 			"list.List",
 			|lua: &mlua::Lua, args: mlua::MultiValue| {
 				let entries = convert_lua_args!(lua, args, (ListEntry, "entries", vuserdata));
-				let contained = entries.iter()
+				let contained = entries
+					.iter()
 					.map(|ent| ent.content.clone())
 					.collect::<Vec<_>>();
-				Ok(Kernel::with_context(lua, |ctx|
-					ElemWrapper { inner: Arc::new(List { location: ctx.location.clone(), contained, entries: entries.to_owned() }) }
-				))
+				Ok(Kernel::with_context(lua, |ctx| ElemWrapper {
+					inner: Arc::new(List {
+						location: ctx.location.clone(),
+						contained,
+						entries: entries.to_owned(),
+					}),
+				}))
 			},
 			"Creates a new list entry",
 			vec!["entries ListEntry[] Entries for the list"],

@@ -6,6 +6,7 @@ mod parser;
 mod unit;
 mod util;
 mod lua;
+mod layout;
 
 use std::env::{self};
 use std::fs;

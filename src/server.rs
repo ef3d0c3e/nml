@@ -6,6 +6,7 @@ mod lua;
 mod parser;
 mod unit;
 mod util;
+mod layout;
 
 use std::cmp;
 use std::env::current_dir;
