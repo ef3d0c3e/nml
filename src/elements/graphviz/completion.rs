@@ -27,7 +27,7 @@ impl CompletionProvider for GraphvizCompletion {
 					value: "# Usage
 
 `[graph] ... [/graph]` *render Graphviz graph*
-`[graph][width=50%] ... [/graph]` *render Graphviz graph and displys as 50% page width*
+`[graph][width=50%] ... [/graph]` *render Graphviz graph and display it as 50% page width*
 
 # Properties
 

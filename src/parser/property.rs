@@ -4,8 +4,10 @@ use std::ops::Range;
 
 use ariadne::Fmt;
 
+use crate::elements::anchor::rule;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use crate::parser::util::escape_source;
 use crate::unit::translation::TranslationUnit;
 
 use super::reports::Report;
@@ -428,6 +430,30 @@ impl PropertyParser {
 		}
 
 		Some(pm)
+	}
+
+	/// Parses properties from a token
+	///
+	/// This function will perform escaping on the token to parse the properties
+	pub fn parse_token<'s, 'u>(
+		&'s self,
+		rule_name: &'s str,
+		unit: &mut TranslationUnit,
+		token: Token,
+		escape: char,
+		closing: &'static str,
+	) -> Option<PropertyMap<'s>> {
+		let prop_source = escape_source(
+			token.source(),
+			token.range,
+			format!("{rule_name} Properties"),
+			escape, closing
+		);
+		self.parse(
+			rule_name,
+			unit,
+			Token::new(0..prop_source.content().len(), prop_source),
+		)
 	}
 }
 
