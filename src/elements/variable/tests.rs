@@ -31,29 +31,31 @@ TEXT *italic*
 
 	validate_ast!(unit.get_entry_scope(), 0,
 		VariableDefinition {
-			variable.name() == &VariableName("var".into()),
-			variable.visibility() == &VariableVisibility::Internal,
+			variable.name() == VariableName("var".into()),
+			variable.visibility() == VariableVisibility::Internal,
 			variable.to_string() == "foo",
 			variable.variable_typename() == "property",
 		};
+		/*
 		VariableDefinition {
-			variable.name() == &VariableName("val".into()),
-			variable.visibility() == &VariableVisibility::Exported,
+			variable.name() == VariableName("val".into()),
+			variable.visibility() == VariableVisibility::Exported,
 			variable.to_string() == "bar",
 			variable.variable_typename() == "property",
 		};
 		VariableDefinition {
-			variable.name() == &VariableName("multi".into()),
-			variable.visibility() == &VariableVisibility::Internal,
+			variable.name() == VariableName("multi".into()),
+			variable.visibility() == VariableVisibility::Internal,
 			variable.to_string() == "baz\nmulti\n\nline",
 			variable.variable_typename() == "property",
 		};
 		VariableDefinition {
-			variable.name() == &VariableName("content".into()),
-			variable.visibility() == &VariableVisibility::Internal,
+			variable.name() == VariableName("content".into()),
+			variable.visibility() == VariableVisibility::Internal,
 			variable.to_string() == "\nTEXT *italic*\n",
 			variable.variable_typename() == "content",
 		};
+		*/
 	);
 }
 

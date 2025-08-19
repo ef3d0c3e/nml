@@ -1,3 +1,4 @@
+
 /// Recursively call field matched for each field
 #[macro_export]
 macro_rules! validate_ast_fields {
@@ -14,9 +15,12 @@ macro_rules! validate_ast_parse_field {
 	// Found `==` token, now we have the complete LHS expression
 	($obj:expr, $idx:expr, $t:ty, [$($lhs:tt)*], == $value:expr, $($rest:tt)*) => {
 		{
+			use crate::util::util::AsRefForCompare;
+
 			let expected = $value;
 			let actual = crate::validate_ast_evaluate_expr!($obj, $($lhs)*);
-			assert_eq!(actual, expected,
+			
+			assert_eq!(actual.as_ref_for_compare(), expected.as_ref_for_compare(),
 				"Invalid field expression '{}' for {} at index {}, expected {:#?}, found {:#?}",
 				stringify!($($lhs)*),
 				stringify!($t),
@@ -32,9 +36,11 @@ macro_rules! validate_ast_parse_field {
 	// Found `==` token without comma (last field)
 	($obj:expr, $idx:expr, $t:ty, [$($lhs:tt)*], == $value:expr) => {
 		{
+			use crate::util::util::AsRefForCompare;
+
 			let expected = $value;
 			let actual = crate::validate_ast_evaluate_expr!($obj, $($lhs)*);
-			assert_eq!(*actual, expected,
+			assert_eq!(actual.as_ref_for_compare(), expected.as_ref_for_compare(),
 				"Invalid field expression '{}' for {} at index {}, expected {:#?}, found {:#?}",
 				stringify!($($lhs)*),
 				stringify!($t),
