@@ -17,8 +17,10 @@ use crate::parser::source::Token;
 use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
 use crate::parser::util::escape_text;
+use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
+use crate::unit::variable::VariableName;
 
 #[auto_registry::auto_registry(registry = "rules")]
 pub struct CodeRule {
@@ -35,7 +37,7 @@ impl Default for CodeRule {
 		);
 		Self {
 			re: [
-				Regex::new(r"``(?:\[((?:\\.|[^\\])*?)\])?([^,\r\n]*),((?:\\.|[^\\\n\r])*?)``")
+				Regex::new(r"(?:^|\n)?``(?:\[((?:\\.|[^\\])*?)\])?([^,\r\n]*),((?:\\.|[^\\\n\r])*?)``")
 					.unwrap(),
 				Regex::new(
 					r"(?:\n|^)```(?:\[((?:\\.|[^\\\\])*?)\])?([^,\r\n]*)(?:,(.*))?(?:\n((?:\\.|[^\\\\])*?)```)?",
@@ -120,7 +122,7 @@ impl RegexRule for CodeRule {
 
 		// Parse content
 		let closing = if index == 1 { "```" } else { "``" };
-		let Some(content) = captures.get(4).map(|m| m.as_str()) else {
+		let Some(content) = captures.get(if index == 0 { 3 } else { 4 }).map(|m| m.as_str()) else {
 			report_err!(
 				unit,
 				token.source(),
@@ -128,14 +130,21 @@ impl RegexRule for CodeRule {
 				span(
 					captures.get(0).unwrap().range(),
 					format!(
-						"Expected code content after opening '{}'",
+						"Expected code content after opening '{}' {index}",
 						closing.fg(unit.colors().highlight)
 					)
 				)
 			);
 			return;
 		};
+		let content = if index == 0 { content.trim_start().trim_end() } else { content };
 		let content = escape_text('\\', closing, content, false);
+
+		// Get theme
+		let theme = unit
+			.get_scope()
+			.get_variable(&VariableName("code.theme".to_string()))
+			.map(|(theme, _)| theme.to_string());
 
 		unit.add_content(Arc::new(Code {
 			location: token,
@@ -145,6 +154,7 @@ impl RegexRule for CodeRule {
 				line_gutter: index == 1,
 				line_offset,
 				inline: index == 0,
+				theme,
 			},
 			content,
 		}));
