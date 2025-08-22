@@ -15,9 +15,9 @@ int foo;```
 ```[line_offset=7]C, Code
 int foo;```
 ```C,
-int foo;```
+int foo```
 ```C
-int foo;```
+int foo```
 "#.to_string(),
 		None,
 	));
@@ -36,6 +36,14 @@ int foo;```
 			language == "C",
 			display.title == Some("Code".to_string()),
 			display.line_offset == 7
+		};
+		Code {
+			language == "C",
+			display.title == None,
+		};
+		Code {
+			language == "C",
+			display.title == None,
 		};
 	);
 }

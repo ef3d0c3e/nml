@@ -140,6 +140,12 @@ pub struct Tokens {
 	pub heading_refname_sep: (u32, u32),
 	pub heading_refname: (u32, u32),
 	pub heading_kind: (u32, u32),
+
+	pub code_sep: (u32, u32),
+	pub code_prop_sep: (u32, u32),
+	pub code_lang: (u32, u32),
+	pub code_title: (u32, u32),
+	pub code_content: (u32, u32),
 }
 
 impl Default for Tokens {
@@ -194,6 +200,12 @@ impl Default for Tokens {
 			heading_refname_sep: token!("macro"),
 			heading_refname: token!("parameter"),
 			heading_kind: token!("operator"),
+
+			code_sep: token!("macro"),
+			code_prop_sep: token!("macro"),
+			code_lang: token!("function"),
+			code_title: token!("property"),
+			code_content: token!("regexp"),
 		}
 	}
 }

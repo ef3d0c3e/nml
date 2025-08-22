@@ -1,10 +1,10 @@
-use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use ariadne::Fmt;
 use regex::Regex;
 
+use crate::elements::code::completion::CodeCompletion;
 use crate::elements::code::elem::Code;
 use crate::elements::code::elem::CodeDisplay;
 use crate::parser::property::Property;
@@ -69,6 +69,21 @@ impl RegexRule for CodeRule {
 		token: Token,
 		captures: regex::Captures,
 	) {
+		// Highlight starting ``` and properties
+		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
+			let mut start = captures.get(0).unwrap().start();
+			if token.source().content().as_bytes()[start] == b'\n'
+			{
+				start += 1;
+			}
+			let end = start + if index == 1 { 3 } else { 2 };
+			sems.add(start..end, tokens.code_sep);
+
+			let Some(props) = captures.get(1) else { return };
+			sems.add(props.start()-1..props.start(), tokens.code_prop_sep);
+			sems.add_to_queue(props.end()..props.end()+1, tokens.code_prop_sep);
+		}));
+
 		// Parse properties
 		let Some(mut props) = self.properties.parse_token(
 			"Code",
@@ -110,6 +125,11 @@ impl RegexRule for CodeRule {
 		}
 		.to_string();
 
+		// Highlight language
+		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
+			sems.add(captures.get(2).unwrap().range(), tokens.code_lang);
+		}));
+
 		// Parse title for block mode
 		let title = (index > 0).then_some(
 			captures
@@ -118,7 +138,15 @@ impl RegexRule for CodeRule {
 				.trim_start()
 				.trim_end()
 				.to_string(),
-		);
+		).filter(|title| !title.is_empty());
+
+		// Highlight title
+		if index > 0 && captures.get(3).is_some()
+		{
+			unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(captures.get(3).unwrap().range(), tokens.code_title);
+			}));
+		}
 
 		// Parse content
 		let closing = if index == 1 { "```" } else { "``" };
@@ -139,6 +167,13 @@ impl RegexRule for CodeRule {
 		};
 		let content = if index == 0 { content.trim_start().trim_end() } else { content };
 		let content = escape_text('\\', closing, content, false);
+
+		// Highlight content and terminating ```
+		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
+			let range = captures.get(if index == 0 { 3 } else { 4 }).unwrap().range();
+			sems.add(range.clone(), tokens.code_content);
+			sems.add(range.end..range.end+closing.len(), tokens.code_sep);
+		}));
 
 		// Get theme
 		let theme = unit
@@ -172,5 +207,9 @@ impl RegexRule for CodeRule {
 		index: usize,
 	) -> bool {
 		index == 0 || !mode.paragraph_only
+	}
+
+	fn completion(&self) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
+	    Some(Box::new(CodeCompletion {}))
 	}
 }

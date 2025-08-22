@@ -105,7 +105,7 @@ impl Code {
 
 			// Highlight content
 			let content = self.content.trim_end();
-			for (line_num, line) in content.split('\n').enumerate() {
+			for line in content.split('\n') {
 				match highlight.highlight_line(line, Code::syntaxes()) {
 					Err(e) => return Err(format!("Error highlighting line `{line}`: {}", e)),
 					Ok(regions) => {
@@ -169,5 +169,37 @@ impl Element for Code {
 		};
 		output.add_task(self.location.clone(), "Code".into(), Box::pin(fut));
 		Ok(())
+	}
+
+	fn provide_hover(&self) -> Option<String> {
+		let mut hover = String::default();
+		hover += format!(
+			"Code Fragment
+
+# Properties
+ * **Location**: [{}] ({}..{})
+ * **Language**: {}",
+			self.location.source().name(),
+			self.location().range.start,
+			self.location().range.end,
+			self.language,
+		).as_str();
+		if let Some(title) = &self.display.title
+		{
+			hover += format!("\n * **Title**: {title}").as_str();
+		}
+		if self.display.line_offset != 0
+		{
+			hover += format!("\n * **Line Offset**: {}", self.display.line_offset).as_str();
+		}
+		if let Some(theme) = &self.display.theme
+		{
+			hover += format!("\n * **Theme**: {theme}").as_str();
+		}
+		hover += format!("\n * **Display**: *{}* + *{}*",
+			if self.display.inline { "Inline" } else { "Block" },
+			if self.display.line_gutter { "Line Gutter" } else { "No Line Gutter" }
+			).as_str();
+		Some(hover)
 	}
 }
