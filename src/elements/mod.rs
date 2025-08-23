@@ -1,6 +1,6 @@
 //pub mod block;
 pub mod code;
-//pub mod comment;
+pub mod comment;
 //pub mod customstyle;
 //pub mod elemstyle;
 pub mod graphviz;

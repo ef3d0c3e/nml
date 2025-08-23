@@ -8,7 +8,6 @@ use crate::elements::raw::elem::Raw;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
-use crate::parser::rule::Rule;
 use crate::parser::rule::RuleTarget;
 use crate::parser::source::Token;
 use crate::parser::state::CustomStates;
@@ -55,7 +54,7 @@ impl RegexRule for RawRule {
 
 	fn on_regex_match<'u>(
 		&self,
-		index: usize,
+		_index: usize,
 		unit: &mut TranslationUnit,
 		token: Token,
 		captures: Captures,

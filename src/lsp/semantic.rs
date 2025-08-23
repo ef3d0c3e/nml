@@ -150,6 +150,8 @@ pub struct Tokens {
 	pub raw_sep: (u32, u32),
 	pub raw_kind: (u32, u32),
 	pub raw_content: (u32, u32),
+
+	pub comment: (u32, u32),
 }
 
 impl Default for Tokens {
@@ -215,7 +217,7 @@ impl Default for Tokens {
 			raw_kind: token!("function"),
 			raw_content: token!("regexp"),
 
-
+			comment: token!("comment"),
 		}
 	}
 }
