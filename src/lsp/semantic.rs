@@ -146,6 +146,10 @@ pub struct Tokens {
 	pub code_lang: (u32, u32),
 	pub code_title: (u32, u32),
 	pub code_content: (u32, u32),
+
+	pub raw_sep: (u32, u32),
+	pub raw_kind: (u32, u32),
+	pub raw_content: (u32, u32),
 }
 
 impl Default for Tokens {
@@ -206,6 +210,12 @@ impl Default for Tokens {
 			code_lang: token!("function"),
 			code_title: token!("property"),
 			code_content: token!("regexp"),
+
+			raw_sep: token!("macro"),
+			raw_kind: token!("function"),
+			raw_content: token!("regexp"),
+
+
 		}
 	}
 }

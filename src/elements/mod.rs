@@ -10,7 +10,7 @@ pub mod link;
 pub mod list;
 //pub mod media;
 pub mod linebreak;
-//pub mod raw;
+pub mod raw;
 pub mod anchor;
 pub mod internal_link;
 //pub mod script;
