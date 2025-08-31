@@ -162,7 +162,7 @@ impl Parser {
 				s
 			}
 		});
-		content = content.as_str().trim_end().trim_start().to_string();
+		content = content.as_str().trim_start().to_string();
 
 		if content.is_empty() {
 			return;
