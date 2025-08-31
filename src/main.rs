@@ -20,6 +20,7 @@ use compiler::process::ProcessOutputOptions;
 use compiler::process::ProcessQueue;
 use getopts::Matches;
 use getopts::Options;
+use graphviz_rust::attributes::root;
 use parser::reports::Report;
 use parser::reports::ReportColors;
 use util::settings::ProjectSettings;
@@ -212,11 +213,13 @@ fn input_project(
 ) -> Result<(Vec<PathBuf>, ProcessOutputOptions, ProjectSettings), String> {
 	let settings_file = matches.opt_str("p").unwrap();
 	// Get root path
-	let root_path = &settings_file
+	let mut root_path = settings_file
 		.split_at(settings_file.rfind(|c| c == '/').unwrap_or(0))
 		.0
 		.to_string();
-	let root_meta = std::fs::metadata(root_path)
+	if root_path.is_empty() { root_path = ".".to_string(); }
+
+	let root_meta = std::fs::metadata(&root_path)
 		.map_err(|e| format!("Failed to get project root metadata `{root_path}`: {e}"))?;
 	if !root_meta.is_dir() {
 		return Err(format!("Project root `{root_path}` is not a directory"));
