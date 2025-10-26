@@ -182,7 +182,7 @@ impl TranslationUnit {
 		let ret = f(self, self.current_scope.clone());
 		let scope = std::mem::replace(&mut self.current_scope, prev_scope);
 		let reports = scope
-			.on_end(self)
+			.on_end(self, false)
 			.drain(..)
 			.map(|report| (scope.clone(), report))
 			.collect::<Vec<_>>();
@@ -248,7 +248,7 @@ impl TranslationUnit {
 					.new_child(self.source.clone(), ParseMode::default(), false);
 			let scope = std::mem::replace(&mut self.entry_scope, temp_scope);
 			let reports = scope
-				.on_end(&mut self)
+				.on_end(&mut self, true)
 				.drain(..)
 				.map(|report| (scope.clone(), report))
 				.collect::<Vec<_>>();

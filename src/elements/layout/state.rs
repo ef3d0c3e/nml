@@ -12,70 +12,37 @@ use regex::Regex;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::macros::*;
-use crate::parser::reports::Report;
 use crate::parser::reports::*;
 use crate::parser::source::Token;
 use crate::parser::state::CustomState;
 use crate::unit::scope::Scope;
 use crate::unit::translation::TranslationUnit;
 
-pub trait LayoutType
-{
+pub trait Layout: core::fmt::Debug {
+	fn name(&self) -> &str;
 	fn expects(&self) -> Range<usize>;
-	fn parse_properties(&self) -> Option<Box<dyn Any>>;
-
+	fn parse_properties(&self, unit: &mut TranslationUnit, token: Token) -> Option<Box<dyn Any>>;
 }
 
-pub struct Layout {
-	/// Style name
-	pub(crate) name: String,
-	/// Style enable regex
-	pub(crate) start_re: Regex,
-	/// Style disable regex
-	pub(crate) end_re: Regex,
-	/// Compile function
-	pub(crate) compile: Arc<
-		dyn Fn(bool, Arc<RwLock<Scope>>, &Compiler, &mut CompilerOutput) -> Result<(), Vec<Report>>
-			+ Send
-			+ Sync,
-	>,
-}
+pub static LAYOUT_STATE: &str = "nml.layout.state";
 
-impl core::fmt::Debug for Layout {
-	fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-		#[derive(Debug)]
-		struct Wrapper<'a> {
-			name: &'a String,
-			start_re: &'a Regex,
-			end_re: &'a Regex,
-		}
-
-		core::fmt::Debug::fmt(
-			&Wrapper {
-				name: &self.name,
-				start_re: &self.start_re,
-				end_re: &self.end_re,
-			},
-			f,
-		)
-	}
-}
-
-pub static STYLE_STATE: &str = "nml.layout.state";
-
-/// State for styles
 #[derive(Debug, Default)]
-pub struct StyleState {
-	/// Enabled styles and their enabled location
-	pub(crate) enabled: Vec<(String, Token)>,
+pub struct LayoutState {
+	pub(crate) state: Vec<(Arc<dyn Layout + Send + Sync>, Token, usize)>
 }
 
-impl CustomState for StyleState {
+impl CustomState for LayoutState {
 	fn name(&self) -> &str {
-		STYLE_STATE
+		LAYOUT_STATE
 	}
 
 	fn on_scope_end(
+		&mut self,
+		_unit: &mut TranslationUnit,
+		_scope: Arc<RwLock<Scope>>,
+	) -> Vec<Report> { vec![] }
+
+	fn on_document_end(
 		&mut self,
 		unit: &mut TranslationUnit,
 		scope: Arc<RwLock<Scope>>,
@@ -83,17 +50,17 @@ impl CustomState for StyleState {
 		let mut reports = vec![];
 		let scope_token: Token = scope.read().source().clone().into();
 
-		self.enabled.iter().for_each(|(name, location)| {
+		self.state.iter().for_each(|(layout, location, _id)| {
 			reports.push(make_err!(
 				location.source(),
-				"Unterminated style".into(),
+				"Unterminated Layout".into(),
 				span(
 					location.range.clone(),
-					format!("Style {} starts here", name.fg(unit.colors().info))
+					format!("Layout {} starts here", layout.name().fg(unit.colors().info))
 				),
 				span(
 					scope_token.range.end()..scope_token.range.end(),
-					"Scope ends here".into()
+					"Docment ends here".into()
 				)
 			));
 		});

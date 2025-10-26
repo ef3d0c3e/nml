@@ -24,6 +24,13 @@ pub trait CustomState: Downcast + core::fmt::Debug + Send + Sync {
 		unit: &mut TranslationUnit,
 		scope: Arc<RwLock<Scope>>,
 	) -> Vec<Report>;
+
+	/// Method called when the document of this state ends
+	fn on_document_end(
+		&mut self,
+		unit: &mut TranslationUnit,
+		scope: Arc<RwLock<Scope>>,
+	) -> Vec<Report>;
 }
 impl_downcast!(CustomState);
 

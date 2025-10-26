@@ -115,7 +115,7 @@ pub trait ScopeAccessor {
 	) -> Arc<RwLock<Scope>>;
 
 	/// Method called when the scope ends
-	fn on_end(&self, unit: &mut TranslationUnit) -> Vec<Report>;
+	fn on_end(&self, unit: &mut TranslationUnit, document: bool) -> Vec<Report>;
 
 	/// Returns a variable as well as it's declaring scope
 	fn get_variable(&self, name: &VariableName) -> Option<(Arc<dyn Variable>, Arc<RwLock<Scope>>)>;
@@ -167,7 +167,7 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 		Arc::new(RwLock::new(child))
 	}
 
-	fn on_end(&self, unit: &mut TranslationUnit) -> Vec<Report> {
+	fn on_end(&self, unit: &mut TranslationUnit, document: bool) -> Vec<Report> {
 		let states = {
 			let mut scope = self.write();
 			std::mem::replace(&mut scope.parser_state.states, HashMap::default())
@@ -175,7 +175,11 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 		let mut reports = vec![];
 		states.iter().for_each(|(_, state)| {
 			let mut lock = state.write();
-			reports.extend(lock.on_scope_end(unit, self.clone()));
+			if document {
+				reports.extend(lock.on_document_end(unit, self.clone()));
+			} else {
+				reports.extend(lock.on_scope_end(unit, self.clone()));
+			}
 		});
 		reports
 	}

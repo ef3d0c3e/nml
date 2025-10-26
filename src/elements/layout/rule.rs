@@ -1,10 +1,16 @@
+use std::sync::Arc;
+
+use parking_lot::RwLock;
 use regex::Regex;
 
+use crate::elements::layout::custom::LayoutData;
+use crate::elements::layout::custom::LAYOUT_CUSTOM;
 use crate::parser::rule::RegexRule;
 use crate::parser::rule::RuleTarget;
 use crate::parser::source::Token;
 use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
+use crate::unit::translation::CustomData;
 use crate::unit::translation::TranslationUnit;
 
 #[auto_registry::auto_registry(registry = "rules")]
@@ -34,15 +40,6 @@ impl RegexRule for LayoutRule {
 		RuleTarget::Command
 	}
 
-	fn on_regex_match<'u>(
-		&self,
-		_index: usize,
-		unit: &mut TranslationUnit,
-		token: Token,
-		captures: regex::Captures,
-	) {
-	}
-
 	fn regexes(&self) -> &[regex::Regex] {
 		&self.re
 	}
@@ -55,5 +52,21 @@ impl RegexRule for LayoutRule {
 		_index: usize,
 	) -> bool {
 		!mode.paragraph_only
+	}
+
+	fn on_regex_match<'u>(
+		&self,
+		_index: usize,
+		unit: &mut TranslationUnit,
+		token: Token,
+		captures: regex::Captures,
+	) {
+		if !unit.has_data(LAYOUT_CUSTOM) {
+			unit.new_data(Arc::new(RwLock::new(LayoutData::default())));
+		}
+
+		let data = unit.get_data(LAYOUT_CUSTOM);
+		let mut lock = data.write();
+		let data = lock.downcast_mut::<LayoutData>().unwrap();
 	}
 }

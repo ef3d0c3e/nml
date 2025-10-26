@@ -1,79 +1,69 @@
 use std::sync::Arc;
 
-use regex::Regex;
+use ariadne::Fmt;
 
-use crate::compiler::compiler::Target;
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
+use crate::parser::source::Token;
 use crate::unit::translation::CustomData;
+use crate::unit::translation::TranslationUnit;
 
 use super::state::Layout;
 
-pub static STYLE_CUSTOM: &str = "nml.layout.registered";
+pub static LAYOUT_CUSTOM: &str = "nml.layout.registered";
 
-/// Data for styles
+/// Data for layouts
 pub struct LayoutData {
-	/// All registered styles
-	pub(crate) registered: Vec<Arc<Layout>>,
+	/// All registered layouts
+	pub(crate) registered: Vec<Arc<dyn Layout + Send + Sync>>,
 }
 
 impl Default for LayoutData {
 	fn default() -> Self {
-		Self {
-			registered: vec![
-				Arc::new(Layout {
-					name: "bold".into(),
-					start_re: Regex::new(r"\*\*").unwrap(),
-					end_re: Regex::new(r"\*\*").unwrap(),
-					compile: Arc::new(|enable, _, compiler, output| {
-						output.add_content(match compiler.target() {
-							Target::HTML => enable.then_some("<b>").unwrap_or("</b>"),
-							_ => todo!(),
-						});
-						Ok(())
-					}),
-				}),
-				Arc::new(Layout {
-					name: "italic".into(),
-					start_re: Regex::new(r"\*").unwrap(),
-					end_re: Regex::new(r"\*").unwrap(),
-					compile: Arc::new(|enable, _, compiler, output| {
-						output.add_content(match compiler.target() {
-							Target::HTML => enable.then_some("<i>").unwrap_or("</i>"),
-							_ => todo!(),
-						});
-						Ok(())
-					}),
-				}),
-				Arc::new(Layout {
-					name: "underline".into(),
-					start_re: Regex::new(r"__").unwrap(),
-					end_re: Regex::new(r"__").unwrap(),
-					compile: Arc::new(|enable, _, compiler, output| {
-						output.add_content(match compiler.target() {
-							Target::HTML => enable.then_some("<u>").unwrap_or("</u>"),
-							_ => todo!(),
-						});
-						Ok(())
-					}),
-				}),
-				Arc::new(Layout {
-					name: "marked".into(),
-					start_re: Regex::new(r"`").unwrap(),
-					end_re: Regex::new(r"`").unwrap(),
-					compile: Arc::new(|enable, _, compiler, output| {
-						output.add_content(match compiler.target() {
-							Target::HTML => enable.then_some("<em>").unwrap_or("</em>"),
-							_ => todo!(),
-						});
-						Ok(())
-					}),
-				}),
-			],
-		}
+		Self { registered: vec![
+			Arc::new(CenterLayout{})
+		] }
 	}
 }
 
 impl CustomData for LayoutData {
 	fn name(&self) -> &str {
-		STYLE_CUSTOM
+		LAYOUT_CUSTOM
+	}
+}
+
+#[derive(Debug)]
+pub struct CenterLayout;
+
+impl Layout for CenterLayout {
+	fn name(&self) -> &str {
+		"center"
+	}
+
+	fn expects(&self) -> std::ops::Range<usize> {
+		1..1
+	}
+
+	fn parse_properties(
+		&self,
+		unit: &mut TranslationUnit,
+		token: Token,
+	) -> Option<Box<dyn std::any::Any>> {
+		if token.end() != token.start() {
+			report_err!(
+				unit,
+				token.source(),
+				"Invalid Properties for Layout".into(),
+				span(
+					token.range.clone(),
+					format!(
+						"Layout {} expects no properties",
+						self.name().fg(unit.colors().info)
+					)
+				),
+			);
+			return None;
+		}
+		Some(Box::new([0; 0]))
 	}
 }

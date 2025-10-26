@@ -45,6 +45,11 @@ impl Element for LineBreak {
 					output.add_content("</p>");
 					output.set_paragraph(&scope, false);
 				}
+				else // FIXME: temporary fix
+				{
+					output.add_content("<br>");
+					output.add_content("<br>");
+				}
 			}
 			_ => todo!("Unimplemented compiler"),
 		}

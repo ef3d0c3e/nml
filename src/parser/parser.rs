@@ -146,23 +146,29 @@ impl Parser {
 	/// Adds content from `range` as text to `unit`
 	fn add_text<'u>(&'u self, unit: &mut TranslationUnit, range: Range<Cursor>) {
 		let token: Token = (&range).into();
+		println!("content = {}", token.content());
+		let mut first = true;
 		let mut content = token.content().chars().fold(String::default(), {
 			let mut escaped = false;
 			move |mut s, c| {
-				if c == '\\' {
+				if c == '\\' && !escaped {
 					escaped = !escaped;
 				} else if escaped {
 					s.push(c);
 					escaped = false;
+					first = false;
 				} else if c == '\n' {
-					s.push(' ');
+					if !first {
+						s.push(' ');
+					}
 				} else {
 					s.push(c);
+					first = false;
 				}
 				s
 			}
 		});
-		content = content.as_str().trim_start().to_string();
+		content = content.as_str().to_string();
 
 		if content.is_empty() {
 			return;

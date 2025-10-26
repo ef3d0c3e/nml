@@ -91,4 +91,30 @@ impl CustomState for StyleState {
 
 		reports
 	}
+
+	fn on_document_end(
+		&mut self,
+		unit: &mut TranslationUnit,
+		scope: Arc<RwLock<Scope>>,
+	) -> Vec<Report> {
+		let mut reports = vec![];
+		let scope_token: Token = scope.read().source().clone().into();
+
+		self.enabled.iter().for_each(|(name, location)| {
+			reports.push(make_err!(
+				location.source(),
+				"Unterminated Style".into(),
+				span(
+					location.range.clone(),
+					format!("Style {} starts here", name.fg(unit.colors().info))
+				),
+				span(
+					scope_token.range.end()..scope_token.range.end(),
+					"Document ends here".into()
+				)
+			));
+		});
+
+		reports
+	}
 }

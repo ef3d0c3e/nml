@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use regex::Captures;
 use regex::Regex;
+use regex::RegexBuilder;
 
 use crate::parser::rule::RegexRule;
 use crate::parser::rule::RuleTarget;
@@ -21,7 +22,10 @@ pub struct BreakRule {
 impl Default for BreakRule {
 	fn default() -> Self {
 		Self {
-			re: [Regex::new(r"(\n[^\S\r\n]*)+$").unwrap()],
+			re: [RegexBuilder::new(r"\n\s*$")
+				.multi_line(true)
+				.build()
+				.unwrap()],
 		}
 	}
 }
@@ -57,11 +61,12 @@ impl RegexRule for BreakRule {
 		captures: Captures,
 	) {
 		let length = captures
-			.get(1)
+			.get(0)
 			.unwrap()
 			.as_str()
 			.chars()
-			.fold(0usize, |count, c| count + (c == '\n') as usize);
+			.filter(|c| c == &'\n')
+			.count();
 
 		unit.add_content(Arc::new(LineBreak {
 			location: token.clone(),
