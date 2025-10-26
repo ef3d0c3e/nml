@@ -293,7 +293,7 @@ impl Rule for VariableRule {
 			let content_source = escape_source(
 				cursor.source(),
 				content_range.clone(),
-				format!(":VAR:Variable Content for `{}`", &name.0),
+				PathBuf::from(format!(":VAR:Variable Content for `{}`", &name.0)),
 				'\\',
 				delim,
 			);

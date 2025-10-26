@@ -64,7 +64,7 @@ impl Element for Link {
 # Properties
  * **Location**: [{0}] ({1}..{2})
  * **Url**: [{3}]({3})",
-				self.location.source().name(),
+				self.location.source().name().display(),
 				self.location().range.start(),
 				self.location().range.end(),
 				self.url.to_string()))

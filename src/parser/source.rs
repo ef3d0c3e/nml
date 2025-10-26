@@ -1,6 +1,8 @@
 use core::fmt::Debug;
 use std::fs;
 use std::ops::Range;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use ariadne::Span;
@@ -22,7 +24,7 @@ pub trait Source: Downcast + Send + Sync {
 	/// Gets the source's name
 	///
 	/// For [`SourceFile`] this means the path of the source. Note that some [`VirtualSource`] are prefixed with a special identifier such as `:LUA:`.
-	fn name(&self) -> &String;
+	fn name(&self) -> &PathBuf;
 	/// Gets the source's content
 	fn content(&self) -> &String;
 }
@@ -30,13 +32,13 @@ impl_downcast!(Source);
 
 impl core::fmt::Debug for dyn Source {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.name())
+		write!(f, "{:#?}", self.name())
 	}
 }
 
 impl core::fmt::Display for dyn Source {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.name())
+		write!(f, "{}", self.name().display())
 	}
 }
 
@@ -61,7 +63,7 @@ pub struct SourceFile {
 	/// options.
 	location: Option<Token>,
 	/// Path relative to the compilation databse / current directory
-	path: String,
+	path: PathBuf,
 	/// Content of the file
 	content: String,
 }
@@ -70,9 +72,9 @@ impl SourceFile {
 	// TODO: Create a SourceFileRegistry holding already loaded files to avoid reloading them
 	/// Creates a [`SourceFile`] from a `path`. This will read the content of the file at that
 	/// `path`. In case the file is not accessible or reading fails, an error is returned.
-	pub fn new(path: String, location: Option<Token>) -> Result<Self, String> {
+	pub fn new(path: PathBuf, location: Option<Token>) -> Result<Self, String> {
 		match fs::read_to_string(&path) {
-			Err(_) => Err(format!("Unable to read file content: `{path}`")),
+			Err(_) => Err(format!("Unable to read file content: `{}`", path.display())),
 			Ok(content) => Ok(Self {
 				location,
 				path: path,
@@ -85,13 +87,13 @@ impl SourceFile {
 	pub fn with_content(path: String, content: String, location: Option<Token>) -> Self {
 		Self {
 			location,
-			path,
+			path: PathBuf::from(path),
 			content,
 		}
 	}
 
 	/// Gets the path of this [`SourceFile`]
-	pub fn path(&self) -> &String {
+	pub fn path(&self) -> &PathBuf {
 		&self.path
 	}
 }
@@ -100,7 +102,7 @@ impl Source for SourceFile {
 	fn location(&self) -> Option<&Token> {
 		self.location.as_ref()
 	}
-	fn name(&self) -> &String {
+	fn name(&self) -> &PathBuf {
 		&self.path
 	}
 	fn content(&self) -> &String {
@@ -151,7 +153,7 @@ pub struct VirtualSource {
 	/// Token that createrd this [`VirtualSource`]
 	location: Token,
 	/// Name of the [`VirtualSource`]
-	name: String,
+	name: PathBuf,
 	/// Content of the [`VirtualSource`]
 	content: String,
 	/// Offsets relative to the [`Self::location`]'s source
@@ -160,7 +162,7 @@ pub struct VirtualSource {
 
 impl VirtualSource {
 	/// Creates a new [`VirtualSource`] from a `location`, `name` and `content`.
-	pub fn new(location: Token, name: String, content: String) -> Self {
+	pub fn new(location: Token, name: PathBuf, content: String) -> Self {
 		Self {
 			location,
 			name,
@@ -176,7 +178,7 @@ impl VirtualSource {
 	/// This should be called by [`crate::parser::util::escape_source`]
 	pub fn new_offsets(
 		location: Token,
-		name: String,
+		name: PathBuf,
 		content: String,
 		offsets: Vec<(usize, isize)>,
 	) -> Self {
@@ -193,7 +195,7 @@ impl Source for VirtualSource {
 	fn location(&self) -> Option<&Token> {
 		Some(&self.location)
 	}
-	fn name(&self) -> &String {
+	fn name(&self) -> &PathBuf {
 		&self.name
 	}
 	fn content(&self) -> &String {
@@ -515,7 +517,7 @@ impl Token {
 	pub fn to_source(&self, name: String) -> Arc<dyn Source> {
 		Arc::new(VirtualSource {
 			location: self.clone(),
-			name,
+			name: PathBuf::from(name),
 			content: self.content().into(),
 			offsets: None,
 		})

@@ -64,7 +64,7 @@ impl Element for Anchor {
 # Properties
  * **Location**: {} ({}..{})
  * **Name**: {}",
-			self.location.source().name(),
+			self.location.source().name().display(),
 			self.location().range.start(),
 			self.location().range.end(),
 			self.refname.to_string()))

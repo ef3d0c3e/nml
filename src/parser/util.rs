@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -146,7 +147,7 @@ pub fn transform_text<S: AsRef<str>>(text: S) -> String {
 pub fn escape_source(
 	source: Arc<dyn Source>,
 	range: Range<usize>,
-	name: String,
+	name: PathBuf,
 	escape: char,
 	token: &'static str,
 ) -> Arc<dyn Source> {

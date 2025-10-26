@@ -249,7 +249,7 @@ impl Element for Latex {
  * **Mathmode**: {}
  * **Environment**: {}
  * **Caption**: {}",
-			self.location.source().name(),
+			self.location.source().name().display(),
 			self.location().range.start(),
 			self.location().range.end(),
 			self.kind,

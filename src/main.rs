@@ -194,7 +194,7 @@ fn input_manual(
 	{
 		Ok((
 				files,
-				compiler::process::ProcessOutputOptions::Directory(settings.output_path.clone()),
+				compiler::process::ProcessOutputOptions::Directory(PathBuf::from(&settings.output_path)),
 				settings,
 		))
 	}
@@ -202,7 +202,7 @@ fn input_manual(
 	{
 		Ok((
 				files,
-				compiler::process::ProcessOutputOptions::File(settings.output_path.clone()),
+				compiler::process::ProcessOutputOptions::File(PathBuf::from(&settings.output_path)),
 				settings,
 		))
 	}
@@ -285,7 +285,7 @@ fn input_project(
 	settings.set_root_path(&root_path)?;
 	Ok((
 		files,
-		compiler::process::ProcessOutputOptions::Directory(settings.output_path.clone()),
+		compiler::process::ProcessOutputOptions::Directory(PathBuf::from(&settings.output_path)),
 		settings,
 	))
 }
@@ -363,14 +363,14 @@ fn main() -> ExitCode {
 		.split_at(settings.db_path.rfind(|c| c == '/').unwrap_or(0))
 		.0
 		.to_string();
-	let mut queue = ProcessQueue::new(Target::HTML, project_path, settings, files);
+	let mut queue = ProcessQueue::new(Target::HTML, PathBuf::from(project_path), settings, files);
 	match queue.process(output, options) {
 		Ok(_) => {}
 		Err(ProcessError::GeneralError(err)) => {
 			eprintln!("Processing failed with error: `{err}`");
 		}
-		Err(ProcessError::InputError(file, err)) => {
-			eprintln!("Processing failed with error: `{err}` while processing file '{file}'");
+		Err(ProcessError::InputError(err, file)) => {
+			eprintln!("Processing failed with error: `{err}` while processing file '{}'", file.display());
 		}
 		Err(ProcessError::LinkError(reports)) | Err(ProcessError::CompileError(reports)) => {
 			let colors = ReportColors::with_colors();

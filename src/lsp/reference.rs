@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{ops::Range, path::PathBuf};
 
 /// Reference in the language server
 pub struct LsReference {
@@ -7,7 +7,7 @@ pub struct LsReference {
 	/// Range in the defining document
 	pub range: Range<usize>,
 	/// Path to defining document
-	pub source_path: String,
+	pub source_path: PathBuf,
 	/// Refkey of defining document
 	pub source_refkey: String,
 	/// Type of reference

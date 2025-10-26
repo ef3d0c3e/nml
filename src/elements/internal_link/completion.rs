@@ -30,7 +30,7 @@ Full name: [{label}]()
  * **Defined in**: [{}]() ({}..{})
  * **Type**: `{}`",
 			reference.name,
-			reference.source_path,
+			reference.source_path.display(),
 			reference.range.start(),
 			reference.range.end(),
 			reference.reftype
@@ -52,7 +52,7 @@ Full name: [{label}]()
 			LsReference {
 				name: label,
 				range: iref.location().range.clone(),
-				source_path: iref.location().source().name().to_owned(),
+				source_path: iref.location().source().name().clone(),
 				source_refkey: unit.reference_key().to_owned(),
 				reftype: referenceable.refcount_key().to_owned(),
 			},

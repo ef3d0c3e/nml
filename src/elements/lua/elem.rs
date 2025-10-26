@@ -77,12 +77,12 @@ impl LuaPostProcess {
 					match kernel.run_with_context(ctx, |lua| match self.eval_kind {
 						LuaEvalKind::None => lua
 							.load(self.source.content())
-							.set_name(self.source.name())
+							.set_name(self.source.name().display().to_string())
 							.eval::<()>()
 							.map(|_| String::default()),
 						LuaEvalKind::String | LuaEvalKind::StringParse => lua
 							.load(self.source.content())
-							.set_name(self.source.name())
+							.set_name(self.source.name().display().to_string())
 							.eval::<String>(),
 						_ => panic!(),
 					}) {

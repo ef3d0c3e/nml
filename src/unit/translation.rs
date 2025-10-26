@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
@@ -43,8 +44,8 @@ impl_downcast!(CustomData);
 /// Stores output data for [`TranslationUnit`]
 #[derive(Debug)]
 pub struct UnitOutput {
-	pub input_file: String,
-	pub output_file: Option<String>,
+	pub input_file: PathBuf,
+	pub output_file: Option<PathBuf>,
 }
 
 /// Stores the data required by the parser
@@ -78,7 +79,7 @@ pub struct TranslationUnit {
 	reports: Vec<(Arc<RwLock<Scope>>, Report)>,
 
 	/// Path relative to the database
-	path: String,
+	path: PathBuf,
 	/// Exported (internal) references
 	references: HashMap<String, Arc<dyn ReferenceableElement>>,
 	/// Output data extracted from parsing
@@ -105,7 +106,7 @@ impl TranslationUnit {
 	///
 	/// Should be called once for each distinct source file
 	pub fn new(
-		path: String,
+		path: PathBuf,
 		parser: Arc<Parser>,
 		source: Arc<dyn Source>,
 		with_lsp: bool,
@@ -194,14 +195,14 @@ impl TranslationUnit {
 	/// Runs procedure with the language server, if language server processing is enabled
 	pub fn with_lsp<F, R>(&self, f: F) -> Option<R>
 	where
-		F: FnOnce(RwLockWriteGuard<LangServerData>) -> R,
+		F: FnOnce(RwLockWriteGuard<'_, LangServerData>) -> R,
 	{
 		self.lsp.as_ref().map(|data| f(data.write()))
 	}
 
 	/// Consumes the translation unit with it's current scope
 	/// Returns `None` if an error happened
-	pub fn consume(mut self, output_file: String) -> (Vec<Report>, Self) {
+	pub fn consume(mut self, output_file: PathBuf) -> (Vec<Report>, Self) {
 		// Insert default variables
 		let token = Token::new(0..0, self.source.clone());
 		self.get_entry_scope()
@@ -210,7 +211,7 @@ impl TranslationUnit {
 				name: VariableName::try_from("nml.input_file").unwrap(),
 				visibility: VariableVisibility::Internal,
 				mutability: VariableMutability::Immutable,
-				value: PropertyValue::String(self.source.name().into()),
+				value: PropertyValue::Path(self.source.name().into()),
 				value_token: token.clone(),
 			}));
 		self.get_entry_scope()
@@ -219,7 +220,7 @@ impl TranslationUnit {
 				name: VariableName::try_from("nml.output_file").unwrap(),
 				visibility: VariableVisibility::Internal,
 				mutability: VariableMutability::Mutable,
-				value: PropertyValue::String(output_file),
+				value: PropertyValue::Path(output_file),
 				value_token: token.clone(),
 			}));
 		self.get_entry_scope()
@@ -228,7 +229,7 @@ impl TranslationUnit {
 				name: VariableName::try_from("nml.reference_key").unwrap(),
 				visibility: VariableVisibility::Internal,
 				mutability: VariableMutability::Mutable,
-				value: PropertyValue::String(self.path.to_string()),
+				value: PropertyValue::Path(self.path.clone()),
 				value_token: token.clone(),
 			}));
 
@@ -262,7 +263,7 @@ impl TranslationUnit {
 			.get_variable(&VariableName("nml.output_file".into()));
 		let output = UnitOutput {
 			input_file: self.path.clone(),
-			output_file: output_file.map(|(var, _)| var.to_string()),
+			output_file: output_file.and_then(|(var, _)| var.to_path()),
 		};
 		self.output.set(output).unwrap();
 		(
@@ -282,12 +283,12 @@ impl TranslationUnit {
 	}
 
 	/// Returns the path of the unit relative to the project's root. This is used to uniquely identify each units.
-	pub fn input_path(&self) -> &String {
+	pub fn input_path(&self) -> &PathBuf {
 		&self.path
 	}
 
 	/// Gets the output path for this unit
-	pub fn output_path(&self) -> Option<&String> {
+	pub fn output_path(&self) -> Option<&PathBuf> {
 		self.output
 			.get()
 			.map(|out| out.output_file.as_ref().unwrap())

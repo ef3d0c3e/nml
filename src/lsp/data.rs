@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -45,7 +47,7 @@ pub struct LangServerData {
 
 	pub external_refs: HashMap<String, LsReference>,
 
-	pub sources: RwLock<HashMap<String, Arc<dyn Source>>>,
+	pub sources: RwLock<HashMap<PathBuf, Arc<dyn Source>>>,
 }
 
 impl LangServerData {
@@ -99,12 +101,12 @@ impl LangServerData {
 	}
 
 	/// Gets a source file by name, or insert a new file
-	pub fn get_source<'lsp>(&'lsp self, name: &str) -> Option<Arc<dyn Source>> {
+	pub fn get_source<'lsp>(&'lsp self, name: &Path) -> Option<Arc<dyn Source>> {
 		if let Some(found) = self.sources.read().get(name) {
 			return Some(found.to_owned());
 		}
 
-		let Ok(file) = SourceFile::new(name.to_string(), None) else {
+		let Ok(file) = SourceFile::new(name.to_path_buf(), None) else {
 			return None;
 		};
 		let source = Arc::new(file);

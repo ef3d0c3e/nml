@@ -219,7 +219,7 @@ impl RegexRule for InternalLinkRule {
 			let Some(reference) = lsp.external_refs.get(&label) else {
 				return;
 			};
-			let Some(ref_source) = lsp.get_source(reference.source_path.as_str()) else {
+			let Some(ref_source) = lsp.get_source(&reference.source_path) else {
 				return;
 			};
 

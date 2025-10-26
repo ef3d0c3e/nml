@@ -82,7 +82,7 @@ impl Element for Heading {
  * **Numbered**: {4}
  * **In TOC**: {5}
  * **Refname**: {6}",
-				self.location.source().name(),
+				self.location.source().name().display(),
 				self.location().range.start(),
 				self.location().range.end(),
 				self.depth,

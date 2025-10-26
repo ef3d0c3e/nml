@@ -45,7 +45,7 @@ fn get_documentation(title: &str, var: &Arc<dyn Variable>) -> String {
 		var.name(),
 		var.to_string(),
 		var.variable_typename(),
-		var.location().source().name(),
+		var.location().source().name().display(),
 		var.visibility(),
 		var.mutability()
 	)

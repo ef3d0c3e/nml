@@ -154,7 +154,7 @@ impl RegexRule for ImportRule {
 
 		// Parse imported
 		let source = match SourceFile::new(
-			path_buf.to_str().expect("Invalid path").to_string(),
+			path_buf,
 			Some(token.clone()),
 		) {
 			Ok(source) => source,

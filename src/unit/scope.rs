@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ops::Range;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use parking_lot::MappedRwLockWriteGuard;
@@ -76,7 +77,7 @@ impl Scope {
 	}
 
 	/// The name of this scope (which corresponds to the name of the source)
-	pub fn name(&self) -> &String {
+	pub fn name(&self) -> &PathBuf {
 		self.source.name()
 	}
 

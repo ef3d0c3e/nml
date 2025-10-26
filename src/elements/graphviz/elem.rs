@@ -180,7 +180,7 @@ impl Element for Graphviz {
  * **Location**: [{}] ({}..{})
  * **Layout**: {}
  * **Width**: {}",
-			self.location.source().name(),
+			self.location.source().name().display(),
 			self.location().range.start(),
 			self.location().range.end(),
 			layout_to_str(self.layout),

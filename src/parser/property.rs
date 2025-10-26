@@ -446,7 +446,7 @@ impl PropertyParser {
 		let prop_source = escape_source(
 			token.source(),
 			token.range,
-			format!("{rule_name} Properties"),
+			PathBuf::from(format!("{rule_name} Properties")),
 			escape, closing
 		);
 		self.parse(

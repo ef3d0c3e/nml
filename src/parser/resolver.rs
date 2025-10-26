@@ -81,13 +81,13 @@ impl<'u> Resolver<'u> {
 								0..0,
 								format!(
 									"Unit 1: `{}` with key `{}`",
-									loaded.input_path().fg(colors.info),
+									loaded.input_path().display().fg(colors.info),
 									loaded.reference_key().fg(colors.info)
 								)
 							),
 							note(format!(
 								"Unit 2: `{}` with key `{}`",
-								(&previous.input_file).fg(colors.info),
+								(&previous.input_file).display().fg(colors.info),
 								(&previous.reference_key).fg(colors.info)
 							))
 						))?;
@@ -106,7 +106,7 @@ impl<'u> Resolver<'u> {
 							0..0,
 							format!(
 								"Unit 1: `{}` with key `{}`",
-								loaded.input_path().fg(colors.info),
+								loaded.input_path().display().fg(colors.info),
 								loaded.reference_key().fg(colors.info)
 							)
 						),
@@ -115,7 +115,7 @@ impl<'u> Resolver<'u> {
 							0..0,
 							format!(
 								"Unit 2: `{}` with key `{}`",
-								previous.input_path().fg(colors.info),
+								previous.input_path().display().fg(colors.info),
 								previous.reference_key().fg(colors.info)
 							)
 						),

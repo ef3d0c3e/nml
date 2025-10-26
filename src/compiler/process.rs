@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -30,24 +31,24 @@ pub struct ProcessOptions {
 #[derive(Debug)]
 pub enum ProcessError {
 	GeneralError(String),
-	InputError(String, String),
+	InputError(String, PathBuf),
 	LinkError(Vec<Report>),
 	CompileError(Vec<Report>),
 }
 
 pub enum ProcessOutputOptions {
 	/// Path to the directory
-	Directory(String),
+	Directory(PathBuf),
 	/// Path to the output file
-	File(String),
+	File(PathBuf),
 }
 
 /// Message for the queue
 pub enum ProcessQueueMessage<'u> {
 	/// Source file being skipped
-	Skipped(&'u String),
+	Skipped(&'u Path),
 	/// Source file being parsed
-	Parsing(&'u String),
+	Parsing(&'u Path),
 	/// Unit being resolved
 	Resolving(&'u TranslationUnit),
 	/// Unit being compiled
@@ -59,22 +60,28 @@ pub fn output_message<'u>(message: ProcessQueueMessage<'u>, perc: f64) {
 	print!("[{: >3.0}%] ", perc * 100.0f64);
 	match message {
 		ProcessQueueMessage::Skipped(source) => {
-			println!("{}", format!("Skipping '{}'", source).fg(Color::Green))
+			println!(
+				"{}",
+				format!("Skipping '{}'", source.display()).fg(Color::Green)
+			)
 		}
 		ProcessQueueMessage::Parsing(source) => {
-			println!("{}", format!("Parsing '{}'", source).fg(Color::Green))
+			println!(
+				"{}",
+				format!("Parsing '{}'", source.display()).fg(Color::Green)
+			)
 		}
 		ProcessQueueMessage::Resolving(unit) => println!(
 			"{} {}",
-			format!("Resolving '{}'", unit.input_path()).fg(Color::Green),
+			format!("Resolving '{}'", unit.input_path().display()).fg(Color::Green),
 			format!("[{}]", unit.reference_key()).fg(Color::Blue)
 		),
 		ProcessQueueMessage::Compiling(unit) => println!(
 			"{}",
 			format!(
 				"Compiling '{}' -> '{}'",
-				unit.input_path(),
-				unit.output_path().unwrap()
+				unit.input_path().display(),
+				unit.output_path().unwrap().display()
 			)
 			.fg(Color::Green)
 		),
@@ -88,7 +95,7 @@ pub struct ProcessQueue {
 	outputs: Vec<()>,
 
 	cache: Arc<Cache>,
-	project_path: String,
+	project_path: PathBuf,
 	parser: Arc<Parser>,
 	compiler: Compiler,
 }
@@ -96,7 +103,7 @@ pub struct ProcessQueue {
 impl ProcessQueue {
 	pub fn new(
 		target: Target,
-		project_path: String,
+		project_path: PathBuf,
 		settings: ProjectSettings,
 		inputs: Vec<PathBuf>,
 	) -> Self {
@@ -133,36 +140,22 @@ impl ProcessQueue {
 
 		let mut processed = vec![];
 		for (idx, input) in self.inputs.iter().enumerate() {
-			let input_string =
-				input
-					.to_str()
-					.map(|s| s.to_string())
-					.ok_or(ProcessError::GeneralError(format!(
-						"Failed to convert {input:#?} to string"
-					)))?;
-
 			// Compute path
-			let Some(local_path) = pathdiff::diff_paths(&input_string, &self.project_path) else {
+			let Some(local_path) = pathdiff::diff_paths(&input, &self.project_path) else {
 				Err(ProcessError::InputError(
 					format!(
-						"Failed to compute local path. Base=`{:#?}` Input=`{input_string}`",
-						self.project_path
+						"Failed to compute local path. Base=`{}` Input=`{}`",
+						self.project_path.display(),
+						input.display()
 					),
-					input_string,
+					PathBuf::from(input),
 				))?
 			};
-			let Some(local_path) = local_path.to_str().map(|s| s.to_string()) else {
-				Err(ProcessError::InputError(
-					format!("Failed to translate `{local_path:#?}` to a string."),
-					input_string,
-				))?
-			};
-
 			// Get mtime
 			let meta = std::fs::metadata(input).map_err(|err| {
 				ProcessError::InputError(
-					input_string.clone(),
-					format!("Failed to get metadata for `{input_string}`: {err}"),
+					format!("Failed to get metadata for `{}`: {err}", input.display()),
+					PathBuf::from(input),
 				)
 			})?;
 
@@ -171,43 +164,61 @@ impl ProcessQueue {
 				.map(|e| e.duration_since(UNIX_EPOCH).unwrap().as_secs())
 				.map_err(|err| {
 					ProcessError::InputError(
-						input_string.clone(),
-						format!("Unable to query modification time for `{input_string}`: {err}"),
+						format!(
+							"Unable to query modification time for `{}`: {err}",
+							input.display()
+						),
+						PathBuf::from(input),
 					)
 				})?;
-			let prev_mtime = self.cache.get_mtime(&local_path.to_string()).unwrap_or(0);
+			let prev_mtime = self.cache.get_mtime(&local_path).unwrap_or(0);
 
 			if !options.force_rebuild && prev_mtime >= mtime {
 				output_message(
-					ProcessQueueMessage::Skipped(&input_string),
+					ProcessQueueMessage::Skipped(&input),
 					(1 + idx) as f64 / self.inputs.len() as f64,
 				);
 				continue;
 			}
 			output_message(
-				ProcessQueueMessage::Parsing(&input_string),
+				ProcessQueueMessage::Parsing(&input),
 				(1 + idx) as f64 / self.inputs.len() as f64,
 			);
 
 			// Create unit
-			let source = Arc::new(SourceFile::new(input_string.clone(), None).unwrap());
-			let unit =
-				TranslationUnit::new(local_path.clone(), self.parser.clone(), source, false, true);
+			let source = Arc::new(SourceFile::new(input.clone(), None).unwrap());
+			let unit = TranslationUnit::new(
+				local_path.to_path_buf(),
+				self.parser.clone(),
+				source,
+				false,
+				true,
+			);
 
 			let output_file = match &output {
 				ProcessOutputOptions::Directory(dir) => {
-					let basename = match local_path.rfind(|c| c == '.') {
-						Some(pos) => &local_path[0..pos],
-						None => &local_path,
+					let mut buf = dir.clone();
+					let Some(mut basename) = local_path.file_stem().map(|str| str.to_os_string())
+					else {
+						Err(ProcessError::InputError(
+							format!("Input file `{}` has no valid name!", local_path.display()),
+							local_path.to_path_buf(),
+						))?
 					};
-					format!("{dir}/{basename}.html")
+					basename.push(".html");
+					buf.push(basename);
+					buf
 				}
 				ProcessOutputOptions::File(file) => {
-					let basename = match local_path.rfind(|c| c == '.') {
-						Some(pos) => &local_path[0..pos],
-						None => &local_path,
+					let Some(mut basename) = local_path.file_stem().map(|str| str.to_os_string())
+					else {
+						Err(ProcessError::InputError(
+							format!("Input file `{}` has no valid name!", local_path.display()),
+							local_path.to_path_buf(),
+						))?
 					};
-					format!("{basename}.html")
+					basename.push(".html");
+					PathBuf::from(basename)
 				}
 			};
 
@@ -244,10 +255,9 @@ impl ProcessQueue {
 			let mut reports = vec![];
 			missing.iter().for_each(|(unit_file, list)| {
 				for item in list {
-					let source = Arc::new(
-						SourceFile::new(format!("{}/{unit_file}", self.project_path), None)
-							.unwrap(),
-					);
+					let mut path = self.project_path.clone();
+					path.push(unit_file);
+					let source = Arc::new(SourceFile::new(path, None).unwrap());
 					reports.push(make_err!(
 						source.clone(),
 						"Missing references".into(),
@@ -278,35 +288,32 @@ impl ProcessQueue {
 			);
 			match self.compiler.compile(unit) {
 				Ok(content) => {
-					if let Some(output) = unit.output_path()
-					{
+					if let Some(output) = unit.output_path() {
 						let mut parent = PathBuf::new();
 						parent.push(output);
 						parent.pop();
-						let parent_exists = if let Ok(meta) = std::fs::metadata(&parent)
-						{
+						let parent_exists = if let Ok(meta) = std::fs::metadata(&parent) {
 							meta.is_dir()
-						} else { false };
-						if !parent_exists
-						{
-							if let Err(err) = std::fs::create_dir_all(&parent)
-							{
+						} else {
+							false
+						};
+						if !parent_exists {
+							if let Err(err) = std::fs::create_dir_all(&parent) {
 								reports.push(make_err!(
-										unit.token().source(),
-										"Invalid output path".into(),
-										span(
-											unit.token().range,
-											format!(
-												"Failed to create output directory {}: {err}",
-												parent.display().fg(Color::Blue),
-											)
+									unit.token().source(),
+									"Invalid output path".into(),
+									span(
+										unit.token().range,
+										format!(
+											"Failed to create output directory {}: {err}",
+											parent.display().fg(Color::Blue),
 										)
+									)
 								));
-								break
+								break;
 							}
 						}
-						if let Err(err) = std::fs::write(output, content)
-						{
+						if let Err(err) = std::fs::write(output, content) {
 							reports.push(make_err!(
 								unit.token().source(),
 								"Invalid output path".into(),
@@ -314,7 +321,7 @@ impl ProcessQueue {
 									unit.token().range,
 									format!(
 										"Failed to output to {}: {err}",
-										output.fg(Color::Blue),
+										output.display().fg(Color::Blue),
 									)
 								)
 							));

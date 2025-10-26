@@ -81,9 +81,9 @@ fn from_source_impl<'lsp>(
 
 	// Add definition
 	let uri = if orignal_target.source().name().starts_with("file://") {
-		Url::try_from(orignal_target.source().name().as_str()).unwrap()
+		Url::try_from(orignal_target.source().name().display().to_string().as_str()).unwrap()
 	} else {
-		let target_path = std::fs::canonicalize(orignal_target.source().name().as_str()).unwrap();
+		let target_path = std::fs::canonicalize(orignal_target.source().name().display().to_string().as_str()).unwrap();
 		Url::from_file_path(target_path).unwrap()
 	};
 	db.push((

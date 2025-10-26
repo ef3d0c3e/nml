@@ -36,7 +36,7 @@ impl VariableCompletion {
  * **Mutability**: *{4}*",
 				var.to_string(),
 				var.variable_typename(),
-				var.location().source().name(),
+				var.location().source().name().display(),
 				var.visibility(),
 				var.mutability()
 			),

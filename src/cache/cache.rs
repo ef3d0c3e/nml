@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use rusqlite::params;
@@ -198,11 +201,11 @@ impl Cache {
 
 		// Insert
 		for unloaded in unlodaded_iter {
-			let unloaded: (String, String, Option<String>) = unloaded.unwrap();
+			let unloaded: (String, Vec<u8>, Option<Vec<u8>>) = unloaded.unwrap();
 			input_it(DatabaseUnit {
 				reference_key: unloaded.0.clone(),
-				input_file: unloaded.1.clone(),
-				output_file: unloaded.2,
+				input_file: PathBuf::from(unsafe { OsStr::from_encoded_bytes_unchecked(&unloaded.1) }),
+				output_file: unloaded.2.map(|path| PathBuf::from(unsafe { OsStr::from_encoded_bytes_unchecked(&path) })),
 			})?;
 		}
 		Ok(())
@@ -227,13 +230,13 @@ impl Cache {
 
 		for unit in it {
 			insert_stmt
-				.execute(params![unit.input_path(), time_now])
+				.execute(params![unit.input_path().as_os_str().as_bytes(), time_now])
 				.unwrap();
 		}
 	}
 
 	/// Gets a unit's mtime
-	pub fn get_mtime(&self, input_file: &String) -> Option<u64> {
+	pub fn get_mtime(&self, input_file: &std::path::Path) -> Option<u64> {
 		let con = tokio::runtime::Runtime::new()
 			.unwrap()
 			.block_on(self.get_connection());
@@ -242,14 +245,14 @@ impl Cache {
 			"SELECT mtime
 		FROM units
 		WHERE input_file = (?1)",
-			[input_file],
+			[input_file.as_os_str().as_bytes()],
 			|row| Ok(row.get_unwrap::<_, u64>(0)),
 		)
 		.ok()
 	}
 
 	/// Export a referenceable unit
-	pub fn export_ref_unit(&self, unit: &TranslationUnit, input: &String, output: &Option<String>) {
+	pub fn export_ref_unit(&self, unit: &TranslationUnit, input: &PathBuf, output: &Option<PathBuf>) {
 		let con = tokio::runtime::Runtime::new()
 			.unwrap()
 			.block_on(self.get_connection());
@@ -260,7 +263,7 @@ impl Cache {
 		"SELECT reference_key
 		FROM referenceable_units
 		WHERE input_file = (?1)",
-		[input], |row| {
+		[input.as_os_str().as_bytes()], |row| {
 			Ok(row.get_unwrap::<_, String>(0))
 		}).optional().unwrap() {
 			con.execute(
@@ -286,7 +289,7 @@ impl Cache {
 			(reference_key, input_file, output_file)
 		VALUES
 			(?1, ?2, ?3)",
-			(unit.reference_key(), input, output),
+			(unit.reference_key(), input.as_os_str().as_bytes(), output.as_ref().map(|out| out.as_os_str().as_bytes())),
 		)
 		.unwrap();
 	}
@@ -332,7 +335,7 @@ impl Cache {
 				Ok(LsReference {
 					name: row.get_unwrap::<_, String>(0),
 					range: row.get_unwrap::<_, usize>(2)..row.get_unwrap::<_, usize>(3),
-					source_path: row.get_unwrap::<_, String>(5),
+					source_path: PathBuf::from(unsafe{ OsStr::from_encoded_bytes_unchecked(&row.get_unwrap::<_, Vec<u8>>(5)) }),
 					source_refkey: row.get_unwrap::<_, String>(1),
 					reftype: row.get_unwrap::<_, String>(4),
 				})

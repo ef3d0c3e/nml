@@ -179,7 +179,7 @@ impl Element for Code {
 # Properties
  * **Location**: [{}] ({}..{})
  * **Language**: {}",
-			self.location.source().name(),
+			self.location.source().name().display(),
 			self.location().range.start,
 			self.location().range.end,
 			self.language,

@@ -51,7 +51,7 @@ pub fn translate_reference(
 			if from.output_path() == to.output_path() {
 				format!("#{}", reference.link)
 			} else {
-				format!("{}#{}", from.output_path(), reference.link)
+				format!("{}#{}", from.output_path().display(), reference.link)
 			}
 		}
 		_ => todo!(),

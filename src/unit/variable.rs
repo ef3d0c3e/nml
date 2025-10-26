@@ -13,6 +13,7 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::state::ParseMode;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::element::ContainerElement;
@@ -121,6 +122,8 @@ pub trait Variable: Downcast + core::fmt::Debug + Send + Sync {
 	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token) -> Arc<RwLock<Scope>>;
 
 	fn to_string(&self) -> String;
+
+	fn to_path(&self) -> Option<PathBuf>;
 }
 impl_downcast!(Variable);
 
@@ -176,6 +179,10 @@ impl Variable for ContentVariable {
 	fn to_string(&self) -> String {
 		self.content.content().into()
 	}
+
+	fn to_path(&self) -> Option<PathBuf> {
+	    None
+	}
 }
 
 /// Values for property variables
@@ -183,6 +190,7 @@ impl Variable for ContentVariable {
 pub enum PropertyValue {
 	Integer(i64),
 	String(String),
+	Path(PathBuf),
 }
 
 impl ToString for PropertyValue {
@@ -190,6 +198,7 @@ impl ToString for PropertyValue {
 		match self {
 			PropertyValue::Integer(i) => i.to_string(),
 			PropertyValue::String(s) => s.clone(),
+			PropertyValue::Path(p) => p.to_str().unwrap_or("<Invalid UTF-8 path>").into(),
 		}
 	}
 }
@@ -241,7 +250,7 @@ impl Variable for PropertyVariable {
 		// Generate source for scope
 		let definition_source = Arc::new(VirtualSource::new(
 			self.location.clone(),
-			format!(":VAR:Definition for `{}`", &self.name.0),
+			PathBuf::from(format!(":VAR:Definition for `{}`", &self.name.0)),
 			self.value_token.content().into(),
 		)) as Arc<dyn Source>;
 		// Add content to scope
@@ -262,5 +271,14 @@ impl Variable for PropertyVariable {
 
 	fn to_string(&self) -> String {
 		self.value.to_string()
+	}
+
+	fn to_path(&self) -> Option<PathBuf> {
+		match &self.value
+		{
+			PropertyValue::Integer(_) => None,
+			PropertyValue::String(s) => Some(PathBuf::from(s)),
+			PropertyValue::Path(p) => Some(p.clone()),
+		}
 	}
 }

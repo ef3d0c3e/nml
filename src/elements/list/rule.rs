@@ -311,7 +311,7 @@ impl Rule for ListRule {
 			let token = Token::new(entry_start..end_cursor.pos(), end_cursor.source().clone());
 			let entry_src = Arc::new(VirtualSource::new(
 				token.clone(),
-				"List Entry".to_string(),
+				PathBuf::from("List Entry"),
 				entry_content,
 			));
 			let parsed_content = match parse_paragraph(unit, entry_src) {

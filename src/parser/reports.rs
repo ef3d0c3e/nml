@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ops::Range;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use ariadne::Color;
@@ -177,7 +178,7 @@ impl Report {
 		});
 	}
 
-	pub fn to_diagnostics(self, diagnostic_map: &DashMap<String, Vec<Diagnostic>>) {
+	pub fn to_diagnostics(self, diagnostic_map: &DashMap<PathBuf, Vec<Diagnostic>>) {
 		for span in self.spans {
 			let token = span.token.source().original_range(span.token.range.clone());
 
@@ -215,7 +216,7 @@ impl Report {
 	}
 
 	pub fn reports_to_diagnostics(
-		diagnostic_map: &DashMap<String, Vec<Diagnostic>>,
+		diagnostic_map: &DashMap<PathBuf, Vec<Diagnostic>>,
 		mut reports: Vec<Report>,
 	) {
 		for report in reports.drain(..) {

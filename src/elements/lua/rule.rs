@@ -172,7 +172,7 @@ impl Rule for LuaRule {
 		});
 		let lua_source = Arc::new(VirtualSource::new(
 			lua_range.clone(),
-			format!(":LUA:Block ({}..{})", lua_range.start(), lua_range.end()),
+			PathBuf::from(format!(":LUA:Block ({}..{})", lua_range.start(), lua_range.end())),
 			lua_range.content().to_owned(),
 		)) as Arc<dyn Source>;
 
@@ -182,7 +182,7 @@ impl Rule for LuaRule {
 			let ctx = KernelContext::new(lua_source.clone().into(), unit);
 			if let Err(err) = kernel.run_with_context(ctx, |lua| {
 				lua.load(lua_source.content())
-					.set_name(lua_source.name())
+					.set_name(lua_source.name().display().to_string())
 					.exec()
 			}) {
 				report_err!(
@@ -338,7 +338,7 @@ impl RegexRule for InlineLuaRule {
 		let lua_source = escape_source(
 			token.source(),
 			lua_range.clone(),
-			format!(":LUA:Inline ({}..{})", lua_range.start(), lua_range.end()),
+			PathBuf::from(format!(":LUA:Inline ({}..{})", lua_range.start(), lua_range.end())),
 			'\\',
 			":}",
 		);
@@ -372,12 +372,12 @@ impl RegexRule for InlineLuaRule {
 					match kernel.run_with_context(ctx, |lua| match eval_kind {
 						LuaEvalKind::None => lua
 							.load(lua_source.content())
-							.set_name(lua_source.name())
+							.set_name(lua_source.name().display().to_string())
 							.eval::<()>()
 							.map(|_| String::default()),
 						LuaEvalKind::String | LuaEvalKind::StringParse => lua
 							.load(lua_source.content())
-							.set_name(lua_source.name())
+							.set_name(lua_source.name().display().to_string())
 							.eval::<String>(),
 						_ => panic!(),
 					}) {

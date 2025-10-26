@@ -54,7 +54,7 @@ impl Element for Import {
 
 # Properties
  * **Location**: [{}] ({}..{})",
-			self.location.source().name(),
+			self.location.source().name().display(),
 			self.location().range.start(),
 			self.location().range.end(),
 		))

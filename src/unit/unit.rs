@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::Deserialize;
@@ -17,7 +18,7 @@ pub struct Reference {
 	/// Type of reference
 	pub refkey: String,
 	/// Source unit path, relative to the database
-	pub source_unit: String,
+	pub source_unit: PathBuf,
 	/// The reference link in it's own unit
 	pub link: String,
 	/// Declaring token of the reference
@@ -27,8 +28,8 @@ pub struct Reference {
 /// In-database translation unit
 pub struct DatabaseUnit {
 	pub reference_key: String,
-	pub input_file: String,
-	pub output_file: Option<String>,
+	pub input_file: PathBuf,
+	pub output_file: Option<PathBuf>,
 }
 
 /// Wrapper units that may be present in memory or in the database
@@ -49,15 +50,15 @@ impl<'u> OffloadedUnit<'u> {
 	}
 
 	/// Gets the unit's input path
-	pub fn input_path(&self) -> &String {
+	pub fn input_path(&self) -> &PathBuf {
 		match self {
-			OffloadedUnit::Loaded(unit) => &unit.input_path(),
+			OffloadedUnit::Loaded(unit) => unit.input_path(),
 			OffloadedUnit::Unloaded(unit) => &unit.input_file,
 		}
 	}
 
 	/// Gets the unit's output path
-	pub fn output_path(&self) -> &String {
+	pub fn output_path(&self) -> &PathBuf {
 		match self {
 			OffloadedUnit::Loaded(unit) => unit.output_path().as_ref().unwrap(),
 			OffloadedUnit::Unloaded(unit) => unit.output_file.as_ref().unwrap(),
