@@ -107,7 +107,7 @@ impl ProcessQueue {
 		settings: ProjectSettings,
 		inputs: Vec<PathBuf>,
 	) -> Self {
-		let cache = Arc::new(Cache::new(settings.db_path.as_str()).unwrap());
+		let cache = Arc::new(Cache::new(&settings.db_path).unwrap());
 		cache.setup_tables();
 
 		let parser = Arc::new(Parser::new());

@@ -8,6 +8,7 @@ use ariadne::IndexType;
 use ariadne::ReportBuilder;
 use dashmap::DashMap;
 use tower_lsp::lsp_types::Diagnostic;
+use url::Url;
 
 use crate::parser::source::LineCursor;
 
@@ -178,7 +179,7 @@ impl Report {
 		});
 	}
 
-	pub fn to_diagnostics(self, diagnostic_map: &DashMap<PathBuf, Vec<Diagnostic>>) {
+	pub fn to_diagnostics(self, diagnostic_map: &DashMap<Url, Vec<Diagnostic>>) {
 		for span in self.spans {
 			let token = span.token.source().original_range(span.token.range.clone());
 
@@ -207,16 +208,16 @@ impl Report {
 				tags: None,
 				data: None,
 			};
-			if let Some(mut diags) = diagnostic_map.get_mut(token.source().name()) {
+			if let Some(mut diags) = diagnostic_map.get_mut(token.source().url()) {
 				diags.push(diag);
 			} else {
-				diagnostic_map.insert(token.source().name().to_owned(), vec![diag]);
+				diagnostic_map.insert(token.source().url().to_owned(), vec![diag]);
 			}
 		}
 	}
 
 	pub fn reports_to_diagnostics(
-		diagnostic_map: &DashMap<PathBuf, Vec<Diagnostic>>,
+		diagnostic_map: &DashMap<Url, Vec<Diagnostic>>,
 		mut reports: Vec<Report>,
 	) {
 		for report in reports.drain(..) {

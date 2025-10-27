@@ -44,29 +44,29 @@ use util::settings::ProjectSettings;
 pub struct Backend {
 	parser: Arc<Parser>,
 
-	source_files: DashMap<String, Arc<dyn Source>>,
+	source_files: DashMap<Url, Arc<dyn Source>>,
 	client: Client,
 	settings: ProjectSettings,
 	root_path: PathBuf,
 	cache: Arc<Cache>,
 
-	completors: DashMap<String, Vec<Box<dyn CompletionProvider + 'static + Send + Sync>>>,
+	completors: DashMap<Url, Vec<Box<dyn CompletionProvider + 'static + Send + Sync>>>,
 
-	units: DashMap<String, TranslationUnit>,
+	units: DashMap<Url, TranslationUnit>,
 
-	document_map: DashMap<String, String>,
-	definition_map: DashMap<String, Vec<(Location, Range)>>,
-	semantic_token_map: DashMap<String, Vec<SemanticToken>>,
-	diagnostic_map: DashMap<String, Vec<Diagnostic>>,
-	hints_map: DashMap<String, Vec<InlayHint>>,
-	conceals_map: DashMap<String, Vec<ConcealInfo>>,
-	styles_map: DashMap<String, Vec<StyleInfo>>,
-	coderanges_map: DashMap<String, Vec<CodeRangeInfo>>,
-	completions_map: DashMap<String, Vec<CompletionItem>>,
-	hovers_map: DashMap<String, Vec<HoverRange>>,
+	document_map: DashMap<Url, String>,
+	definition_map: DashMap<Url, Vec<(Location, Range)>>,
+	semantic_token_map: DashMap<Url, Vec<SemanticToken>>,
+	diagnostic_map: DashMap<Url, Vec<Diagnostic>>,
+	hints_map: DashMap<Url, Vec<InlayHint>>,
+	conceals_map: DashMap<Url, Vec<ConcealInfo>>,
+	styles_map: DashMap<Url, Vec<StyleInfo>>,
+	coderanges_map: DashMap<Url, Vec<CodeRangeInfo>>,
+	completions_map: DashMap<Url, Vec<CompletionItem>>,
+	hovers_map: DashMap<Url, Vec<HoverRange>>,
 
 	// Lua ls
-	lua_ranges: DashMap<String, Vec<std::ops::Range<usize>>>,
+	lua_ranges: DashMap<Url, Vec<std::ops::Range<usize>>>,
 }
 
 #[derive(Debug)]
@@ -81,7 +81,7 @@ impl Backend {
 		settings: ProjectSettings,
 		root_path: PathBuf,
 	) -> Self {
-		let cache = Arc::new(Cache::new(settings.db_path.as_str()).unwrap());
+		let cache = Arc::new(Cache::new(&settings.db_path).unwrap());
 		//cache.setup_tables();
 
 		Self {
@@ -116,7 +116,7 @@ impl Backend {
 			cache.get_references().await
 		};
 		self.document_map
-			.insert(params.uri.to_string(), params.text.clone());
+			.insert(params.uri.clone(), params.text.clone());
 
 		let source = Arc::new(SourceFile::with_content(
 			params.uri.to_string(),
@@ -124,13 +124,12 @@ impl Backend {
 			None,
 		));
 		self.source_files
-			.insert(params.uri.to_string(), source.clone());
+			.insert(params.uri.clone(), source.clone());
 
 		let path = pathdiff::diff_paths(
 			params.uri.to_string().replace("file:///", "/"),
 			&self.root_path,
 		)
-		.map(|path| path.to_str().unwrap().to_string())
 		.unwrap();
 		let unit = TranslationUnit::new(path, self.parser.clone(), source.clone(), true, false);
 
@@ -147,10 +146,10 @@ impl Backend {
 
 		let basename = PathBuf::from(params.uri.as_str())
 			.file_stem()
-			.map(|p| p.to_str().unwrap_or("output"))
-			.unwrap_or("output")
-			.to_owned();
-		let output_file = format!("{}/{basename}", self.settings.output_path);
+			.map(|s| s.to_owned())
+			.unwrap_or(std::ffi::OsString::from("output"));
+		let mut output_file = self.settings.output_path.clone();
+		output_file.push(basename);
 		let (reports, unit) = unit.consume(output_file);
 
 		self.diagnostic_map.clear();
@@ -164,104 +163,104 @@ impl Backend {
 		for comp in &completors {
 			comp.unit_items(&unit, &mut items);
 		}
-		self.completions_map.insert(params.uri.to_string(), items);
-		self.completors.insert(params.uri.to_string(), completors);
+		self.completions_map.insert(params.uri.clone(), items);
+		self.completors.insert(params.uri.clone(), completors);
 
 		// TODO: Run resolver
 		unit.with_lsp(|lsp| {
 			// Semantics
 			for (source, sem) in &lsp.semantic_data {
-				if let Some(path) = source
+				if let Some(url) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
-					.map(|source| source.path().to_owned())
+					.map(|source| source.url().to_owned())
 				{
 					self.semantic_token_map
-						.insert(path, std::mem::take(&mut *sem.tokens.write()));
+						.insert(url, std::mem::take(&mut *sem.tokens.write()));
 				}
 			}
 
 			// Inlay hints
 			for (source, hints) in &lsp.inlay_hints {
-				if let Some(path) = source
+				if let Some(url) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
-					.map(|source| source.path().to_owned())
+					.map(|source| source.url().to_owned())
 				{
 					self.hints_map
-						.insert(path, std::mem::take(&mut *hints.hints.write()));
+						.insert(url, std::mem::take(&mut *hints.hints.write()));
 				}
 			}
 
 			// Definitions
 			for (source, definitions) in &lsp.definitions {
-				if let Some(path) = source
+				if let Some(url) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
-					.map(|source| source.path().to_owned())
+					.map(|source| source.url().to_owned())
 				{
 					self.definition_map
-						.insert(path, std::mem::take(&mut *definitions.definitions.write()));
+						.insert(url, std::mem::take(&mut *definitions.definitions.write()));
 				}
 			}
 
 			// Conceals
 			for (source, conceals) in &lsp.conceals {
-				if let Some(path) = source
+				if let Some(url) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
-					.map(|source| source.path().to_owned())
+					.map(|source| source.url().to_owned())
 				{
 					self.conceals_map
-						.insert(path, std::mem::take(&mut *conceals.conceals.write()));
+						.insert(url, std::mem::take(&mut *conceals.conceals.write()));
 				}
 			}
 
 			// Styles
 			for (source, styles) in &lsp.styles {
-				if let Some(path) = source
+				if let Some(url) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
-					.map(|source| source.path().to_owned())
+					.map(|source| source.url().to_owned())
 				{
 					self.styles_map
-						.insert(path, std::mem::take(&mut *styles.styles.write()));
+						.insert(url, std::mem::take(&mut *styles.styles.write()));
 				}
 			}
 
 			// Code Ranges
 			for (source, coderanges) in &lsp.coderanges {
-				if let Some(path) = source
+				if let Some(url) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
-					.map(|source| source.path().to_owned())
+					.map(|source| source.url().to_owned())
 				{
 					self.coderanges_map
-						.insert(path, std::mem::take(&mut *coderanges.coderanges.write()));
+						.insert(url, std::mem::take(&mut *coderanges.coderanges.write()));
 				}
 			}
 
 			// Hovers
 			for (source, hovers) in &lsp.hovers {
-				if let Some(path) = source
+				if let Some(url) = source
 					.clone()
 					.downcast_ref::<SourceFile>()
-					.map(|source| source.path().to_owned())
+					.map(|source| source.url().to_owned())
 				{
 					self.hovers_map
-						.insert(path, std::mem::take(&mut *hovers.hovers.write()));
+						.insert(url, std::mem::take(&mut *hovers.hovers.write()));
 				}
 			}
 		});
 
-		self.units.insert(source.clone().path().to_owned(), unit);
+		self.units.insert(source.clone().url().to_owned(), unit);
 	}
 
 	async fn handle_conceal_request(
 		&self,
 		params: ConcealParams,
 	) -> jsonrpc::Result<Vec<ConcealInfo>> {
-		if let Some(conceals) = self.conceals_map.get(params.text_document.uri.as_str()) {
+		if let Some(conceals) = self.conceals_map.get(&params.text_document.uri) {
 			let (_, data) = conceals.pair();
 
 			return Ok(data.to_vec());
@@ -270,7 +269,7 @@ impl Backend {
 	}
 
 	async fn handle_style_request(&self, params: StyleParams) -> jsonrpc::Result<Vec<StyleInfo>> {
-		if let Some(styles) = self.styles_map.get(params.text_document.uri.as_str()) {
+		if let Some(styles) = self.styles_map.get(&params.text_document.uri) {
 			let (_, data) = styles.pair();
 
 			return Ok(data.to_vec());
@@ -282,7 +281,7 @@ impl Backend {
 		&self,
 		params: StyleParams,
 	) -> jsonrpc::Result<Vec<CodeRangeInfo>> {
-		if let Some(styles) = self.coderanges_map.get(params.text_document.uri.as_str()) {
+		if let Some(styles) = self.coderanges_map.get(&params.text_document.uri) {
 			let (_, data) = styles.pair();
 
 			return Ok(data.to_vec());
@@ -396,7 +395,7 @@ impl LanguageServer for Backend {
 		let uri = &params.text_document_position_params.text_document.uri;
 		let pos = &params.text_document_position_params.position;
 
-		let Some(source) = self.source_files.get(uri.as_str()).map(|v| v.clone()) else {
+		let Some(source) = self.source_files.get(uri).map(|v| v.clone()) else {
 			return Ok(None);
 		};
 		let cursor = LineCursor::from_position(
@@ -406,7 +405,7 @@ impl LanguageServer for Backend {
 			pos.character,
 		);
 		let hovers_from_map = || -> Option<Hover> {
-			let Some(hovers) = self.hovers_map.get(uri.as_str()) else {
+			let Some(hovers) = self.hovers_map.get(uri) else {
 				return None;
 			};
 			let index = hovers.binary_search_by(|hover| {
@@ -432,7 +431,7 @@ impl LanguageServer for Backend {
 		}
 
 		// Get hovers from document
-		let Some(unit) = self.units.get(uri.as_str()) else {
+		let Some(unit) = self.units.get(uri) else {
 			return Ok(None);
 		};
 		let mut found = None;
@@ -467,7 +466,7 @@ impl LanguageServer for Backend {
 		let uri = &params.text_document_position_params.text_document.uri;
 		let pos = &params.text_document_position_params.position;
 
-		let Some(definitions) = self.definition_map.get(uri.as_str()) else {
+		let Some(definitions) = self.definition_map.get(uri) else {
 			return Ok(None);
 		};
 		let index = definitions.binary_search_by(|(_, range)| {
@@ -488,7 +487,7 @@ impl LanguageServer for Backend {
 			}
 		});
 		if let Ok(index) = index {
-			let loc = self.definition_map.get(uri.as_str()).as_ref().unwrap()[index]
+			let loc = self.definition_map.get(uri).as_ref().unwrap()[index]
 				.0
 				.clone();
 			return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
@@ -501,16 +500,17 @@ impl LanguageServer for Backend {
 		&self,
 		params: CompletionParams,
 	) -> tower_lsp::jsonrpc::Result<Option<CompletionResponse>> {
+		let uri = &params.text_document_position.text_document.uri;
 		let Some(mut completions) = self
 			.completions_map
-			.get(params.text_document_position.text_document.uri.as_str())
+			.get(uri)
 			.map(|v| v.clone())
 		else {
 			return Ok(None);
 		};
 		if let Some(completors) = self
 			.completors
-			.get(params.text_document_position.text_document.uri.as_str())
+			.get(uri)
 		{
 			completors
 				.iter()
@@ -523,12 +523,13 @@ impl LanguageServer for Backend {
 		&self,
 		params: SemanticTokensParams,
 	) -> tower_lsp::jsonrpc::Result<Option<SemanticTokensResult>> {
-		let uri = params.text_document.uri;
+		let uri = &params.text_document.uri;
+
 		self.client
 			.log_message(MessageType::LOG, "semantic_token_full")
 			.await;
 
-		if let Some(semantic_tokens) = self.semantic_token_map.get(uri.as_str()) {
+		if let Some(semantic_tokens) = self.semantic_token_map.get(uri) {
 			let data = semantic_tokens
 				.iter()
 				.filter_map(|token| Some(token.clone()))
@@ -546,6 +547,8 @@ impl LanguageServer for Backend {
 		&self,
 		params: DocumentDiagnosticParams,
 	) -> tower_lsp::jsonrpc::Result<DocumentDiagnosticReportResult> {
+		let uri = &params.text_document.uri;
+
 		Ok(DocumentDiagnosticReportResult::Report(
 			DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
 				related_documents: None,
@@ -553,7 +556,7 @@ impl LanguageServer for Backend {
 					result_id: None,
 					items: self
 						.diagnostic_map
-						.get(params.text_document.uri.as_str())
+						.get(uri)
 						.map_or(vec![], |v| v.to_owned()),
 				},
 			}),
@@ -564,7 +567,9 @@ impl LanguageServer for Backend {
 		&self,
 		params: InlayHintParams,
 	) -> tower_lsp::jsonrpc::Result<Option<Vec<InlayHint>>> {
-		if let Some(hints) = self.hints_map.get(params.text_document.uri.as_str()) {
+		let uri = &params.text_document.uri;
+
+		if let Some(hints) = self.hints_map.get(uri) {
 			let (_, data) = hints.pair();
 
 			return Ok(Some(data.to_owned()));

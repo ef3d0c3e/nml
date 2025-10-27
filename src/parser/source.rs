@@ -3,6 +3,7 @@ use std::fs;
 use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use ariadne::Span;
@@ -11,21 +12,24 @@ use downcast_rs::Downcast;
 use mlua::LuaSerdeExt;
 use mlua::UserData;
 use unicode_segmentation::UnicodeSegmentation;
+use url::Url;
 
 use crate::add_documented_method;
 
 /// Trait for source content
 pub trait Source: Downcast + Send + Sync {
-	/// Gets the source's location
+	/// Get the source's location
 	///
 	/// This usually means the parent source.
 	/// If the source is a [`SourceFile`], this generally means the [`SourceFile`] that included it.
 	fn location(&self) -> Option<&Token>;
-	/// Gets the source's name
+	/// Get the source's name
 	///
 	/// For [`SourceFile`] this means the path of the source. Note that some [`VirtualSource`] are prefixed with a special identifier such as `:LUA:`.
 	fn name(&self) -> &PathBuf;
-	/// Gets the source's content
+	/// Get the url corresponding to the source
+	fn url(&self) -> &Url;
+	/// Get the source's content
 	fn content(&self) -> &String;
 }
 impl_downcast!(Source);
@@ -64,6 +68,8 @@ pub struct SourceFile {
 	location: Option<Token>,
 	/// Path relative to the compilation databse / current directory
 	path: PathBuf,
+	/// Url to the file
+	url: Url,
 	/// Content of the file
 	content: String,
 }
@@ -73,11 +79,14 @@ impl SourceFile {
 	/// Creates a [`SourceFile`] from a `path`. This will read the content of the file at that
 	/// `path`. In case the file is not accessible or reading fails, an error is returned.
 	pub fn new(path: PathBuf, location: Option<Token>) -> Result<Self, String> {
+		let url = Url::from_file_path(&path)
+			.map_err(|_| format!("Failed to form url from path `{}`", path.display()))?;
 		match fs::read_to_string(&path) {
 			Err(_) => Err(format!("Unable to read file content: `{}`", path.display())),
 			Ok(content) => Ok(Self {
 				location,
-				path: path,
+				path,
+				url,
 				content,
 			}),
 		}
@@ -85,9 +94,17 @@ impl SourceFile {
 
 	/// Creates a [`SourceFile`] from a `String`
 	pub fn with_content(path: String, content: String, location: Option<Token>) -> Self {
+		let url = if path.starts_with("file:///") {
+			Url::from_str(&path)
+		} else {
+			Url::from_str(&format!("file:///{path}"))
+		}
+		.unwrap();
+
 		Self {
 			location,
-			path: PathBuf::from(path),
+			path: PathBuf::from(&path),
+			url,
 			content,
 		}
 	}
@@ -104,6 +121,9 @@ impl Source for SourceFile {
 	}
 	fn name(&self) -> &PathBuf {
 		&self.path
+	}
+	fn url(&self) -> &Url {
+		&self.url
 	}
 	fn content(&self) -> &String {
 		&self.content
@@ -154,6 +174,8 @@ pub struct VirtualSource {
 	location: Token,
 	/// Name of the [`VirtualSource`]
 	name: PathBuf,
+	/// Url to this [`VirtualSource`]
+	url: Url,
 	/// Content of the [`VirtualSource`]
 	content: String,
 	/// Offsets relative to the [`Self::location`]'s source
@@ -163,9 +185,11 @@ pub struct VirtualSource {
 impl VirtualSource {
 	/// Creates a new [`VirtualSource`] from a `location`, `name` and `content`.
 	pub fn new(location: Token, name: PathBuf, content: String) -> Self {
+		let url = Url::from_str(&format!("virtual:///{}", name.display())).unwrap();
 		Self {
 			location,
 			name,
+			url,
 			content,
 			offsets: None,
 		}
@@ -182,9 +206,11 @@ impl VirtualSource {
 		content: String,
 		offsets: Vec<(usize, isize)>,
 	) -> Self {
+		let url = Url::from_str(&format!("virtual:///{}", name.display())).unwrap();
 		Self {
 			location,
 			name,
+			url,
 			content,
 			offsets: Some(SourceOffset { offsets }),
 		}
@@ -197,6 +223,9 @@ impl Source for VirtualSource {
 	}
 	fn name(&self) -> &PathBuf {
 		&self.name
+	}
+	fn url(&self) -> &Url {
+		&self.url
 	}
 	fn content(&self) -> &String {
 		&self.content
@@ -515,9 +544,11 @@ impl Token {
 
 	/// Creates a virtual source from the token
 	pub fn to_source(&self, name: String) -> Arc<dyn Source> {
+		let url = Url::from_str(&format!("virtual:///{name}")).unwrap();
 		Arc::new(VirtualSource {
 			location: self.clone(),
 			name: PathBuf::from(name),
+			url,
 			content: self.content().into(),
 			offsets: None,
 		})

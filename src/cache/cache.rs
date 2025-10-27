@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -108,8 +109,8 @@ pub struct Cache {
 }
 
 impl Cache {
-	pub fn new(db_path: &str) -> Result<Self, String> {
-		let con = if db_path.is_empty() {
+	pub fn new(db_path: &Path) -> Result<Self, String> {
+		let con = if db_path.as_os_str().is_empty() {
 			Connection::open_in_memory()
 		} else {
 			Connection::open(db_path)

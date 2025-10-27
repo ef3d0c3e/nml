@@ -9,8 +9,8 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HtmlOutput {
 	pub language: String,
-	pub icon: Option<String>,
-	pub css: Option<String>,
+	pub icon: Option<PathBuf>,
+	pub css: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,8 +22,8 @@ pub enum ProjectOutput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSettings {
-	pub db_path: String,
-	pub output_path: String,
+	pub db_path: PathBuf,
+	pub output_path: PathBuf,
 	pub output: ProjectOutput,
 }
 
@@ -45,18 +45,13 @@ impl ProjectSettings {
 	/// Sets the project's root path
 	/// - path: The directory containing the project settings file
 	pub fn set_root_path(&mut self, path: &String) -> Result<(), String> {
-		fn get_path(name: &str, cwd: &PathBuf, mut base: PathBuf, component: &str) -> Result<String, String> {
+		fn get_path(cwd: &PathBuf, base: PathBuf, component: &Path) -> Result<PathBuf, String> {
 			let mut base = PathBuf::from(&base).canonicalize().map_err(|e| format!("Failed to canonicalize `{}`: {e}", base.display()))?;
 			base.push(component);
 			base = cwd.join(base);
 			base = base.canonicalize().unwrap_or(base);
 			base = pathdiff::diff_paths(&base, cwd).unwrap_or(base);
-			base.to_str()
-				.ok_or(format!(
-						"Invalid unicode in {name} path: {}",
-						base.display()
-				))
-				.map(|val| val.to_string())
+			Ok(base)
 		}
 
 		let path = PathBuf::from(path).canonicalize().map_err(|e| format!("Failed to canonicalize `{path}`: {e}"))?;
@@ -64,18 +59,18 @@ impl ProjectSettings {
 		let diff = pathdiff::diff_paths(&path, &cwd)
 			.unwrap_or(PathBuf::from(path.clone()));
 
-		self.output_path = get_path("output", &cwd, diff.clone(), self.output_path.as_str())?;
-		self.db_path = get_path("db", &cwd, path.clone(), self.db_path.as_str())?;
-		let output_buf = PathBuf::from(&self.output_path).canonicalize().map_err(|e| format!("Failed to canonicalize `{}`: {e}", self.output_path))?;
+		self.output_path = get_path(&cwd, diff.clone(), &self.output_path)?;
+		self.db_path = get_path(&cwd, path.clone(), &self.db_path)?;
+		let output_buf = PathBuf::from(&self.output_path).canonicalize().map_err(|e| format!("Failed to canonicalize `{}`: {e}", self.output_path.display()))?;
 
 		match &mut self.output {
 			ProjectOutput::Html(html) => {
 				if let Some(icon) = &mut html.icon {
-					*icon = get_path("html.icon", &output_buf, diff.clone(), icon.as_str())?;
+					*icon = get_path(&output_buf, diff.clone(), &icon)?;
 				}
 
 				if let Some(css) = &mut html.css {
-					*css = get_path("html.css", &output_buf, diff.clone(), css.as_str())?;
+					*css = get_path(&output_buf, diff.clone(), &css)?;
 				}
 			}
 		}

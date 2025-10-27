@@ -115,7 +115,7 @@ impl Compiler {
 				let css = if let Some(css) = &html.css {
 					format!(
 						"<link rel=\"stylesheet\" href=\"{}\">",
-						self.sanitize(css.as_str())
+						self.sanitize(&css.display().to_string())
 					)
 				} else {
 					"".into()
@@ -123,7 +123,7 @@ impl Compiler {
 				let icon = if let Some(icon) = &html.icon {
 					format!(
 						"<link rel=\"icon\" href=\"{}\">",
-						self.sanitize(icon.as_str())
+						self.sanitize(&icon.display().to_string())
 					)
 				} else {
 					"".into()

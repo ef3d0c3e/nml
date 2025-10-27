@@ -1,12 +1,12 @@
 mod cache;
 mod compiler;
 mod elements;
+mod layout;
 mod lsp;
+mod lua;
 mod parser;
 mod unit;
 mod util;
-mod lua;
-mod layout;
 
 use std::env::{self};
 use std::fs;
@@ -105,36 +105,23 @@ fn input_manual(
 	let db_path = match &matches.opt_str("d") {
 		Some(db) => {
 			if std::fs::exists(db).unwrap_or(false) {
-				match std::fs::canonicalize(db)
-					.map_err(|err| format!("Failed to cannonicalize database path `{db}`: {err}"))
-					.as_ref()
-					.map(|path| path.to_str())
-				{
-					Ok(Some(path)) => Some(path.to_string()),
-					Ok(None) => {
-						return Err(format!("Failed to transform path to string `{db}`"));
-					}
+				match std::fs::canonicalize(db) {
+					Ok(path) => Some(path),
 					Err(err) => {
-						return Err(format!("{err}"));
+						return Err(format!(
+							"Failed to cannonicalize database parent path `{db}`: {err}"
+						))
 					}
 				}
 			} else
 			// Cannonicalize parent path, then append the database name
 			{
-				match std::fs::canonicalize(".")
-					.map_err(|err| {
-						format!("Failed to cannonicalize database parent path `{db}`: {err}")
-					})
-					.map(|path| path.join(db))
-					.as_ref()
-					.map(|path| path.to_str())
-				{
-					Ok(Some(path)) => Some(path.to_string()),
-					Ok(None) => {
-						return Err(format!("Failed to transform path to string `{db}`"));
-					}
+				match std::fs::canonicalize(".") {
+					Ok(path) => Some(path.join(db)),
 					Err(err) => {
-						return Err(format!("{err}"));
+						return Err(format!(
+							"Failed to cannonicalize database parent path `{db}`: {err}"
+						))
 					}
 				}
 			}
@@ -184,26 +171,22 @@ fn input_manual(
 		files.push(std::fs::canonicalize(input).unwrap());
 	}
 	let mut settings = ProjectSettings::default();
-	settings.db_path = db_path.unwrap_or("".into());
-	settings.output_path = output
-		.clone()
-		.split_at(output.rfind(|c| c == '/').unwrap_or(0))
-		.0
-		.to_string();
-	if input_meta.is_dir()
-	{
+	settings.db_path = db_path.unwrap_or(PathBuf::from(""));
+	let mut output_path = PathBuf::from(output);
+	output_path.pop();
+	if input_meta.is_dir() {
 		Ok((
-				files,
-				compiler::process::ProcessOutputOptions::Directory(PathBuf::from(&settings.output_path)),
-				settings,
+			files,
+			compiler::process::ProcessOutputOptions::Directory(PathBuf::from(
+				&settings.output_path,
+			)),
+			settings,
 		))
-	}
-	else
-	{
+	} else {
 		Ok((
-				files,
-				compiler::process::ProcessOutputOptions::File(PathBuf::from(&settings.output_path)),
-				settings,
+			files,
+			compiler::process::ProcessOutputOptions::File(PathBuf::from(&settings.output_path)),
+			settings,
 		))
 	}
 }
@@ -217,7 +200,9 @@ fn input_project(
 		.split_at(settings_file.rfind(|c| c == '/').unwrap_or(0))
 		.0
 		.to_string();
-	if root_path.is_empty() { root_path = ".".to_string(); }
+	if root_path.is_empty() {
+		root_path = ".".to_string();
+	}
 
 	let root_meta = std::fs::metadata(&root_path)
 		.map_err(|e| format!("Failed to get project root metadata `{root_path}`: {e}"))?;
@@ -319,8 +304,7 @@ fn main() -> ExitCode {
 		print_usage(&program, opts);
 		return ExitCode::SUCCESS;
 	}
-	if matches.opt_present("luals-gen")
-	{
+	if matches.opt_present("luals-gen") {
 		lua::doc::get_lua_docs();
 		return ExitCode::SUCCESS;
 	}
@@ -348,21 +332,10 @@ fn main() -> ExitCode {
 		options.debug_ast = true
 	}
 
-	// Check that all files have a valid unicode path
-	for file in &files {
-		if file.to_str().is_none() {
-			eprintln!("Invalid unicode for file: `{file:#?}`");
-			return ExitCode::FAILURE;
-		}
-	}
 	println!("files={files:#?}");
 
-	let project_path = settings
-		.db_path
-		.clone()
-		.split_at(settings.db_path.rfind(|c| c == '/').unwrap_or(0))
-		.0
-		.to_string();
+	let mut project_path = settings.db_path.clone();
+	project_path.pop();
 	let mut queue = ProcessQueue::new(Target::HTML, PathBuf::from(project_path), settings, files);
 	match queue.process(output, options) {
 		Ok(_) => {}
@@ -370,7 +343,10 @@ fn main() -> ExitCode {
 			eprintln!("Processing failed with error: `{err}`");
 		}
 		Err(ProcessError::InputError(err, file)) => {
-			eprintln!("Processing failed with error: `{err}` while processing file '{}'", file.display());
+			eprintln!(
+				"Processing failed with error: `{err}` while processing file '{}'",
+				file.display()
+			);
 		}
 		Err(ProcessError::LinkError(reports)) | Err(ProcessError::CompileError(reports)) => {
 			let colors = ReportColors::with_colors();
