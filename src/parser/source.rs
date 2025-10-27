@@ -79,7 +79,10 @@ impl SourceFile {
 	/// Creates a [`SourceFile`] from a `path`. This will read the content of the file at that
 	/// `path`. In case the file is not accessible or reading fails, an error is returned.
 	pub fn new(path: PathBuf, location: Option<Token>) -> Result<Self, String> {
-		let url = Url::from_file_path(&path)
+		let absolute = path
+			.canonicalize()
+			.map_or_else(|_| path.to_path_buf(), |p| p);
+		let url = Url::from_file_path(&absolute)
 			.map_err(|_| format!("Failed to form url from path `{}`", path.display()))?;
 		match fs::read_to_string(&path) {
 			Err(_) => Err(format!("Unable to read file content: `{}`", path.display())),

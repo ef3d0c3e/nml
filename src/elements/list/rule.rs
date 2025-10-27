@@ -351,7 +351,7 @@ impl Rule for ListRule {
 				Ok(Kernel::with_context(lua, |ctx| ListEntry {
 					location: ctx.location.clone(),
 					bullet,
-					content: content.inner.clone(),
+					content: content.0.clone(),
 					markers,
 				}))
 			},
@@ -371,13 +371,12 @@ impl Rule for ListRule {
 					.iter()
 					.map(|ent| ent.content.clone())
 					.collect::<Vec<_>>();
-				Ok(Kernel::with_context(lua, |ctx| ElemWrapper {
-					inner: Arc::new(List {
+				Ok(Kernel::with_context(lua, |ctx| ElemWrapper (Arc::new(List {
 						location: ctx.location.clone(),
 						contained,
 						entries: entries.to_owned(),
 					}),
-				}))
+				)))
 			},
 			"Creates a new list entry",
 			vec!["entries ListEntry[] Entries for the list"],

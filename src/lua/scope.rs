@@ -13,9 +13,7 @@ use super::elem::ElemWrapper;
 
 /// Wrapper for Scopes
 #[auto_registry::auto_registry(registry = "lua")]
-pub struct ScopeWrapper {
-	pub inner: Arc<RwLock<Scope>>,
-}
+pub struct ScopeWrapper(pub Arc<RwLock<Scope>>);
 
 impl UserData for ScopeWrapper {
 	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
@@ -26,11 +24,14 @@ impl UserData for ScopeWrapper {
 			"Scope",
 			"content",
 			|_lua, this, (recurse,): (bool,)| {
-				let it = this.inner.content_iter(recurse);
-				Ok(IteratorWrapper { iter: Box::new(it) })
+				let it = this.0.content_iter(recurse);
+				Ok(IteratorWrapper(Box::new(it)))
 			},
 			"Gets an iterator to the scope's content",
-			vec!["self", "recurse:bool Recursively iterate over nested scopes"],
+			vec![
+				"self",
+				"recurse:bool Recursively iterate over nested scopes"
+			],
 			None
 		);
 	}
@@ -38,9 +39,7 @@ impl UserData for ScopeWrapper {
 
 /// Wrapper for `Vec<Arc<RwLock<Scope>>>`
 #[auto_registry::auto_registry(registry = "lua")]
-pub struct VecScopeWrapper {
-	pub inner: Vec<Arc<RwLock<Scope>>>,
-}
+pub struct VecScopeWrapper(pub Vec<Arc<RwLock<Scope>>>);
 
 impl UserData for VecScopeWrapper {
 	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
@@ -50,9 +49,9 @@ impl UserData for VecScopeWrapper {
 			methods,
 			"Scope[]",
 			"scope",
-			|_lua, this, (id,): (usize,)| { 
-				if let Some(scope) = this.inner.get(id).cloned() {
-					Ok(ScopeWrapper { inner: scope })
+			|_lua, this, (id,): (usize,)| {
+				if let Some(scope) = this.0.get(id).cloned() {
+					Ok(ScopeWrapper(scope))
 				} else {
 					Err(mlua::Error::BadArgument {
 						to: Some("scope".into()),
@@ -69,9 +68,7 @@ impl UserData for VecScopeWrapper {
 	}
 }
 
-pub struct IteratorWrapper {
-	pub iter: Box<dyn Iterator<Item = (Arc<RwLock<Scope>>, Arc<dyn Element>)>>,
-}
+pub struct IteratorWrapper(pub Box<dyn Iterator<Item = (Arc<RwLock<Scope>>, Arc<dyn Element>)>>);
 
 impl UserData for IteratorWrapper {
 	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
@@ -81,12 +78,10 @@ impl UserData for IteratorWrapper {
 			mlua::MetaMethod::Call,
 			|lua, (this,): (mlua::AnyUserData,)| {
 				let mut iter = this.borrow_mut::<IteratorWrapper>()?;
-				if let Some((scope, elem)) = iter.iter.next() {
+				if let Some((scope, elem)) = iter.0.next() {
 					Ok(mlua::MultiValue::from_vec(vec![
-						Value::UserData(
-							lua.create_userdata(ScopeWrapper { inner: scope }).unwrap(),
-						),
-						Value::UserData(lua.create_userdata(ElemWrapper { inner: elem }).unwrap()),
+						Value::UserData(lua.create_userdata(ScopeWrapper(scope)).unwrap()),
+						Value::UserData(lua.create_userdata(ElemWrapper(elem)).unwrap()),
 					]))
 				} else {
 					Ok(mlua::MultiValue::new())

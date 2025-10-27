@@ -50,15 +50,14 @@ impl Rule for TextRule {
 		add_documented_function!(
 			"text.Text",
 			|lua: &mlua::Lua, (content,): (String,)| {
-				Ok(Kernel::with_context(lua, |ctx| ElemWrapper {
-					inner: Arc::new(Text {
+				Ok(Kernel::with_context(lua, |ctx| ElemWrapper (Arc::new(Text {
 						location: ctx.location.clone(),
 						content,
 					}),
-				}))
+				)))
 			},
-			"Creates a new text element",
-			vec!["content:string String content of the created text"],
+			"Create a new text element",
+			vec!["content:string Content of the created text"],
 			"Text"
 		);
 	}

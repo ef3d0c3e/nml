@@ -11,6 +11,7 @@ use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
 use crate::lua::scope::VecScopeWrapper;
+use crate::lua::wrappers::OnceLockWrapper;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crate::unit::element::ContainerElement;
@@ -32,7 +33,7 @@ pub struct Heading {
 	pub(crate) numbered: bool,
 	pub(crate) in_toc: bool,
 	pub(crate) reference: Option<Arc<InternalReference>>,
-	#[lua_ignore]
+	#[lua_map(OnceLockWrapper)]
 	pub(crate) link: OnceLock<String>,
 }
 

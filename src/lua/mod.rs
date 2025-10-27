@@ -4,3 +4,4 @@ pub mod scope;
 pub mod elem;
 pub mod variable;
 pub mod doc;
+pub mod wrappers;

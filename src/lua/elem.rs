@@ -8,23 +8,21 @@ use mlua::Value;
 use crate::unit::element::Element;
 
 #[derive(Clone)]
-pub struct ElemWrapper {
-	pub inner: Arc<dyn Element>,
-}
+pub struct ElemWrapper(pub Arc<dyn Element>);
 
 impl UserData for ElemWrapper {
 	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
 
 	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
 		methods.add_method("name", |lua, this, ()| {
-			lua.to_value(this.inner.element_name())
+			lua.to_value(this.0.element_name())
 		});
-		methods.add_method("kind", |lua, this, ()| lua.to_value(&this.inner.kind()));
+		methods.add_method("kind", |lua, this, ()| lua.to_value(&this.0.kind()));
 		methods.add_method("downcast", |lua, this, ()| {
-			let Some(down) = this.inner.clone().lua_wrap(lua) else {
+			let Some(down) = this.0.clone().lua_wrap(lua) else {
 				return Err(mlua::Error::RuntimeError(format!(
 					"Element {} doesn't support downcasting!",
-					this.inner.element_name()
+					this.0.element_name()
 				)));
 			};
 
@@ -51,9 +49,7 @@ impl<'lua> FromLua<'lua> for ElemWrapper {
 }
 
 /// Wrapper for a Vector of UserData objects
-pub struct LuaUDVec<T> {
-	pub inner: Vec<T>,
-}
+pub struct LuaUDVec<T>(pub Vec<T>);
 
 /// Now any `LuaVec<T>` where `T: UserData + Clone + 'static`
 /// can be turned into a table of `T` userdata.
@@ -63,7 +59,7 @@ where
 {
 	fn into_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
 		let tbl: mlua::Table = lua.create_table()?;
-		for (i, item) in self.inner.iter().enumerate() {
+		for (i, item) in self.0.iter().enumerate() {
 			// clone out the T, wrap in userdata, stick at 1‑based index
 			let ud = lua.create_userdata(item.clone())?;
 			tbl.set(i + 1, ud)?;

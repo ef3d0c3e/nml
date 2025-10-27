@@ -21,13 +21,13 @@ impl<'a> UserData for UnitWrapper<'a> {
 
 	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
 		methods.add_method("entry_scope", |_lua, this, ()| {
-			Ok(ScopeWrapper {
-				inner: this.inner.get_entry_scope().clone(),
-			})
+			Ok(ScopeWrapper (
+				this.inner.get_entry_scope().clone(),
+			))
 		});
 		methods.add_method("content", |_lua, this, (recurse,): (bool,)| {
 			let it = this.inner.get_entry_scope().content_iter(recurse);
-			Ok(IteratorWrapper { iter: Box::new(it) })
+			Ok(IteratorWrapper(Box::new(it)))
 		});
 		methods.add_method("get_variable", |_lua, this, (name,): (String,)| {
 			let Some((var, _)) = this
@@ -37,7 +37,7 @@ impl<'a> UserData for UnitWrapper<'a> {
 			else {
 				return Ok(None);
 			};
-			Ok(Some(VariableWrapper { inner: var }))
+			Ok(Some(VariableWrapper(var)))
 		});
 		add_documented_method!(
 			methods,
@@ -45,11 +45,11 @@ impl<'a> UserData for UnitWrapper<'a> {
 			"add_content",
 			|lua, _this, (elem,): (ElemWrapper,)| {
 				Kernel::with_context(lua, |ctx| {
-					ctx.unit.add_content(elem.inner.clone());
+					ctx.unit.add_content(elem.0.clone());
 				});
 				Ok(())
 			},
-			"Inserts content in the unit at the current position",
+			"Insert content in the unit at the current position",
 			vec!["self", "elem:Element Element to insert"],
 			None
 		);
