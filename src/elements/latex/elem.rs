@@ -1,4 +1,3 @@
-use std::fmt::write;
 use std::fmt::Display;
 use std::io::Read;
 use std::io::Write;
@@ -106,7 +105,7 @@ impl Cached for FormattedTex {
 	}
 }
 
-fn format_latex(fontsize: &str, preamble: &str, tex: &str) -> FormattedTex {
+fn format_latex(_fontsize: &str, preamble: &str, tex: &str) -> FormattedTex {
 	FormattedTex(format!(
 		r"\documentclass[preview]{{standalone}}
 {preamble}

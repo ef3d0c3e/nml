@@ -84,7 +84,6 @@ impl LuaPostProcess {
 							.load(self.source.content())
 							.set_name(self.source.name().display().to_string())
 							.eval::<String>(),
-						_ => panic!(),
 					}) {
 						Err(err) => {
 							report_err!(

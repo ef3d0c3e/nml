@@ -11,7 +11,6 @@ use crate::lsp::completion::context_triggered;
 use crate::lsp::completion::CompletionProvider;
 use crate::unit::translation::TranslationUnit;
 use crate::unit::variable::Variable;
-use crate::unit::variable::VariableName;
 
 pub struct VariableCompletion;
 

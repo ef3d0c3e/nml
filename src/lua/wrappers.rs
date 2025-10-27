@@ -1,31 +1,47 @@
+pub mod elem;
+pub mod iterator;
+pub mod luaudvec;
+pub mod once_lock;
+pub mod scope;
+pub mod unit;
+pub mod variable;
+
+use std::sync::Arc;
 use std::sync::OnceLock;
 
-use mlua::{IntoLua, UserData};
+use parking_lot::RwLock;
 
+use crate::unit::element::Element;
+use crate::unit::scope::Scope;
+use crate::unit::translation::TranslationUnit;
+use crate::unit::variable::Variable;
+
+/// Wrapper for [`Variable`]
 #[auto_registry::auto_registry(registry = "lua")]
+pub struct VariableWrapper(pub Arc<dyn Variable>);
+
+/// Wrapper for [`TranslationUnit`]
+#[auto_registry::auto_registry(registry = "lua")]
+pub struct UnitWrapper<'a>(pub &'a mut TranslationUnit);
+
+/// Wrapper for [`Scope`]
+#[auto_registry::auto_registry(registry = "lua")]
+pub struct ScopeWrapper(pub Arc<RwLock<Scope>>);
+
+/// Wrapper for [`Vec<Arc<RwLock<Scope>>>`]
+#[auto_registry::auto_registry(registry = "lua")]
+pub struct VecScopeWrapper(pub Vec<Arc<RwLock<Scope>>>);
+
+/// Wrapper for [`OnceLock`]
+//#[auto_registry::auto_registry(registry = "lua")] TODO: Make it work for generic types
 pub struct OnceLockWrapper<T>(pub OnceLock<T>);
 
-impl<T> UserData for OnceLockWrapper<T>
-where
-    for<'lua> T: mlua::FromLua<'lua> + mlua::IntoLua<'lua> + Clone + core::fmt::Debug,
-    T: Send + Sync + 'static,
-{
-    fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
+/// Wrapper for [`Iterator`] over a [`Scope`]'s content
+pub struct IteratorWrapper(pub Box<dyn Iterator<Item = (Arc<RwLock<Scope>>, Arc<dyn Element>)>>);
 
-    fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-		methods.add_method("get", |_lua, this, ()| {
-			eprintln!("IN GET : {:#?}", this.0);
-			match this.0.get() {
-				Some(v) => Ok(Some(v.clone())),
-				None => Ok(None),
-			}
-		});
+/// Wrapper for [`Element`]
+#[derive(Clone)]
+pub struct ElemWrapper(pub Arc<dyn Element>);
 
-		methods.add_method("set", |_lua, this, value: T| {
-			match this.0.set(value) {
-				Ok(()) => Ok(true),
-				Err(_already) => Ok(false),
-			}
-		});
-	}
-}
+/// Wrapper for a Vector of UserData objects
+pub struct LuaUDVec<T>(pub Vec<T>);

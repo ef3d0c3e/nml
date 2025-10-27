@@ -15,7 +15,7 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::variable::Variable;
-use crate::lua::variable::VariableWrapper;
+use crate::lua::wrappers::*;
 
 #[derive(Debug, AutoUserData)]
 pub struct VariableDefinition {

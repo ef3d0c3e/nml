@@ -6,9 +6,8 @@ use ariadne::Fmt;
 use mlua::LuaSerdeExt;
 use regex::Regex;
 
-use crate::lua::elem::ElemWrapper;
+use crate::lua::wrappers::*;
 use crate::lua::kernel::Kernel;
-use crate::lua::scope::ScopeWrapper;
 use crate::parser::property::Property;
 use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;

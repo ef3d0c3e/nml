@@ -5,13 +5,10 @@ use mlua::UserData;
 
 use crate::add_documented_method;
 use crate::elements::variable::elem::VariableSubstitution;
+use crate::lua::wrappers::VariableWrapper;
 use crate::unit::translation::TranslationAccessors;
-use crate::unit::variable::Variable;
 
-use super::kernel::Kernel;
-
-#[auto_registry::auto_registry(registry = "lua")]
-pub struct VariableWrapper(pub Arc<dyn Variable>);
+use crate::lua::kernel::Kernel;
 
 impl UserData for VariableWrapper {
 	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}

@@ -1,8 +1,6 @@
-use std::cell::LazyCell;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use graphviz_rust::print;
 use mlua::IntoLua;
 use mlua::LightUserData;
 use mlua::Lua;
@@ -10,12 +8,10 @@ use mlua::Table;
 use mlua::Value;
 use parking_lot::Mutex;
 
-use crate::parser::parser::ParserRuleAccessor;
+use crate::lua::wrappers::UnitWrapper;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crate::unit::translation::TranslationUnit;
-
-use super::unit::UnitWrapper;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct KernelName(pub String);
@@ -132,9 +128,9 @@ impl Kernel {
 
 						// Wrap the unit (not as userdata! use a light proxy)
 						// Instead of passing a reference directly, create a proxy object with dynamic dispatch
-						let wrapper = lua.create_userdata(UnitWrapper {
-							inner: &mut ctx_ref.unit,
-						})?;
+						let wrapper = lua.create_userdata(UnitWrapper (
+							&mut ctx_ref.unit,
+						))?;
 
 						Ok(wrapper)
 					})
@@ -145,7 +141,6 @@ impl Kernel {
 		// Register functions from parser rules
 		let lock = LUA_FUNC.lock();
 		for (name, fun) in lock.iter() {
-			println!("name = {name}");
 			let mut stack = vec![nml_table.clone()];
 			let mut path = *name;
 			loop {

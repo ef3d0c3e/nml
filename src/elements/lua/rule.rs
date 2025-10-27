@@ -11,7 +11,6 @@ use regex::Regex;
 use crate::elements::meta::scope::ScopeElement;
 use crate::elements::text::elem::Text;
 use crate::lsp::ranges::CustomRange;
-use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelContext;
 use crate::lua::kernel::KernelName;
 use crate::parser::property::Property;
@@ -379,7 +378,6 @@ impl RegexRule for InlineLuaRule {
 							.load(lua_source.content())
 							.set_name(lua_source.name().display().to_string())
 							.eval::<String>(),
-						_ => panic!(),
 					}) {
 						Err(err) => {
 							report_err!(

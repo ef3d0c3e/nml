@@ -10,8 +10,6 @@ use crate::parser::source::Token;
 use crate::unit::element::ContainerElement;
 use crate::unit::element::ElemKind;
 use crate::unit::element::Element;
-use crate::unit::element::LinkableElement;
-use crate::unit::element::ReferenceableElement;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
@@ -36,7 +34,7 @@ impl Element for Import {
 
 	fn compile(
 		&self,
-		scope: Arc<RwLock<Scope>>,
+		_scope: Arc<RwLock<Scope>>,
 		compiler: &Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {

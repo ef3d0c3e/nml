@@ -4,7 +4,6 @@ use tower_lsp::lsp_types::CompletionItemKind;
 use tower_lsp::lsp_types::InsertTextFormat;
 use tower_lsp::lsp_types::MarkupContent;
 
-use crate::lsp::completion::context_triggered;
 use crate::lsp::completion::CompletionProvider;
 use crate::unit::translation::TranslationUnit;
 
@@ -17,7 +16,7 @@ impl CompletionProvider for ListCompletion {
 
 	fn unit_items(&self, _unit: &TranslationUnit, _items: &mut Vec<CompletionItem>) {}
 
-	fn static_items(&self, context: &Option<CompletionContext>, items: &mut Vec<CompletionItem>) {
+	fn static_items(&self, _context: &Option<CompletionContext>, items: &mut Vec<CompletionItem>) {
 		// *
 		items.push(CompletionItem {
 			label: "*".to_string(),

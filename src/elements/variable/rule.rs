@@ -34,7 +34,7 @@ use super::elem::VariableSubstitution;
 fn parse_delimited(content: &str, delim: &str) -> Option<usize> {
 	let mut escaped = 0usize;
 	let mut it = content.char_indices();
-	let mut end_pos = 0;
+	let mut end_pos;
 
 	loop {
 		let Some((pos, c)) = it.next() else {

@@ -10,7 +10,6 @@ use crate::parser::rule::RuleTarget;
 use crate::parser::source::Token;
 use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
-use crate::unit::translation::CustomData;
 use crate::unit::translation::TranslationUnit;
 
 #[auto_registry::auto_registry(registry = "rules")]
@@ -58,8 +57,8 @@ impl RegexRule for LayoutRule {
 		&self,
 		_index: usize,
 		unit: &mut TranslationUnit,
-		token: Token,
-		captures: regex::Captures,
+		_token: Token,
+		_captures: regex::Captures,
 	) {
 		if !unit.has_data(LAYOUT_CUSTOM) {
 			unit.new_data(Arc::new(RwLock::new(LayoutData::default())));

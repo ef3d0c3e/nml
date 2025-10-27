@@ -139,12 +139,12 @@ impl RegexRule for GraphvizRule {
 		) else {
 			return;
 		};
-		let Some(layout) = properties.get(unit, "layout", |prop, value| {
+		let Some(layout) = properties.get(unit, "layout", |_prop, value| {
 			layout_from_str(value.value.as_str())
 		}) else {
 			return;
 		};
-		let Some(width) = properties.get(unit, "width", |prop, value| {
+		let Some(width) = properties.get(unit, "width", |_prop, value| {
 			Size::from_str(value.value.as_str())
 		}) else {
 			return;

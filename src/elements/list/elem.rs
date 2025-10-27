@@ -8,9 +8,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use mlua::serde::LuaSerdeExt;
 
-use crate::lua::elem::LuaUDVec;
-use crate::lua::scope::ScopeWrapper;
-use crate::lua::scope::VecScopeWrapper;
+use crate::lua::wrappers::*;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;

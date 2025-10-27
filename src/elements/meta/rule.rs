@@ -3,9 +3,8 @@ use std::any::Any;
 use mlua::Lua;
 
 use crate::add_documented_function;
-use crate::lua::elem::ElemWrapper;
 use crate::lua::kernel::Kernel;
-use crate::lua::scope::ScopeWrapper;
+use crate::lua::wrappers::*;
 use crate::parser::rule::Rule;
 use crate::parser::rule::RuleTarget;
 use crate::parser::source::Cursor;

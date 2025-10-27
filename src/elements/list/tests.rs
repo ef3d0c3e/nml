@@ -2,11 +2,9 @@ use std::sync::Arc;
 
 use crate::elements::list::elem::List;
 use crate::elements::text::elem::Text;
-use crate::elements::variable::elem::VariableDefinition;
 use crate::parser::parser::Parser;
 use crate::parser::source::SourceFile;
 use crate::unit::translation::TranslationUnit;
-use crate::unit::variable::{VariableName, VariableVisibility};
 use crate::validate_ast;
 
 #[test]
@@ -21,7 +19,8 @@ fn parser() {
  - third
 
  * new list
-"#.to_string(),
+"#
+		.to_string(),
 		None,
 	));
 

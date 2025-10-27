@@ -10,8 +10,7 @@ use parking_lot::RwLock;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
-use crate::lua::scope::VecScopeWrapper;
-use crate::lua::wrappers::OnceLockWrapper;
+use crate::lua::wrappers::*;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crate::unit::element::ContainerElement;
@@ -56,15 +55,16 @@ impl Element for Heading {
 		match compiler.target() {
 			Target::HTML => {
 				output.add_content(format!("<h{}>", self.depth));
-				if self.reference.is_some()
-				{
-					output.add_content(format!("<a id=\"{}\">", compiler.sanitize(self.link.get().unwrap())));
+				if self.reference.is_some() {
+					output.add_content(format!(
+						"<a id=\"{}\">",
+						compiler.sanitize(self.link.get().unwrap())
+					));
 				}
 				for (scope, elem) in (&self.display[0]).content_iter(false) {
 					elem.compile(scope, compiler, output)?;
 				}
-				if self.reference.is_some()
-				{
+				if self.reference.is_some() {
 					output.add_content("</a>");
 				}
 				output.add_content(format!("</h{}>", self.depth));
@@ -75,7 +75,8 @@ impl Element for Heading {
 	}
 
 	fn provide_hover(&self) -> Option<String> {
-	    Some(format!("Heading
+		Some(format!(
+			"Heading
 
 # Properties
  * **Location**: [{0}] ({1}..{2})
@@ -83,13 +84,16 @@ impl Element for Heading {
  * **Numbered**: {4}
  * **In TOC**: {5}
  * **Refname**: {6}",
-				self.location.source().name().display(),
-				self.location().range.start(),
-				self.location().range.end(),
-				self.depth,
-				self.numbered,
-				self.in_toc,
-				self.reference.as_ref().map_or("*None*".to_string(), |r| r.name().to_string())))
+			self.location.source().name().display(),
+			self.location().range.start(),
+			self.location().range.end(),
+			self.depth,
+			self.numbered,
+			self.in_toc,
+			self.reference
+				.as_ref()
+				.map_or("*None*".to_string(), |r| r.name().to_string())
+		))
 	}
 
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
@@ -97,8 +101,7 @@ impl Element for Heading {
 	}
 
 	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		if self.reference.is_some()
-		{
+		if self.reference.is_some() {
 			Some(self)
 		} else {
 			None
@@ -139,25 +142,24 @@ impl ContainerElement for Heading {
 	}
 }
 
-impl ReferenceableElement for Heading
-{
-    fn reference(&self) -> Arc<InternalReference> {
+impl ReferenceableElement for Heading {
+	fn reference(&self) -> Arc<InternalReference> {
 		self.reference.to_owned().unwrap()
-    }
+	}
 
-    fn refcount_key(&self) -> &'static str {
-        "heading"
-    }
+	fn refcount_key(&self) -> &'static str {
+		"heading"
+	}
 
-    fn refid(&self, _compiler: &Compiler, refid: usize) -> String {
-        refid.to_string()
-    }
+	fn refid(&self, _compiler: &Compiler, refid: usize) -> String {
+		refid.to_string()
+	}
 
-    fn get_link(&self) -> Option<&String> {
+	fn get_link(&self) -> Option<&String> {
 		self.link.get()
-    }
+	}
 
-    fn set_link(&self, url: String) {
+	fn set_link(&self, url: String) {
 		self.link.set(url).expect("set_url can only be called once");
-    }
+	}
 }

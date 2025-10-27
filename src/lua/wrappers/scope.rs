@@ -1,19 +1,10 @@
 use std::sync::Arc;
 
 use mlua::UserData;
-use mlua::Value;
-use parking_lot::RwLock;
 
 use crate::add_documented_method;
-use crate::unit::element::Element;
-use crate::unit::scope::Scope;
+use crate::lua::wrappers::{IteratorWrapper, ScopeWrapper, VecScopeWrapper};
 use crate::unit::scope::ScopeAccessor;
-
-use super::elem::ElemWrapper;
-
-/// Wrapper for Scopes
-#[auto_registry::auto_registry(registry = "lua")]
-pub struct ScopeWrapper(pub Arc<RwLock<Scope>>);
 
 impl UserData for ScopeWrapper {
 	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
@@ -36,10 +27,6 @@ impl UserData for ScopeWrapper {
 		);
 	}
 }
-
-/// Wrapper for `Vec<Arc<RwLock<Scope>>>`
-#[auto_registry::auto_registry(registry = "lua")]
-pub struct VecScopeWrapper(pub Vec<Arc<RwLock<Scope>>>);
 
 impl UserData for VecScopeWrapper {
 	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
@@ -64,29 +51,6 @@ impl UserData for VecScopeWrapper {
 			"Gets a scope by id",
 			vec!["self", "id:number Id of the scope to get"],
 			Some("Scope")
-		);
-	}
-}
-
-pub struct IteratorWrapper(pub Box<dyn Iterator<Item = (Arc<RwLock<Scope>>, Arc<dyn Element>)>>);
-
-impl UserData for IteratorWrapper {
-	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
-
-	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-		methods.add_meta_function(
-			mlua::MetaMethod::Call,
-			|lua, (this,): (mlua::AnyUserData,)| {
-				let mut iter = this.borrow_mut::<IteratorWrapper>()?;
-				if let Some((scope, elem)) = iter.0.next() {
-					Ok(mlua::MultiValue::from_vec(vec![
-						Value::UserData(lua.create_userdata(ScopeWrapper(scope)).unwrap()),
-						Value::UserData(lua.create_userdata(ElemWrapper(elem)).unwrap()),
-					]))
-				} else {
-					Ok(mlua::MultiValue::new())
-				}
-			},
 		);
 	}
 }

@@ -1,16 +1,11 @@
 use std::any::Any;
-use std::fmt::Error;
-use std::fmt::Formatter;
 use std::ops::Range;
 use std::sync::Arc;
 
 use ariadne::Fmt;
 use ariadne::Span;
 use parking_lot::RwLock;
-use regex::Regex;
 
-use crate::compiler::compiler::Compiler;
-use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::source::Token;
