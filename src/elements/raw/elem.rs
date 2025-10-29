@@ -15,8 +15,9 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct Raw {
 	pub(crate) location: Token,
 	#[lua_value]

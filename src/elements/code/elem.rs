@@ -33,8 +33,9 @@ pub struct CodeDisplay {
 }
 
 #[derive(Debug, Clone, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct Code {
 	pub(crate) location: Token,
 	pub(crate) language: String,

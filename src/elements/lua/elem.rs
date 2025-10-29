@@ -59,8 +59,9 @@ impl FromStr for LuaEvalKind {
 }
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct LuaPostProcess {
 	pub(crate) location: Token,
 	/// Expanded content after post processing

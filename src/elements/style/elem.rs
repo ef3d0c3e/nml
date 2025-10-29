@@ -16,8 +16,9 @@ use crate::unit::scope::Scope;
 use super::state::Style;
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct StyleElem {
 	/// Elem location
 	pub(crate) location: Token,

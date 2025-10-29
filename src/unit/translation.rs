@@ -355,7 +355,8 @@ pub trait TranslationAccessors {
 	fn add_content<T>(&mut self, elem: T)
 	where
 		T: Element + UserData + Send + Sync + 'static,
-		for<'a> &'a T: mlua::UserData;
+		for<'a> &'a T: mlua::UserData,
+		for<'a> &'a mut T: mlua::UserData;
 
 	/// Add content to the translation unit's current scope, bypassing lua callbacks
 	fn add_content_raw(&mut self, elem: Arc<dyn Element>);
@@ -381,6 +382,7 @@ impl TranslationAccessors for TranslationUnit {
 	where
 		T: Element + UserData + Send + Sync + 'static,
 		for<'a> &'a T: mlua::UserData,
+		for<'a> &'a mut T: mlua::UserData
 	{
 		crate::elements::lua::custom::LuaData::initialize(self);
 		let elem = crate::elements::lua::custom::LuaData::with_kernel(
@@ -389,7 +391,7 @@ impl TranslationAccessors for TranslationUnit {
 			|unit, kernel| {
 				let token = elem.location().to_owned();
 
-				match kernel.au_create_elem(elem) {
+				match kernel.au_create_elem(unit, elem) {
 					Ok(elem) => elem,
 					Err(err) => {
 						report_err!(

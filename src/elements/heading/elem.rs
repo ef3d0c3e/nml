@@ -22,8 +22,9 @@ use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct Heading {
 	pub(crate) location: Token,
 	/// Heading display

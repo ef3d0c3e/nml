@@ -56,8 +56,9 @@ pub(crate) fn layout_from_str(value: &str) -> Result<Layout, String> {
 }
 
 #[derive(Debug, Clone, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct Graphviz {
 	pub(crate) location: Token,
 	pub(crate) graph: String,

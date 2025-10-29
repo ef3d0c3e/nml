@@ -14,8 +14,9 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct Text {
 	pub(crate) location: Token,
 	pub(crate) content: String,

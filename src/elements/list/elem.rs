@@ -41,8 +41,9 @@ pub struct ListMarker {
 }
 
 #[derive(Debug, Clone, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct ListEntry {
 	#[allow(unused)]
 	pub(crate) location: Token,
@@ -55,8 +56,9 @@ pub struct ListEntry {
 }
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct List {
 	pub(crate) location: Token,
 	#[lua_map(VecScopeWrapper)]

@@ -18,8 +18,9 @@ use crate::unit::scope::ScopeAccessor;
 use crate::unit::variable::Variable;
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct VariableDefinition {
 	pub(crate) location: Token,
 	#[lua_map(VariableWrapper)]
@@ -87,8 +88,9 @@ impl Element for VariableDefinition {
 
 /// Holds the generated ast from a variable invocation
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct VariableSubstitution {
 	pub location: Token,
 	#[lua_map(VariableWrapper)]

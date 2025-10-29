@@ -8,11 +8,14 @@ use mlua::IntoLua;
 use mlua::LightUserData;
 use mlua::Lua;
 use mlua::Table;
+use mlua::UserData;
 use mlua::Value;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::lua::wrappers::ElemMutWrapper;
+use crate::lua::wrappers::ElemWrapper;
 use crate::lua::wrappers::UnitWrapper;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
@@ -348,31 +351,36 @@ impl Kernel {
 	}
 
 	/// Dispatch AutoCommand calls when creating an element
-	pub fn au_create_elem<T>(&self, mut elem: T) -> Result<Option<T>, String>
+	pub fn au_create_elem<T>(&self, unit: &mut TranslationUnit, mut elem: T) -> Result<Option<T>, String>
 	where
-		T: Element + Send + mlua::UserData + 'static,
+		T: Element + UserData + Send + 'static,
+		for <'a> &'a mut T: mlua::UserData
 	{
 		let mut result = true;
 		let elem_name = elem.element_name();
 		let create_elem_table = self.au_create_elem.borrow();
+		let mut wrapper = ElemMutWrapper(elem);
 		for key in create_elem_table.iter() {
 			let fun: mlua::Function = self
 				.lua
 				.registry_value(key)
 				.map_err(|err| format!("Failed to retrieve registry key `{key:#?}`: {err}"))?;
+			let ctx = KernelContext::new(wrapper.0.location().clone(), self, unit);
 			let ud = self
 				.lua
-				.create_userdata(elem)
+				.create_userdata(wrapper)
 				.map_err(|err| format!("Failed to pass element {elem_name} to lua: {err}",))?;
-			result &= fun
-				.call::<bool>(&ud)
-				.map_err(|err| format!("CreateElem AutoCommand failed with: {err}"))?;
-			elem = ud.take().map_err(|err| {
+			result &= self.run_with_context(ctx, |_lua| {
+				fun
+					.call::<bool>(&ud)
+					.map_err(|err| format!("CreateElem AutoCommand failed with: {err}"))
+			})?;
+			wrapper = ud.take().map_err(|err| {
 				format!("CreateElem AutoCommand failed to retrieve element: {err}")
 			})?;
 		}
 
-		Ok(result.then_some(elem))
+		Ok(result.then_some(wrapper.0))
 	}
 }
 

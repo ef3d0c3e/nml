@@ -18,8 +18,9 @@ use crate::unit::element::ReferenceableElement;
 use crate::unit::scope::Scope;
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct LineBreak {
 	pub(crate) location: Token,
 	pub(crate) length: usize,

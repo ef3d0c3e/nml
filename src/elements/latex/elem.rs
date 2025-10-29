@@ -75,8 +75,9 @@ impl Display for TexKind {
 }
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct Latex {
 	pub(crate) location: Token,
 	pub(crate) mathmode: bool,

@@ -41,7 +41,13 @@ pub struct OnceLockWrapper<T>(pub OnceLock<T>);
 /// Wrapper for [`Iterator`] over a [`Scope`]'s content
 pub struct IteratorWrapper(pub Box<dyn Iterator<Item = (Arc<RwLock<Scope>>, Arc<dyn Element>)>>);
 
-/// Wrapper for [`Element`]
+/// Wrapper for mutable [`Element`]
+pub struct ElemMutWrapper<T>(pub T)
+where
+	T: Element,
+	for <'a> &'a mut T: mlua::UserData;
+
+/// Wrapper for [`Arc<dyn Element>`]
 #[derive(Clone)]
 pub struct ElemWrapper(pub Arc<dyn Element>);
 

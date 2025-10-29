@@ -48,8 +48,9 @@ impl FromLua for ReferenceTarget {
 }
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct InternalLink {
 	pub(crate) location: Token,
 	#[lua_value]

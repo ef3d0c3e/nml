@@ -3,7 +3,9 @@ use mlua::LuaSerdeExt;
 use mlua::UserData;
 use mlua::Value;
 
+use crate::lua::wrappers::ElemMutWrapper;
 use crate::lua::wrappers::ElemWrapper;
+use crate::unit::element::Element;
 
 impl UserData for ElemWrapper {
 	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
@@ -36,5 +38,20 @@ impl FromLua for ElemWrapper {
 		};
 		let wrapper = ud.borrow::<ElemWrapper>()?;
 		Ok(wrapper.clone())
+	}
+}
+
+impl<T> UserData for ElemMutWrapper<T>
+where
+	T: Element,
+	for <'a> &'a mut T: mlua::UserData
+{
+	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+		methods.add_method("name", |lua, this, ()| lua.to_value(this.0.element_name()));
+		methods.add_method("kind", |lua, this, ()| lua.to_value(&this.0.kind()));
+		methods.add_method_mut("downcast", |lua, this, ()| {
+			let r: &'static mut T = unsafe { &mut *(&mut this.0 as *mut T) };
+			lua.create_userdata(r)
+		});
 	}
 }

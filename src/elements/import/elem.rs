@@ -18,8 +18,9 @@ use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
 #[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
 #[auto_userdata_target = "*"]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "&mut"]
 pub struct Import {
 	pub(crate) location: Token,
 	#[lua_map(VecScopeWrapper)]
