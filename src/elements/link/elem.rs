@@ -1,8 +1,13 @@
 use std::sync::Arc;
 
 use ariadne::Span;
+use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::Lua;
 use parking_lot::RwLock;
 
+use mlua::LuaSerdeExt;
+use crate::lua::wrappers::*;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
@@ -14,12 +19,16 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct Link {
 	pub(crate) location: Token,
 	/// Link display content
+	#[lua_map(VecScopeWrapper)]
 	pub(crate) display: Vec<Arc<RwLock<Scope>>>,
 	/// Url of link
+	#[lua_value]
 	pub(crate) url: url::Url,
 }
 
@@ -72,6 +81,11 @@ impl Element for Link {
 
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		Some(self)
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }
 

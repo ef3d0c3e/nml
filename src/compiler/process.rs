@@ -6,7 +6,6 @@ use std::time::UNIX_EPOCH;
 
 use ariadne::Color;
 use ariadne::Fmt;
-use graphviz_rust::print;
 
 use crate::cache::cache::Cache;
 use crate::parser::parser::Parser;
@@ -14,7 +13,6 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::resolver::Resolver;
 use crate::parser::source::SourceFile;
-use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;
@@ -139,6 +137,7 @@ impl ProcessQueue {
 		};
 
 		let mut processed = vec![];
+		let mut has_error = false;
 		for (idx, input) in self.inputs.iter().enumerate() {
 			// Compute path
 			let Some(local_path) = pathdiff::diff_paths(&input, &self.project_path) else {
@@ -223,11 +222,16 @@ impl ProcessQueue {
 			};
 
 			let (reports, unit) = unit.consume(output_file);
+			if !reports.is_empty() { has_error = true }
 			Report::reports_to_stdout(unit.colors(), reports);
 			if options.debug_ast {
 				println!("{:#?}", unit.get_entry_scope());
 			}
 			processed.push(unit);
+		}
+		if has_error
+		{
+			return Err(ProcessError::GeneralError("Failed to parse units".into()));
 		}
 
 		// Insert with time 0

@@ -56,7 +56,7 @@ impl Rule for MetaRule {
 						false,
 						|unit, scope| {
 							for elem in elems {
-								unit.add_content(elem.0);
+								unit.add_content_raw(elem.0);
 							}
 							Ok(ScopeWrapper(scope))
 						},

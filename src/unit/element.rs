@@ -88,7 +88,7 @@ pub trait Element: Downcast + core::fmt::Debug + Send + Sync {
 
 	/// Gets the userdata of the underlying concreate type
 	#[allow(unused)]
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> { None }
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData>;
 }
 impl_downcast!(Element);
 

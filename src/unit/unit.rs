@@ -11,7 +11,7 @@ use super::translation::TranslationAccessors;
 use super::translation::TranslationUnit;
 
 /// Link/Compile-time reference
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Reference {
 	/// Name of reference
 	pub refname: String,

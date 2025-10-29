@@ -338,7 +338,7 @@ impl Rule for ListRule {
 
 		while parse_entry() {}
 		list.location.range = cursor.pos()..end_cursor.pos();
-		unit.add_content(Arc::new(list));
+		unit.add_content(list);
 		end_cursor
 	}
 

@@ -1,8 +1,10 @@
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 use crate::compiler::compiler::Target;
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum Size {
 	Em(f64),
 	Px(f64),

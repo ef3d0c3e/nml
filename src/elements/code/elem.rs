@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
+use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::Lua;
+use mlua::LuaSerdeExt;
 use parking_lot::RwLock;
+use serde::Deserialize;
+use serde::Serialize;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
@@ -17,7 +23,7 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 use lazy_static::lazy_static;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodeDisplay {
 	pub title: Option<String>,
 	pub line_gutter: bool,
@@ -26,10 +32,13 @@ pub struct CodeDisplay {
 	pub theme: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct Code {
 	pub(crate) location: Token,
 	pub(crate) language: String,
+	#[lua_value]
 	pub(crate) display: CodeDisplay,
 	pub(crate) content: String,
 }
@@ -183,23 +192,36 @@ impl Element for Code {
 			self.location().range.start,
 			self.location().range.end,
 			self.language,
-		).as_str();
-		if let Some(title) = &self.display.title
-		{
+		)
+		.as_str();
+		if let Some(title) = &self.display.title {
 			hover += format!("\n * **Title**: {title}").as_str();
 		}
-		if self.display.line_offset != 0
-		{
+		if self.display.line_offset != 0 {
 			hover += format!("\n * **Line Offset**: {}", self.display.line_offset).as_str();
 		}
-		if let Some(theme) = &self.display.theme
-		{
+		if let Some(theme) = &self.display.theme {
 			hover += format!("\n * **Theme**: {theme}").as_str();
 		}
-		hover += format!("\n * **Display**: *{}* + *{}*",
-			if self.display.inline { "Inline" } else { "Block" },
-			if self.display.line_gutter { "Line Gutter" } else { "No Line Gutter" }
-			).as_str();
+		hover += format!(
+			"\n * **Display**: *{}* + *{}*",
+			if self.display.inline {
+				"Inline"
+			} else {
+				"Block"
+			},
+			if self.display.line_gutter {
+				"Line Gutter"
+			} else {
+				"No Line Gutter"
+			}
+		)
+		.as_str();
 		Some(hover)
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }

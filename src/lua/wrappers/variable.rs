@@ -11,9 +11,9 @@ use crate::unit::translation::TranslationAccessors;
 use crate::lua::kernel::Kernel;
 
 impl UserData for VariableWrapper {
-	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
+	fn add_fields<F: mlua::UserDataFields<Self>>(_fields: &mut F) {}
 
-	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
 		add_documented_method!(
 			methods,
 			"Variable",
@@ -64,7 +64,7 @@ impl UserData for VariableWrapper {
 				Kernel::with_context(lua, |ctx| {
 					let result = this.0.expand(ctx.unit, ctx.location.clone());
 
-					ctx.unit.add_content(Arc::new(VariableSubstitution {
+					ctx.unit.add_content_raw(Arc::new(VariableSubstitution {
 						location: ctx.location.clone(),
 						variable: this.0.clone(),
 						content: vec![result],

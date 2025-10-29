@@ -195,7 +195,7 @@ impl RegexRule for HeadingRule {
 			)))
 		} else { None };
 		// Add element
-		unit.add_content(Arc::new(Heading {
+		unit.add_content(Heading {
 			location: token.clone(),
 			display: vec![parsed],
 			depth,
@@ -203,6 +203,6 @@ impl RegexRule for HeadingRule {
 			in_toc,
 			reference,
 			link: OnceLock::default(),
-		}));
+		});
 	}
 }

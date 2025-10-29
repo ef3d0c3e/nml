@@ -10,9 +10,11 @@ use crate::parser::rule::Rule;
 use crate::parser::rule::RuleTarget;
 use crate::parser::source::Cursor;
 use crate::parser::source::Token;
+use crate::parser::state::CustomState;
 use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
 use crate::unit::scope::ScopeAccessor;
+use crate::unit::translation::CustomData;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 
@@ -47,14 +49,14 @@ impl Rule for StyleRule {
 		let content = source.content();
 
 		if !unit.has_data(STYLE_CUSTOM) {
-			unit.new_data(Arc::new(RwLock::new(StyleData::default())));
+			unit.new_data(Arc::new(RwLock::new(StyleData::default())) as Arc<RwLock<dyn CustomData>>);
 		}
 
 		let enabled = {
 			if !states.contains_key(STYLE_STATE) {
 				states.insert(
 					STYLE_STATE.to_string(),
-					Arc::new(RwLock::new(StyleState::default())),
+					Arc::new(RwLock::new(StyleState::default())) as Arc<RwLock<dyn CustomState>>,
 				);
 			}
 			let borrow = states.get(STYLE_STATE).unwrap().read();
@@ -141,11 +143,11 @@ impl Rule for StyleRule {
 				sems.add(token.range.clone(), tokens.style_marker);
 			})
 		});
-		unit.add_content(Arc::new(StyleElem {
+		unit.add_content(StyleElem {
 			location: token,
 			style: rule.clone(),
 			enable: !*active,
-		}));
+		});
 		cursor.clone().at(captures.get(0).unwrap().end())
 	}
 }

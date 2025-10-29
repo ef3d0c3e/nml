@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use ariadne::Fmt;
 use regex::Regex;
@@ -37,8 +36,10 @@ impl Default for CodeRule {
 		);
 		Self {
 			re: [
-				Regex::new(r"(?:^|\n)?``(?:\[((?:\\.|[^\\])*?)\])?([^,\r\n]*),((?:\\.|[^\\\n\r])*?)``")
-					.unwrap(),
+				Regex::new(
+					r"(?:^|\n)?``(?:\[((?:\\.|[^\\])*?)\])?([^,\r\n]*),((?:\\.|[^\\\n\r])*?)``",
+				)
+				.unwrap(),
 				Regex::new(
 					r"(?:\n|^)```(?:\[((?:\\.|[^\\\\])*?)\])?([^,\r\n]*)(?:,(.*))?(?:\n((?:\\.|[^\\\\])*?)```)?",
 				)
@@ -70,19 +71,20 @@ impl RegexRule for CodeRule {
 		captures: regex::Captures,
 	) {
 		// Highlight starting ``` and properties
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			let mut start = captures.get(0).unwrap().start();
-			if token.source().content().as_bytes()[start] == b'\n'
-			{
-				start += 1;
-			}
-			let end = start + if index == 1 { 3 } else { 2 };
-			sems.add(start..end, tokens.code_sep);
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				let mut start = captures.get(0).unwrap().start();
+				if token.source().content().as_bytes()[start] == b'\n' {
+					start += 1;
+				}
+				let end = start + if index == 1 { 3 } else { 2 };
+				sems.add(start..end, tokens.code_sep);
 
-			let Some(props) = captures.get(1) else { return };
-			sems.add(props.start()-1..props.start(), tokens.code_prop_sep);
-			sems.add_to_queue(props.end()..props.end()+1, tokens.code_prop_sep);
-		}));
+				let Some(props) = captures.get(1) else { return };
+				sems.add(props.start() - 1..props.start(), tokens.code_prop_sep);
+				sems.add_to_queue(props.end()..props.end() + 1, tokens.code_prop_sep);
+			})
+		});
 
 		// Parse properties
 		let Some(mut props) = self.properties.parse_token(
@@ -126,31 +128,39 @@ impl RegexRule for CodeRule {
 		.to_string();
 
 		// Highlight language
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			sems.add(captures.get(2).unwrap().range(), tokens.code_lang);
-		}));
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(captures.get(2).unwrap().range(), tokens.code_lang);
+			})
+		});
 
 		// Parse title for block mode
-		let title = (index > 0).then_some(
-			captures
-				.get(3)
-				.map_or("", |m| m.as_str())
-				.trim_start()
-				.trim_end()
-				.to_string(),
-		).filter(|title| !title.is_empty());
+		let title = (index > 0)
+			.then_some(
+				captures
+					.get(3)
+					.map_or("", |m| m.as_str())
+					.trim_start()
+					.trim_end()
+					.to_string(),
+			)
+			.filter(|title| !title.is_empty());
 
 		// Highlight title
-		if index > 0 && captures.get(3).is_some()
-		{
-			unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-				sems.add(captures.get(3).unwrap().range(), tokens.code_title);
-			}));
+		if index > 0 && captures.get(3).is_some() {
+			unit.with_lsp(|lsp| {
+				lsp.with_semantics(token.source(), |sems, tokens| {
+					sems.add(captures.get(3).unwrap().range(), tokens.code_title);
+				})
+			});
 		}
 
 		// Parse content
 		let closing = if index == 1 { "```" } else { "``" };
-		let Some(content) = captures.get(if index == 0 { 3 } else { 4 }).map(|m| m.as_str()) else {
+		let Some(content) = captures
+			.get(if index == 0 { 3 } else { 4 })
+			.map(|m| m.as_str())
+		else {
 			report_err!(
 				unit,
 				token.source(),
@@ -165,15 +175,24 @@ impl RegexRule for CodeRule {
 			);
 			return;
 		};
-		let content = if index == 0 { content.trim_start().trim_end() } else { content };
+		let content = if index == 0 {
+			content.trim_start().trim_end()
+		} else {
+			content
+		};
 		let content = escape_text('\\', closing, content, false);
 
 		// Highlight content and terminating ```
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			let range = captures.get(if index == 0 { 3 } else { 4 }).unwrap().range();
-			sems.add(range.clone(), tokens.code_content);
-			sems.add(range.end..range.end+closing.len(), tokens.code_sep);
-		}));
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				let range = captures
+					.get(if index == 0 { 3 } else { 4 })
+					.unwrap()
+					.range();
+				sems.add(range.clone(), tokens.code_content);
+				sems.add(range.end..range.end + closing.len(), tokens.code_sep);
+			})
+		});
 
 		// Get theme
 		let theme = unit
@@ -181,7 +200,7 @@ impl RegexRule for CodeRule {
 			.get_variable(&VariableName("code.theme".to_string()))
 			.map(|(theme, _)| theme.to_string());
 
-		unit.add_content(Arc::new(Code {
+		unit.add_content(Code {
 			location: token,
 			language,
 			display: CodeDisplay {
@@ -192,7 +211,7 @@ impl RegexRule for CodeRule {
 				theme,
 			},
 			content,
-		}));
+		});
 	}
 
 	fn regexes(&self) -> &[regex::Regex] {
@@ -209,7 +228,9 @@ impl RegexRule for CodeRule {
 		index == 0 || !mode.paragraph_only
 	}
 
-	fn completion(&self) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
-	    Some(Box::new(CodeCompletion {}))
+	fn completion(
+		&self,
+	) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
+		Some(Box::new(CodeCompletion {}))
 	}
 }

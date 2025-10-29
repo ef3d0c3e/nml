@@ -2,16 +2,23 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use mlua::AnyUserData;
+use mlua::Lua;
+use mlua::LuaSerdeExt;
+use serde::Deserialize;
+use serde::Serialize;
 use crate::elements::meta::scope::ScopeElement;
 use crate::elements::text::elem::Text;
+use crate::lua::kernel::KernelNameBuf;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use auto_userdata::AutoUserData;
+use crate::lua::wrappers::*;
 use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::lua::kernel::KernelContext;
-use crate::lua::kernel::KernelName;
 use crate::parser::reports::Report;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
@@ -27,7 +34,8 @@ use crate::unit::translation::TranslationUnit;
 
 use super::custom::LuaData;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u8)]
 pub enum LuaEvalKind {
 	/// Discard evaluation result
 	None,
@@ -50,16 +58,22 @@ impl FromStr for LuaEvalKind {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct LuaPostProcess {
 	pub(crate) location: Token,
 	/// Expanded content after post processing
+	#[lua_ignore]
 	pub(crate) expanded: OnceLock<Vec<Arc<RwLock<Scope>>>>,
 	/// Lua content source
+	#[lua_map(SourceWrapper)]
 	pub(crate) source: Arc<dyn Source>,
-	/// Lua kernel nam
-	pub(crate) kernel_name: KernelName,
+	/// Lua kernel name
+	#[lua_value]
+	pub(crate) kernel_name: KernelNameBuf,
 	/// Kind of evaluation required
+	#[lua_value]
 	pub(crate) eval_kind: LuaEvalKind,
 }
 
@@ -73,7 +87,7 @@ impl LuaPostProcess {
 				ParseMode::default(),
 				true,
 				|unit, scope| {
-					let ctx = KernelContext::new(self.source.clone().into(), unit);
+					let ctx = KernelContext::new(self.source.clone().into(), &*kernel, unit);
 					match kernel.run_with_context(ctx, |lua| match self.eval_kind {
 						LuaEvalKind::None => lua
 							.load(self.source.content())
@@ -95,10 +109,10 @@ impl LuaPostProcess {
 						}
 						Ok(result) => {
 							if self.eval_kind == LuaEvalKind::String && !result.is_empty() {
-								unit.add_content(Arc::new(Text {
+								unit.add_content(Text {
 									location: self.source.clone().into(),
 									content: result,
-								}));
+								});
 							} else if self.eval_kind == LuaEvalKind::StringParse
 								&& !result.is_empty()
 							{
@@ -117,10 +131,10 @@ impl LuaPostProcess {
 										scope
 									},
 								);
-								unit.add_content(Arc::new(ScopeElement {
+								unit.add_content(ScopeElement {
 									token: self.source.clone().into(),
-									scope: [scope],
-								}));
+									scope,
+								});
 							}
 						}
 					}
@@ -159,6 +173,11 @@ impl Element for LuaPostProcess {
 			elem.compile(scope, compiler, output)?;
 		}
 		Ok(())
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }
 

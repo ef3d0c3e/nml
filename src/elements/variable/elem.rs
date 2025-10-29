@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::lua::wrappers::*;
 use auto_userdata::AutoUserData;
 use mlua::AnyUserData;
 use mlua::Lua;
@@ -15,9 +16,10 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::variable::Variable;
-use crate::lua::wrappers::*;
 
 #[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct VariableDefinition {
 	pub(crate) location: Token,
 	#[lua_map(VariableWrapper)]
@@ -78,15 +80,20 @@ impl Element for VariableDefinition {
 	}
 
 	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		Some(lua.create_userdata(self.clone()).unwrap())
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }
 
 /// Holds the generated ast from a variable invocation
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct VariableSubstitution {
 	pub location: Token,
+	#[lua_map(VariableWrapper)]
 	pub variable: Arc<dyn Variable>,
+	#[lua_map(VecScopeWrapper)]
 	pub content: Vec<Arc<RwLock<Scope>>>,
 }
 
@@ -122,11 +129,15 @@ impl Element for VariableSubstitution {
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		Some(self)
 	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
+	}
 }
 
-impl ContainerElement for VariableSubstitution
-{
-    fn contained(&self) -> &[Arc<RwLock<Scope>>] {
-        &self.content
-    }
+impl ContainerElement for VariableSubstitution {
+	fn contained(&self) -> &[Arc<RwLock<Scope>>] {
+		&self.content
+	}
 }

@@ -173,7 +173,7 @@ impl Parser {
 			return;
 		}
 
-		unit.add_content(Arc::new(Text::new(token, content.into())));
+		unit.add_content(Text::new(token, content.into()));
 	}
 
 	/// Parses the current scope in the translation unit

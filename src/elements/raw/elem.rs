@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::Lua;
 use mlua::LuaSerdeExt;
 use parking_lot::RwLock;
 
@@ -13,6 +15,8 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 
 #[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct Raw {
 	pub(crate) location: Token,
 	#[lua_value]
@@ -41,5 +45,10 @@ impl Element for Raw {
 	) -> Result<(), Vec<Report>> {
 		output.add_content(&self.content);
 		Ok(())
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }

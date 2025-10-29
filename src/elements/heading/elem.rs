@@ -22,6 +22,8 @@ use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
 #[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct Heading {
 	pub(crate) location: Token,
 	/// Heading display
@@ -31,6 +33,7 @@ pub struct Heading {
 	pub(crate) depth: usize,
 	pub(crate) numbered: bool,
 	pub(crate) in_toc: bool,
+	#[lua_ignore]
 	pub(crate) reference: Option<Arc<InternalReference>>,
 	#[lua_map(OnceLockWrapper)]
 	pub(crate) link: OnceLock<String>,
@@ -109,7 +112,8 @@ impl Element for Heading {
 	}
 
 	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		Some(lua.create_userdata(self.clone()).unwrap())
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }
 

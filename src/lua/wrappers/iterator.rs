@@ -6,9 +6,7 @@ use crate::lua::wrappers::IteratorWrapper;
 use crate::lua::wrappers::ScopeWrapper;
 
 impl UserData for IteratorWrapper {
-	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
-
-	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_meta_function(
 			mlua::MetaMethod::Call,
 			|lua, (this,): (mlua::AnyUserData,)| {

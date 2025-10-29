@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use ariadne::Fmt;
 use regex::Captures;
@@ -231,14 +230,14 @@ impl RegexRule for LatexRule {
 			})
 		});
 
-		unit.add_content(Arc::new(Latex {
+		unit.add_content(Latex {
 			location: token,
 			mathmode: index == 1,
 			kind: tex_kind,
 			env: tex_env,
 			tex: tex_content,
 			caption: tex_caption,
-		}));
+		});
 	}
 
 	fn completion(

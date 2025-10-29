@@ -129,12 +129,12 @@ impl RegexRule for AnchorRule {
 			token.source().original_range(token.range.clone()),
 			anchor_refname.clone(),
 		));
-		unit.add_content(Arc::new(Anchor {
+		unit.add_content(Anchor {
 			location: token.clone(),
 			refname: anchor_refname.clone(),
 			reference: reference.clone(),
 			link: OnceLock::default(),
-		}));
+		});
 	}
 
 	fn completion(

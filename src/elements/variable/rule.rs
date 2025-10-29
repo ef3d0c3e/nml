@@ -305,10 +305,10 @@ impl Rule for VariableRule {
 				content: content_source,
 			});
 			unit.get_scope().insert_variable(variable.clone());
-			unit.add_content(Arc::new(VariableDefinition {
+			unit.add_content(VariableDefinition {
 				location: variable.location().clone(),
 				variable,
-			}));
+			});
 		}
 		// Insert as string property
 		else {
@@ -335,10 +335,10 @@ impl Rule for VariableRule {
 				value_token: Token::new(content_range, cursor.source()),
 			});
 			unit.get_scope().insert_variable(variable.clone());
-			unit.add_content(Arc::new(VariableDefinition {
+			unit.add_content(VariableDefinition {
 				location: variable.location().clone(),
 				variable,
-			}));
+			});
 		}
 		return cursor.at(end_pos + value_len + 2 * delim.len());
 	}
@@ -446,11 +446,11 @@ impl RegexRule for VariableSubstitutionRule {
 		});
 
 		let content = variable.0.expand(unit, token.clone());
-		unit.add_content(Arc::new(VariableSubstitution {
+		unit.add_content(VariableSubstitution {
 			location: token,
 			variable: variable.0.clone(),
 			content: vec![content],
-		}));
+		});
 
 	}
 

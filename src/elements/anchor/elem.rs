@@ -2,8 +2,13 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 
 use ariadne::Span;
+use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::Lua;
+use mlua::LuaSerdeExt;
 use parking_lot::RwLock;
 
+use crate::lua::wrappers::*;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
@@ -16,11 +21,16 @@ use crate::unit::references::InternalReference;
 use crate::unit::references::Refname;
 use crate::unit::scope::Scope;
 
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct Anchor {
 	pub(crate) location: Token,
+	#[lua_value]
 	pub(crate) refname: Refname,
+	#[lua_arc_deref]
 	pub(crate) reference: Arc<InternalReference>,
+	#[lua_map(OnceLockWrapper)]
 	pub(crate) link: OnceLock<String>,
 }
 
@@ -70,6 +80,11 @@ impl Element for Anchor {
 
 	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
 		Some(self)
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }
 

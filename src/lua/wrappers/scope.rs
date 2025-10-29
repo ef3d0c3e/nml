@@ -7,9 +7,7 @@ use crate::lua::wrappers::{IteratorWrapper, ScopeWrapper, VecScopeWrapper};
 use crate::unit::scope::ScopeAccessor;
 
 impl UserData for ScopeWrapper {
-	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
-
-	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
 		add_documented_method!(
 			methods,
 			"Scope",
@@ -29,9 +27,7 @@ impl UserData for ScopeWrapper {
 }
 
 impl UserData for VecScopeWrapper {
-	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
-
-	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
 		add_documented_method!(
 			methods,
 			"Scope[]",

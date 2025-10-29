@@ -5,12 +5,14 @@ pub mod once_lock;
 pub mod scope;
 pub mod unit;
 pub mod variable;
+pub mod source;
 
 use std::sync::Arc;
 use std::sync::OnceLock;
 
 use parking_lot::RwLock;
 
+use crate::parser::source::Source;
 use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 use crate::unit::translation::TranslationUnit;
@@ -45,3 +47,7 @@ pub struct ElemWrapper(pub Arc<dyn Element>);
 
 /// Wrapper for a Vector of UserData objects
 pub struct LuaUDVec<T>(pub Vec<T>);
+
+/// Wrapper for [`Arc<dyn Source>`]
+#[auto_registry::auto_registry(registry = "lua")]
+pub struct SourceWrapper(pub Arc<dyn Source>);

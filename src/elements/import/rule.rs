@@ -183,10 +183,10 @@ impl RegexRule for ImportRule {
 		);
 
 		unit.get_scope().add_import(content.clone());
-		unit.add_content(Arc::new(Import {
+		unit.add_content(Import {
 			location: token,
 			content: vec![content],
-		}));
+		});
 	}
 
 	fn completion(

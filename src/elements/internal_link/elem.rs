@@ -1,7 +1,16 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use crate::lua::wrappers::*;
+use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::FromLua;
+use mlua::IntoLua;
+use mlua::Lua;
+use mlua::LuaSerdeExt;
 use parking_lot::RwLock;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
@@ -18,12 +27,37 @@ use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::unit::Reference;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReferenceTarget {
+	//// Link to the reference
+	pub link: String,
+	/// Reference
+	pub reference: Reference,
+}
+
+impl IntoLua for ReferenceTarget {
+    fn into_lua(self, lua: &Lua) -> mlua::Result<mlua::Value> {
+        lua.to_value(&self)
+    }
+}
+
+impl FromLua for ReferenceTarget {
+    fn from_lua(value: mlua::Value, lua: &Lua) -> mlua::Result<Self> {
+        lua.from_value(value)
+    }
+}
+
+#[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct InternalLink {
 	pub(crate) location: Token,
+	#[lua_value]
 	pub(crate) refname: Refname,
+	#[lua_map(VecScopeWrapper)]
 	pub(crate) display: Vec<Arc<RwLock<Scope>>>,
-	pub(crate) reference: OnceLock<(String, Reference)>,
+	#[lua_map(OnceLockWrapper)]
+	pub(crate) reference: OnceLock<ReferenceTarget>,
 }
 
 impl Element for InternalLink {
@@ -47,7 +81,10 @@ impl Element for InternalLink {
 	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			Target::HTML => {
-				output.add_content(format!("<a href=\"{}\">", self.reference.get().unwrap().0));
+				output.add_content(format!(
+					"<a href=\"{}\">",
+					self.reference.get().unwrap().link
+				));
 
 				let display = &self.display[0];
 				for (scope, elem) in display.content_iter(false) {
@@ -70,6 +107,11 @@ impl Element for InternalLink {
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		Some(self)
 	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
+	}
 }
 
 impl ContainerElement for InternalLink {
@@ -88,6 +130,8 @@ impl LinkableElement for InternalLink {
 	}
 
 	fn set_link(&self, reference: Reference, link: String) {
-		self.reference.set((link, reference)).unwrap();
+		self.reference
+			.set(ReferenceTarget { link, reference })
+			.unwrap();
 	}
 }

@@ -1,4 +1,7 @@
+use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::LazyLock;
 
 use mlua::IntoLua;
@@ -7,23 +10,31 @@ use mlua::Lua;
 use mlua::Table;
 use mlua::Value;
 use parking_lot::Mutex;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::lua::wrappers::UnitWrapper;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
+use crate::unit::element::Element;
 use crate::unit::translation::TranslationUnit;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct KernelName(pub String);
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct KernelName(pub str);
 
-impl TryFrom<String> for KernelName {
-	type Error = String;
+impl KernelName {
+	/// Create a new [`KernelName`], bypassing validity checks
+	pub fn new(s: &str) -> &KernelName {
+        unsafe { &*(s as *const str as *const KernelName) }
+	}
 
-	fn try_from(s: String) -> Result<Self, Self::Error> {
+	/// Create a new [`KernelName`]
+	pub fn try_new(s: &str) -> Result<&KernelName, String>
+	{
 		for c in s.chars() {
 			if c.is_whitespace() {
 				return Err(format!(
-					"Kernel names cannot contain whitespaces, found `{c}`"
+						"Kernel names cannot contain whitespaces, found `{c}`"
 				));
 			}
 			if c.is_ascii_control() {
@@ -31,12 +42,69 @@ impl TryFrom<String> for KernelName {
 			}
 			if c.is_ascii_punctuation() {
 				return Err(format!(
-					"Kernel names cannot contain punctuaction, found `{c}`"
+						"Kernel names cannot contain punctuaction, found `{c}`"
 				));
 			}
 		}
-		Ok(KernelName(s))
+		Ok(unsafe { &*(s as *const str as *const KernelName) })
 	}
+}
+
+impl ToOwned for KernelName
+{
+    type Owned = KernelNameBuf;
+
+    fn to_owned(&self) -> Self::Owned {
+        KernelNameBuf::new(self.0.to_owned())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct KernelNameBuf(pub String);
+
+impl KernelNameBuf {
+	/// Create a new [`KernelNameBuf`], bypassing validity checks
+	pub fn new(s: String) -> Self
+	{
+		Self(s)
+	}
+}
+
+impl Borrow<KernelName> for KernelNameBuf {
+    fn borrow(&self) -> &KernelName {
+		KernelName::new(self.0.as_str())
+    }
+}
+
+impl TryFrom<&str> for KernelNameBuf {
+    type Error = String;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+		for c in s.chars() {
+			if c.is_whitespace() {
+				return Err(format!(
+						"Kernel names cannot contain whitespaces, found `{c}`"
+				));
+			}
+			if c.is_ascii_control() {
+				return Err(format!("Kernel names cannot contain control sequences"));
+			}
+			if c.is_ascii_punctuation() {
+				return Err(format!(
+						"Kernel names cannot contain punctuaction, found `{c}`"
+				));
+			}
+		}
+		Ok(Self(s.into()))
+    }
+}
+
+impl std::ops::Deref for KernelNameBuf {
+    type Target = KernelName;
+
+    fn deref(&self) -> &Self::Target {
+		unsafe { &*(self.0.as_str() as *const str as *const KernelName) }
+    }
 }
 
 /// Redirected data from lua execution
@@ -50,15 +118,17 @@ pub struct KernelRedirect {
 /// Lua execution context
 pub struct KernelContext<'ctx> {
 	pub location: Token,
+	pub kernel: &'ctx Kernel,
 	pub unit: &'ctx mut TranslationUnit,
 	pub redirects: Vec<KernelRedirect>,
 	pub reports: Vec<Report>,
 }
 
 impl<'ctx> KernelContext<'ctx> {
-	pub fn new(location: Token, unit: &'ctx mut TranslationUnit) -> Self {
+	pub fn new(location: Token, kernel: &'ctx Kernel, unit: &'ctx mut TranslationUnit) -> Self {
 		Self {
 			location,
+			kernel,
 			unit,
 			redirects: vec![],
 			reports: vec![],
@@ -69,7 +139,8 @@ impl<'ctx> KernelContext<'ctx> {
 /// Stores lua related informations for a translation unit
 pub struct Kernel {
 	lua: Lua,
-	//context: Rc<RefCell<Option<KernelContext<'static, 'static>>>>,
+
+	au_create_elem: RefCell<Vec<mlua::RegistryKey>>,
 }
 
 unsafe impl Send for Kernel {}
@@ -79,6 +150,7 @@ impl Kernel {
 	pub fn new(unit: &TranslationUnit) -> Self {
 		let kernel = Self {
 			lua: Lua::new(),
+			au_create_elem: RefCell::default(),
 			//context: Rc::new(RefCell::default()),
 		};
 
@@ -128,11 +200,26 @@ impl Kernel {
 
 						// Wrap the unit (not as userdata! use a light proxy)
 						// Instead of passing a reference directly, create a proxy object with dynamic dispatch
-						let wrapper = lua.create_userdata(UnitWrapper (
-							&mut ctx_ref.unit,
-						))?;
+						let wrapper = lua.create_userdata(UnitWrapper(&mut ctx_ref.unit))?;
 
 						Ok(wrapper)
+					})
+					.unwrap(),
+			)
+			.unwrap();
+
+		// Register AutoCommand
+		nml_table
+			.set(
+				"create_autocommand",
+				kernel
+					.lua
+					.create_function(|lua, (name, callback): (String, mlua::Function)| {
+						Kernel::with_context(lua, |ctx| {
+							ctx.kernel
+								.register_autocmd(&name, callback)
+								.map_err(|err| mlua::Error::RuntimeError(err))
+						})
 					})
 					.unwrap(),
 			)
@@ -150,7 +237,7 @@ impl Kernel {
 
 				if rest.is_empty() {
 					// Check for duplicate
-					match top.get::<_, Value>(name) {
+					match top.get::<Value>(name) {
 						Ok(Value::Nil) => {}
 						_ => panic!("Duplicate binding: {}", fun.name),
 					}
@@ -170,7 +257,7 @@ impl Kernel {
 					break;
 				}
 
-				match top.get::<_, Value>(name) {
+				match top.get::<Value>(name) {
 					// Create table if not found
 					Ok(Value::Nil) => {
 						let table = kernel.lua.create_table().unwrap();
@@ -228,18 +315,64 @@ impl Kernel {
 	///
 	/// This function exports a table to lua. The exported table is available under `nml.tables.{name}`.
 	/// This function will overwrite any previously defined table using the same name.
-	pub fn export_table<'lua, K: IntoLua<'lua>>(
-		&'lua self,
+	pub fn export_table<K: IntoLua>(
+		&self,
 		name: &str,
 		table: Vec<K>,
 	) -> Result<(), String> {
-		let nml: Table<'_> = self.lua.globals().get("nml").unwrap();
-		let tables: Table<'_> = nml.get("tables").unwrap();
+		let nml: Table = self.lua.globals().get("nml").unwrap();
+		let tables: Table = nml.get("tables").unwrap();
 		if let Err(err) = tables.raw_set(name, table) {
 			return Err(err.to_string());
 		}
 
 		Ok(())
+	}
+
+	/// Attempt to register an AutoComnmand
+	pub fn register_autocmd(
+		&self,
+		name: &str,
+		callback: mlua::Function,
+	) -> Result<(), String> {
+		match name {
+			"CreateElem" => {
+				let key = self.lua.create_registry_value(callback).map_err(|err| {
+					format!("Failed to create registry key for AutoCommand `{name}`: {err}")
+				})?;
+				self.au_create_elem.borrow_mut().push(key);
+			}
+			_ => return Err(format!("Unknown AutoCommand: `{name}`")),
+		}
+		Ok(())
+	}
+
+	/// Dispatch AutoCommand calls when creating an element
+	pub fn au_create_elem<T>(&self, mut elem: T) -> Result<Option<T>, String>
+	where
+		T: Element + Send + mlua::UserData + 'static,
+	{
+		let mut result = true;
+		let elem_name = elem.element_name();
+		let create_elem_table = self.au_create_elem.borrow();
+		for key in create_elem_table.iter() {
+			let fun: mlua::Function = self
+				.lua
+				.registry_value(key)
+				.map_err(|err| format!("Failed to retrieve registry key `{key:#?}`: {err}"))?;
+			let ud = self
+				.lua
+				.create_userdata(elem)
+				.map_err(|err| format!("Failed to pass element {elem_name} to lua: {err}",))?;
+			result &= fun
+				.call::<bool>(&ud)
+				.map_err(|err| format!("CreateElem AutoCommand failed with: {err}"))?;
+			elem = ud.take().map_err(|err| {
+				format!("CreateElem AutoCommand failed to retrieve element: {err}")
+			})?;
+		}
+
+		Ok(result.then_some(elem))
 	}
 }
 
@@ -258,7 +391,7 @@ pub struct LuaFunc {
 	pub ret: &'static str,
 	/// Function
 	pub fun: std::sync::Arc<
-		dyn for<'lua> Fn(&'lua Lua, mlua::MultiValue<'lua>) -> mlua::Result<mlua::MultiValue<'lua>>
+		dyn Fn(&Lua, mlua::MultiValue) -> mlua::Result<mlua::MultiValue>
 			+ Send
 			+ Sync,
 	>,
@@ -270,17 +403,17 @@ pub static LUA_FUNC: LazyLock<Mutex<HashMap<&'static str, LuaFunc>>> =
 pub fn wrap_lua_fn<A, R, F>(
 	f: F,
 ) -> std::sync::Arc<
-	dyn for<'lua> Fn(
-			&'lua mlua::Lua,
-			mlua::MultiValue<'lua>,
-		) -> mlua::Result<mlua::MultiValue<'lua>>
+	dyn Fn(
+			&mlua::Lua,
+			mlua::MultiValue,
+		) -> mlua::Result<mlua::MultiValue>
 		+ Send
 		+ Sync,
 >
 where
-	A: for<'lua> mlua::FromLuaMulti<'lua> + 'static,
-	R: for<'lua> mlua::IntoLuaMulti<'lua> + 'static,
-	F: for<'lua> Fn(&'lua mlua::Lua, A) -> mlua::Result<R> + Send + Sync + 'static,
+	A: mlua::FromLuaMulti + 'static,
+	R: mlua::IntoLuaMulti + 'static,
+	F: Fn(&mlua::Lua, A) -> mlua::Result<R> + Send + Sync + 'static,
 {
 	std::sync::Arc::new(move |lua, args| {
 		let a = A::from_lua_multi(args, lua)?;
@@ -313,14 +446,14 @@ pub fn wrap_lua_fn_with_values<R, F>(
 ) -> std::sync::Arc<
 	dyn for<'lua> Fn(
 			&'lua mlua::Lua,
-			mlua::MultiValue<'lua>,
-		) -> mlua::Result<mlua::MultiValue<'lua>>
+			mlua::MultiValue,
+		) -> mlua::Result<mlua::MultiValue>
 		+ Send
 		+ Sync,
 >
 where
-	R: for<'lua> mlua::IntoLuaMulti<'lua>,
-	F: for<'lua> Fn(&'lua mlua::Lua, mlua::MultiValue<'lua>) -> mlua::Result<R>
+	R: mlua::IntoLuaMulti,
+	F: Fn(&mlua::Lua, mlua::MultiValue) -> mlua::Result<R>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -423,7 +556,7 @@ macro_rules! convert_lua_args {
 								$name, idx + 1, e
 							)))?
 							{
-								let item_value = table.get::<i32, mlua::Value>(i as i32)
+								let item_value = table.get::<mlua::Value>(i as i32)
 									.map_err(|e| mlua::Error::RuntimeError(format!(
 										"Failed to get item {} from table for argument '{}' at position {}: {}",
 										i, $name, idx + 1, e

@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::Lua;
 use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
@@ -14,7 +17,9 @@ use crate::unit::element::LinkableElement;
 use crate::unit::element::ReferenceableElement;
 use crate::unit::scope::Scope;
 
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct LineBreak {
 	pub(crate) location: Token,
 	pub(crate) length: usize,
@@ -64,5 +69,10 @@ impl Element for LineBreak {
 	}
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		None
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }

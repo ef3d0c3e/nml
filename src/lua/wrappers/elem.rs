@@ -6,9 +6,7 @@ use mlua::Value;
 use crate::lua::wrappers::ElemWrapper;
 
 impl UserData for ElemWrapper {
-	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
-
-	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("name", |lua, this, ()| lua.to_value(this.0.element_name()));
 		methods.add_method("kind", |lua, this, ()| lua.to_value(&this.0.kind()));
 		methods.add_method("downcast", |lua, this, ()| {
@@ -24,14 +22,14 @@ impl UserData for ElemWrapper {
 	}
 }
 
-impl<'lua> FromLua<'lua> for ElemWrapper {
-	fn from_lua(value: Value<'lua>, _lua: &'lua mlua::Lua) -> mlua::Result<Self> {
+impl FromLua for ElemWrapper {
+	fn from_lua(value: Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
 		let ud = match value {
 			Value::UserData(ud) => ud,
 			other => {
 				return Err(mlua::Error::FromLuaConversionError {
 					from: other.type_name(),
-					to: "ElemWrapper",
+					to: "ElemWrapper".into(),
 					message: Some("expected ElemWrapper userdata".into()),
 				})
 			}

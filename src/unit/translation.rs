@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use crate::parser::reports::macros::*;
+use crate::parser::reports::*;
+
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 use mlua::UserData;
@@ -13,6 +16,7 @@ use parking_lot::RwLockWriteGuard;
 use crate::cache::cache::Cache;
 use crate::elements::lua::elem::LuaPostProcess;
 use crate::lsp::data::LangServerData;
+use crate::lua::kernel::KernelName;
 use crate::parser::parser::Parser;
 use crate::parser::reports::Report;
 use crate::parser::reports::ReportColors;
@@ -236,9 +240,10 @@ impl TranslationUnit {
 		self.with_lsp(|mut lsp| lsp.on_new_source(self.source.clone()));
 		self.parser.clone().parse(&mut self);
 		// Run post processing tasks
-		for (_, elem) in self.entry_scope.content_iter(true)
-		{
-			let Some(post_process) = elem.downcast_ref::<LuaPostProcess>() else { continue };
+		for (_, elem) in self.entry_scope.content_iter(true) {
+			let Some(post_process) = elem.downcast_ref::<LuaPostProcess>() else {
+				continue;
+			};
 
 			post_process.process(&mut self);
 		}
@@ -346,27 +351,69 @@ impl TranslationUnit {
 }
 
 pub trait TranslationAccessors {
-	/// Adds content to the translation unit's current scope
-	fn add_content(&mut self, elem: Arc<dyn Element>);
+	/// Add content to the translation unit's current scope, triggering lua callbacks
+	fn add_content<T>(&mut self, elem: T)
+	where
+		T: Element + UserData + Send + Sync + 'static,
+		for<'a> &'a T: mlua::UserData;
 
-	/// Adds a reference, note that this is not necessary to call
+	/// Add content to the translation unit's current scope, bypassing lua callbacks
+	fn add_content_raw(&mut self, elem: Arc<dyn Element>);
+
+	/// Add a reference, note that this is not necessary to call
 	fn add_reference(&mut self, elem: Arc<dyn ReferenceableElement>);
 
-	/// Finds an internal reference, with name `name`, declared in this document
+	/// Find an internal reference, with name `name`, declared in this document
 	fn get_reference<S: AsRef<str>>(&self, refname: S) -> Option<Arc<dyn ReferenceableElement>>;
 
-	/// Returns the hashmap containing all referenceables in this unit
+	/// Return the hashmap containing all referenceables in this unit
 	fn references(&self) -> &HashMap<String, Arc<dyn ReferenceableElement>>;
 
 	/// Update unit project setting
 	fn update_settings(&self, settings: ProjectSettings);
 
-	/// Gets the unit's settings (will panic if not set)
+	/// Get the unit's settings (will panic if not set)
 	fn get_settings(&self) -> &ProjectSettings;
 }
 
 impl TranslationAccessors for TranslationUnit {
-	fn add_content(&mut self, elem: Arc<dyn Element>) {
+	fn add_content<T>(&mut self, elem: T)
+	where
+		T: Element + UserData + Send + Sync + 'static,
+		for<'a> &'a T: mlua::UserData,
+	{
+		crate::elements::lua::custom::LuaData::initialize(self);
+		let elem = crate::elements::lua::custom::LuaData::with_kernel(
+			self,
+			KernelName::new("main"),
+			|unit, kernel| {
+				let token = elem.location().to_owned();
+
+				match kernel.au_create_elem(elem) {
+					Ok(elem) => elem,
+					Err(err) => {
+						report_err!(
+							unit,
+							token.source(),
+							"AutoCommand Failed".into(),
+							span(token.range.clone(), err)
+						);
+						None
+					}
+				}
+			},
+		);
+
+		if let Some(elem) = elem {
+			let elem = Arc::new(elem);
+			if let Some(reference) = elem.clone().as_referenceable() {
+				self.add_reference(reference);
+			}
+			self.current_scope.add_content(elem);
+		}
+	}
+
+	fn add_content_raw(&mut self, elem: Arc<dyn Element>) {
 		if let Some(reference) = elem.clone().as_referenceable() {
 			self.add_reference(reference);
 		}

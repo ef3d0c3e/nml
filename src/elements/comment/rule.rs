@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use regex::Captures;
 use regex::Regex;
 
@@ -60,9 +58,9 @@ impl RegexRule for CommentRule {
 			sems.add(token.start()+1..content.end(), tokens.comment);
 		}));
 
-		unit.add_content(Arc::new(Comment {
+		unit.add_content(Comment {
 			location: token,
 			content: content.as_str().to_string(),
-		}));
+		});
 	}
 }

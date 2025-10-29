@@ -2,11 +2,11 @@ use crate::lua::wrappers::LuaUDVec;
 
 /// Now any `LuaVec<T>` where `T: UserData + Clone + 'static`
 /// can be turned into a table of `T` userdata.
-impl<'lua, T> mlua::IntoLua<'lua> for LuaUDVec<T>
+impl<T> mlua::IntoLua for LuaUDVec<T>
 where
 	T: mlua::UserData + Clone + 'static,
 {
-	fn into_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+	fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
 		let tbl: mlua::Table = lua.create_table()?;
 		for (i, item) in self.0.iter().enumerate() {
 			// clone out the T, wrap in userdata, stick at 1‑based index

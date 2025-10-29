@@ -141,11 +141,11 @@ impl RegexRule for LinkRule {
 		};
 
 		// Add element
-		unit.add_content(Arc::new(Link {
+		unit.add_content(Link {
 			location: token.clone(),
 			display: vec![link_display],
 			url,
-		}));
+		});
 
 		// Add semantics
 		unit.with_lsp(|lsp| {

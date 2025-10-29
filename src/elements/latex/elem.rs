@@ -6,11 +6,17 @@ use std::process::Stdio;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Once;
+use mlua::AnyUserData;
+use mlua::Lua;
+use mlua::LuaSerdeExt;
 
 use ariadne::Span;
+use auto_userdata::AutoUserData;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use parking_lot::RwLock;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
@@ -31,7 +37,7 @@ use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::variable::VariableName;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum TexKind {
 	Block,
@@ -68,10 +74,13 @@ impl Display for TexKind {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct Latex {
 	pub(crate) location: Token,
 	pub(crate) mathmode: bool,
+	#[lua_value]
 	pub(crate) kind: TexKind,
 	pub(crate) env: String,
 	pub(crate) tex: String,
@@ -266,5 +275,10 @@ impl Element for Latex {
 	}
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		None
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }

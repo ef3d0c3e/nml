@@ -11,9 +11,7 @@ use crate::unit::variable::VariableName;
 use mlua::UserData;
 
 impl<'a> UserData for UnitWrapper<'a> {
-	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
-
-	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("entry_scope", |_lua, this, ()| {
 			Ok(ScopeWrapper(this.0.get_entry_scope().clone()))
 		});
@@ -33,7 +31,7 @@ impl<'a> UserData for UnitWrapper<'a> {
 			"add_content",
 			|lua, _this, (elem,): (ElemWrapper,)| {
 				Kernel::with_context(lua, |ctx| {
-					ctx.unit.add_content(elem.0.clone());
+					ctx.unit.add_content_raw(elem.0.clone());
 				});
 				Ok(())
 			},

@@ -2,16 +2,20 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use ariadne::Span;
+use auto_userdata::AutoUserData;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use graphviz_rust::cmd::Format;
 use graphviz_rust::cmd::Layout;
 use graphviz_rust::exec_dot;
+use mlua::AnyUserData;
+use mlua::Lua;
 use parking_lot::RwLock;
 
 use crate::layout::size::Size;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use mlua::LuaSerdeExt;
 
 use crate::cache::cache::Cached;
 use crate::cache::cache::CachedError;
@@ -51,11 +55,15 @@ pub(crate) fn layout_from_str(value: &str) -> Result<Layout, String> {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct Graphviz {
 	pub(crate) location: Token,
 	pub(crate) graph: String,
+	#[lua_ignore]
 	pub(crate) layout: Layout,
+	#[lua_value]
 	pub(crate) width: Size,
 }
 
@@ -186,5 +194,10 @@ impl Element for Graphviz {
 			layout_to_str(self.layout),
 			self.width.to_string()
 		))
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }

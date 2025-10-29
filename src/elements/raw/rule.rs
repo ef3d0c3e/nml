@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use ariadne::Fmt;
 use regex::Captures;
 use regex::Regex;
@@ -131,11 +129,11 @@ impl RegexRule for RawRule {
 			sems.add(end-2..end, tokens.raw_sep);
 		}));
 
-		unit.add_content(Arc::new(Raw {
+		unit.add_content(Raw {
 			location: token,
 			kind: layout,
 			content: content.as_str().to_string(),
-		}));
+		});
 
 	}
 	}

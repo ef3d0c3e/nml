@@ -14,6 +14,8 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 
 #[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct Text {
 	pub(crate) location: Token,
 	pub(crate) content: String,
@@ -47,6 +49,7 @@ impl Element for Text {
 	}
 
 	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		Some(lua.create_userdata(self.clone()).unwrap())
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }

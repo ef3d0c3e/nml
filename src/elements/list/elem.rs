@@ -41,6 +41,8 @@ pub struct ListMarker {
 }
 
 #[derive(Debug, Clone, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct ListEntry {
 	#[allow(unused)]
 	pub(crate) location: Token,
@@ -53,6 +55,8 @@ pub struct ListEntry {
 }
 
 #[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct List {
 	pub(crate) location: Token,
 	#[lua_map(VecScopeWrapper)]
@@ -175,7 +179,8 @@ impl Element for List {
 	}
 
 	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		Some(lua.create_userdata(self.clone()).unwrap())
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }
 

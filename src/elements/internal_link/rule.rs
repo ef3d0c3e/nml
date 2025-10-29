@@ -234,12 +234,12 @@ impl RegexRule for InternalLinkRule {
 			);
 		});
 
-		unit.add_content(Arc::new(InternalLink {
+		unit.add_content(InternalLink {
 			location: token.clone(),
 			refname: link_refname,
 			display: vec![display],
 			reference: OnceLock::new(),
-		}));
+		});
 	}
 
 	fn completion(

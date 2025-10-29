@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::Lua;
 use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
@@ -14,10 +17,13 @@ use crate::unit::element::ReferenceableElement;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct ScopeElement {
 	pub token: Token,
-	pub scope: [Arc<RwLock<Scope>>; 1],
+	#[lua_ignore]
+	pub scope: Arc<RwLock<Scope>>,
 }
 
 impl Element for ScopeElement {
@@ -39,7 +45,7 @@ impl Element for ScopeElement {
 		compiler: &Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
-		for (scope, elem) in self.scope[0].content_iter(false) {
+		for (scope, elem) in self.scope.content_iter(false) {
 			elem.compile(scope, compiler, output)?;
 		}
 		Ok(())
@@ -56,10 +62,15 @@ impl Element for ScopeElement {
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		Some(self)
 	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
+	}
 }
 
 impl ContainerElement for ScopeElement {
 	fn contained(&self) -> &[Arc<RwLock<Scope>>] {
-		&self.scope
+		std::slice::from_ref(&self.scope)
 	}
 }

@@ -68,9 +68,9 @@ impl RegexRule for BreakRule {
 			.filter(|c| c == &'\n')
 			.count();
 
-		unit.add_content(Arc::new(LineBreak {
+		unit.add_content(LineBreak {
 			location: token.clone(),
 			length,
-		}))
+		});
 	}
 }

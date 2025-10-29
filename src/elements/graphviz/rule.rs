@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use ariadne::Fmt;
 use regex::Captures;
@@ -166,12 +165,12 @@ impl RegexRule for GraphvizRule {
 			})
 		});
 
-		unit.add_content(Arc::new(Graphviz {
+		unit.add_content(Graphviz {
 			location: token,
 			graph: graph_content,
 			width,
 			layout,
-		}));
+		});
 	}
 
 	fn completion(

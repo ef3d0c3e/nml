@@ -6,6 +6,7 @@ use parking_lot::RwLockWriteGuard;
 
 use crate::lua::kernel::Kernel;
 use crate::lua::kernel::KernelName;
+use crate::lua::kernel::KernelNameBuf;
 use crate::unit::translation::CustomData;
 use crate::unit::translation::TranslationUnit;
 
@@ -14,7 +15,7 @@ pub static LUA_CUSTOM: &str = "nml.lua.kernel";
 /// Data for kernels
 pub struct LuaData {
 	/// All registered kernels
-	pub(crate) registered: HashMap<String, Arc<RwLock<Kernel>>>,
+	pub(crate) registered: HashMap<KernelNameBuf, Arc<RwLock<Kernel>>>,
 }
 
 impl LuaData {
@@ -23,7 +24,7 @@ impl LuaData {
 			return;
 		}
 
-		unit.new_data(Arc::new(RwLock::new(LuaData::default())));
+		unit.new_data(Arc::new(RwLock::new(LuaData::default())) as Arc<RwLock<dyn CustomData>>);
 	}
 
 	pub(crate) fn with_kernel<F, R>(unit: &mut TranslationUnit, name: &KernelName, f: F) -> R
@@ -34,12 +35,12 @@ impl LuaData {
 		let mut kernels =
 			RwLockWriteGuard::map(kernels.write(), |b| b.downcast_mut::<LuaData>().unwrap());
 
-		if !kernels.registered.contains_key(&name.0) {
+		if !kernels.registered.contains_key(name) {
 			kernels
 				.registered
-				.insert(name.0.clone(), Arc::new(RwLock::new(Kernel::new(unit))));
+				.insert(name.to_owned(), Arc::new(RwLock::new(Kernel::new(unit))));
 		}
-		let kernel = kernels.registered.get(&name.0).unwrap();
+		let kernel = kernels.registered.get(name).unwrap();
 		f(unit, kernel.write())
 	}
 }

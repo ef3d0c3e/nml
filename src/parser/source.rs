@@ -578,9 +578,7 @@ impl From<&Range<Cursor>> for Token {
 }
 
 impl UserData for Token {
-	fn add_fields<'lua, F: mlua::UserDataFields<'lua, Self>>(_fields: &mut F) {}
-
-	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
 		add_documented_method!(
 			methods,
 			"Token",

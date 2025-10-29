@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use auto_userdata::AutoUserData;
+use mlua::AnyUserData;
+use mlua::Lua;
 use parking_lot::RwLock;
 
 use crate::compiler::compiler::Compiler;
@@ -12,11 +15,14 @@ use crate::unit::scope::Scope;
 
 use super::state::Style;
 
-#[derive(Debug)]
+#[derive(Debug, AutoUserData)]
+#[auto_userdata_target = "&"]
+#[auto_userdata_target = "*"]
 pub struct StyleElem {
 	/// Elem location
 	pub(crate) location: Token,
 	/// Linked style
+	#[lua_arc_deref]
 	pub(crate) style: Arc<Style>,
 	/// Whether to enable or disable
 	pub(crate) enable: bool,
@@ -50,5 +56,10 @@ impl Element for StyleElem {
 # Properties
  * **Name**: `{}`
  * **Status**: *{}*", self.style.name, ["disable", "enable"][self.enable as usize]))
+	}
+
+	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
+		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
+		Some(lua.create_userdata(r).unwrap())
 	}
 }
