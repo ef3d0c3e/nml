@@ -106,7 +106,12 @@ impl ProcessQueue {
 		inputs: Vec<PathBuf>,
 	) -> Self {
 		let cache = Arc::new(Cache::new(&settings.db_path).unwrap());
-		cache.setup_tables();
+		{
+			let con = tokio::runtime::Runtime::new()
+				.unwrap()
+				.block_on(cache.get_connection());
+			cache.setup_tables(con);
+		}
 
 		let parser = Arc::new(Parser::new());
 		let compiler = Compiler::new(target, cache.clone());

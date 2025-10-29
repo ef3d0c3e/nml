@@ -126,11 +126,7 @@ impl Cache {
 	}
 
 	/// Sets up cache tables
-	pub fn setup_tables(&self) {
-		let con = tokio::runtime::Runtime::new()
-			.unwrap()
-			.block_on(self.get_connection());
-
+	pub fn setup_tables(&self, con: MutexGuard<'_, Connection>) {
 		// Table containing all compiled units
 		con.execute(
 			"CREATE TABLE IF NOT EXISTS units(

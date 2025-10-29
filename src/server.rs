@@ -604,6 +604,8 @@ async fn main() -> anyhow::Result<()> {
 		let Some(parent) = path.parent() else { break };
 		path = parent.into();
 	}
+	let cache = Arc::new(Cache::new(&settings.db_path).unwrap());
+	cache.setup_tables(cache.get_connection().await);
 
 	let stdin = tokio::io::stdin();
 	let stdout = tokio::io::stdout();
