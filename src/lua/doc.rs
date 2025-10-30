@@ -55,6 +55,35 @@ macro_rules! add_documented_method {
 	}};
 }
 
+#[macro_export]
+macro_rules! add_documented_method_mut {
+	($methods:ident, $type_name:literal, $name:literal, $handler:expr, $documentation:expr, $args:expr, $ret:expr) => {{
+		$methods.add_method_mut($name, $handler);
+		let mut docs = crate::lua::doc::LUA_DOCS.lock();
+		if let Some(doc) = docs.get_mut($type_name) {
+			doc.methods.push(crate::lua::doc::LuaMethodDoc {
+				name: $name,
+				args: $args,
+				returns: $ret,
+				doc: $documentation,
+			});
+		} else {
+			docs.insert(
+				$type_name,
+				crate::lua::doc::UserDataDoc {
+					type_name: $type_name,
+					methods: vec![crate::lua::doc::LuaMethodDoc {
+						name: $name,
+						args: $args,
+						returns: $ret,
+						doc: $documentation,
+					}],
+				},
+			);
+		}
+	}};
+}
+
 macro_rules! add_lua_docs {
 	($t:ty) => {{
 		let lua = Lua::new();

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use graphviz_rust::print;
 use mlua::IntoLua;
 use mlua::LightUserData;
 use mlua::Lua;
@@ -14,6 +15,7 @@ use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::elements::heading::elem::Heading;
 use crate::lua::wrappers::ElemMutWrapper;
 use crate::lua::wrappers::ElemWrapper;
 use crate::lua::wrappers::UnitWrapper;
@@ -351,7 +353,7 @@ impl Kernel {
 	}
 
 	/// Dispatch AutoCommand calls when creating an element
-	pub fn au_create_elem<T>(&self, unit: &mut TranslationUnit, mut elem: T) -> Result<Option<T>, String>
+	pub fn au_create_elem<T>(&self, unit: &mut TranslationUnit, elem: T) -> Result<Option<T>, String>
 	where
 		T: Element + UserData + Send + 'static,
 		for <'a> &'a mut T: mlua::UserData

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use crate::elements::heading::elem::FieldInternalReference;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RuleTarget;
@@ -201,7 +202,7 @@ impl RegexRule for HeadingRule {
 			depth,
 			numbered,
 			in_toc,
-			reference,
+			reference: FieldInternalReference(reference),
 			link: OnceLock::default(),
 		});
 	}

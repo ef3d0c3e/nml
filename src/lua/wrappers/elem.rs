@@ -6,6 +6,7 @@ use mlua::Value;
 use crate::lua::wrappers::ElemMutWrapper;
 use crate::lua::wrappers::ElemWrapper;
 use crate::unit::element::Element;
+use crate::unit::element::ReferenceableElement;
 
 impl UserData for ElemWrapper {
 	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {

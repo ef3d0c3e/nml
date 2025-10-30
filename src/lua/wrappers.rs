@@ -6,6 +6,7 @@ pub mod scope;
 pub mod unit;
 pub mod variable;
 pub mod source;
+pub mod internal_reference;
 
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -14,6 +15,7 @@ use parking_lot::RwLock;
 
 use crate::parser::source::Source;
 use crate::unit::element::Element;
+use crate::unit::references::InternalReference;
 use crate::unit::scope::Scope;
 use crate::unit::translation::TranslationUnit;
 use crate::unit::variable::Variable;
@@ -33,6 +35,10 @@ pub struct ScopeWrapper(pub Arc<RwLock<Scope>>);
 /// Wrapper for [`Vec<Arc<RwLock<Scope>>>`]
 #[auto_registry::auto_registry(registry = "lua")]
 pub struct VecScopeWrapper(pub Vec<Arc<RwLock<Scope>>>);
+
+/// Wrapper for [`Option<Arc<InternalReference>`]
+#[auto_registry::auto_registry(registry = "lua")]
+pub struct InternalReferenceWrapper(pub Option<Arc<InternalReference>>);
 
 /// Wrapper for [`OnceLock`]
 //#[auto_registry::auto_registry(registry = "lua")] TODO: Make it work for generic types
@@ -57,3 +63,10 @@ pub struct LuaUDVec<T>(pub Vec<T>);
 /// Wrapper for [`Arc<dyn Source>`]
 #[auto_registry::auto_registry(registry = "lua")]
 pub struct SourceWrapper(pub Arc<dyn Source>);
+
+pub trait UserDataElem
+{
+	fn take(lua: &mlua::Lua, ud: &mlua::AnyUserData) -> Result<Self, mlua::Error>
+	where
+		Self: Element + mlua::UserData + Send + Sync + 'static;
+}
