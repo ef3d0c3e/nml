@@ -13,6 +13,7 @@ use mlua::Lua;
 use parking_lot::RwLock;
 
 use crate::layout::size::Size;
+use crate::layout::size::SizeOutput;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use mlua::LuaSerdeExt;
@@ -79,7 +80,7 @@ impl Graphviz {
 				let svg_start = out.find("<svg").unwrap(); // Remove svg header
 				let split_at = out.split_at(svg_start).1.find('\n').unwrap();
 
-				let mut result = format!("<svg width=\"{}\"", self.width.to_output(Target::HTML));
+				let mut result = format!("<svg width=\"{}\"", self.width.to_output(SizeOutput::CSS));
 				result.push_str(out.split_at(svg_start + split_at).1);
 
 				result

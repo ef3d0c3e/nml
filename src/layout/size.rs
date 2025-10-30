@@ -1,8 +1,16 @@
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::compiler::compiler::Target;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum SizeOutput
+{
+	CSS,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum Size {
@@ -12,9 +20,9 @@ pub enum Size {
 }
 
 impl Size {
-	pub fn to_output(&self, output: Target) -> String {
+	pub fn to_output(&self, output: SizeOutput) -> String {
 		match output {
-			Target::HTML => match self {
+			SizeOutput::CSS => match self {
 				Size::Em(s) => format!("{s}em"),
 				Size::Px(s) => format!("{s}px"),
 				Size::Percent(s) => format!("{s}%"),
@@ -34,10 +42,10 @@ impl ToString for Size {
 	}
 }
 
-impl FromStr for Size {
-	type Err = String;
+impl TryFrom<&str> for Size {
+	type Error = String;
 
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
+	fn try_from(s: &str) -> Result<Self, Self::Error> {
 		let Some((sep, _)) = s.char_indices().find(|(_, c)| !c.is_numeric() || *c == '.') else {
 			return Err(format!("Missing unit after size: '{}'", s));
 		};

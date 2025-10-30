@@ -1,4 +1,5 @@
 use std::cell::OnceCell;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::future::Future;
 use std::future::IntoFuture;
@@ -12,6 +13,7 @@ use std::time::Instant;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use crate::unit::element::ReferenceableElement;
 
 use ariadne::Color;
 use ariadne::Fmt;
@@ -65,6 +67,8 @@ pub struct CompilerOutput {
 	target: Target,
 	/// Paragraph state of the output
 	paragraph: HashSet<ArcKey<Scope>>,
+	/// Counter for references
+	refcount: HashMap<String, usize>,
 
 	// Holds the content of the resulting document
 	pub(crate) content: String,
@@ -90,7 +94,8 @@ impl CompilerOutput {
 		// Create the output & the runtime
 		let mut output = Self {
 			target,
-			paragraph: HashSet::new(),
+			paragraph: HashSet::default(),
+			refcount: HashMap::default(),
 
 			content: String::default(),
 			tasks: vec![],
@@ -224,6 +229,21 @@ impl CompilerOutput {
 			self.paragraph.insert(ArcKey(scope.to_owned()));
 		} else {
 			self.paragraph.remove(&ArcKey(scope.to_owned()));
+		}
+	}
+
+	/// Get a unique reference id for the element's referenceable type
+	pub fn refid(&mut self, refer: &dyn ReferenceableElement) -> usize {
+		let key = refer.refcount_key();
+		if let Some(count) = self.refcount.get_mut(key)
+		{
+			*count += 1;
+			*count
+		}
+		else
+		{
+			self.refcount.insert(key.to_owned(), 1);
+			1
 		}
 	}
 }

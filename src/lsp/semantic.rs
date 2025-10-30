@@ -151,6 +151,17 @@ pub struct Tokens {
 	pub raw_kind: (u32, u32),
 	pub raw_content: (u32, u32),
 
+	/// `!`
+	pub media_sep: (u32, u32),
+	/// `[` and `]`
+	pub media_refname_sep: (u32, u32),
+	/// `(` and `)`
+	pub media_url_sep: (u32, u32),
+	/// `[` and `]`
+	pub media_prop_sep: (u32, u32),
+	pub media_refname: (u32, u32),
+	pub media_url: (u32, u32),
+
 	pub comment: (u32, u32),
 }
 
@@ -216,6 +227,13 @@ impl Default for Tokens {
 			raw_sep: token!("macro"),
 			raw_kind: token!("function"),
 			raw_content: token!("regexp"),
+
+			media_sep: token!("function"),
+			media_refname_sep: token!("macro"),
+			media_url_sep: token!("macro"),
+			media_prop_sep: token!("macro"),
+			media_refname: token!("parameter"),
+			media_url: token!("function", "readonly", "abstract", "abstract"),
 
 			comment: token!("comment"),
 		}

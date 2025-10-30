@@ -152,6 +152,42 @@ impl<'s> PropertyMap<'s> {
 		None
 	}
 
+	pub fn get_or_else<T, E, D, F>(
+		&mut self,
+		unit: &mut TranslationUnit,
+		key: &str,
+		default: D,
+		f: F,
+	) -> Option<T>
+	where
+		E: Display,
+		D: FnOnce() -> T,
+		F: FnOnce(&Property, PropertyValue) -> Result<T, E>,
+	{
+		match self.properties.remove(key) {
+			None => return Some(default()),
+			Some((prop, val)) => {
+				let range = val.value_range.clone();
+				match f(prop, val) {
+					Err(err) => report_err!(
+						unit,
+						self.token.source(),
+						format!("Failed to parse {} properties", self.rule_name),
+						span(
+							range,
+							format!(
+								"Unable to parse property {}: {err}",
+								key.fg(self.colors.info),
+							)
+						),
+					),
+					Ok(parsed) => return Some(parsed),
+				}
+			}
+		}
+		None
+	}
+
 	/// Get an optional value by key
 	///
 	/// # Returned value
@@ -447,7 +483,8 @@ impl PropertyParser {
 			token.source(),
 			token.range,
 			PathBuf::from(format!("{rule_name} Properties")),
-			escape, closing
+			escape,
+			closing,
 		);
 		self.parse(
 			rule_name,

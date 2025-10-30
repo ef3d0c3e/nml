@@ -144,7 +144,7 @@ impl RegexRule for GraphvizRule {
 			return;
 		};
 		let Some(width) = properties.get(unit, "width", |_prop, value| {
-			Size::from_str(value.value.as_str())
+			Size::try_from(value.value.as_str())
 		}) else {
 			return;
 		};

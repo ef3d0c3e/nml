@@ -16,3 +16,4 @@ pub mod layout;
 pub mod lua;
 pub mod meta;
 pub mod variable;
+pub mod media;
