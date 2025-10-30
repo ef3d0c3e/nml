@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -95,7 +96,29 @@ impl RegexRule for MediaRule {
 		token: crate::parser::source::Token,
 		captures: regex::Captures,
 	) {
+		// Parse refname
 		let refname_group = captures.get(1).unwrap();
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(
+					captures.get(0).unwrap().start()..captures.get(0).unwrap().start() + 1,
+					tokens.media_sep,
+				);
+				sems.add(
+					refname_group.range().start - 1..refname_group.range().start,
+					tokens.media_refname_sep,
+				);
+				sems.add(
+					refname_group.range().start..refname_group.range().end,
+					tokens.media_refname,
+				);
+				sems.add(
+					refname_group.range().end..refname_group.range().end + 1,
+					tokens.media_refname_sep,
+				);
+			});
+		});
+
 		let refname = match Refname::try_from(refname_group.as_str()) {
 			Ok(refname) => match refname {
 				Refname::Internal(refname) => Refname::Internal(refname),
@@ -120,26 +143,48 @@ impl RegexRule for MediaRule {
 			}
 		};
 
+		// Parse url
 		let url_group = captures.get(2).unwrap();
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(
+					url_group.range().start - 1..url_group.range().start,
+					tokens.media_url_sep,
+				);
+				sems.add(
+					url_group.range().start..url_group.range().end,
+					tokens.media_url,
+				);
+				sems.add(
+					url_group.range().end..url_group.range().end + 1,
+					tokens.media_url_sep,
+				);
+			});
+		});
 		let url = match Url::from_str(url_group.as_str()) {
 			Ok(url) => url,
 			Err(err) => match err {
 				url::ParseError::RelativeUrlWithoutBase => {
-					let Some(mut cwd) = unit.output_path().cloned() else {
-						report_err!(
-							unit,
-							token.source(),
-							"Invalid Media Url".into(),
-							span(
-								url_group.range(),
-								format!("Cannot specify a relative Url without knowing the unit's output path")
-							)
-						);
-						return;
-					};
-					cwd.pop();
-					cwd.push(url_group.as_str());
-					if !cwd.exists() {
+					let mut path = PathBuf::from(url_group.as_str());
+					if !path.is_absolute()
+					{
+						let Some(mut cwd) = unit.output_path().cloned() else {
+							report_err!(
+								unit,
+								token.source(),
+								"Invalid Media Url".into(),
+								span(
+									url_group.range(),
+									format!("Cannot specify a relative Url without knowing the unit's output path")
+								)
+							);
+							return;
+						};
+						path = cwd;
+						path.pop();
+						path.push(url_group.as_str());
+					}
+					if !path.exists() {
 						report_warn!(
 							unit,
 							token.source(),
@@ -148,12 +193,12 @@ impl RegexRule for MediaRule {
 								url_group.range(),
 								format!(
 									"Path `{}` does not exist",
-									cwd.display().fg(unit.colors().info)
+									path.display().fg(unit.colors().info)
 								)
 							)
 						);
 					}
-					match Url::from_file_path(&cwd) {
+					match Url::from_file_path(&path) {
 						Ok(url) => url,
 						Err(()) => {
 							report_err!(
@@ -164,7 +209,7 @@ impl RegexRule for MediaRule {
 									url_group.range(),
 									format!(
 										"Path `{}` is not valid",
-										cwd.display().fg(unit.colors().info)
+										path.display().fg(unit.colors().info)
 									)
 								)
 							);
@@ -187,6 +232,22 @@ impl RegexRule for MediaRule {
 			},
 		};
 
+		// Parse properties
+		if let Some(prop_group) = captures.get(3)
+		{
+			unit.with_lsp(|lsp| {
+				lsp.with_semantics(token.source(), |sems, tokens| {
+					sems.add(
+						prop_group.range().start - 1..prop_group.range().start,
+						tokens.media_prop_sep,
+					);
+					sems.add_to_queue(
+						prop_group.range().end..prop_group.range().end + 1,
+						tokens.media_prop_sep,
+					);
+				});
+			});
+		}
 		let prop_source = escape_source(
 			token.source(),
 			captures.get(3).map_or(0..0, |m| m.range()),
