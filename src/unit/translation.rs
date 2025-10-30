@@ -8,6 +8,7 @@ use crate::parser::reports::*;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use graphviz_rust::print;
 use mlua::UserData;
 use parking_lot::MappedRwLockWriteGuard;
 use parking_lot::RwLock;
@@ -236,6 +237,14 @@ impl TranslationUnit {
 				value: PropertyValue::Path(self.path.clone()),
 				value_token: token.clone(),
 			}));
+		let output_file = self
+			.get_scope()
+			.get_variable(&VariableName("nml.output_file".into()));
+		let output = UnitOutput {
+			input_file: self.path.clone(),
+			output_file: output_file.and_then(|(var, _)| var.to_path()),
+		};
+		self.output.set(output).unwrap();
 
 		self.with_lsp(|mut lsp| lsp.on_new_source(self.source.clone()));
 		self.parser.clone().parse(&mut self);
@@ -262,15 +271,6 @@ impl TranslationUnit {
 			self.entry_scope = scope;
 		}
 		self.with_lsp(|mut lsp| lsp.on_source_end(self.source.clone()));
-
-		let output_file = self
-			.get_scope()
-			.get_variable(&VariableName("nml.output_file".into()));
-		let output = UnitOutput {
-			input_file: self.path.clone(),
-			output_file: output_file.and_then(|(var, _)| var.to_path()),
-		};
-		self.output.set(output).unwrap();
 		(
 			self.reports
 				.drain(..)

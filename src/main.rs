@@ -196,18 +196,23 @@ fn input_project(
 ) -> Result<(Vec<PathBuf>, ProcessOutputOptions, ProjectSettings), String> {
 	let settings_file = matches.opt_str("p").unwrap();
 	// Get root path
-	let mut root_path = settings_file
-		.split_at(settings_file.rfind(|c| c == '/').unwrap_or(0))
-		.0
-		.to_string();
-	if root_path.is_empty() {
-		root_path = ".".to_string();
-	}
+	let mut root_path = PathBuf::from(&settings_file);
+	root_path = root_path.canonicalize().map_err(|err| {
+		format!("Failed to canonicalize project root path `{settings_file}`: {err}")
+	})?;
+	root_path.pop();
 
-	let root_meta = std::fs::metadata(&root_path)
-		.map_err(|e| format!("Failed to get project root metadata `{root_path}`: {e}"))?;
+	let root_meta = std::fs::metadata(&root_path).map_err(|e| {
+		format!(
+			"Failed to get project root metadata `{}`: {e}",
+			root_path.display()
+		)
+	})?;
 	if !root_meta.is_dir() {
-		return Err(format!("Project root `{root_path}` is not a directory"));
+		return Err(format!(
+			"Project root `{}` is not a directory",
+			root_path.display()
+		));
 	}
 
 	let meta = match std::fs::metadata(&settings_file) {
@@ -267,7 +272,7 @@ fn input_project(
 		}
 		files.push(path.into());
 	}
-	settings.set_root_path(&root_path)?;
+	settings.set_root_path(root_path)?;
 	Ok((
 		files,
 		compiler::process::ProcessOutputOptions::Directory(PathBuf::from(&settings.output_path)),

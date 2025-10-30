@@ -44,33 +44,33 @@ impl Default for ProjectSettings {
 impl ProjectSettings {
 	/// Sets the project's root path
 	/// - path: The directory containing the project settings file
-	pub fn set_root_path(&mut self, path: &String) -> Result<(), String> {
-		fn get_path(cwd: &PathBuf, base: PathBuf, component: &Path) -> Result<PathBuf, String> {
-			let mut base = PathBuf::from(&base).canonicalize().map_err(|e| format!("Failed to canonicalize `{}`: {e}", base.display()))?;
-			base.push(component);
-			base = cwd.join(base);
-			base = base.canonicalize().unwrap_or(base);
-			base = pathdiff::diff_paths(&base, cwd).unwrap_or(base);
+	pub fn set_root_path(&mut self, path: PathBuf) -> Result<(), String> {
+		fn get_path(mut base: PathBuf, component: &Path) -> Result<PathBuf, String> {
+			base = base.join(component);
+			base = base.canonicalize().map_err(|e| format!("Failed to canonicalize `{}`: {e}", base.display()))?;
 			Ok(base)
 		}
 
-		let path = PathBuf::from(path).canonicalize().map_err(|e| format!("Failed to canonicalize `{path}`: {e}"))?;
 		let cwd = current_dir().map_err(|e| format!("Failed to get working directory: {e}"))?;
 		let diff = pathdiff::diff_paths(&path, &cwd)
 			.unwrap_or(PathBuf::from(path.clone()));
 
-		self.output_path = get_path(&cwd, diff.clone(), &self.output_path)?;
-		self.db_path = get_path(&cwd, path.clone(), &self.db_path)?;
+		self.output_path = get_path(diff.clone(), &self.output_path)?;
+		self.db_path = get_path(diff.clone(), &self.db_path)?;
 		let output_buf = PathBuf::from(&self.output_path).canonicalize().map_err(|e| format!("Failed to canonicalize `{}`: {e}", self.output_path.display()))?;
 
+		let diff = pathdiff::diff_paths(&output_buf, &cwd)
+			.unwrap_or(PathBuf::from(output_buf.clone()));
 		match &mut self.output {
 			ProjectOutput::Html(html) => {
 				if let Some(icon) = &mut html.icon {
-					*icon = get_path(&output_buf, diff.clone(), &icon)?;
+					println!("ICON");
+					*icon = get_path(diff.clone(), &icon)?;
 				}
 
 				if let Some(css) = &mut html.css {
-					*css = get_path(&output_buf, diff.clone(), &css)?;
+					println!("CSS");
+					*css = get_path(diff.clone(), &css)?;
 				}
 			}
 		}
