@@ -8,6 +8,7 @@ use ariadne::Fmt;
 use parking_lot::lock_api::RwLock;
 use regex::Regex;
 use regex::RegexBuilder;
+use tokio::task::coop::has_budget_remaining;
 use url::Url;
 
 use crate::elements::media;
@@ -343,16 +344,29 @@ impl RegexRule for MediaRule {
 			reference,
 			link: OnceLock::default(),
 		};
+		let mut has_group = false;
 		if let Some(elem) = unit.get_scope().content_last() {
 			if let Some(group) = elem.downcast_ref::<MediaGroup>() {
-				group.add_media(Arc::new(media));
-				return;
+				has_group = true
 			}
 		}
 
-		unit.add_content(MediaGroup {
-			location: token.clone(),
-			media: RwLock::new(vec![Arc::new(media)]),
-		});
+		let mut group = if has_group {
+			let group = unit.get_scope().take_last_content()
+				.unwrap();
+			let group = Arc::downcast::<MediaGroup>(group)
+				.unwrap();
+			Arc::try_unwrap(group)
+				.expect("Failed to take back ownerwship of MediaGroup")
+		}
+		else
+		{
+			MediaGroup {
+				location: token.clone(),
+				media: vec![],
+			}
+		};
+		group.media.push(Arc::new(media));
+		unit.add_content(group);
 	}
 }

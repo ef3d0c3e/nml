@@ -133,6 +133,9 @@ pub trait ScopeAccessor {
 	/// Gets the last element of this scope
 	fn content_last(&self) -> Option<Arc<dyn Element>>;
 
+	/// Take ownership of the last element (remove it)
+	fn take_last_content(&self) -> Option<Arc<dyn Element>>;
+
 	/// Gets an iterator over scope elements
 	///
 	/// When recurse is enabled, recursively contained scopes will be iterated.
@@ -218,6 +221,10 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 
 	fn content_last(&self) -> Option<Arc<dyn Element>> {
 		return (*self.clone()).read().content.last().cloned();
+	}
+
+	fn take_last_content(&self) -> Option<Arc<dyn Element>> {
+		self.write().content.pop()
 	}
 
 	fn content_iter(&self, recurse: bool) -> ScopeIterator {

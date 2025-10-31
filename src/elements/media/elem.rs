@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
@@ -16,7 +15,6 @@ use crate::unit::scope::ScopeAccessor;
 use auto_userdata::AutoUserData;
 use mlua::AnyUserData;
 use mlua::Lua;
-use mlua::LuaSerdeExt;
 use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
@@ -69,13 +67,14 @@ impl TryFrom<&str> for MediaType {
 pub struct MediaGroup {
 	pub(crate) location: Token,
 	#[lua_ignore]
-	pub(crate) media: RwLock<Vec<Arc<Media>>>,
+	pub(crate) media: Vec<Arc<Media>>,
 }
 
 impl MediaGroup {
-	pub fn add_media(&self, media: Arc<Media>)
+	pub fn add_media(&mut self, media: Arc<Media>)
 	{
-		self.media.write().push(media);
+		self.location.range.end = media.location().end();
+		self.media.push(media);
 	}
 }
 
@@ -101,7 +100,7 @@ impl Element for MediaGroup {
 		match compiler.target() {
 			Target::HTML => {
 				output.add_content("<div class=\"media\">");
-				for media in self.media.read().iter() {
+				for media in self.media.iter() {
 					media.compile(scope.clone(), compiler, output)?;
 				}
 				output.add_content("</div>");
