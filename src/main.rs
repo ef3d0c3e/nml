@@ -20,7 +20,6 @@ use compiler::process::ProcessOutputOptions;
 use compiler::process::ProcessQueue;
 use getopts::Matches;
 use getopts::Options;
-use graphviz_rust::attributes::root;
 use parser::reports::Report;
 use parser::reports::ReportColors;
 use util::settings::ProjectSettings;

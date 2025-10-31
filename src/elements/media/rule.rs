@@ -1,17 +1,13 @@
 use std::collections::HashMap;
-use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
 use ariadne::Fmt;
-use parking_lot::lock_api::RwLock;
 use regex::Regex;
 use regex::RegexBuilder;
-use tokio::task::coop::has_budget_remaining;
 use url::Url;
 
-use crate::elements::media;
 use crate::elements::media::elem::Media;
 use crate::elements::media::elem::MediaGroup;
 use crate::elements::media::elem::MediaType;
@@ -169,7 +165,7 @@ impl RegexRule for MediaRule {
 					let mut path = PathBuf::from(url_group.as_str());
 					if !path.is_absolute()
 					{
-						let Some(mut cwd) = unit.output_path().cloned() else {
+						let Some(cwd) = unit.output_path().cloned() else {
 							report_err!(
 								unit,
 								token.source(),
@@ -334,6 +330,7 @@ impl RegexRule for MediaRule {
 			token.source().original_range(token.range.clone()),
 			refname,
 		)));
+		println!("size={width:#?}");
 		let media = Media {
 			location: token.clone(),
 			url,
@@ -346,7 +343,7 @@ impl RegexRule for MediaRule {
 		};
 		let mut has_group = false;
 		if let Some(elem) = unit.get_scope().content_last() {
-			if let Some(group) = elem.downcast_ref::<MediaGroup>() {
+			if let Some(_) = elem.downcast_ref::<MediaGroup>() {
 				has_group = true
 			}
 		}

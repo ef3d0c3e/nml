@@ -99,7 +99,7 @@ impl Element for MediaGroup {
 	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
 			Target::HTML => {
-				output.add_content("<div class=\"media\">");
+				output.add_content("<div class=\"media-group\">");
 				for media in self.media.iter() {
 					media.compile(scope.clone(), compiler, output)?;
 				}
@@ -160,9 +160,11 @@ impl Element for Media {
 		match compiler.target() {
 			Target::HTML => {
 				let id = output.refid(self);
-				let width = self
-					.width
-					.map_or(String::default(), |w| w.to_output(SizeOutput::CSS));
+				let width = if let Some(width) = &self.width
+				{
+					format!(r#" style="width:{}""#, width.to_output(SizeOutput::CSS))
+				}
+				else { r#" style="width:100%""#.into() };
 
 				output.add_content(r#"<div class="media">"#);
 				output.add_content(match self.media_type {
