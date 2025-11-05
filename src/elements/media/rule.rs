@@ -159,12 +159,14 @@ impl RegexRule for MediaRule {
 			});
 		});
 		let url = match Url::from_str(url_group.as_str()) {
-			Ok(url) => url,
+			Ok(url) => {
+				println!("Got url: {url:#?}");
+				url
+			},
 			Err(err) => match err {
 				url::ParseError::RelativeUrlWithoutBase => {
 					let mut path = PathBuf::from(url_group.as_str());
-					if !path.is_absolute()
-					{
+					if !path.is_absolute() {
 						let Some(cwd) = unit.output_path().cloned() else {
 							report_err!(
 								unit,
@@ -230,8 +232,7 @@ impl RegexRule for MediaRule {
 		};
 
 		// Parse properties
-		if let Some(prop_group) = captures.get(3)
-		{
+		if let Some(prop_group) = captures.get(3) {
 			unit.with_lsp(|lsp| {
 				lsp.with_semantics(token.source(), |sems, tokens| {
 					sems.add(
@@ -349,15 +350,10 @@ impl RegexRule for MediaRule {
 		}
 
 		let mut group = if has_group {
-			let group = unit.get_scope().take_last_content()
-				.unwrap();
-			let group = Arc::downcast::<MediaGroup>(group)
-				.unwrap();
-			Arc::try_unwrap(group)
-				.expect("Failed to take back ownerwship of MediaGroup")
-		}
-		else
-		{
+			let group = unit.get_scope().take_last_content().unwrap();
+			let group = Arc::downcast::<MediaGroup>(group).unwrap();
+			Arc::try_unwrap(group).expect("Failed to take back ownerwship of MediaGroup")
+		} else {
 			MediaGroup {
 				location: token.clone(),
 				media: vec![],

@@ -5,6 +5,7 @@ use std::future::Future;
 use std::future::IntoFuture;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::thread::sleep;
@@ -14,6 +15,7 @@ use std::time::Instant;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::unit::element::ReferenceableElement;
+use crate::unit::translation::UnitOutput;
 
 use ariadne::Color;
 use ariadne::Fmt;
@@ -70,6 +72,8 @@ pub struct CompilerOutput {
 	/// Counter for references
 	refcount: HashMap<String, usize>,
 
+	pub input_path: PathBuf,
+	pub output_path: Option<PathBuf>,
 	// Holds the content of the resulting document
 	pub(crate) content: String,
 	/// Holds the spawned async tasks. After the work function has completed, these tasks will be
@@ -86,6 +90,8 @@ impl CompilerOutput {
 	pub fn run_with_processor<F>(
 		target: Target,
 		colors: &ReportColors,
+		input_path: PathBuf,
+		output_path: Option<PathBuf>,
 		f: F,
 	) -> Result<CompilerOutput, Vec<Report>>
 	where
@@ -97,6 +103,8 @@ impl CompilerOutput {
 			paragraph: HashSet::default(),
 			refcount: HashMap::default(),
 
+			input_path,
+			output_path,
 			content: String::default(),
 			tasks: vec![],
 			runtime: tokio::runtime::Builder::new_multi_thread()

@@ -148,7 +148,7 @@ impl Compiler {
 
 	/// Compiles a document to it's output
 	pub fn compile(&self, unit: &TranslationUnit) -> Result<String, Vec<Report>> {
-		let body = CompilerOutput::run_with_processor(self.target, &unit.colors(), |output| {
+		let body = CompilerOutput::run_with_processor(self.target, &unit.colors(), unit.input_path().clone(), unit.output_path().cloned(), |output| {
 			self.compile_scope(output, unit.get_entry_scope().to_owned())
 		})?;
 

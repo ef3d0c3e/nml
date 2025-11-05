@@ -16,6 +16,7 @@ use auto_userdata::AutoUserData;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
+use pathdiff::diff_paths;
 use serde::Deserialize;
 use serde::Serialize;
 use url::Url;
@@ -165,20 +166,44 @@ impl Element for Media {
 					format!(r#" style="width:{}""#, width.to_output(SizeOutput::CSS))
 				}
 				else { r#" style="width:100%""#.into() };
+				let url = match self.url.scheme() {
+					"output" => {
+						let mut base = output.output_path.clone().unwrap_or(
+							output.input_path.clone());
+						base.pop();
+						let base_clone = base.clone();
+						if let Some(domain) = self.url.host_str() {
+							let rel = format!("{domain}{}", self.url.path());
+							base.push(rel);
+							println!("base = {base:#?}");
+						}
+						else
+						{
+							base.push(self.url.path());
+						}
+						println!("base = {base:#?} # {base_clone:#?}");
+						base = diff_paths(base, base_clone).unwrap();
+						base.display().to_string()
+					},
+					"file" => {
+						self.url.path().to_string()
+					},
+					_ => self.url.to_string()
+				};
 
 				output.add_content(r#"<div class="media">"#);
 				output.add_content(match self.media_type {
 					MediaType::Image => format!(
 						r#"<a href="{0}"><img src="{0}"{width}></a>"#,
-						compiler.sanitize(self.url.to_string())
+						compiler.sanitize(url)
 					),
 					MediaType::Video => format!(
 						r#"<video controls {width}><source src="{0}"></video>"#,
-						compiler.sanitize(self.url.to_string())
+						compiler.sanitize(url)
 					),
 					MediaType::Audio => format!(
 						r#"<audio controls src="{0}"{width}></audio>"#,
-						compiler.sanitize(self.url.to_string())
+						compiler.sanitize(url)
 					),
 				});
 
