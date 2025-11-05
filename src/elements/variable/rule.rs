@@ -32,7 +32,7 @@ use super::completion::VariableCompletion;
 use super::elem::VariableSubstitution;
 
 fn parse_delimited(content: &str, delim: &str) -> Option<usize> {
-	let mut escaped = 0usize;
+	let mut escaped = false;
 	let mut it = content.char_indices();
 	let mut end_pos;
 
@@ -42,12 +42,11 @@ fn parse_delimited(content: &str, delim: &str) -> Option<usize> {
 		};
 		end_pos = pos;
 		if c == '\\' {
-			escaped += 1;
-		} else if escaped % 2 == 1 {
+			escaped = !escaped;
+		} else if escaped {
+			escaped = false
 		} else if content[pos..].starts_with(delim) {
 			break;
-		} else {
-			escaped = 0;
 		}
 	}
 	Some(end_pos)
@@ -451,7 +450,6 @@ impl RegexRule for VariableSubstitutionRule {
 			variable: variable.0.clone(),
 			content: vec![content],
 		});
-
 	}
 
 	fn completion(&self) -> Option<Box<dyn CompletionProvider + 'static + Send + Sync>> {
