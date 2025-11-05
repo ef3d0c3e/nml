@@ -34,6 +34,10 @@ impl Default for CodeRule {
 			"line_offset".to_string(),
 			Property::new("Code line offset".to_string(), Some("0".to_string())),
 		);
+		props.insert(
+			"max_lines".to_string(),
+			Property::new("Maximum lines before scrolling".to_string(), None),
+		);
 		Self {
 			re: [
 				Regex::new(
@@ -98,6 +102,11 @@ impl RegexRule for CodeRule {
 		};
 		let Some(line_offset) =
 			props.get(unit, "line_offset", |_, value| value.value.parse::<usize>())
+		else {
+			return;
+		};
+		let Some(max_lines) =
+			props.get_opt(unit, "max_lines", |_, value| value.value.parse::<usize>())
 		else {
 			return;
 		};
@@ -208,6 +217,7 @@ impl RegexRule for CodeRule {
 				line_gutter: index == 1,
 				line_offset,
 				inline: index == 0,
+				max_lines,
 				theme,
 			},
 			content,

@@ -29,6 +29,7 @@ pub struct CodeDisplay {
 	pub line_gutter: bool,
 	pub line_offset: usize,
 	pub inline: bool,
+	pub max_lines: Option<usize>,
 	pub theme: Option<String>,
 }
 
@@ -76,7 +77,7 @@ impl Code {
 
 		let mut result = String::new();
 		if self.display.inline {
-			result += "<pre class=\"inline-code\"><code>";
+			result += r#"<pre class="inline-code"><code>"#;
 			match highlight.highlight_line(self.content.as_str(), Code::syntaxes()) {
 				Err(e) => return Err(format!("Error highlighting line `{}`: {}", self.content, e)),
 				Ok(regions) => {
@@ -104,13 +105,22 @@ impl Code {
 			}
 
 			if self.display.line_gutter {
-				result += format!(
-					"<pre><code class=\"line-gutter\" style=\"--line-offset:{}\">",
+				let max_height = if let Some(lines) = self.display.max_lines {
+					format!(";max-height:calc({lines}*var(--line-height))")
+				} else {
+					"".into()
+				};
+				result += &format!(
+					"<pre><code class=\"line-gutter\" style=\"--line-offset:{}{max_height}\">",
 					self.display.line_offset
-				)
-				.as_str();
+				);
 			} else {
-				result += "<pre><code>";
+				let max_height = if let Some(lines) = self.display.max_lines {
+					format!(r#" style="max-height:calc({lines}*var(--line-height))""#)
+				} else {
+					"".into()
+				};
+				result += &format!("<pre><code{max_height}>");
 			}
 
 			// Highlight content
