@@ -159,10 +159,7 @@ impl RegexRule for MediaRule {
 			});
 		});
 		let url = match Url::from_str(url_group.as_str()) {
-			Ok(url) => {
-				println!("Got url: {url:#?}");
-				url
-			},
+			Ok(url) => url,
 			Err(err) => match err {
 				url::ParseError::RelativeUrlWithoutBase => {
 					let mut path = PathBuf::from(url_group.as_str());
