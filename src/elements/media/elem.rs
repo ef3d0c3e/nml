@@ -210,9 +210,11 @@ impl Element for Media {
 				));
 
 				if let Some(description) = &self.description {
+					output.add_content(r#"<div class="media-description">"#);
 					for (scope, elem) in description.content_iter(false) {
 						elem.compile(scope, compiler, output)?;
 					}
+					output.add_content(r#"</div>"#);
 				}
 				output.add_content(r#"</div>"#);
 			}

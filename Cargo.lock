@@ -58,9 +58,9 @@ dependencies = [
 
 [[package]]
 name = "auto-registry"
-version = "0.0.1"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09e041614cd21a5e125dc4d5f696f35afc371e5463e2a4d4021d955a3fe53069"
+checksum = "b68e52b12a39625fe9186fa868e60b766cc43f70a68fe6e8353ed019d45223ff"
 dependencies = [
  "proc-macro2",
  "quote",
