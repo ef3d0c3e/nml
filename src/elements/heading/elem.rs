@@ -166,7 +166,7 @@ pub struct Heading {
 	pub(crate) in_toc: bool,
 	//#[lua_map(InternalReferenceWrapper)]
 	//pub(crate) reference: Option<Arc<InternalReference>>,
-	#[lua_ud]
+	//#[lua_ud]
 	pub(crate) reference: FieldInternalReference,
 	#[lua_map(OnceLockWrapper)]
 	pub(crate) link: OnceLock<String>,

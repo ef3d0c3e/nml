@@ -219,7 +219,7 @@ impl CompilerOutput {
 			location,
 			pos: self.content.len(),
 			name,
-			timeout: 5000,
+			timeout: 500000,
 			result: OnceCell::default(),
 		});
 	}
