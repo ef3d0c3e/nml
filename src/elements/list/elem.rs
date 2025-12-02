@@ -1,17 +1,18 @@
 use std::sync::Arc;
 
 use auto_userdata::AutoUserData;
+use graphviz_rust::print;
+use mlua::serde::LuaSerdeExt;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
-use mlua::serde::LuaSerdeExt;
 
-use crate::lua::wrappers::*;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
+use crate::lua::wrappers::*;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crate::unit::element::ContainerElement;
@@ -93,11 +94,11 @@ impl Element for List {
 		compiler: &Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
-		let mut stack = vec![];
+		let mut stack /* Vec<(Numbered?, Gap, Index)> */ = vec![];
 
-		let match_stack = |stack: &mut Vec<(bool, usize)>,
-		                   target: &Vec<ListMarker>,
-		                   output: &mut CompilerOutput| {
+		let mut match_stack = |stack: &mut Vec<(bool, usize)>,
+		                       target: &Vec<ListMarker>,
+		                       output: &mut CompilerOutput| {
 			// Find first diff index
 			let mut m = 0;
 			for t in target {
@@ -107,18 +108,15 @@ impl Element for List {
 				m += 1;
 			}
 
-			// Apply offset
-			if m == stack.len() && m != 0 {
-				stack[m - 1].1 += target[m - 1].offset;
-				return true;
-			}
-
 			// Close
 			for e in stack[m..].iter().rev() {
 				match compiler.target() {
 					Target::HTML => output.add_content(["</ul>", "</ol>"][e.0 as usize]),
 					_ => todo!(),
 				}
+			}
+			for _ in m..stack.len() {
+				stack.pop();
 			}
 
 			// Open
@@ -128,6 +126,12 @@ impl Element for List {
 					Target::HTML => output.add_content(["<ul>", "<ol>"][e.numbered as usize]),
 					_ => todo!(),
 				}
+			}
+
+			// Apply offset
+			if m == stack.len() && m != 0 {
+				stack[m - 1].1 += target[m - 1].offset;
+				return target[m - 1].offset != 1;
 			}
 			false
 		};
