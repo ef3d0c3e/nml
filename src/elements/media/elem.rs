@@ -186,7 +186,7 @@ impl Element for Media {
 					_ => self.url.to_string(),
 				};
 
-				output.add_content(r#"<div class="media">"#);
+				output.add_content(r#"<figure class="media">"#);
 				output.add_content(match self.media_type {
 					MediaType::Image => format!(
 						r#"<a href="{0}"><img src="{0}"{width}></a>"#,
@@ -210,13 +210,13 @@ impl Element for Media {
 				));
 
 				if let Some(description) = &self.description {
-					output.add_content(r#"<div class="media-description">"#);
+					output.add_content(r#"<figcaption class="media-description">"#);
 					for (scope, elem) in description.content_iter(false) {
 						elem.compile(scope, compiler, output)?;
 					}
-					output.add_content(r#"</div>"#);
+					output.add_content(r#"</figcaption>"#);
 				}
-				output.add_content(r#"</div>"#);
+				output.add_content(r#"</figure>"#);
 			}
 			_ => todo!(),
 		}

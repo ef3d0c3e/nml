@@ -45,6 +45,10 @@ impl Element for LineBreak {
 		compiler: &'e Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
+		if !output.in_paragraph(&scope)
+		{
+			return Ok(())
+		}
 		match compiler.target() {
 			HTML => {
 				if output.in_paragraph(&scope) {

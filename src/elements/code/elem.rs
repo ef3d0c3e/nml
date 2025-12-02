@@ -77,7 +77,7 @@ impl Code {
 
 		let mut result = String::new();
 		if self.display.inline {
-			result += r#"<pre class="inline-code"><code>"#;
+			result += r#"<code class="inline-code">"#;
 			match highlight.highlight_line(self.content.as_str(), Code::syntaxes()) {
 				Err(e) => return Err(format!("Error highlighting line `{}`: {}", self.content, e)),
 				Ok(regions) => {
@@ -90,7 +90,7 @@ impl Code {
 					}
 				}
 			}
-			result += "</code></pre>";
+			result += "</code>";
 		} else {
 			result += "<div class=\"code-block\">";
 			// Output title if some

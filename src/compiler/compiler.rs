@@ -84,13 +84,13 @@ impl Compiler {
 		for (scope, elem) in scope.content_iter(false) {
 			if nested_kind(elem.clone()) == ElemKind::Inline && !output.in_paragraph(&scope) {
 				match self.target {
-					Target::HTML => output.add_content("" /*"<p>"*/),
+					Target::HTML => output.add_content("<p>"),
 					Target::LATEX => todo!(),
 				}
 				output.set_paragraph(&scope, true);
 			} else if output.in_paragraph(&scope) && nested_kind(elem.clone()) != ElemKind::Inline {
 				match self.target {
-					Target::HTML => output.add_content("" /*"</p>"*/),
+					Target::HTML => output.add_content("</p>"),
 					Target::LATEX => todo!(),
 				}
 				output.set_paragraph(&scope, false);
