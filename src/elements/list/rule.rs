@@ -5,7 +5,9 @@ use std::sync::Arc;
 use ariadne::Fmt;
 use mlua::LuaSerdeExt;
 use regex::Regex;
+use serde_json::json;
 
+use crate::lsp::conceal::ConcealTarget;
 use crate::lua::wrappers::*;
 use crate::lua::kernel::Kernel;
 use crate::parser::property::Property;
@@ -247,6 +249,33 @@ impl Rule for ListRule {
 				BulletMarker::Bullet
 			};
 
+			// Add conceal
+			unit.with_lsp(|lsp| {
+				let markers = captures.get(1).unwrap();
+				for (idx, marker) in markers.as_str().char_indices()
+				{
+					let token = Token::new(markers.start() + idx .. markers.start() + idx + 1, cursor.source());
+					match marker {
+						'*' => lsp.add_conceal(token, ConcealTarget::Token {
+							token: "bullet".into(),
+							params: json!({
+								"depth": idx,
+								"numbered": false,
+							}),
+						}),
+						'-' => lsp.add_conceal(token, ConcealTarget::Token {
+							token: "bullet".into(),
+							params: json!({
+								"depth": idx,
+								"numbered": true,
+							}),
+						}),
+
+						
+						_ => panic!("")
+					}
+				}
+			});
 			/*
 			if let Some(conceals) =
 				Conceals::from_source(cursor.source.clone(), &state.shared.lsp)

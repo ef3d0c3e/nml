@@ -12,8 +12,6 @@ use std::cmp;
 use std::env::current_dir;
 use std::fs::read;
 use std::path::PathBuf;
-use std::process::ChildStdin;
-use std::process::ChildStdout;
 use std::sync::Arc;
 
 use cache::cache::Cache;
@@ -30,7 +28,6 @@ use parser::reports::Report;
 use parser::source::LineCursor;
 use parser::source::Source;
 use parser::source::SourceFile;
-use tokio::sync::mpsc;
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;

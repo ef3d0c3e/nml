@@ -1,5 +1,3 @@
-use std::cell::Ref;
-use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -54,18 +52,18 @@ pub struct ConcealData {
 
 /// Temporary data returned by [`Self::from_source_impl`]
 #[derive(Debug)]
-pub struct Conceals<'a> {
-	pub(self) conceals: Ref<'a, ConcealData>,
+pub struct Conceal<'lsp> {
+	conceals: &'lsp ConcealData,
 	// The source used when resolving the parent source
-	pub(self) original_source: Arc<dyn Source>,
+	original_source: Arc<dyn Source>,
 	/// The resolved parent source
-	pub(self) source: Arc<dyn Source>,
+	source: Arc<dyn Source>,
 }
 
-impl<'a> Conceals<'a> {
+impl<'lsp> Conceal<'lsp> {
 	fn from_source_impl(
 		source: Arc<dyn Source>,
-		lsp: &'a Option<RefCell<LangServerData>>,
+		lsp: &'lsp LangServerData,
 		original_source: Arc<dyn Source>,
 	) -> Option<Self> {
 		if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
@@ -82,11 +80,7 @@ impl<'a> Conceals<'a> {
 		{
 			return Self::from_source_impl(location.source(), lsp, original_source);
 		} else if source.downcast_ref::<SourceFile>().is_some() {
-			return Ref::filter_map(lsp.as_ref().unwrap().borrow(), |lsp: &LangServerData| {
-				lsp.conceals.get(&(source.clone()))
-			})
-			.ok()
-			.map(|conceals| Self {
+			return lsp.conceals.get(&source).map(|conceals| Self {
 				conceals,
 				source,
 				original_source,
@@ -95,18 +89,11 @@ impl<'a> Conceals<'a> {
 		None
 	}
 
-	pub fn from_source(
-		source: Arc<dyn Source>,
-		lsp: &'a Option<RefCell<LangServerData>>,
-	) -> Option<Self> {
-		if lsp.is_none() {
-			return None;
-		}
+	pub fn from_source(source: Arc<dyn Source>, lsp: &'lsp LangServerData) -> Option<Self> {
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
 	pub fn add(&self, range: Range<usize>, text: ConcealTarget) {
-		let range = self.original_source.original_range(range.clone()).range;
 		let mut cursor = LineCursor::new(self.source.clone(), OffsetEncoding::Utf8);
 
 		cursor.move_to(range.start);

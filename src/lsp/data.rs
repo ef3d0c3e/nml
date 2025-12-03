@@ -7,6 +7,9 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tower_lsp::lsp_types::Diagnostic;
 
+use crate::lsp::conceal::Conceal;
+use crate::lsp::conceal::ConcealInfo;
+use crate::lsp::conceal::ConcealTarget;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
 use crate::parser::source::SourcePosition;
@@ -140,10 +143,24 @@ impl LangServerData {
 			content,
 		});
 	}
-	
-	pub fn add_range<'lsp>(&'lsp self, source: Arc<dyn Source>, range: std::ops::Range<usize>, data: CustomRange)
-	{
-		let Some(r) = Range::from_source(source.clone(), self) else { return };
+
+	pub fn add_conceal<'lsp>(&'lsp self, range: Token, conceal: ConcealTarget) {
+		let Some(con) = Conceal::from_source(range.source(), self) else {
+			return;
+		};
+		let original = range.source().original_range(range.range);
+		con.add(original.range, conceal);
+	}
+
+	pub fn add_range<'lsp>(
+		&'lsp self,
+		source: Arc<dyn Source>,
+		range: std::ops::Range<usize>,
+		data: CustomRange,
+	) {
+		let Some(r) = Range::from_source(source.clone(), self) else {
+			return;
+		};
 		let original = source.original_range(range);
 		r.add(original.range, data);
 	}
