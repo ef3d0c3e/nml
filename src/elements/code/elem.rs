@@ -92,12 +92,12 @@ impl Code {
 			}
 			result += "</code>";
 		} else {
-			result += "<div class=\"code-block\">";
+			result += "<figure class=\"code-block\">";
 			// Output title if some
 			if let Some(title) = self.display.title.as_ref() {
 				if !title.is_empty() {
 					result += format!(
-						"<div class=\"code-block-title\">{}</div>",
+						"<figcaption class=\"code-block-title\">{}</figcaption>",
 						sanitizer.sanitize(title.as_str())
 					)
 					.as_str();
@@ -143,7 +143,7 @@ impl Code {
 					}
 				}
 			}
-			result += "</code></pre></div>";
+			result += "</code></pre></figure>";
 		}
 		Ok(result)
 	}
