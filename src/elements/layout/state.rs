@@ -6,6 +6,9 @@ use ariadne::Fmt;
 use ariadne::Span;
 use parking_lot::RwLock;
 
+use crate::compiler::compiler::Compiler;
+use crate::compiler::output::CompilerOutput;
+use crate::elements::layout::elem::LayoutToken;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::source::Token;
@@ -16,14 +19,27 @@ use crate::unit::translation::TranslationUnit;
 pub trait Layout: core::fmt::Debug {
 	fn name(&self) -> &str;
 	fn expects(&self) -> Range<usize>;
-	fn parse_properties(&self, unit: &mut TranslationUnit, token: Token) -> Option<Box<dyn Any>>;
+	fn parse_properties(
+		&self,
+		unit: &mut TranslationUnit,
+		token: Token,
+	) -> Option<Box<dyn Any + Send + Sync>>;
+	fn compile(
+		&self,
+		scope: Arc<RwLock<Scope>>,
+		compiler: &Compiler,
+		output: &mut CompilerOutput,
+		id: usize,
+		token: LayoutToken,
+		params: &Option<Box<dyn Any + Send + Sync>>,
+	) -> Result<(), Vec<Report>>;
 }
 
 pub static LAYOUT_STATE: &str = "nml.layout.state";
 
 #[derive(Debug, Default)]
 pub struct LayoutState {
-	pub(crate) state: Vec<(Arc<dyn Layout + Send + Sync>, Token, usize)>
+	pub(crate) state: Vec<(Arc<dyn Layout + Send + Sync>, Token, usize)>,
 }
 
 impl CustomState for LayoutState {
@@ -35,7 +51,9 @@ impl CustomState for LayoutState {
 		&mut self,
 		_unit: &mut TranslationUnit,
 		_scope: Arc<RwLock<Scope>>,
-	) -> Vec<Report> { vec![] }
+	) -> Vec<Report> {
+		vec![]
+	}
 
 	fn on_document_end(
 		&mut self,
@@ -51,12 +69,19 @@ impl CustomState for LayoutState {
 				"Unterminated Layout".into(),
 				span(
 					location.range.clone(),
-					format!("Layout {} starts here", layout.name().fg(unit.colors().info))
+					format!(
+						"Layout {} starts here",
+						layout.name().fg(unit.colors().info)
+					)
 				),
 				span(
 					scope_token.range.end()..scope_token.range.end(),
 					"Docment ends here".into()
-				)
+				),
+				help(format!(
+					"Insert `{}` before the document end",
+					":layout end".fg(unit.colors().highlight)
+				))
 			));
 		});
 
