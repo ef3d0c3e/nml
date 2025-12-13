@@ -4,6 +4,8 @@ body {
 	font-family: sans-serif;
 	margin: 0;
 	padding: 0;
+	max-width: 99ch;
+	margin: auto;
 }
 
 
@@ -18,19 +20,21 @@ body {
 }
 
 .code-block pre {
+	--line-height: 1.25em;
 	margin: 0;
-	line-height: 1.25em;
+	line-height: var(--line-height);
 	overflow-x: auto;
 }
 
-.code-block div.code-block-title {
+.code-block figcaption.code-block-title {
 	background-color: #20202a;
 	padding-left: .3em;
 	margin: 0;
+	font-size: 1.2em;
 }
 
 .code-block pre code {
-	max-height: 38em;
+	max-height: calc(38 * var(--line-height));
 	margin-bottom: 0.2em;
 	overflow: auto;
 	background-color: #0f141a;
@@ -58,7 +62,7 @@ body {
 	user-select: none;
 }
 
-pre.inline-code {
+code.inline-code {
 	display: inline-block;
 	margin: 0;
 	padding: 0.2em 0.4em;
@@ -67,4 +71,36 @@ pre.inline-code {
 	white-space: pre;
 	border-radius: 0.2em;
 	vertical-align: baseline;
+}
+
+/*** Styles ***/
+em {
+	border-radius: 4px;
+	border: 1px solid #444446;
+	background-color: #25242a;
+	font-family: monospace;
+	font-style: normal;
+}
+
+/*** Media ***/
+.media {
+	margin-top: .8em;
+	margin-bottom: .8em;
+}
+
+p.media-refname {
+	color: #af2f5f;
+	font-weight: bold;
+}
+
+.media p {
+	width: 80%;
+	margin: auto;
+	text-align: center;
+}
+
+.media-description {
+	margin-left: 2em;
+	margin-right: 2em;
+	text-align: center;
 }
