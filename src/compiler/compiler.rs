@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
+use rand::Rng;
 
 use crate::cache::cache::Cache;
 use crate::parser::reports::Report;
@@ -158,6 +159,17 @@ impl Compiler {
 
 	pub fn get_cache(&self) -> Arc<Cache> {
 		self.cache.clone()
+	}
+
+	pub fn random_id(&self) -> String {
+		const SET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+		let mut rng = rand::thread_rng();
+		
+		(0..16).map(|_| {
+			let idx = rng.gen_range(0..SET.len());
+			SET[idx] as char
+		})
+		.collect()
 	}
 }
 

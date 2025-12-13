@@ -162,6 +162,9 @@ pub struct Tokens {
 	pub media_refname: (u32, u32),
 	pub media_url: (u32, u32),
 
+	pub layout_type: (u32, u32),
+	pub layout_opts: (u32, u32),
+
 	pub comment: (u32, u32),
 }
 
@@ -234,6 +237,9 @@ impl Default for Tokens {
 			media_prop_sep: token!("macro"),
 			media_refname: token!("parameter"),
 			media_url: token!("function", "readonly", "abstract", "abstract"),
+
+			layout_type: token!("constructor", "async"),
+			layout_opts: token!("number"),
 
 			comment: token!("comment"),
 		}

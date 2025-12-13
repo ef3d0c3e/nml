@@ -23,6 +23,7 @@ pub trait Layout: core::fmt::Debug {
 		&self,
 		unit: &mut TranslationUnit,
 		token: Token,
+		id: usize,
 	) -> Option<Box<dyn Any + Send + Sync>>;
 	fn compile(
 		&self,

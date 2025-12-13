@@ -32,7 +32,7 @@ pub struct LayoutRule {
 impl Default for LayoutRule {
 	fn default() -> Self {
 		Self {
-			re: [Regex::new(r"(?:^|\n):layout(?:[^\S\r\n]+(\w+)(?:[^\S\r\n]+(.*))?)?").unwrap()],
+			re: [Regex::new(r"(?:^|\n)(:layout)(?:[^\S\r\n]+(\w+)(?:[^\S\r\n]+(.*))?)?").unwrap()],
 		}
 	}
 }
@@ -78,7 +78,7 @@ impl RegexRule for LayoutRule {
 			unit.new_data(Arc::new(RwLock::new(LayoutData::default())));
 		}
 
-		let Some(command) = captures.get(1) else {
+		let Some(command) = captures.get(2) else {
 			report_err!(
 				unit,
 				token.source(),
@@ -87,7 +87,17 @@ impl RegexRule for LayoutRule {
 			);
 			return;
 		};
-		let opts = captures.get(2);
+		let opts = captures.get(3);
+
+		unit.with_lsp(|lsp| lsp.with_semantics(token.source(),|sems, tokens| {
+			let cmd = captures.get(1).unwrap();
+			sems.add(cmd.range(), tokens.command);
+			sems.add(command.range(), tokens.layout_type);
+			if let Some(opts) = opts
+			{
+				sems.add(opts.range(), tokens.layout_opts);
+			}
+		}));
 
 		let data = unit.get_data(LAYOUT_CUSTOM);
 		let mut lock = data.write();
@@ -182,7 +192,7 @@ impl RegexRule for LayoutRule {
 				Some(opts) => Token::new(opts.range(), token.source()),
 				None => Token::new(token.range.end..token.range.end, token.source()),
 			};
-			let Some(result) = layout.0.parse_properties(unit, opts_token) else {
+			let Some(result) = layout.0.parse_properties(unit, opts_token, layout.2) else {
 				return;
 			};
 			unit.get_scope()
@@ -222,7 +232,7 @@ impl RegexRule for LayoutRule {
 			Some(opts) => Token::new(opts.range(), token.source()),
 			None => Token::new(token.range.end..token.range.end, token.source()),
 		};
-		let Some(result) = layout.parse_properties(unit, opts_token) else {
+		let Some(result) = layout.parse_properties(unit, opts_token, 0) else {
 			return;
 		};
 		unit.get_scope()

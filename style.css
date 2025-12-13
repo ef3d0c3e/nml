@@ -104,3 +104,34 @@ p.media-refname {
 	margin-right: 2em;
 	text-align: center;
 }
+
+/*** Spoiler ***/
+.spoiler-container {
+	margin-top: .4em;
+	margin-bottom: .4em;
+}
+
+.spoiler-toggle {
+	display: none;
+}
+
+.spoiler-toggle:checked + .spoiler-label + .spoiler-content {
+	max-height: 100%;
+}
+
+.spoiler-label {
+	cursor: pointer;
+	background-color: #444;
+	padding: 4px 8px;
+	border-radius: 2px;
+	display: inline-block;
+}
+
+.spoiler-content {
+	max-height: 0;
+	overflow: hidden;
+	transition: max-height 0.3s ease, padding 0.3s ease;
+	background-color: #222;
+	padding: 0 10px;
+	border-left: 4px solid #D8C;
+}
