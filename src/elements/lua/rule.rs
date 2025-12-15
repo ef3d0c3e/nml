@@ -182,19 +182,31 @@ impl Rule for LuaRule {
 		// Evaluate
 		LuaData::initialize(unit);
 		LuaData::with_kernel(unit, &kernel_name, |unit, kernel| {
-			let ctx = KernelContext::new(lua_source.clone().into(), &*kernel, unit);
-			if let Err(err) = kernel.run_with_context(ctx, |lua| {
-				lua.load(lua_source.content())
-					.set_name(lua_source.name().display().to_string())
-					.exec()
-			}) {
-				report_err!(
-					unit,
-					lua_range.source(),
-					"Lua error".into(),
-					span(lua_range.range.clone(), err.to_string())
-				);
-			}
+			let scope = unit.with_child(
+				lua_source.clone(),
+				ParseMode::default(),
+				true,
+				|unit, scope| {
+					let ctx = KernelContext::new(lua_source.clone().into(), &*kernel, unit);
+					if let Err(err) = kernel.run_with_context(ctx, |lua| {
+						lua.load(lua_source.content())
+							.set_name(lua_source.name().display().to_string())
+							.exec()
+					}) {
+						report_err!(
+							unit,
+							lua_range.source(),
+							"Lua error".into(),
+							span(lua_range.range.clone(), err.to_string())
+						);
+					}
+					scope
+				},
+			);
+			unit.add_content_raw(Arc::new(ScopeElement {
+				token: lua_range.clone(),
+				scope,
+			}));
 		});
 
 		unit.with_lsp(|lsp| {
