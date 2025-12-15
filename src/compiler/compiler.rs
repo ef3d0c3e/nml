@@ -105,7 +105,7 @@ impl Compiler {
 		output
 	}
 
-	fn header(&self, unit: &TranslationUnit) -> String {
+	fn header(&self, mut output: CompilerOutput, unit: &TranslationUnit) -> CompilerOutput {
 		let settings = unit.get_settings();
 
 		match self.target {
@@ -113,48 +113,58 @@ impl Compiler {
 				let ProjectOutput::Html(html) = &settings.output else {
 					panic!("Invalid project settings")
 				};
-				let css = if let Some(css) = &html.css {
+				let css = if let Some(css) =&html.css {
+					let path = output.local_path(css);
 					format!(
 						"<link rel=\"stylesheet\" href=\"{}\">",
-						self.sanitize(&css.display().to_string())
+						self.sanitize(&path)
 					)
 				} else {
 					"".into()
 				};
 				let icon = if let Some(icon) = &html.icon {
+					let path = output.local_path(icon);
 					format!(
 						"<link rel=\"icon\" href=\"{}\">",
-						self.sanitize(&icon.display().to_string())
+						self.sanitize(&path)
 					)
 				} else {
 					"".into()
 				};
-				format!(
+				output.add_content(&format!(
 					"<!DOCTYPE html><html lang=\"{}\"><head><meta charset=\"utf-8\">{icon}{css}</head><body>",
 					self.sanitize(html.language.as_str())
-				)
+				));
 			}
 			_ => todo!(),
 		}
+		output
 	}
 
-	fn footer(&self, unit: &TranslationUnit) -> String {
-		let settings = unit.get_settings();
-
+	fn footer(&self, mut output: CompilerOutput, _unit: &TranslationUnit) -> CompilerOutput {
 		match self.target {
-			Target::HTML => "</body></html>".into(),
+			Target::HTML => output.add_content("</body></html>"),
 			_ => todo!(),
 		}
+		output
 	}
 
 	/// Compiles a document to it's output
 	pub fn compile(&self, unit: &TranslationUnit) -> Result<String, Vec<Report>> {
-		let body = CompilerOutput::run_with_processor(self.target, &unit.colors(), unit.input_path().clone(), unit.output_path().cloned(), |output| {
-			self.compile_scope(output, unit.get_entry_scope().to_owned())
-		})?;
+		let output = CompilerOutput::run_with_processor(
+			self.target,
+			&unit.colors(),
+			unit.input_path().clone(),
+			unit.output_path().cloned(),
+			|output| {
+				let mut output = self.header(output, unit);
+				output = self.compile_scope(output, unit.get_entry_scope().to_owned());
+				output = self.footer(output, unit);
+				output
+			},
+		)?;
 
-		let output = format!("{}<main><article>{}</article></main>{}", self.header(unit), body.content(), self.footer(unit));
-		Ok(output)
+		Ok(output.content().into())
 	}
 
 	pub fn get_cache(&self) -> Arc<Cache> {
@@ -164,12 +174,13 @@ impl Compiler {
 	pub fn random_id(&self) -> String {
 		const SET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
 		let mut rng = rand::thread_rng();
-		
-		(0..16).map(|_| {
-			let idx = rng.gen_range(0..SET.len());
-			SET[idx] as char
-		})
-		.collect()
+
+		(0..16)
+			.map(|_| {
+				let idx = rng.gen_range(0..SET.len());
+				SET[idx] as char
+			})
+			.collect()
 	}
 }
 

@@ -21,6 +21,7 @@ use ariadne::Color;
 use ariadne::Fmt;
 use parking_lot::RwLock;
 use tokio::task::JoinHandle;
+use url::Url;
 
 use crate::make_err;
 use crate::parser::reports::Report;
@@ -253,5 +254,38 @@ impl CompilerOutput {
 			self.refcount.insert(key.to_owned(), 1);
 			1
 		}
+	}
+
+	/// Get the path of a path in the output space
+	pub fn local_path(&self, path: &Path) -> String
+	{
+		let mut base = self
+			.output_path
+			.clone()
+			.unwrap_or(self.input_path.clone());
+		base.pop();
+		let base_clone = base.clone();
+		base.push(path);
+		base = pathdiff::diff_paths(base, base_clone).unwrap();
+		base.display().to_string()
+	}
+
+	/// Get the path of an url in the output space
+	pub fn local_path_url(&self, path: &Url) -> String
+	{
+		let mut base = self
+			.output_path
+			.clone()
+			.unwrap_or(self.input_path.clone());
+		base.pop();
+		let base_clone = base.clone();
+		if let Some(domain) = path.host_str() {
+			let rel = format!("{domain}{}", path.path());
+			base.push(rel);
+		} else {
+			base.push(path.path());
+		}
+		base = pathdiff::diff_paths(base, base_clone).unwrap();
+		base.display().to_string()
 	}
 }

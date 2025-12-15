@@ -166,22 +166,7 @@ impl Element for Media {
 					r#" style="width:100%""#.into()
 				};
 				let url = match self.url.scheme() {
-					"output" => {
-						let mut base = output
-							.output_path
-							.clone()
-							.unwrap_or(output.input_path.clone());
-						base.pop();
-						let base_clone = base.clone();
-						if let Some(domain) = self.url.host_str() {
-							let rel = format!("{domain}{}", self.url.path());
-							base.push(rel);
-						} else {
-							base.push(self.url.path());
-						}
-						base = diff_paths(base, base_clone).unwrap();
-						base.display().to_string()
-					}
+					"output" => output.local_path_url(&self.url),
 					"file" => self.url.path().to_string(),
 					_ => self.url.to_string(),
 				};
