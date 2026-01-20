@@ -46,6 +46,7 @@ pathdiff = "0.2.3"
 toml = "0.8.22"
 parking_lot = "0.12.4"
 anyhow = "1.0.98"
+rand = "0.8.5"
 
 [dev-dependencies]
 rand = "0.8.5"

@@ -139,7 +139,7 @@ pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 				let r: &'static _ = unsafe { &*Arc::as_ptr(&this.#name) };
 				Ok(lua.create_userdata(r).unwrap())
 			},
-			Some(ValueMapper::Value) => quote! { lua.to_value(&this.#name) },
+			Some(ValueMapper::Value) => quote! { mlua::LuaSerdeExt::to_value(lua, &this.#name) },
 			_ => quote! { Ok(this.#name.clone()) },
 		};
 
