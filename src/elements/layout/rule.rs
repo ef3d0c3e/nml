@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use ariadne::Fmt;
-use graphviz_rust::cmd::Layout;
 use parking_lot::RwLock;
 use regex::Regex;
 
@@ -153,7 +152,7 @@ impl RegexRule for LayoutRule {
 		if command.as_str() == "next" {
 			let Some(layout) = unit
 				.get_scope()
-				.with_state::<LayoutState, _, _>(LAYOUT_STATE, |mut state| {
+				.with_state::<LayoutState, _, _>(LAYOUT_STATE, |state| {
 					state.state.last().cloned()
 				})
 			else {

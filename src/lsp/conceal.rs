@@ -11,7 +11,6 @@ use crate::parser::source::LineCursor;
 use crate::parser::source::OffsetEncoding;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
-use crate::parser::source::SourcePosition;
 use crate::parser::source::VirtualSource;
 
 use super::data::LangServerData;

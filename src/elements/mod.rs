@@ -17,3 +17,4 @@ pub mod lua;
 pub mod meta;
 pub mod variable;
 pub mod media;
+pub mod typst;

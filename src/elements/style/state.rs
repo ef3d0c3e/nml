@@ -4,7 +4,6 @@ use std::sync::Arc;
 use ariadne::Fmt;
 use ariadne::Span;
 use auto_userdata::AutoUserData;
-use mlua::UserData;
 use parking_lot::RwLock;
 use regex::Regex;
 

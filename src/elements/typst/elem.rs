@@ -1,3 +1,6 @@
+use core::hash;
+use mlua::AnyUserData;
+use mlua::Lua;
 use std::fmt::Display;
 use std::io::Read;
 use std::io::Write;
@@ -6,8 +9,6 @@ use std::process::Stdio;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Once;
-use mlua::AnyUserData;
-use mlua::Lua;
 
 use ariadne::Span;
 use auto_userdata::AutoUserData;
@@ -38,37 +39,37 @@ use crate::unit::variable::VariableName;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
-pub enum TexKind {
+pub enum TypstKind {
 	Block,
 	Inline,
 }
 
-impl From<TexKind> for ElemKind {
-	fn from(value: TexKind) -> Self {
+impl From<TypstKind> for ElemKind {
+	fn from(value: TypstKind) -> Self {
 		match value {
-			TexKind::Block => ElemKind::Block,
-			TexKind::Inline => ElemKind::Inline,
+			TypstKind::Block => ElemKind::Block,
+			TypstKind::Inline => ElemKind::Inline,
 		}
 	}
 }
 
-impl FromStr for TexKind {
+impl FromStr for TypstKind {
 	type Err = String;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s {
-			"inline" => Ok(TexKind::Inline),
-			"block" => Ok(TexKind::Block),
+			"inline" => Ok(TypstKind::Inline),
+			"block" => Ok(TypstKind::Block),
 			_ => Err(format!("Unknown kind: {s}")),
 		}
 	}
 }
 
-impl Display for TexKind {
+impl Display for TypstKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			TexKind::Block => write!(f, "Block"),
-			TexKind::Inline => write!(f, "Inline"),
+			TypstKind::Block => write!(f, "Block"),
+			TypstKind::Inline => write!(f, "Inline"),
 		}
 	}
 }
@@ -77,34 +78,35 @@ impl Display for TexKind {
 #[auto_userdata_target = "*"]
 #[auto_userdata_target = "&"]
 #[auto_userdata_target = "&mut"]
-pub struct Latex {
+pub struct Typst {
 	pub(crate) location: Token,
 	pub(crate) mathmode: bool,
 	#[lua_value]
-	pub(crate) kind: TexKind,
+	pub(crate) kind: TypstKind,
 	pub(crate) env: String,
-	pub(crate) tex: String,
+	pub(crate) typ: String,
 	pub(crate) caption: Option<String>,
 }
 
-struct FormattedTex(String);
+struct FormattedTyp(String);
 
-impl Cached for FormattedTex {
+impl Cached for FormattedTyp {
 	type Key = String;
 	type Value = String;
 
 	fn sql_table() -> &'static str {
-		"CREATE TABLE IF NOT EXISTS cached_latex (
-				digest TEXT PRIMARY KEY,
-				svg    BLOB NOT NULL);"
+		"CREATE TABLE IF NOT EXISTS cached_typst(
+			digest TEXT PRIMARY KEY,
+			svg BLOB NOT NULL
+		)"
 	}
 
 	fn sql_get_query() -> &'static str {
-		"SELECT svg FROM cached_latex WHERE digest = (?1)"
+		"SELECT svg FROM cached_typst WHERE digest = (?1)"
 	}
 
 	fn sql_insert_query() -> &'static str {
-		"INSERT INTO cached_latex (digest, svg) VALUES (?1, ?2)"
+		"INSERT INTO cached_typst (digest, svg) VALUES (?1, ?2)"
 	}
 
 	fn key(&self) -> <Self as Cached>::Key {
@@ -114,43 +116,42 @@ impl Cached for FormattedTex {
 	}
 }
 
-fn format_latex(_fontsize: &str, preamble: &str, tex: &str) -> FormattedTex {
-	FormattedTex(format!(
-		r"\documentclass[preview]{{standalone}}
+fn format_typst(fontsize: &str, preamble: &str, typ: &str) -> FormattedTyp {
+	FormattedTyp(format!(
+		r"#set page(width: auto, height: auto, margin: 0pt, background: none)
+#set text(size: {fontsize})
 {preamble}
-\begin{{document}}
-\begin{{preview}}
-{tex}
-\end{{preview}}
-\end{{document}}"
+{typ}"
 	))
 }
 
-fn latex_to_svg(tex: &FormattedTex, exec: &String, fontsize: &String) -> Result<String, String> {
+fn typst_to_svg(typ: &FormattedTyp, exec: &String) -> Result<String, String> {
 	let process = match Command::new(exec)
-		.arg("--fontsize")
-		.arg(fontsize)
+		.arg("compile")
+		.arg("--format")
+		.arg("svg")
+		.arg("-")
+		.arg("-")
 		.stdout(Stdio::piped())
 		.stdin(Stdio::piped())
 		.spawn()
 	{
 		Err(e) => return Err(format!("Could not spawn `{exec}`: {}", e)),
-		Ok(process) => process,
+		Ok(proc) => proc,
 	};
-
-	if let Err(e) = process.stdin.unwrap().write_all(tex.0.as_bytes()) {
-		panic!("Unable to write to `latex2svg`'s stdin: {}", e);
+	if let Err(e) = process.stdin.unwrap().write_all(typ.0.as_bytes()) {
+		panic!("Unable to write to typst's stdin: {e}");
 	}
 
 	let mut result = String::new();
 	if let Err(e) = process.stdout.unwrap().read_to_string(&mut result) {
-		panic!("Unable to read `latex2svg` stdout: {}", e)
+		panic!("Unable to read typst's stdout: {e}");
 	}
 
 	Ok(result)
 }
 
-impl Element for Latex {
+impl Element for Typst {
 	fn location(&self) -> &Token {
 		&self.location
 	}
@@ -160,13 +161,13 @@ impl Element for Latex {
 	}
 
 	fn element_name(&self) -> &'static str {
-		"Latex"
+		"Typst"
 	}
 
-	fn compile<'e>(
-		&'e self,
+	fn compile(
+		&self,
 		scope: Arc<RwLock<Scope>>,
-		compiler: &'e Compiler,
+		compiler: &Compiler,
 		output: &mut CompilerOutput,
 	) -> Result<(), Vec<Report>> {
 		match compiler.target() {
@@ -178,32 +179,32 @@ impl Element for Latex {
 					let con = tokio::runtime::Runtime::new()
 						.unwrap()
 						.block_on(cache.get_connection());
-					if let Err(e) = FormattedTex::init(&con) {
+					if let Err(e) = FormattedTyp::init(&con) {
 						eprintln!("Unable to create cache table: {e}");
 					}
 				});
 
 				let exec = scope
-					.get_variable(&VariableName(format!("latex.{}.exec", self.env)))
-					.map_or("latex2svg".to_string(), |(var, _)| var.to_string());
+					.get_variable(&VariableName(format!("typst.{}.exec", self.env)))
+					.map_or("typst".to_string(), |(var, _)| var.to_string());
 				let fontsize = scope
-					.get_variable(&VariableName(format!("latex.{}.fontsize", self.env)))
-					.map_or("12".to_string(), |(var, _)| var.to_string());
+					.get_variable(&VariableName(format!("typst.{}.fontsize", self.env)))
+					.map_or("12pt".to_string(), |(var, _)| var.to_string());
 				let preamble = scope
-					.get_variable(&VariableName(format!("latex.{}.preamble", self.env)))
+					.get_variable(&VariableName(format!("typst.{}.preamble", self.env)))
 					.map_or("".to_string(), |(var, _)| var.to_string());
 				let prepend = if self.mathmode {
 					"".to_string()
 				} else {
 					scope
-						.get_variable(&VariableName(format!("tex.{}.block_prepend", self.env)))
+						.get_variable(&VariableName(format!("typst.{}.block_prepend", self.env)))
 						.map_or("".to_string(), |(var, _)| var.to_string() + "\n")
 				};
 
-				let latex = if self.mathmode {
-					format_latex(&fontsize, &preamble, &format!("${{{}}}$", self.tex))
+				let typst = if self.mathmode {
+					format_typst(&fontsize, &preamble, &format!("${}$", self.typ))
 				} else {
-					format_latex(&fontsize, &preamble, &format!("{prepend}{}", self.tex))
+					format_typst(&fontsize, &preamble, &format!("{prepend}{}", self.typ))
 				};
 
 				let sanitizer = compiler.sanitizer();
@@ -212,20 +213,20 @@ impl Element for Latex {
 				let cache = compiler.get_cache();
 				let fut = async move {
 					let con = cache.get_connection().await;
-					let mut result = match latex.cached(&con, |s| latex_to_svg(s, &exec, &fontsize))
+					let mut result = match typst.cached(&con, |s| typst_to_svg(s, &exec))
 					{
 						Ok(s) => s,
 						Err(CachedError::SqlErr(e)) => {
 							return Err(compile_err!(
 								location,
-								"Failed to process LaTeX element".to_string(),
+								"Failed to process Typst element".to_string(),
 								format!("Querying the cache failed: {e}")
 							))
 						}
 						Err(CachedError::GenErr(e)) => {
 							return Err(compile_err!(
 								location,
-								"Failed to process LaTeX element".to_string(),
+								"Failed to process Typst element".to_string(),
 								e
 							))
 						}
@@ -240,7 +241,7 @@ impl Element for Latex {
 					}
 					Ok(result)
 				};
-				output.add_task(self.location.clone(), "Latex".into(), Box::pin(fut));
+				output.add_task(self.location.clone(), "Typst".into(), Box::pin(fut));
 			}
 			_ => todo!(),
 		}
@@ -249,7 +250,7 @@ impl Element for Latex {
 
 	fn provide_hover(&self) -> Option<String> {
 		Some(format!(
-			"LaTeX
+			"Typst
 
 # Properties
  * **Location**: [{}] ({}..{})
@@ -265,16 +266,6 @@ impl Element for Latex {
 			self.env,
 			self.caption.as_ref().unwrap_or(&"*<none>*".to_string())
 		))
-	}
-
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		None
-	}
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
-		None
-	}
-	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
-		None
 	}
 
 	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {

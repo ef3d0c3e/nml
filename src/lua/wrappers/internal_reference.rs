@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use graphviz_rust::print;
 use mlua::UserData;
 use mlua::Value;
 
@@ -13,7 +12,7 @@ use crate::unit::references::Refname;
 
 impl UserData for InternalReferenceWrapper {
 	fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
-	    fields.add_field_method_set("foo", |lua, this, value: mlua::Value| {
+	    fields.add_field_method_set("foo", |_lua, _this, _value: mlua::Value| {
 			Ok(())
 		});
 	}

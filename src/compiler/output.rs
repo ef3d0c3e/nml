@@ -15,7 +15,6 @@ use std::time::Instant;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::unit::element::ReferenceableElement;
-use crate::unit::translation::UnitOutput;
 
 use ariadne::Color;
 use ariadne::Fmt;
@@ -90,7 +89,7 @@ impl CompilerOutput {
 	/// The result of async taks will be inserted into the output
 	pub fn run_with_processor<F>(
 		target: Target,
-		colors: &ReportColors,
+		_colors: &ReportColors,
 		input_path: PathBuf,
 		output_path: Option<PathBuf>,
 		f: F,

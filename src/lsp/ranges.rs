@@ -61,7 +61,7 @@ impl<'lsp> Range<'lsp> {
 		Self::from_source_impl(source.clone(), lsp, source)
 	}
 
-	pub fn add(&'lsp self, range: std::ops::Range<usize>, data: CustomRange) {
+	pub fn add(&'lsp self, range: std::ops::Range<usize>, _data: CustomRange) {
 		self.ranges.lua.write().push(range);
 	}
 }

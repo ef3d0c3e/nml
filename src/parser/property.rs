@@ -4,7 +4,6 @@ use std::ops::Range;
 
 use ariadne::Fmt;
 
-use crate::elements::anchor::rule;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::util::escape_source;

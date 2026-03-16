@@ -133,8 +133,8 @@ impl ProcessQueue {
 		options: ProcessOptions,
 	) -> Result<Vec<()>, ProcessError> {
 		match &output {
-			ProcessOutputOptions::Directory(dir) => {}
-			ProcessOutputOptions::File(file) => {
+			ProcessOutputOptions::Directory(_dir) => {}
+			ProcessOutputOptions::File(_file) => {
 				if self.inputs.len() > 1 {
 					Err(ProcessError::GeneralError("Single file specified with multiple inputs. Please specify a directory instead".into()))?
 				}
@@ -213,7 +213,7 @@ impl ProcessQueue {
 					buf.push(basename);
 					buf
 				}
-				ProcessOutputOptions::File(file) => {
+				ProcessOutputOptions::File(_file) => {
 					let Some(mut basename) = local_path.file_stem().map(|str| str.to_os_string())
 					else {
 						Err(ProcessError::InputError(

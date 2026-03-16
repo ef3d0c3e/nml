@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;

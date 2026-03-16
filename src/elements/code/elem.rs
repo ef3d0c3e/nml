@@ -3,7 +3,6 @@ use std::sync::Arc;
 use auto_userdata::AutoUserData;
 use mlua::AnyUserData;
 use mlua::Lua;
-use mlua::LuaSerdeExt;
 use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;

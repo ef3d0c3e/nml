@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
 use auto_userdata::AutoUserData;
-use graphviz_rust::print;
-use mlua::serde::LuaSerdeExt;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
@@ -96,7 +94,7 @@ impl Element for List {
 	) -> Result<(), Vec<Report>> {
 		let mut stack /* Vec<(Numbered?, Gap, Index)> */ = vec![];
 
-		let mut match_stack = |stack: &mut Vec<(bool, usize)>,
+		let match_stack = |stack: &mut Vec<(bool, usize)>,
 		                       target: &Vec<ListMarker>,
 		                       output: &mut CompilerOutput| {
 			// Find first diff index

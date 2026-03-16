@@ -139,8 +139,8 @@ pub fn get_lua_docs() {
 		for m in &doc.methods {
 			// doc comment
 			buf += &format!("--- {}\n", m.doc);
-			let mut args = String::default();
-			let mut args_doc = String::default();
+			let _args = String::default();
+			let _args_doc = String::default();
 			let (args_doc, args) = document_args(&m.args);
 			buf += args_doc.as_str();
 			// @return if any

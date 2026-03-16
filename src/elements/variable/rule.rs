@@ -26,6 +26,7 @@ use parser::state::ParseMode;
 use regex::Captures;
 use regex::Regex;
 use std::any::Any;
+use std::ops::Range;
 use std::sync::Arc;
 
 use super::completion::VariableCompletion;
@@ -84,7 +85,7 @@ impl Rule for VariableRule {
 		mode: &ParseMode,
 		_states: &mut CustomStates,
 		cursor: &Cursor,
-	) -> Option<(usize, Box<dyn Any + Send + Sync>)> {
+	) -> Option<(Range<usize>, Box<dyn Any + Send + Sync>)> {
 		if mode.paragraph_only {
 			return None;
 		}
@@ -93,7 +94,7 @@ impl Rule for VariableRule {
 			.find_at(cursor.source().content(), cursor.pos())
 			.map(|m| {
 				(
-					m.start(),
+					m.range(),
 					Box::new([false; 0]) as Box<dyn Any + Send + Sync>,
 				)
 			})

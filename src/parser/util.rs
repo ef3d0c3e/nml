@@ -264,7 +264,7 @@ pub fn parse_paragraph(
 
 			// Iterate over parsed content
 			let mut iter = scope.content_iter(true);
-			while let Some(elem) = iter.next() {
+			while let Some(_elem) = iter.next() {
 				// TODO
 			}
 

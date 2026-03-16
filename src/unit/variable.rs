@@ -1,14 +1,10 @@
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
-use mlua::UserData;
 use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::compiler::compiler::Compiler;
-use crate::compiler::output::CompilerOutput;
 use crate::elements::text::elem::Text;
-use crate::elements::variable::elem::VariableSubstitution;
 use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
@@ -16,11 +12,7 @@ use crate::parser::state::ParseMode;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::element::ContainerElement;
-use super::element::ElemKind;
 use super::element::Element;
-use super::element::LinkableElement;
-use super::element::ReferenceableElement;
 use super::scope::Scope;
 use super::scope::ScopeAccessor;
 use super::translation::TranslationUnit;
@@ -162,7 +154,7 @@ impl Variable for ContentVariable {
 		self.content.location().map_or(&self.location, |loc| &loc)
 	}
 
-	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token) -> Arc<RwLock<Scope>> {
+	fn expand<'u>(&self, unit: &mut TranslationUnit, _location: Token) -> Arc<RwLock<Scope>> {
 		// Parse content
 		let content = unit.with_child(
 			self.content.clone(),
@@ -246,7 +238,7 @@ impl Variable for PropertyVariable {
 		&self.value_token
 	}
 
-	fn expand<'u>(&self, unit: &mut TranslationUnit, location: Token) -> Arc<RwLock<Scope>> {
+	fn expand<'u>(&self, unit: &mut TranslationUnit, _location: Token) -> Arc<RwLock<Scope>> {
 		// Generate source for scope
 		let definition_source = Arc::new(VirtualSource::new(
 			self.location.clone(),
@@ -258,7 +250,7 @@ impl Variable for PropertyVariable {
 			definition_source.clone(),
 			ParseMode::default(),
 			true,
-			|unit, scope| {
+			|_unit, scope| {
 				scope.add_content(Arc::new(Text {
 					location: definition_source.into(),
 					content: self.value.to_string(),

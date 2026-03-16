@@ -8,7 +8,6 @@ use crate::parser::reports::*;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
-use graphviz_rust::print;
 use mlua::UserData;
 use parking_lot::MappedRwLockWriteGuard;
 use parking_lot::RwLock;

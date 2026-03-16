@@ -16,7 +16,6 @@ use crate::layout::size::Size;
 use crate::layout::size::SizeOutput;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-use mlua::LuaSerdeExt;
 
 use crate::cache::cache::Cached;
 use crate::cache::cache::CachedError;

@@ -2,6 +2,7 @@ use std::any::Any;
 use std::ops::Range;
 use std::slice::Iter;
 use std::sync::Arc;
+use std::usize;
 
 use crate::elements::meta::eof::Eof;
 use crate::elements::text::elem::Text;
@@ -49,6 +50,7 @@ impl Parser {
 	/// In case multiple rules have the same `next_match`, the rules that are
 	/// defined first in the parser are prioritized. See [`Rule::previous`] for
 	/// information on how to prioritize rules.
+	/// When multiple rules have the same 'next_match', it prioritizes the one that matched the longest content
 	///
 	/// Notes that the result of every call to [`Rule::next_match`] gets stored
 	/// in a table: [`ParserState::matches`]. Until the cursor steps over a
@@ -66,29 +68,29 @@ impl Parser {
 		let state = scope.parser_state_mut();
 		// Initialize state if required
 		while state.matches.len() < self.rules.len() {
-			state.matches.push((0, None));
+			state.matches.push((0..0, None));
 		}
 
 		self.rules
 			.iter()
 			.zip(state.matches.iter_mut())
-			.for_each(|(rule, (pos, data))| {
+			.for_each(|(rule, (range, data))| {
 				// Don't upate if not stepped over yet
-				if *pos > cursor.pos() {
+				if range.start > cursor.pos() {
 					return;
 				}
 				// Update next match position
-				(*pos, *data) = match rule.next_match(unit, &state.mode, &mut state.states, cursor)
+				(*range, *data) = match rule.next_match(unit, &state.mode, &mut state.states, cursor)
 				{
-					None => (usize::MAX, None),
-					Some((mut new_pos, mut new_data)) => {
+					None => (usize::MAX..usize::MAX, None),
+					Some((mut new_range, mut new_data)) => {
 						let mut local_cursor = cursor.to_owned();
 						// Check if escaped
 						while local_cursor.pos() != usize::MAX {
 							let source = cursor.source();
 							let content = source.content().as_str();
 
-							let mut codepoints = content[0..new_pos].chars();
+							let mut codepoints = content[0..new_range.start].chars();
 							let mut escaped = false;
 
 							'inner: loop {
@@ -102,7 +104,7 @@ impl Parser {
 								break;
 							}
 							// Advance by 1 codepoint if escaped
-							match content[new_pos..].chars().next() {
+							match content[new_range.start..].chars().next() {
 								Some(ch) => {
 									local_cursor =
 										local_cursor.at(local_cursor.pos() + ch.len_utf8())
@@ -110,37 +112,49 @@ impl Parser {
 								None => panic!(),
 							};
 							// Find next potential match
-							(new_pos, new_data) = match rule.next_match(
+							(new_range, new_data) = match rule.next_match(
 								unit,
 								&state.mode,
 								&mut state.states,
 								&local_cursor,
 							) {
-								None => (usize::MAX, new_data), // Stop iterating
-								Some((new_pos, new_data)) => (new_pos, new_data),
+								None => (usize::MAX..usize::MAX, new_data), // Stop iterating
+								Some((new_range, new_data)) => (new_range, new_data),
 							};
-							local_cursor = local_cursor.at(new_pos);
+							local_cursor = local_cursor.at(new_range.start);
 						}
-						(new_pos, Some(new_data))
+						(new_range, Some(new_data))
 					}
 				};
 			});
 
 		// Get winning match
-		match state
-			.matches
-			.iter()
-			.enumerate()
-			.min_by_key(|(_, (pos, _))| pos)
-			.map(|(winner, (pos, _))| (winner, *pos))
-			.unwrap()
+		let mut next = usize::MAX;
+		let mut length = 0;
+		let mut best_idx = 0;
+		for (idx, state) in state.matches.iter().enumerate()
 		{
-			(_, usize::MAX) => None,
-			(winner, pos) => state.matches[winner]
-				.1
-				.take()
-				.map(|data| (cursor.at(pos), &self.rules[winner], data)),
+			// Update if better
+			if state.0.start < next
+			{
+				next = state.0.start;
+				length = state.0.end - state.0.start;
+				best_idx = idx;
+			}
+			// On conflict pick the longest match
+			else if state.0.start == next
+			{
+				let cur_length = state.0.end - state.0.start;
+				if cur_length < length
+				{
+				next = state.0.start;
+				length = cur_length;
+				best_idx = idx;
+				}
+			}
 		}
+		if next == usize::MAX { return None }
+		return Some((cursor.at(next), &self.rules[best_idx], state.matches[best_idx].1.take().unwrap()));
 	}
 
 	/// Adds content from `range` as text to `unit`
@@ -216,11 +230,11 @@ impl Parser {
 }
 
 pub trait ParserRuleAccessor {
-	fn rules_iter(&self) -> Iter<Box<dyn Rule + Send + Sync>>;
+	fn rules_iter(&self) -> Iter<'_, Box<dyn Rule + Send + Sync>>;
 }
 
 impl ParserRuleAccessor for Parser {
-	fn rules_iter(&self) -> Iter<Box<dyn Rule + Send + Sync>> {
+	fn rules_iter(&self) -> Iter<'_, Box<dyn Rule + Send + Sync>> {
 		self.rules.iter()
 	}
 }

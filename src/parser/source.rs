@@ -1,7 +1,6 @@
 use core::fmt::Debug;
 use std::fs;
 use std::ops::Range;
-use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;

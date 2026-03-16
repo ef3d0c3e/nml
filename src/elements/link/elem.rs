@@ -6,7 +6,6 @@ use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
 
-use mlua::LuaSerdeExt;
 use crate::lua::wrappers::*;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;

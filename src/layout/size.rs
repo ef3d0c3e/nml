@@ -1,9 +1,7 @@
-use std::str::FromStr;
 
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::compiler::compiler::Target;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]

@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -48,7 +49,7 @@ pub struct ParseMode {
 #[derive(Debug)]
 pub struct ParserState {
 	/// Stores the match data, with the next match position and the data to pass to the processing function
-	pub matches: Vec<(usize, Option<Box<dyn Any + Send + Sync>>)>,
+	pub matches: Vec<(Range<usize>, Option<Box<dyn Any + Send + Sync>>)>,
 	/// Current mode for the parser
 	pub mode: ParseMode,
 	/// Custom states

@@ -1,10 +1,8 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::LazyLock;
 
-use graphviz_rust::print;
 use mlua::IntoLua;
 use mlua::LightUserData;
 use mlua::Lua;
@@ -15,9 +13,7 @@ use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::elements::heading::elem::Heading;
 use crate::lua::wrappers::ElemMutWrapper;
-use crate::lua::wrappers::ElemWrapper;
 use crate::lua::wrappers::UnitWrapper;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
@@ -152,7 +148,7 @@ unsafe impl Send for Kernel {}
 unsafe impl Sync for Kernel {}
 
 impl Kernel {
-	pub fn new(unit: &TranslationUnit) -> Self {
+	pub fn new(_unit: &TranslationUnit) -> Self {
 		let kernel = Self {
 			lua: Lua::new(),
 			au_create_elem: RefCell::default(),

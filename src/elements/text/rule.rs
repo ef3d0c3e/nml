@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::ops::Range;
 use std::sync::Arc;
 
 use crate::add_documented_function;
@@ -32,7 +33,7 @@ impl Rule for TextRule {
 		_mode: &ParseMode,
 		_states: &mut CustomStates,
 		_cursor: &Cursor,
-	) -> Option<(usize, Box<dyn Any + Send + Sync>)> {
+	) -> Option<(Range<usize>, Box<dyn Any + Send + Sync>)> {
 		None
 	}
 

@@ -1,13 +1,12 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use ariadne::Fmt;
 use regex::Captures;
 use regex::Regex;
 
-use crate::elements::graphviz::completion::GraphvizCompletion;
-use crate::elements::graphviz::elem::layout_from_str;
-use crate::elements::graphviz::elem::Graphviz;
-use crate::layout::size::Size;
+use crate::elements::typst::elem::Typst;
+use crate::elements::typst::elem::TypstKind;
 use crate::parser::property::Property;
 use crate::parser::property::PropertyParser;
 use crate::parser::rule::RegexRule;
@@ -25,42 +24,47 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 
 #[auto_registry::auto_registry(registry = "rules")]
-pub struct GraphvizRule {
+pub struct TypstRule {
 	re: [Regex; 1],
 	properties: PropertyParser,
 }
 
-impl Default for GraphvizRule {
+impl Default for TypstRule {
 	fn default() -> Self {
 		let mut props = HashMap::new();
 		props.insert(
-			"layout".to_string(),
-			Property::new(
-				"Graphviz layout engine, see <https://graphviz.org/docs/layouts/>".to_string(),
-				Some("dot".to_string()),
-			),
+			"env".to_string(),
+			Property::new("Typst environment".to_string(), Some("main".to_string())),
 		);
 		props.insert(
-			"width".to_string(),
-			Property::new("Graph display width".to_string(), Some("100%".to_string())),
+			"kind".to_string(),
+			Property::new("Element display kind".to_string(), None),
+		);
+		props.insert(
+			"caption".to_string(),
+			Property::new("Typst caption".to_string(), None),
 		);
 		Self {
-			re: [Regex::new(
-				r"\[graph\](?:\[((?:\\.|[^\[\]\\])*?)\])?(?:((?:\\.|[^\\\\])*?)\[/graph\])?",
-			)
-			.unwrap()],
+			re: [
+				Regex::new(r"\$\[(?:\[((?:\\.|[^\\\\])*?)\])?(?:((?:\\.|[^\\\\])*?)(\]\$))?")
+					.unwrap(),
+			],
 			properties: PropertyParser { properties: props },
 		}
 	}
 }
 
-impl RegexRule for GraphvizRule {
+impl RegexRule for TypstRule {
 	fn name(&self) -> &'static str {
-		"Graphviz"
+		"Typst"
 	}
 
 	fn target(&self) -> RuleTarget {
-		RuleTarget::Command
+		RuleTarget::Inline
+	}
+
+	fn before(&self) -> Option<&'static str> {
+	    Some("Latex")
 	}
 
 	fn regexes(&self) -> &[regex::Regex] {
@@ -70,33 +74,33 @@ impl RegexRule for GraphvizRule {
 	fn enabled(
 		&self,
 		_unit: &TranslationUnit,
-		mode: &ParseMode,
+		_mode: &ParseMode,
 		_states: &mut CustomStates,
 		_index: usize,
 	) -> bool {
-		!mode.paragraph_only
+		true
 	}
 
 	fn on_regex_match<'u>(
 		&self,
-		_index: usize,
+		index: usize,
 		unit: &mut TranslationUnit,
 		token: Token,
 		captures: Captures,
 	) {
-		let graph_content = match captures.get(2) {
-			// Unterminated `$`
+		let typ_content = match captures.get(2) {
+			// Unterminated `$[`
 			None => {
 				report_err!(
 					unit,
 					token.source(),
-					"Unterminated Graphviz Code".into(),
+					"Unterminated Typst Code".into(),
 					span(
 						token.range.clone(),
 						format!(
 							"Missing terminating `{}` after first `{}`",
-							"[/graph]".fg(unit.colors().info),
-							"[graph]".fg(unit.colors().info)
+							"$]".fg(unit.colors().info),
+							"$[".fg(unit.colors().info),
 						)
 					)
 				);
@@ -105,7 +109,7 @@ impl RegexRule for GraphvizRule {
 			Some(content) => {
 				let processed = escape_text(
 					'\\',
-					"[/graph]",
+					"]$",
 					content.as_str().trim_start().trim_end(),
 					true,
 				);
@@ -114,8 +118,8 @@ impl RegexRule for GraphvizRule {
 					report_err!(
 						unit,
 						token.source(),
-						"Empty Graphviz Code".into(),
-						span(content.range(), "Graphviz code is empty".into())
+						"Empty Typst Code".into(),
+						span(content.range(), "Typst code is empty".into())
 					);
 				}
 				processed
@@ -126,25 +130,36 @@ impl RegexRule for GraphvizRule {
 		let prop_source = escape_source(
 			token.source(),
 			captures.get(1).map_or(0..0, |m| m.range()),
-			"Graphviz Properties".into(),
+			"Typst Properties".into(),
 			'\\',
 			"]",
 		);
 		let Some(mut properties) = self.properties.parse(
-			"Graphviz",
+			"Raw Code",
 			unit,
 			Token::new(0..prop_source.content().len(), prop_source),
 		) else {
 			return;
 		};
-		let Some(layout) = properties.get(unit, "layout", |_prop, value| {
-			layout_from_str(value.value.as_str())
-		}) else {
-			return;
-		};
-		let Some(width) = properties.get(unit, "width", |_prop, value| {
-			Size::try_from(value.value.as_str())
-		}) else {
+
+		let (Some(typ_kind), Some(typ_caption), Some(typ_env)) = (
+			properties.get_or(
+				unit,
+				"kind",
+				if index == 1 {
+					TypstKind::Inline
+				} else {
+					TypstKind::Block
+				},
+				|_, value| TypstKind::from_str(value.value.as_str()),
+			),
+			properties.get_opt(unit, "caption", |_, value| {
+				Result::<_, String>::Ok(value.value.clone())
+			}),
+			properties.get(unit, "env", |_, value| {
+				Result::<_, String>::Ok(value.value.clone())
+			}),
+		) else {
 			return;
 		};
 
@@ -152,29 +167,34 @@ impl RegexRule for GraphvizRule {
 			lsp.with_semantics(token.source(), |sems, tokens| {
 				let range = &token.range;
 				sems.add(
-					range.start..range.start + "[graph]".len(),
-					tokens.graphviz_sep,
+					range.start..range.start + if index == 0 { 2 } else { 1 },
+					tokens.typ_sep,
 				);
 				if let Some(props) = captures.get(1).map(|m| m.range()) {
-					sems.add(props.start - 1..props.start, tokens.graphviz_prop_sep);
-					sems.add(props.end..props.end + 1, tokens.graphviz_prop_sep);
+					sems.add(props.start - 1..props.start, tokens.typ_prop_sep);
+					sems.add(props.end..props.end + 1, tokens.typ_prop_sep);
 				}
-				sems.add(captures.get(2).unwrap().range(), tokens.graphviz_content);
-				sems.add(range.end - "[/graph]".len()..range.end, tokens.graphviz_sep);
+				sems.add(captures.get(2).unwrap().range(), tokens.typ_content);
+				sems.add(
+					range.end - if index == 0 { 2 } else { 1 }..range.end,
+					tokens.typ_sep,
+				);
 			})
 		});
 
-		unit.add_content(Graphviz {
+		unit.add_content(Typst {
 			location: token,
-			graph: graph_content,
-			width,
-			layout,
+			mathmode: index == 1,
+			kind: typ_kind,
+			env: typ_env,
+			typ: typ_content,
+			caption: typ_caption,
 		});
 	}
 
-	fn completion(
-		&self,
-	) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
-		Some(Box::new(GraphvizCompletion {}))
-	}
+	//fn completion(
+	//	&self,
+	//) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
+	//	Some(Box::new(LatexCompletion {}))
+	//}
 }

@@ -59,7 +59,7 @@ impl Layout for CenterLayout {
 		&self,
 		unit: &mut TranslationUnit,
 		token: Token,
-		id: usize,
+		_id: usize,
 	) -> Option<Box<dyn Any + Send + Sync>> {
 		if token.end() != token.start() {
 			report_err!(
@@ -120,7 +120,7 @@ impl Layout for SpoilerLayout {
 
 	fn parse_properties(
 		&self,
-		unit: &mut TranslationUnit,
+		_unit: &mut TranslationUnit,
 		token: Token,
 		_id: usize,
 	) -> Option<Box<dyn Any + Send + Sync>> {

@@ -2,7 +2,6 @@ use std::env::current_dir;
 use std::path::Path;
 use std::path::PathBuf;
 
-use graphviz_rust::print;
 use serde::Deserialize;
 use serde::Serialize;
 

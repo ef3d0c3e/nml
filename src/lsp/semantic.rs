@@ -128,6 +128,10 @@ pub struct Tokens {
 	pub tex_content: (u32, u32),
 	pub tex_prop_sep: (u32, u32),
 
+	pub typ_sep: (u32, u32),
+	pub typ_content: (u32, u32),
+	pub typ_prop_sep: (u32, u32),
+
 	pub graphviz_sep: (u32, u32),
 	pub graphviz_content: (u32, u32),
 	pub graphviz_prop_sep: (u32, u32),
@@ -207,6 +211,10 @@ impl Default for Tokens {
 			tex_sep: token!("property"),
 			tex_content: token!("regexp"),
 			tex_prop_sep: token!("macro"),
+
+			typ_sep: token!("property"),
+			typ_content: token!("regexp"),
+			typ_prop_sep: token!("macro"),
 
 			graphviz_sep: token!("function"),
 			graphviz_content: token!("regexp"),

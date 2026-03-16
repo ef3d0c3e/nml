@@ -77,9 +77,8 @@ impl Backend {
 		client: Client,
 		settings: ProjectSettings,
 		root_path: PathBuf,
+		cache: Arc<Cache>
 	) -> Self {
-		let cache = Arc::new(Cache::new(&settings.db_path).unwrap());
-		//cache.setup_tables();
 
 		Self {
 			parser: Arc::new(Parser::new()),
@@ -607,7 +606,7 @@ async fn main() -> anyhow::Result<()> {
 	let stdin = tokio::io::stdin();
 	let stdout = tokio::io::stdout();
 	let (service, socket) =
-		LspService::build(|client| Backend::new(client, settings, path))
+		LspService::build(|client| Backend::new(client, settings, path, cache))
 			//let (service, socket) = LspService::build(|client| Backend::new(client, settings, path))
 			.custom_method("textDocument/conceal", Backend::handle_conceal_request)
 			.custom_method("textDocument/style", Backend::handle_style_request)

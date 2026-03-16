@@ -1,6 +1,7 @@
 use core::panic;
 use std::any::Any;
 use std::collections::HashSet;
+use std::ops::Range;
 use std::sync::Arc;
 use std::usize;
 
@@ -44,7 +45,7 @@ impl Rule for StyleRule {
 		_mode: &ParseMode,
 		states: &mut CustomStates,
 		cursor: &Cursor,
-	) -> Option<(usize, Box<dyn std::any::Any + Send + Sync>)> {
+	) -> Option<(Range<usize>, Box<dyn std::any::Any + Send + Sync>)> {
 		let source = cursor.source();
 		let content = source.content();
 
@@ -71,7 +72,7 @@ impl Rule for StyleRule {
 
 		unit.with_data::<StyleData, _, _>(STYLE_CUSTOM, |data| {
 			let mut matched_rule = None;
-			let mut closest = usize::MAX;
+			let mut closest = usize::MAX..usize::MAX;
 			data.registered.iter().for_each(|rule| {
 				let re = if enabled.contains(&rule.name) {
 					&rule.end_re
@@ -82,9 +83,9 @@ impl Rule for StyleRule {
 					return;
 				};
 				let start = m.start();
-				if start < closest {
+				if start < closest.start {
 					matched_rule = Some(rule.clone());
-					closest = start;
+					closest = m.range();
 				}
 			});
 

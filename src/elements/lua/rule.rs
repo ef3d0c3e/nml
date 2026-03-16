@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::collections::HashMap;
+use std::ops::Range;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -77,7 +78,7 @@ impl Rule for LuaRule {
 		mode: &ParseMode,
 		_states: &mut CustomStates,
 		cursor: &Cursor,
-	) -> Option<(usize, Box<dyn Any + Send + Sync>)> {
+	) -> Option<(Range<usize>, Box<dyn Any + Send + Sync>)> {
 		if mode.paragraph_only {
 			return None;
 		}
@@ -86,7 +87,7 @@ impl Rule for LuaRule {
 			.find_at(cursor.source().content(), cursor.pos())
 			.map(|m| {
 				(
-					m.start(),
+					m.range(),
 					Box::new([false; 0]) as Box<dyn Any + Send + Sync>,
 				)
 			})

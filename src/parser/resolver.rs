@@ -206,12 +206,12 @@ impl<'u> Resolver<'u> {
 						.ok_or(ResolveError::NotFound(name.to_owned()))
 				}
 			}
-			Refname::Bibliography(path, name) => todo!(),
+			Refname::Bibliography(_path, _name) => todo!(),
 		}
 	}
 
 	/// Resolve links for internal references
-	pub fn resolve_links(&self, cache: Arc<Cache>, target: Target) {
+	pub fn resolve_links(&self, _cache: Arc<Cache>, target: Target) {
 		self.units.iter().for_each(|(_, unit)| {
 			let OffloadedUnit::Loaded(unit) = unit else {
 				return;

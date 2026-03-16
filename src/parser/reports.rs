@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::ops::Range;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use ariadne::Color;

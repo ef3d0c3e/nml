@@ -3,12 +3,14 @@ use super::source::Token;
 use super::state::CustomStates;
 use super::state::ParseMode;
 use crate::lsp::completion::CompletionProvider;
-use crate::lua::kernel::Kernel;
 use crate::unit::translation::TranslationUnit;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
 use std::any::Any;
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::ops::Range;
 
 macro_rules! create_registry {
 	($($construct:expr);+ $(;)?) => {{
@@ -26,13 +28,91 @@ macro_rules! create_registry {
 //#[auto_registry::generate_registry(registry = "rules", target = make_rules, return_type = Vec<Box<dyn Rule + Send + Sync>>, maker = create_registry)]
 #[auto_registry::generate_registry(registry = "rules", collector = create_registry, output = get_rules)]
 
-pub fn get_rule_registry() -> Vec<Box<dyn Rule + Send + Sync>> {
-	let mut vec = get_rules!();
-	vec.sort_by_key(|rule| rule.target());
-	vec
+
+fn topo_sort_group(
+    group: &[usize],
+    rules: &[Box<dyn Rule + Send + Sync>],
+) -> Vec<usize> {
+    let name_to_group_pos: HashMap<&str, usize> = group
+        .iter()
+        .enumerate()
+        .map(|(pos, &i)| (rules[i].name(), pos))
+        .collect();
+
+    let m = group.len();
+
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); m];
+    let mut in_degree: Vec<usize> = vec![0; m];
+
+    for (pos, &i) in group.iter().enumerate() {
+        if let Some(before_name) = rules[i].before() {
+            if let Some(&target_pos) = name_to_group_pos.get(before_name) {
+                adj[pos].push(target_pos);
+                in_degree[target_pos] += 1;
+            }
+        }
+    }
+
+    let mut queue: Vec<usize> = (0..m).filter(|&p| in_degree[p] == 0).collect();
+    let mut result: Vec<usize> = Vec::with_capacity(m);
+
+    while let Some(pos) = queue.first().copied() {
+        queue.remove(0);
+        result.push(group[pos]);
+
+        for &next_pos in &adj[pos] {
+            in_degree[next_pos] -= 1;
+            if in_degree[next_pos] == 0 {
+                let insert_at = queue.partition_point(|&p| p < next_pos);
+                queue.insert(insert_at, next_pos);
+            }
+        }
+    }
+
+    if result.len() != m {
+        panic!("Cycle detected in rule ordering within a target group");
+    }
+
+    result
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub fn get_rule_registry() -> Vec<Box<dyn Rule + Send + Sync>> {
+	let mut rules = get_rules!();
+	let n = rules.len();
+
+	// Sort by target
+	let mut indices: Vec<usize> = (0..n).collect();
+	indices.sort_by_key(|&i| rules[i].target());
+
+	// Sort each target group by dependency (topo sort)
+	// Find group boundaries
+	let mut groups: Vec<&[usize]> = Vec::new();
+	let mut start = 0;
+	while start < indices.len() {
+		let target = rules[indices[start]].target();
+		let end = indices[start..]
+			.iter()
+			.position(|&i| rules[i].target() != target)
+			.map_or(indices.len(), |offset| start + offset);
+		groups.push(&indices[start..end]);
+		start = end;
+	}
+
+	// Topological sort each group
+	let mut sorted_indices: Vec<usize> = Vec::with_capacity(n);
+	for group in groups {
+		sorted_indices.extend(topo_sort_group(group, &rules));
+	}
+
+	// Build sorted Vec
+	let mut raw: Vec<Option<Box<dyn Rule + Send + Sync>>> = rules.into_iter().map(Some).collect();
+	sorted_indices
+		.into_iter()
+		.map(|i| raw[i].take().unwrap())
+		.collect()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum RuleTarget {
 	/// Meta characters target, e.g newlines
@@ -52,6 +132,11 @@ pub trait Rule: Downcast {
 	/// Rule ordering
 	fn target(&self) -> RuleTarget;
 
+	/// Force this rule to register before another rule by it's name
+	fn before(&self) -> Option<&'static str> {
+		None
+	}
+
 	/// Finds the next match starting from `cursor`
 	///
 	/// # Return
@@ -70,7 +155,7 @@ pub trait Rule: Downcast {
 		mode: &ParseMode,
 		states: &mut CustomStates,
 		cursor: &Cursor,
-	) -> Option<(usize, Box<dyn Any + Send + Sync>)>;
+	) -> Option<(Range<usize>, Box<dyn Any + Send + Sync>)>;
 
 	/// Method called when the rule is chosen by the parser.
 	///
@@ -113,6 +198,11 @@ pub trait RegexRule {
 
 	/// Rule ordering
 	fn target(&self) -> RuleTarget;
+
+	/// Force this rule to register before another rule by it's name
+	fn before(&self) -> Option<&'static str> {
+		None
+	}
 
 	/// Returns the rule's regexes
 	fn regexes(&self) -> &[regex::Regex];
@@ -163,6 +253,10 @@ impl<T: RegexRule + 'static> Rule for T {
 		RegexRule::target(self)
 	}
 
+	fn before(&self) -> Option<&'static str> {
+		RegexRule::before(self)
+	}
+
 	/// Finds the next match starting from [`Cursor`]
 	fn next_match(
 		&self,
@@ -170,29 +264,30 @@ impl<T: RegexRule + 'static> Rule for T {
 		mode: &ParseMode,
 		states: &mut CustomStates,
 		cursor: &Cursor,
-	) -> Option<(usize, Box<dyn Any + Send + Sync>)> {
+	) -> Option<(Range<usize>, Box<dyn Any + Send + Sync>)> {
 		let source = cursor.source();
 		let content = source.content();
 
-		let mut found: Option<(usize, usize)> = None;
+		let mut found: Option<(Range<usize>, usize)> = None;
 		self.regexes().iter().enumerate().for_each(|(id, re)| {
 			if !RegexRule::enabled(self, unit, mode, states, id) {
 				return;
 			}
 			if let Some(m) = re.find_at(content.as_str(), cursor.pos()) {
 				found = found
-					.map(|(f_pos, f_id)| {
-						if f_pos > m.start() {
-							(m.start(), id)
+					.as_ref()
+					.map(|(f_range, f_id)| {
+						if f_range.start > m.start() {
+							(m.range(), id)
 						} else {
-							(f_pos, f_id)
+							(f_range.clone(), *f_id)
 						}
 					})
-					.or(Some((m.start(), id)));
+					.or(Some((m.range(), id)));
 			}
 		});
 
-		found.map(|(pos, id)| (pos, Box::new(id) as Box<dyn Any + Send + Sync>))
+		found.map(|(range, id)| (range, Box::new(id) as Box<dyn Any + Send + Sync>))
 	}
 
 	fn on_match<'u>(

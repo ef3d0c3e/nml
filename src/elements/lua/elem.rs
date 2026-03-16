@@ -4,7 +4,6 @@ use std::sync::OnceLock;
 
 use mlua::AnyUserData;
 use mlua::Lua;
-use mlua::LuaSerdeExt;
 use serde::Deserialize;
 use serde::Serialize;
 use crate::elements::meta::scope::ScopeElement;

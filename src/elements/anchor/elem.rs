@@ -5,7 +5,6 @@ use ariadne::Span;
 use auto_userdata::AutoUserData;
 use mlua::AnyUserData;
 use mlua::Lua;
-use mlua::LuaSerdeExt;
 use parking_lot::RwLock;
 
 use crate::lua::wrappers::*;

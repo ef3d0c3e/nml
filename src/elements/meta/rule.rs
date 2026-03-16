@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::ops::Range;
 
 use mlua::Lua;
 
@@ -32,7 +33,7 @@ impl Rule for MetaRule {
 		_mode: &ParseMode,
 		_states: &mut CustomStates,
 		_cursor: &Cursor,
-	) -> Option<(usize, Box<dyn Any + Send + Sync>)> {
+	) -> Option<(Range<usize>, Box<dyn Any + Send + Sync>)> {
 		None
 	}
 

@@ -16,7 +16,6 @@ use auto_userdata::AutoUserData;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
-use pathdiff::diff_paths;
 use serde::Deserialize;
 use serde::Serialize;
 use url::Url;
