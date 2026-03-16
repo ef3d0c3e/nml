@@ -11,6 +11,7 @@ use syn::Lit;
 use syn::Meta;
 use syn::NestedMeta;
 
+#[derive(Clone)]
 enum ValueMapper {
 	Ignore,
 	Value,
@@ -26,7 +27,7 @@ pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 	let ident = input.ident.clone();
 
-	let mut targets : Vec<proc_macro2::TokenStream> = vec![];
+	let mut targets: Vec<proc_macro2::TokenStream> = vec![];
 
 	for attr in &input.attrs {
 		if attr.path.is_ident("auto_userdata_target") {
@@ -51,8 +52,7 @@ pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 			}
 		}
 	}
-	if targets.is_empty()
-	{
+	if targets.is_empty() {
 		targets.push(quote! { #ident });
 	}
 
@@ -76,6 +76,7 @@ pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 	};
 
 	let mut field_getters = Vec::new();
+	let mut field_setters = Vec::new();
 
 	for field in fields {
 		let name = field.ident.clone().unwrap();
@@ -121,44 +122,97 @@ pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
 			}
 		}
 
-		let getter_expr = match mapper {
-			Some(ValueMapper::Ignore) => continue,
+		// Getter
+		match mapper.clone() {
+			Some(ValueMapper::Ignore) => {}
 			Some(ValueMapper::Map(mapper, expr)) => {
 				if let Some(expr) = expr {
 					let code = expr.replace("$", "#name");
-					quote! {
-						Ok(#mapper(this.#code))
-					}
+					field_getters.push(quote! {
+						fields.add_field_method_get(#field_name_str, |lua, this| {
+							Ok(#mapper(this.#code))
+						});
+					});
 				} else {
-					quote! {
-						Ok(#mapper(this.#name.clone()))
-					}
+					field_getters.push(quote! {
+						fields.add_field_method_get(#field_name_str, |lua, this| {
+							Ok(#mapper(this.#name.clone()))
+						});
+					});
 				}
 			}
-			Some(ValueMapper::ArcDeref) => quote! {
-				let r: &'static _ = unsafe { &*Arc::as_ptr(&this.#name) };
-				Ok(lua.create_userdata(r).unwrap())
+			Some(ValueMapper::ArcDeref) => {
+				field_getters.push(quote! {
+					fields.add_field_method_get(#field_name_str, |lua, this| {
+						let r: &'static _ = unsafe { &*Arc::as_ptr(&this.#name) };
+						Ok(lua.create_userdata(r).unwrap())
+					});
+				});
+			}
+			Some(ValueMapper::Value) => {
+				field_getters.push(quote! {
+					fields.add_field_method_get(#field_name_str, |lua, this| {
+						mlua::LuaSerdeExt::to_value(lua, &this.#name)
+					});
+				});
 			},
-			Some(ValueMapper::Value) => quote! { mlua::LuaSerdeExt::to_value(lua, &this.#name) },
-			_ => quote! { Ok(this.#name.clone()) },
+			_ => {
+				field_getters.push(quote! {
+					fields.add_field_method_get(#field_name_str, |lua, this| {
+						Ok(this.#name.clone())
+					});
+				});
+			},
 		};
 
-		field_getters.push(quote! {
-			fields.add_field_method_get(#field_name_str, |lua, this| {
-				#getter_expr
-			});
-		});
+		// Setter
+		match mapper {
+			Some(ValueMapper::Ignore) => {}
+			Some(ValueMapper::Map(_mapper, _expr)) => {}
+			Some(ValueMapper::Value) => {
+				field_setters.push(quote! {
+					fields.add_field_method_set(#field_name_str, |lua, this, value| {
+						let val = mlua::LuaSerdeExt::from_value(lua, value)?;
+						this.#name = val;
+						Ok(())
+					});
+				});
+			},
+			_ => {
+				//field_getters.push(quote! {
+				//	fields.add_field_method_set(#field_name_str, |lua, this, value| {
+				//		let val = mlua::LuaSerdeExt::from_value(lua, value)?;
+				//		this.#name = val;
+				//		Ok(())
+				//	});
+				//});
+			},
+		};
+
 	}
 
-	let mut expanded : proc_macro2::TokenStream = Default::default();
+	let mut expanded: proc_macro2::TokenStream = Default::default();
 	for target in targets {
-		expanded.extend(quote!{
-			impl mlua::UserData for #target {
-				fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
-					#(#field_getters)*
+		if target.to_string().starts_with("& mut")
+		{
+			expanded.extend(quote! {
+				impl mlua::UserData for #target {
+					fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+						#(#field_getters)*
+						#(#field_setters)*
+					}
 				}
-			}
-		});
+			});
+		}
+		else {
+			expanded.extend(quote! {
+				impl mlua::UserData for #target {
+					fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+						#(#field_getters)*
+					}
+				}
+			});
+		}
 	}
 
 	TokenStream::from(expanded)

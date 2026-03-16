@@ -31,7 +31,7 @@ pub struct Scope {
 	parent: Option<Arc<RwLock<Scope>>>,
 
 	/// Content of this scope
-	content: Vec<Arc<dyn Element>>,
+	pub content: Vec<Arc<dyn Element>>,
 
 	/// State of the parser
 	parser_state: ParserState,

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use mlua::UserData;
 
 use crate::add_documented_method;
-use crate::lua::wrappers::{IteratorWrapper, ScopeWrapper, VecScopeWrapper};
+use crate::lua::wrappers::{ElemWrapper, IteratorWrapper, ScopeWrapper, VecScopeWrapper};
 use crate::unit::scope::ScopeAccessor;
 
 impl UserData for ScopeWrapper {
@@ -20,6 +20,28 @@ impl UserData for ScopeWrapper {
 			vec![
 				"self",
 				"recurse:bool Recursively iterate over nested scopes"
+			],
+			None
+		);
+		add_documented_method!(
+			methods,
+			"Scope",
+			"insert",
+			|_lua, this, (index, elem,): (usize, ElemWrapper)| {
+				let mut scope = this.0.write();
+				if index > scope.content.len()
+				{
+					scope.content.push(elem.0);
+				} else {
+					scope.content.insert(index, elem.0);
+				}
+				Ok(())
+			},
+			"Gets an iterator to the scope's content",
+			vec![
+				"self",
+				"index:integer Index to insert atm 0 to insert at start",
+				"elem:ElemWrapper Element to insert"
 			],
 			None
 		);
