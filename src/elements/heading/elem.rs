@@ -138,6 +138,7 @@ impl UserData for FieldInternalReference {
 				crate::lua::kernel::Kernel::with_context(lua, |ctx| {
 					println!("Heading:set() called!");
 					this.0 = Some(Arc::new(InternalReference::new(ctx.location.clone(), name)));
+					println!("{:#?}", this.0);
 				});
 				Ok(())
 			},
@@ -166,8 +167,8 @@ pub struct Heading {
 	pub(crate) in_toc: bool,
 	//#[lua_map(InternalReferenceWrapper)]
 	//pub(crate) reference: Option<Arc<InternalReference>>,
-	//#[lua_ud]
-	pub(crate) reference: FieldInternalReference,
+	#[lua_map(FieldInternalReference)]
+	pub(crate) reference: Option<Arc<InternalReference>>,
 	#[lua_map(OnceLockWrapper)]
 	pub(crate) link: OnceLock<String>,
 }
@@ -191,7 +192,7 @@ impl Element for Heading {
 		match compiler.target() {
 			Target::HTML => {
 				output.add_content(format!("<h{}>", self.depth));
-				if self.reference.0.is_some() {
+				if self.reference.is_some() {
 					output.add_content(format!(
 						"<a id=\"{}\">",
 						compiler.sanitize(self.link.get().unwrap())
@@ -200,7 +201,7 @@ impl Element for Heading {
 				for (scope, elem) in (&self.display[0]).content_iter(false) {
 					elem.compile(scope, compiler, output)?;
 				}
-				if self.reference.0.is_some() {
+				if self.reference.is_some() {
 					output.add_content("</a>");
 				}
 				output.add_content(format!("</h{}>", self.depth));
@@ -227,7 +228,6 @@ impl Element for Heading {
 			self.numbered,
 			self.in_toc,
 			self.reference
-				.0
 				.as_ref()
 				.map_or("*None*".to_string(), |r| r.name().to_string())
 		))
@@ -238,7 +238,7 @@ impl Element for Heading {
 	}
 
 	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		if self.reference.0.is_some() {
+		if self.reference.is_some() {
 			Some(self)
 		} else {
 			None
@@ -282,7 +282,7 @@ impl ContainerElement for Heading {
 
 impl ReferenceableElement for Heading {
 	fn reference(&self) -> Arc<InternalReference> {
-		self.reference.0.to_owned().unwrap()
+		self.reference.to_owned().unwrap()
 	}
 
 	fn refcount_key(&self) -> &'static str {

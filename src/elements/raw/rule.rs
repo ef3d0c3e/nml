@@ -1,8 +1,13 @@
+use std::sync::Arc;
+
 use ariadne::Fmt;
 use regex::Captures;
 use regex::Regex;
 
 use crate::elements::raw::elem::Raw;
+use crate::lua::kernel::Kernel;
+use crate::add_documented_function;
+use crate::lua::wrappers::*;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RegexRule;
@@ -57,11 +62,12 @@ impl RegexRule for RawRule {
 		token: Token,
 		captures: Captures,
 	) {
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			let start = captures.get(0).unwrap().start();
-			sems.add(start..start+2, tokens.raw_sep);
-		}));
-
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				let start = captures.get(0).unwrap().start();
+				sems.add(start..start + 2, tokens.raw_sep);
+			})
+		});
 
 		let Some(kind) = captures.get(1) else {
 			report_err!(
@@ -82,9 +88,11 @@ impl RegexRule for RawRule {
 			return;
 		};
 
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			sems.add(kind.range(), tokens.raw_kind);
-		}));
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(kind.range(), tokens.raw_kind);
+			})
+		});
 
 		let layout = match kind.as_str() {
 			"inline" => ElemKind::Inline,
@@ -123,17 +131,63 @@ impl RegexRule for RawRule {
 			return;
 		};
 
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			let end = captures.get(0).unwrap().end();
-			sems.add(content.range(), tokens.raw_content);
-			sems.add(end-2..end, tokens.raw_sep);
-		}));
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				let end = captures.get(0).unwrap().end();
+				sems.add(content.range(), tokens.raw_content);
+				sems.add(end - 2..end, tokens.raw_sep);
+			})
+		});
 
 		unit.add_content(Raw {
 			location: token,
 			kind: layout,
 			content: content.as_str().to_string(),
 		});
+	}
 
+	fn register_bindings(&self) {
+		add_documented_function!(
+			"raw.RawInline",
+			|lua: &mlua::Lua, (content,): (String,)| {
+				Ok(Kernel::with_context(lua, |ctx| ElemWrapper (Arc::new(Raw {
+						location: ctx.location.clone(),
+						kind: ElemKind::Inline,
+						content,
+					}),
+				)))
+			},
+			"Create a new inline raw content element",
+			vec!["content:string Content of the created raw"],
+			"Raw"
+		);
+		add_documented_function!(
+			"raw.RawBlock",
+			|lua: &mlua::Lua, (content,): (String,)| {
+				Ok(Kernel::with_context(lua, |ctx| ElemWrapper (Arc::new(Raw {
+						location: ctx.location.clone(),
+						kind: ElemKind::Block,
+						content,
+					}),
+				)))
+			},
+			"Create a new block raw content element",
+			vec!["content:string Content of the created raw"],
+			"Raw"
+		);
+		add_documented_function!(
+			"raw.RawInvisible",
+			|lua: &mlua::Lua, (content,): (String,)| {
+				Ok(Kernel::with_context(lua, |ctx| ElemWrapper (Arc::new(Raw {
+						location: ctx.location.clone(),
+						kind: ElemKind::Invisible,
+						content,
+					}),
+				)))
+			},
+			"Create a new invisible raw content element",
+			vec!["content:string Content of the created raw"],
+			"Raw"
+		);
 	}
-	}
+}
