@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
 
+use crate::lua::wrappers::*;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::Report;
@@ -17,13 +18,12 @@ use crate::unit::element::ReferenceableElement;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "ScopeElementProxy", immutable, mutable)]
 pub struct ScopeElement {
+	#[lua_ud]
 	pub token: Token,
-	#[lua_ignore]
+	#[lua_ud(ScopeWrapper)]
 	pub scope: Arc<RwLock<Scope>>,
 }
 
@@ -64,9 +64,14 @@ impl Element for ScopeElement {
 		Some(self)
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(ScopeElementProxy(self as *const _))
+			.unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(ScopeElementProxyMut(self as *mut _))
+			.unwrap()
 	}
 }
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
@@ -39,30 +39,28 @@ pub struct ListMarker {
 	pub(crate) offset: usize,
 }
 
-#[derive(Debug, Clone, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug, Clone)]
+#[auto_userdata(proxy = "ListEntryProxy", immutable, mutable)]
 pub struct ListEntry {
 	#[allow(unused)]
+	#[lua_ud]
 	pub(crate) location: Token,
 	#[lua_value]
 	pub(crate) bullet: BulletMarker,
-	#[lua_map(ScopeWrapper)]
+	#[lua_proxy(ScopeWrapper, immutable)]
 	pub(crate) content: Arc<RwLock<Scope>>,
 	#[lua_value]
 	pub(crate) markers: Vec<ListMarker>,
 }
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "ListProxy", immutable, mutable)]
 pub struct List {
+	#[lua_ud]
 	pub(crate) location: Token,
-	#[lua_map(VecScopeWrapper)]
+	#[lua_proxy(VecScopeProxy)]
 	pub(crate) contained: Vec<Arc<RwLock<Scope>>>,
-	#[lua_map(LuaUDVec)]
+	#[lua_proxy(LuaUdVecProxy)]
 	pub(crate) entries: Vec<ListEntry>,
 }
 
@@ -95,8 +93,8 @@ impl Element for List {
 		let mut stack /* Vec<(Numbered?, Gap, Index)> */ = vec![];
 
 		let match_stack = |stack: &mut Vec<(bool, usize)>,
-		                       target: &Vec<ListMarker>,
-		                       output: &mut CompilerOutput| {
+		                   target: &Vec<ListMarker>,
+		                   output: &mut CompilerOutput| {
 			// Find first diff index
 			let mut m = 0;
 			for t in target {
@@ -182,9 +180,12 @@ impl Element for List {
 		Some(self)
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(ListProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(ListProxyMut(self as *mut _)).unwrap()
 	}
 }
 

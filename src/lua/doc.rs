@@ -94,8 +94,9 @@ macro_rules! add_lua_docs {
 	}};
 }
 
-#[auto_registry::generate_registry(registry = "lua", mapper = add_lua_docs, output = make_lua_docs)]
+//#[auto_registry::generate_registry(registry = "lua", mapper = add_lua_docs, output = make_lua_docs)]
 pub fn get_lua_docs() {
+	/*
 	fn document_args(params: &Vec<&'static str>) -> (String, String) {
 		let mut docs = String::new();
 		let mut args = String::new();
@@ -182,4 +183,5 @@ pub fn get_lua_docs() {
 	for (name, fun) in docs.iter() {
 		println!("{}", document_function(name, fun));
 	}
+	*/
 }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 
 use ariadne::Span;
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use mlua::UserData;
@@ -25,138 +25,137 @@ use crate::unit::references::InternalReference;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
-#[derive(Debug, Clone)]
-pub struct FieldInternalReference(pub Option<Arc<InternalReference>>);
+//#[derive(Debug, Clone)]
+//pub struct FieldInternalReference(pub Option<Arc<InternalReference>>);
+//
+//impl UserData for &mut FieldInternalReference {
+//	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+//		add_documented_method!(
+//			methods,
+//			"Reference",
+//			"is_some",
+//			|_lua, this, ()| { Ok(this.0.is_some()) },
+//			"Return true if the reference is set",
+//			vec!["self",],
+//			Some("bool True if the reference is set")
+//		);
+//		add_documented_method!(
+//			methods,
+//			"Reference",
+//			"get",
+//			|lua, this, ()| {
+//				match &this.0 {
+//					Some(r) => {
+//						let r: &'static _ = unsafe { &*Arc::as_ptr(r) };
+//						Ok(Value::UserData(lua.create_userdata(r)?))
+//					}
+//					None => Ok(Value::Nil),
+//				}
+//			},
+//			"Get the reference value, or nil if unset",
+//			vec!["self",],
+//			Some("reference? The reference value")
+//		);
+//		add_documented_method_mut!(
+//			methods,
+//			"Reference",
+//			"set",
+//			|lua, this, (name,): (Option<crate::unit::references::Refname>,)| {
+//				let Some(name) = name else {
+//					this.0 = None;
+//					return Ok(());
+//				};
+//				let crate::unit::references::Refname::Internal(_) = &name else {
+//					return Err(mlua::Error::BadArgument {
+//						to: Some("reference:set()".into()),
+//						pos: 1,
+//						name: Some("name".into()),
+//						cause: Arc::new(mlua::Error::RuntimeError(
+//							"Expected an internal reference name".into(),
+//						)),
+//					});
+//				};
+//				crate::lua::kernel::Kernel::with_context(lua, |ctx| {
+//					println!("FI CALLED");
+//					this.0 = Some(Arc::new(InternalReference::new(ctx.location.clone(), name)));
+//				});
+//				Ok(())
+//			},
+//			"",
+//			vec!["self",],
+//			Some("bool true if the reference is set")
+//		);
+//	}
+//}
+//
+//impl UserData for FieldInternalReference {
+//	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+//		add_documented_method!(
+//			methods,
+//			"Reference",
+//			"is_some",
+//			|_lua, this, ()| { Ok(this.0.is_some()) },
+//			"Return true if the reference is set",
+//			vec!["self",],
+//			Some("bool True if the reference is set")
+//		);
+//		add_documented_method!(
+//			methods,
+//			"Reference",
+//			"get",
+//			|lua, this, ()| {
+//				match &this.0 {
+//					Some(r) => {
+//						let r: &'static _ = unsafe { &*Arc::as_ptr(r) };
+//						Ok(Value::UserData(lua.create_userdata(r)?))
+//					}
+//					None => Ok(Value::Nil),
+//				}
+//			},
+//			"Get the reference value, or nil if unset",
+//			vec!["self",],
+//			Some("reference? The reference value")
+//		);
+//		add_documented_method_mut!(
+//			methods,
+//			"Reference",
+//			"set",
+//			|lua, this, (name,): (Option<crate::unit::references::Refname>,)| {
+//				let Some(name) = name else {
+//					this.0 = None;
+//					return Ok(());
+//				};
+//				let crate::unit::references::Refname::Internal(_) = &name else {
+//					return Err(mlua::Error::BadArgument {
+//						to: Some("reference:set()".into()),
+//						pos: 1,
+//						name: Some("name".into()),
+//						cause: Arc::new(mlua::Error::RuntimeError(
+//							"Expected an internal reference name".into(),
+//						)),
+//					});
+//				};
+//				crate::lua::kernel::Kernel::with_context(lua, |ctx| {
+//					println!("Heading:set() called!");
+//					this.0 = Some(Arc::new(InternalReference::new(ctx.location.clone(), name)));
+//					println!("{:#?}", this.0);
+//				});
+//				Ok(())
+//			},
+//			"",
+//			vec!["self",],
+//			Some("bool true if the reference is set")
+//		);
+//	}
+//}
 
-impl UserData for &mut FieldInternalReference {
-	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-		add_documented_method!(
-			methods,
-			"Reference",
-			"is_some",
-			|_lua, this, ()| { Ok(this.0.is_some()) },
-			"Return true if the reference is set",
-			vec!["self",],
-			Some("bool True if the reference is set")
-		);
-		add_documented_method!(
-			methods,
-			"Reference",
-			"get",
-			|lua, this, ()| {
-				match &this.0 {
-					Some(r) => {
-						let r: &'static _ = unsafe { &*Arc::as_ptr(r) };
-						Ok(Value::UserData(lua.create_userdata(r)?))
-					}
-					None => Ok(Value::Nil),
-				}
-			},
-			"Get the reference value, or nil if unset",
-			vec!["self",],
-			Some("reference? The reference value")
-		);
-		add_documented_method_mut!(
-			methods,
-			"Reference",
-			"set",
-			|lua, this, (name,): (Option<crate::unit::references::Refname>,)| {
-				let Some(name) = name else {
-					this.0 = None;
-					return Ok(());
-				};
-				let crate::unit::references::Refname::Internal(_) = &name else {
-					return Err(mlua::Error::BadArgument {
-						to: Some("reference:set()".into()),
-						pos: 1,
-						name: Some("name".into()),
-						cause: Arc::new(mlua::Error::RuntimeError(
-							"Expected an internal reference name".into(),
-						)),
-					});
-				};
-				crate::lua::kernel::Kernel::with_context(lua, |ctx| {
-					println!("FI CALLED");
-					this.0 = Some(Arc::new(InternalReference::new(ctx.location.clone(), name)));
-				});
-				Ok(())
-			},
-			"",
-			vec!["self",],
-			Some("bool true if the reference is set")
-		);
-	}
-}
-
-impl UserData for FieldInternalReference {
-	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-		add_documented_method!(
-			methods,
-			"Reference",
-			"is_some",
-			|_lua, this, ()| { Ok(this.0.is_some()) },
-			"Return true if the reference is set",
-			vec!["self",],
-			Some("bool True if the reference is set")
-		);
-		add_documented_method!(
-			methods,
-			"Reference",
-			"get",
-			|lua, this, ()| {
-				match &this.0 {
-					Some(r) => {
-						let r: &'static _ = unsafe { &*Arc::as_ptr(r) };
-						Ok(Value::UserData(lua.create_userdata(r)?))
-					}
-					None => Ok(Value::Nil),
-				}
-			},
-			"Get the reference value, or nil if unset",
-			vec!["self",],
-			Some("reference? The reference value")
-		);
-		add_documented_method_mut!(
-			methods,
-			"Reference",
-			"set",
-			|lua, this, (name,): (Option<crate::unit::references::Refname>,)| {
-				let Some(name) = name else {
-					this.0 = None;
-					return Ok(());
-				};
-				let crate::unit::references::Refname::Internal(_) = &name else {
-					return Err(mlua::Error::BadArgument {
-						to: Some("reference:set()".into()),
-						pos: 1,
-						name: Some("name".into()),
-						cause: Arc::new(mlua::Error::RuntimeError(
-							"Expected an internal reference name".into(),
-						)),
-					});
-				};
-				crate::lua::kernel::Kernel::with_context(lua, |ctx| {
-					println!("Heading:set() called!");
-					this.0 = Some(Arc::new(InternalReference::new(ctx.location.clone(), name)));
-					println!("{:#?}", this.0);
-				});
-				Ok(())
-			},
-			"",
-			vec!["self",],
-			Some("bool true if the reference is set")
-		);
-	}
-}
-
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "HeadingProxy", immutable, mutable)]
 pub struct Heading {
+	#[lua_ud]
 	pub(crate) location: Token,
 	/// Heading display
-	#[lua_map(VecScopeWrapper)]
+	#[lua_proxy(VecScopeProxy)]
 	pub(crate) display: Vec<Arc<RwLock<Scope>>>,
 	/// Nesting depth
 	#[lua_value]
@@ -167,9 +166,9 @@ pub struct Heading {
 	pub(crate) in_toc: bool,
 	//#[lua_map(InternalReferenceWrapper)]
 	//pub(crate) reference: Option<Arc<InternalReference>>,
-	#[lua_map(FieldInternalReference)]
+	#[lua_ud(FieldInternalReference)]
 	pub(crate) reference: Option<Arc<InternalReference>>,
-	#[lua_map(OnceLockWrapper)]
+	#[lua_ud(OnceLockWrapper)]
 	pub(crate) link: OnceLock<String>,
 }
 
@@ -245,9 +244,12 @@ impl Element for Heading {
 		}
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(HeadingProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(HeadingProxyMut(self as *mut _)).unwrap()
 	}
 }
 

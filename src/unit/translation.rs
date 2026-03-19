@@ -6,6 +6,7 @@ use std::sync::OnceLock;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 
+use auto_userdata::auto_userdata;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 use mlua::UserData;
@@ -353,9 +354,7 @@ pub trait TranslationAccessors {
 	/// Add content to the translation unit's current scope, triggering lua callbacks
 	fn add_content<T>(&mut self, elem: T)
 	where
-		T: Element + UserData + Send + Sync + 'static,
-		for<'a> &'a T: mlua::UserData,
-		for<'a> &'a mut T: mlua::UserData;
+		T: Element + Send + Sync + 'static;
 
 	/// Add content to the translation unit's current scope, bypassing lua callbacks
 	fn add_content_raw(&mut self, elem: Arc<dyn Element>);
@@ -377,11 +376,9 @@ pub trait TranslationAccessors {
 }
 
 impl TranslationAccessors for TranslationUnit {
-	fn add_content<T>(&mut self, elem: T)
+	fn add_content<T>(&mut self, mut elem: T)
 	where
-		T: Element + UserData + Send + Sync + 'static,
-		for<'a> &'a T: mlua::UserData,
-		for<'a> &'a mut T: mlua::UserData
+		T: Element + Send + Sync + 'static
 	{
 		crate::elements::lua::custom::LuaData::initialize(self);
 		let elem = crate::elements::lua::custom::LuaData::with_kernel(

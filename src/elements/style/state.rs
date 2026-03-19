@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ariadne::Fmt;
 use ariadne::Span;
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use parking_lot::RwLock;
 use regex::Regex;
 
@@ -17,8 +17,7 @@ use crate::parser::state::CustomState;
 use crate::unit::scope::Scope;
 use crate::unit::translation::TranslationUnit;
 
-#[derive(AutoUserData)]
-#[auto_userdata_target = "&"]
+#[auto_userdata(proxy = "StyleProxy", immutable, mutable)]
 pub struct Style {
 	/// Style name
 	pub(crate) name: String,

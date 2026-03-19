@@ -59,7 +59,7 @@ impl Rule for MetaRule {
 							for elem in elems {
 								unit.add_content_raw(elem.0);
 							}
-							Ok(ScopeWrapper(scope))
+							Ok(ScopeWrapper(&scope))
 						},
 					)
 				})

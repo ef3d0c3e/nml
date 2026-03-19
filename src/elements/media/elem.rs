@@ -12,7 +12,7 @@ use crate::unit::element::ReferenceableElement;
 use crate::unit::references::InternalReference;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
@@ -60,11 +60,10 @@ impl TryFrom<&str> for MediaType {
 	}
 }
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "MediaGroupProxy", immutable, mutable)]
 pub struct MediaGroup {
+	#[lua_ud]
 	pub(crate) location: Token,
 	#[lua_ignore]
 	pub(crate) media: Vec<Arc<Media>>,
@@ -109,17 +108,21 @@ impl Element for MediaGroup {
 		Ok(())
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(MediaGroupProxy(self as *const _))
+			.unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(MediaGroupProxyMut(self as *mut _))
+			.unwrap()
 	}
 }
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "MediaProxy", immutable, mutable)]
 pub struct Media {
+	#[lua_ud]
 	pub(crate) location: Token,
 	#[lua_ignore]
 	pub(crate) url: Url,
@@ -133,7 +136,7 @@ pub struct Media {
 	pub(crate) description: Option<Arc<RwLock<Scope>>>,
 	#[lua_ignore]
 	pub(crate) reference: Option<Arc<InternalReference>>,
-	#[lua_map(OnceLockWrapper)]
+	#[lua_ud(OnceLockWrapper)]
 	pub(crate) link: OnceLock<String>,
 }
 
@@ -211,9 +214,12 @@ impl Element for Media {
 		Some(self)
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(MediaProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(MediaProxyMut(self as *mut _)).unwrap()
 	}
 }
 

@@ -1,219 +1,400 @@
-#![feature(proc_macro_span)]
 use proc_macro::TokenStream;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use quote::ToTokens;
-use quote::TokenStreamExt;
-use syn::parse_macro_input;
-use syn::DeriveInput;
-use syn::Fields;
-use syn::Ident;
-use syn::Lit;
-use syn::Meta;
-use syn::NestedMeta;
+use syn::{
+	parse::Parse, parse::ParseStream, parse_macro_input, punctuated::Punctuated, DeriveInput,
+	Field, Ident, Meta, Token,
+};
 
-#[derive(Clone)]
-enum ValueMapper {
-	Ignore,
-	Value,
-	ArcDeref,
-	Map(Ident, Option<String>),
+// Helper attributes
+#[proc_macro_attribute]
+pub fn lua_proxy(_args: TokenStream, input: TokenStream) -> TokenStream {
+	input
 }
 
-#[proc_macro_derive(
-	AutoUserData,
-	attributes(lua_value, lua_ignore, lua_map, lua_arc_deref, auto_userdata_target)
-)]
-pub fn derive_lua_user_data(input: TokenStream) -> TokenStream {
-	let input = parse_macro_input!(input as DeriveInput);
-	let ident = input.ident.clone();
+#[proc_macro_attribute]
+pub fn lua_ud(_args: TokenStream, input: TokenStream) -> TokenStream {
+	input
+}
 
-	let mut targets: Vec<proc_macro2::TokenStream> = vec![];
+#[proc_macro_attribute]
+pub fn lua_value(_args: TokenStream, input: TokenStream) -> TokenStream {
+	input
+}
 
-	for attr in &input.attrs {
-		if attr.path.is_ident("auto_userdata_target") {
-			if let Ok(Meta::NameValue(nv)) = attr.parse_meta() {
-				if let Lit::Str(litstr) = nv.lit {
-					let value = litstr.value();
-					if value == "&" {
-						targets.push(quote! { & #ident });
-					} else if value == "&mut" {
-						targets.push(quote! { &mut #ident });
-					} else if value == "*" {
-						targets.push(quote! { #ident });
+#[proc_macro_attribute]
+pub fn lua_ignore(_args: TokenStream, input: TokenStream) -> TokenStream {
+	input
+}
+
+// Parsing
+struct AutoUserDataArgs {
+	proxy: Option<String>,
+	immutable: bool,
+	mutable: bool,
+}
+
+impl Parse for AutoUserDataArgs {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let mut proxy = None;
+		let mut immutable = false;
+		let mut mutable = false;
+
+		let args = Punctuated::<Meta, Token![,]>::parse_terminated(input)?;
+		for meta in args {
+			match &meta {
+				Meta::NameValue(nv) if nv.path.is_ident("proxy") => {
+					if let syn::Expr::Lit(syn::ExprLit {
+						lit: syn::Lit::Str(s),
+						..
+					}) = &nv.value
+					{
+						proxy = Some(s.value());
 					} else {
-						return syn::Error::new_spanned(
-							litstr,
-							"Only `&` is supported as target currently",
-						)
-						.to_compile_error()
-						.into();
+						return Err(syn::Error::new_spanned(
+							&nv.value,
+							"proxy must be a string literal",
+						));
+					}
+				}
+				Meta::Path(p) if p.is_ident("immutable") => immutable = true,
+				Meta::Path(p) if p.is_ident("mutable") => mutable = true,
+				_ => return Err(syn::Error::new_spanned(&meta, "unknown argument")),
+			}
+		}
+
+		Ok(AutoUserDataArgs {
+			proxy,
+			immutable,
+			mutable,
+		})
+	}
+}
+
+// Fields
+
+/// The smart pointer wrapper around the field, if any.
+enum ProxyWrapper {
+	/// Plain field — take address directly
+	None,
+	/// Arc<T> — as_ptr() for const, cast for mut (panics at macro level: force immutable)
+	Arc,
+	/// Box<T> — deref to get pointer
+	Box,
+	/// Rc<T> — as_ptr() for const, no mut
+	Rc,
+}
+
+impl ProxyWrapper {
+	fn parse(ident: &Ident) -> syn::Result<Self> {
+		match ident.to_string().as_str() {
+			"Arc" => Ok(ProxyWrapper::Arc),
+			"Box" => Ok(ProxyWrapper::Box),
+			"Rc"  => Ok(ProxyWrapper::Rc),
+			other => Err(syn::Error::new_spanned(
+				ident,
+				format!("unsupported wrapper `{other}` — expected Arc, Box, or Rc"),
+			)),
+		}
+	}
+
+	/// Whether this wrapper can yield a mutable pointer at all.
+	fn supports_mut(&self) -> bool {
+		matches!(self, ProxyWrapper::None | ProxyWrapper::Box)
+	}
+}
+
+enum FieldKind {
+	/// #[lua_proxy(ProxyName)] or #[lua_proxy(ProxyName, Arc)]
+	/// or #[lua_proxy(ProxyName, Arc, immutable)] etc.
+	Proxy {
+		base: Ident,
+		wrapper: ProxyWrapper,
+		force_immutable: bool,
+	},
+	/// #[lua_ud] — clone field value, use its own UserData impl (requires Clone)
+	UserDataSelf,
+	/// #[lua_ud(SomeType)] — wrap *mut field in SomeType, which manages its own UserData
+	UserDataWrapper(Ident),
+	/// #[lua_value] — serde via mlua's serialize feature
+	Value,
+	/// #[lua_ignore] — not exposed to Lua
+	Ignore,
+	/// No attribute — default IntoLua/FromLua
+	Default,
+}
+
+/// Parse #[lua_proxy(ProxyName)]
+///      #[lua_proxy(ProxyName, immutable)]
+///      #[lua_proxy(ProxyName, Arc)]
+///      #[lua_proxy(ProxyName, Arc, immutable)]
+fn parse_lua_proxy(attr: &syn::Attribute) -> syn::Result<FieldKind> {
+	let mut base: Option<Ident> = None;
+	let mut wrapper = ProxyWrapper::None;
+	let mut force_immutable = false;
+
+	attr.parse_args_with(|input: ParseStream| {
+		// First arg: proxy base name
+		base = Some(input.parse::<Ident>()?);
+
+		// Optional second arg: wrapper or immutable
+		if input.peek(Token![,]) {
+			let _: Token![,] = input.parse()?;
+			let ident: Ident = input.parse()?;
+			if ident == "immutable" {
+				force_immutable = true;
+			} else {
+				wrapper = ProxyWrapper::parse(&ident)?;
+
+				// Optional third arg: immutable
+				if input.peek(Token![,]) {
+					let _: Token![,] = input.parse()?;
+					let flag: Ident = input.parse()?;
+					if flag == "immutable" {
+						force_immutable = true;
+					} else {
+						return Err(syn::Error::new_spanned(flag, "expected `immutable`"));
 					}
 				}
 			}
 		}
-	}
-	if targets.is_empty() {
-		targets.push(quote! { #ident });
+
+		Ok(())
+	})?;
+
+	// Arc and Rc cannot yield *mut — force_immutable is mandatory.
+	// Warn at compile time rather than panicking at runtime.
+	if matches!(wrapper, ProxyWrapper::Arc | ProxyWrapper::Rc) && !force_immutable {
+		return Err(syn::Error::new(
+			attr.pound_token.spans[0],
+			"Arc and Rc fields cannot yield *mut — add `immutable`: \
+			 #[lua_proxy(ProxyName, Arc, immutable)]",
+		));
 	}
 
-	let fields = match input.data {
-		syn::Data::Struct(data) => match data.fields {
-			Fields::Named(named) => named.named,
+	Ok(FieldKind::Proxy { base: base.unwrap(), wrapper, force_immutable })
+}
+
+fn classify_field(field: &Field) -> syn::Result<FieldKind> {
+	for attr in &field.attrs {
+		if attr.path().is_ident("lua_proxy") {
+			return parse_lua_proxy(attr);
+		}
+		if attr.path().is_ident("lua_ud") {
+			// No args: use the field type's own UserData impl (must be Clone)
+			if matches!(attr.meta, syn::Meta::Path(_)) {
+				return Ok(FieldKind::UserDataSelf);
+			}
+			let ud_type: Ident = attr.parse_args()?;
+			return Ok(FieldKind::UserDataWrapper(ud_type));
+		}
+		if attr.path().is_ident("lua_value") {
+			return Ok(FieldKind::Value);
+		}
+		if attr.path().is_ident("lua_ignore") {
+			return Ok(FieldKind::Ignore);
+		}
+	}
+	Ok(FieldKind::Default)
+}
+
+// Generation
+fn generate_proxy(
+	proxy_name: &Ident,
+	is_mut: bool,
+	struct_name: &Ident,
+	fields: &Punctuated<Field, Token![,]>,
+) -> syn::Result<TokenStream2> {
+	let ptr_type = if is_mut {
+		quote! { *mut #struct_name }
+	} else {
+		quote! { *const #struct_name }
+	};
+
+	let mut field_tokens = TokenStream2::new();
+
+	for field in fields {
+		let field_name = field.ident.as_ref().unwrap();
+		let field_name_str = field_name.to_string();
+		let kind = classify_field(field)?;
+
+		match kind {
+			FieldKind::Ignore => {}
+
+			FieldKind::Default => {
+				field_tokens.extend(quote! {
+					fields.add_field_method_get(#field_name_str, |_, this| {
+						Ok(unsafe { (*this.0).#field_name.clone() })
+					});
+				});
+				if is_mut {
+					field_tokens.extend(quote! {
+						fields.add_field_method_set(#field_name_str, |_, this, val| {
+							unsafe { (*this.0).#field_name = val };
+							Ok(())
+						});
+					});
+				}
+			}
+
+			FieldKind::Value => {
+				field_tokens.extend(quote! {
+					fields.add_field_method_get(#field_name_str, |lua, this| {
+						mlua::LuaSerdeExt::to_value(lua, unsafe { &(*this.0).#field_name })
+					});
+				});
+				if is_mut {
+					field_tokens.extend(quote! {
+						fields.add_field_method_set(#field_name_str, |lua, this, val: ::mlua::Value| {
+							unsafe { (*this.0).#field_name = mlua::LuaSerdeExt::from_value(lua, val)?; }
+							Ok(())
+						});
+					});
+				}
+			}
+
+			FieldKind::Proxy { ref base, ref wrapper, force_immutable } => {
+				let use_mut = is_mut && !force_immutable && wrapper.supports_mut();
+
+				let proxy_ident = if use_mut {
+					Ident::new(&format!("{base}Mut"), base.span())
+				} else {
+					base.clone()
+				};
+
+				// Generate the pointer expression based on the wrapper type.
+				let ptr_expr = match wrapper {
+					ProxyWrapper::None => {
+						if use_mut {
+							quote! { &mut (*this.0).#field_name as *mut _ }
+						} else {
+							quote! { &(*this.0).#field_name as *const _ }
+						}
+					}
+					ProxyWrapper::Box => {
+						if use_mut {
+							quote! { (*this.0).#field_name.as_mut() as *mut _ }
+						} else {
+							quote! { (*this.0).#field_name.as_ref() as *const _ }
+						}
+					}
+					// Arc and Rc: always immutable (enforced above in parse_lua_proxy)
+					ProxyWrapper::Arc => {
+						quote! { ::std::sync::Arc::as_ptr(&(*this.0).#field_name) }
+					}
+					ProxyWrapper::Rc => {
+						quote! { ::std::rc::Rc::as_ptr(&(*this.0).#field_name) }
+					}
+				};
+
+				field_tokens.extend(quote! {
+					fields.add_field_method_get(#field_name_str, |lua, this| {
+						let ptr = unsafe { #ptr_expr };
+						lua.create_userdata(#proxy_ident(ptr))
+					});
+				});
+			}
+
+			// #[lua_ud] — clone the field value and use its own UserData impl
+			FieldKind::UserDataSelf => {
+				field_tokens.extend(quote! {
+					fields.add_field_method_get(#field_name_str, |lua, this| {
+						lua.create_userdata(unsafe { (*this.0).#field_name.clone() })
+					});
+				});
+			}
+
+			// #[lua_ud(SomeType)] — wrap *mut field in SomeType
+			FieldKind::UserDataWrapper(ref ud_type) => {
+				field_tokens.extend(quote! {
+					fields.add_field_method_get(#field_name_str, |lua, this| {
+						let ptr = unsafe { &mut (*this.0).#field_name as *mut _ };
+						lua.create_userdata(#ud_type(ptr))
+					});
+				});
+			}
+		}
+	}
+
+	Ok(quote! {
+		pub struct #proxy_name(#ptr_type);
+
+		unsafe impl Send for #proxy_name {}
+		unsafe impl Sync for #proxy_name {}
+
+		impl ::mlua::UserData for #proxy_name {
+			fn add_fields<F: ::mlua::UserDataFields<Self>>(fields: &mut F) {
+				#field_tokens
+			}
+		}
+	})
+}
+
+// Macro
+#[proc_macro_attribute]
+pub fn auto_userdata(args: TokenStream, input: TokenStream) -> TokenStream {
+	let args = parse_macro_input!(args as AutoUserDataArgs);
+	let mut input = parse_macro_input!(input as DeriveInput);
+
+	let struct_name = input.ident.clone();
+
+	let proxy_base = args
+		.proxy
+		.as_deref()
+		.unwrap_or(&format!("{struct_name}Proxy"))
+		.to_string();
+
+	let fields = match &input.data {
+		syn::Data::Struct(s) => match &s.fields {
+			syn::Fields::Named(f) => f.named.clone(),
 			_ => {
-				return syn::Error::new_spanned(
-					ident,
-					"AutoUserData only supports named struct fields",
+				return syn::Error::new(
+					Span::call_site(),
+					"auto_userdata only supports named fields",
 				)
 				.to_compile_error()
-				.into();
+				.into()
 			}
 		},
 		_ => {
-			return syn::Error::new_spanned(ident, "Only structs supported")
+			return syn::Error::new(Span::call_site(), "auto_userdata only supports structs")
 				.to_compile_error()
-				.into();
+				.into()
 		}
 	};
 
-	let mut field_getters = Vec::new();
-	let mut field_setters = Vec::new();
-
-	for field in fields {
-		let name = field.ident.clone().unwrap();
-		let field_name_str = name.to_string();
-
-		let mut mapper: Option<ValueMapper> = None;
-
-		for attr in &field.attrs {
-			if attr.path.is_ident("lua_ignore") {
-				mapper = Some(ValueMapper::Ignore);
-				break;
-			}
-			if attr.path.is_ident("lua_value") {
-				mapper = Some(ValueMapper::Value);
-				break;
-			}
-			if attr.path.is_ident("lua_arc_deref") {
-				mapper = Some(ValueMapper::ArcDeref);
-				break;
-			}
-			if attr.path.is_ident("lua_map") {
-				if let Ok(Meta::List(meta_list)) = attr.parse_meta() {
-					let mut map_to = None;
-					let mut map_expr = None;
-
-					if let Some(NestedMeta::Meta(Meta::Path(path))) = meta_list.nested.iter().nth(0)
-					{
-						if let Some(ident) = path.get_ident() {
-							map_to = Some(ident.clone());
-						}
-					}
-
-					if let Some(NestedMeta::Meta(Meta::Path(path))) = meta_list.nested.iter().nth(1)
-					{
-						map_expr = Some(path.to_token_stream().to_string());
-					}
-
-					if let Some(map_to) = map_to {
-						mapper = Some(ValueMapper::Map(map_to, map_expr));
-					}
-				}
-				break;
-			}
-		}
-
-		// Getter
-		match mapper.clone() {
-			Some(ValueMapper::Ignore) => {}
-			Some(ValueMapper::Map(mapper, expr)) => {
-				if let Some(expr) = expr {
-					let code = expr.replace("$", "#name");
-					field_getters.push(quote! {
-						fields.add_field_method_get(#field_name_str, |lua, this| {
-							Ok(#mapper(this.#code))
-						});
-					});
-				} else {
-					field_getters.push(quote! {
-						fields.add_field_method_get(#field_name_str, |lua, this| {
-							Ok(#mapper(this.#name.clone()))
-						});
-					});
-				}
-			}
-			Some(ValueMapper::ArcDeref) => {
-				field_getters.push(quote! {
-					fields.add_field_method_get(#field_name_str, |lua, this| {
-						let r: &'static _ = unsafe { &*Arc::as_ptr(&this.#name) };
-						Ok(lua.create_userdata(r).unwrap())
-					});
+	// Strip lua* attributes
+	if let syn::Data::Struct(ref mut s) = input.data {
+		if let syn::Fields::Named(ref mut f) = s.fields {
+			for field in f.named.iter_mut() {
+				field.attrs.retain(|attr| {
+					!attr.path().is_ident("lua_proxy")
+						&& !attr.path().is_ident("lua_ud")
+						&& !attr.path().is_ident("lua_value")
+						&& !attr.path().is_ident("lua_ignore")
 				});
 			}
-			Some(ValueMapper::Value) => {
-				field_getters.push(quote! {
-					fields.add_field_method_get(#field_name_str, |lua, this| {
-						mlua::LuaSerdeExt::to_value(lua, &this.#name)
-					});
-				});
-			},
-			_ => {
-				field_getters.push(quote! {
-					fields.add_field_method_get(#field_name_str, |lua, this| {
-						Ok(this.#name.clone())
-					});
-				});
-			},
-		};
-
-		// Setter
-		match mapper {
-			Some(ValueMapper::Ignore) => {}
-			Some(ValueMapper::Map(_mapper, _expr)) => {}
-			Some(ValueMapper::Value) => {
-				field_setters.push(quote! {
-					fields.add_field_method_set(#field_name_str, |lua, this, value| {
-						let val = mlua::LuaSerdeExt::from_value(lua, value)?;
-						this.#name = val;
-						Ok(())
-					});
-				});
-			},
-			_ => {
-				//field_getters.push(quote! {
-				//	fields.add_field_method_set(#field_name_str, |lua, this, value| {
-				//		let val = mlua::LuaSerdeExt::from_value(lua, value)?;
-				//		this.#name = val;
-				//		Ok(())
-				//	});
-				//});
-			},
-		};
-
-	}
-
-	let mut expanded: proc_macro2::TokenStream = Default::default();
-	for target in targets {
-		if target.to_string().starts_with("& mut")
-		{
-			expanded.extend(quote! {
-				impl mlua::UserData for #target {
-					fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
-						#(#field_getters)*
-						#(#field_setters)*
-					}
-				}
-			});
-		}
-		else {
-			expanded.extend(quote! {
-				impl mlua::UserData for #target {
-					fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
-						#(#field_getters)*
-					}
-				}
-			});
 		}
 	}
 
-	TokenStream::from(expanded)
+	let mut output = TokenStream2::new();
+	output.extend(quote! { #input });
+
+	if args.immutable {
+		let proxy_name = Ident::new(&proxy_base, Span::call_site());
+		match generate_proxy(&proxy_name, false, &struct_name, &fields) {
+			Ok(ts) => output.extend(ts),
+			Err(e) => return e.to_compile_error().into(),
+		}
+	}
+
+	if args.mutable {
+		let proxy_mut_name = Ident::new(&format!("{proxy_base}Mut"), Span::call_site());
+		match generate_proxy(&proxy_mut_name, true, &struct_name, &fields) {
+			Ok(ts) => output.extend(ts),
+			Err(e) => return e.to_compile_error().into(),
+		}
+	}
+
+	output.into()
 }

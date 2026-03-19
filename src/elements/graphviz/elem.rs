@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use ariadne::Span;
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use graphviz_rust::cmd::Format;
@@ -55,11 +55,10 @@ pub(crate) fn layout_from_str(value: &str) -> Result<Layout, String> {
 	}
 }
 
-#[derive(Debug, Clone, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug, Clone)]
+#[auto_userdata(proxy = "GraphvizProxy", immutable, mutable)]
 pub struct Graphviz {
+	#[lua_ud]
 	pub(crate) location: Token,
 	pub(crate) graph: String,
 	#[lua_ignore]
@@ -79,7 +78,8 @@ impl Graphviz {
 				let svg_start = out.find("<svg").unwrap(); // Remove svg header
 				let split_at = out.split_at(svg_start).1.find('\n').unwrap();
 
-				let mut result = format!("<svg width=\"{}\"", self.width.to_output(SizeOutput::CSS));
+				let mut result =
+					format!("<svg width=\"{}\"", self.width.to_output(SizeOutput::CSS));
 				result.push_str(out.split_at(svg_start + split_at).1);
 
 				result
@@ -197,8 +197,13 @@ impl Element for Graphviz {
 		))
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(GraphvizProxy(self as *const _))
+			.unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(GraphvizProxyMut(self as *mut _))
+			.unwrap()
 	}
 }

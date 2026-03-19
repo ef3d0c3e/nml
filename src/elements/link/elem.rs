@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ariadne::Span;
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
@@ -18,14 +18,13 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "LinkProxy", immutable, mutable)]
 pub struct Link {
+	#[lua_ud]
 	pub(crate) location: Token,
 	/// Link display content
-	#[lua_map(VecScopeWrapper)]
+	#[lua_proxy(VecScopeProxy)]
 	pub(crate) display: Vec<Arc<RwLock<Scope>>>,
 	/// Url of link
 	#[lua_value]
@@ -83,9 +82,12 @@ impl Element for Link {
 		Some(self)
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(LinkProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(LinkProxyMut(self as *mut _)).unwrap()
 	}
 }
 

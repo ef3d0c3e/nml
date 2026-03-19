@@ -1,4 +1,4 @@
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::FromLua;
 use mlua::LuaSerdeExt;
 use serde::Deserialize;
@@ -94,11 +94,11 @@ impl TryFrom<&str> for Refname {
 }
 
 /// References available inside a document
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "*"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "InternalReferenceProxy", immutable, mutable)]
 pub struct InternalReference {
 	// Declaration
+	#[lua_ud]
 	location: Token,
 	/// Name of the reference
 	#[lua_value]

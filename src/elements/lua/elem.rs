@@ -2,18 +2,18 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
-use mlua::AnyUserData;
-use mlua::Lua;
-use serde::Deserialize;
-use serde::Serialize;
 use crate::elements::meta::scope::ScopeElement;
 use crate::elements::text::elem::Text;
 use crate::lua::kernel::KernelNameBuf;
+use crate::lua::wrappers::*;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
-use auto_userdata::AutoUserData;
-use crate::lua::wrappers::*;
+use auto_userdata::auto_userdata;
+use mlua::AnyUserData;
+use mlua::Lua;
 use parking_lot::RwLock;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
@@ -57,17 +57,16 @@ impl FromStr for LuaEvalKind {
 	}
 }
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "LuaPostProcessProxy", immutable, mutable)]
 pub struct LuaPostProcess {
+	#[lua_ud]
 	pub(crate) location: Token,
 	/// Expanded content after post processing
 	#[lua_ignore]
 	pub(crate) expanded: OnceLock<Vec<Arc<RwLock<Scope>>>>,
 	/// Lua content source
-	#[lua_map(SourceWrapper)]
+	#[lua_ud(SourceWrapper)]
 	pub(crate) source: Arc<dyn Source>,
 	/// Lua kernel name
 	#[lua_value]
@@ -175,9 +174,14 @@ impl Element for LuaPostProcess {
 		Ok(())
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(LuaPostProcessProxy(self as *const _))
+			.unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(LuaPostProcessProxyMut(self as *mut _))
+			.unwrap()
 	}
 }
 

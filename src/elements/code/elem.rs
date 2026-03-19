@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
@@ -32,11 +32,10 @@ pub struct CodeDisplay {
 	pub theme: Option<String>,
 }
 
-#[derive(Debug, Clone, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug, Clone)]
+#[auto_userdata(proxy = "CodeProxy", immutable, mutable)]
 pub struct Code {
+	#[lua_ud]
 	pub(crate) location: Token,
 	pub(crate) language: String,
 	#[lua_value]
@@ -230,8 +229,11 @@ impl Element for Code {
 		Some(hover)
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(CodeProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(CodeProxyMut(self as *mut _)).unwrap()
 	}
 }

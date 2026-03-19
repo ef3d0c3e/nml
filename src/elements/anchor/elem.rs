@@ -2,35 +2,35 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 
 use ariadne::Span;
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
 
-use crate::lua::wrappers::*;
 use crate::compiler::compiler::Compiler;
 use crate::compiler::compiler::Target;
 use crate::compiler::output::CompilerOutput;
+use crate::lua::wrappers::*;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crate::unit::element::ElemKind;
 use crate::unit::element::Element;
 use crate::unit::element::ReferenceableElement;
 use crate::unit::references::InternalReference;
+use crate::unit::references::InternalReferenceProxy;
 use crate::unit::references::Refname;
 use crate::unit::scope::Scope;
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "AnchorProxy", immutable, mutable)]
 pub struct Anchor {
+	#[lua_ud]
 	pub(crate) location: Token,
 	#[lua_value]
 	pub(crate) refname: Refname,
-	#[lua_arc_deref]
+	#[lua_proxy(InternalReferenceProxy, Arc, immutable)]
 	pub(crate) reference: Arc<InternalReference>,
-	#[lua_map(OnceLockWrapper)]
+	#[lua_ud(OnceLockWrapper)]
 	pub(crate) link: OnceLock<String>,
 }
 
@@ -66,8 +66,8 @@ impl Element for Anchor {
 	}
 
 	fn provide_hover(&self) -> Option<String> {
-	    Some(format!(
-"Anchor
+		Some(format!(
+			"Anchor
 
 # Properties
  * **Location**: {} ({}..{})
@@ -75,16 +75,20 @@ impl Element for Anchor {
 			self.location.source().name().display(),
 			self.location().range.start(),
 			self.location().range.end(),
-			self.refname.to_string()))
+			self.refname.to_string()
+		))
 	}
 
 	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
 		Some(self)
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(AnchorProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(AnchorProxyMut(self as *mut _)).unwrap()
 	}
 }
 

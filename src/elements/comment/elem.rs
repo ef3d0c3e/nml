@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
@@ -14,11 +14,10 @@ use crate::unit::element::ElemKind::{self};
 use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "CommentProxy", immutable, mutable)]
 pub struct Comment {
+	#[lua_ud]
 	pub(crate) location: Token,
 	pub(crate) content: String,
 }
@@ -45,8 +44,12 @@ impl Element for Comment {
 		Ok(())
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(CommentProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(CommentProxyMut(self as *mut _))
+			.unwrap()
 	}
 }

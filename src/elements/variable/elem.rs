@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::lua::wrappers::*;
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
@@ -17,13 +17,12 @@ use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::variable::Variable;
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "VariableDefinitionProxy", immutable, mutable)]
 pub struct VariableDefinition {
+	#[lua_ud]
 	pub(crate) location: Token,
-	#[lua_map(VariableWrapper)]
+	#[lua_ud(VariableWrapper)]
 	pub(crate) variable: Arc<dyn Variable>,
 }
 
@@ -80,22 +79,24 @@ impl Element for VariableDefinition {
 		Some(get_documentation(self.element_name(), &self.variable))
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(VariableDefinitionProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(VariableDefinitionProxyMut(self as *mut _)).unwrap()
 	}
 }
 
 /// Holds the generated ast from a variable invocation
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "VariableSubstitutionProxy", immutable, mutable)]
 pub struct VariableSubstitution {
+	#[lua_ud]
 	pub location: Token,
-	#[lua_map(VariableWrapper)]
+	#[lua_ud(VariableWrapper)]
 	pub variable: Arc<dyn Variable>,
-	#[lua_map(VecScopeWrapper)]
+	#[lua_proxy(VecScopeProxy)]
 	pub content: Vec<Arc<RwLock<Scope>>>,
 }
 
@@ -132,9 +133,12 @@ impl Element for VariableSubstitution {
 		Some(self)
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(VariableSubstitutionProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(VariableSubstitutionProxyMut(self as *mut _)).unwrap()
 	}
 }
 

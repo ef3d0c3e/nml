@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::lua::wrappers::ElemMutWrapper;
+use crate::lua::wrappers::ElemWrapperMut;
 use crate::lua::wrappers::UnitWrapper;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
@@ -349,21 +349,20 @@ impl Kernel {
 	}
 
 	/// Dispatch AutoCommand calls when creating an element
-	pub fn au_create_elem<T>(&self, unit: &mut TranslationUnit, elem: T) -> Result<Option<T>, String>
+	pub fn au_create_elem<T>(&self, unit: &mut TranslationUnit, mut elem: T) -> Result<Option<T>, String>
 	where
-		T: Element + UserData + Send + 'static,
-		for <'a> &'a mut T: mlua::UserData
+		T: Element + Send + 'static,
 	{
 		let mut result = true;
 		let elem_name = elem.element_name();
 		let create_elem_table = self.au_create_elem.borrow();
-		let mut wrapper = ElemMutWrapper(elem);
+		let mut wrapper = ElemWrapperMut(unsafe { &mut elem as *mut _ });
 		for key in create_elem_table.iter() {
 			let fun: mlua::Function = self
 				.lua
 				.registry_value(key)
 				.map_err(|err| format!("Failed to retrieve registry key `{key:#?}`: {err}"))?;
-			let ctx = KernelContext::new(wrapper.0.location().clone(), self, unit);
+			let ctx = KernelContext::new(elem.location().clone(), self, unit);
 			let ud = self
 				.lua
 				.create_userdata(wrapper)
@@ -378,7 +377,7 @@ impl Kernel {
 			})?;
 		}
 
-		Ok(result.then_some(wrapper.0))
+		Ok(result.then_some(elem))
 	}
 }
 

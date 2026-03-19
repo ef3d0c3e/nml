@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 
 use crate::lua::wrappers::*;
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::FromLua;
 use mlua::IntoLua;
@@ -47,17 +47,16 @@ impl FromLua for ReferenceTarget {
     }
 }
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "InternalLinkProxy", immutable, mutable)]
 pub struct InternalLink {
+	#[lua_ud]
 	pub(crate) location: Token,
 	#[lua_value]
 	pub(crate) refname: Refname,
-	#[lua_map(VecScopeWrapper)]
+	#[lua_proxy(VecScopeProxy)]
 	pub(crate) display: Vec<Arc<RwLock<Scope>>>,
-	#[lua_map(OnceLockWrapper)]
+	#[lua_ud(OnceLockWrapper)]
 	pub(crate) reference: OnceLock<ReferenceTarget>,
 }
 
@@ -109,9 +108,12 @@ impl Element for InternalLink {
 		Some(self)
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(InternalLinkProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(InternalLinkProxyMut(self as *mut _)).unwrap()
 	}
 }
 

@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
 use mlua::UserData;
+use parking_lot::RwLock;
 
 use crate::add_documented_method;
-use crate::lua::wrappers::{ElemWrapper, IteratorWrapper, ScopeWrapper, VecScopeWrapper};
-use crate::unit::scope::ScopeAccessor;
+use crate::lua::wrappers::{
+	ElemWrapper, IteratorWrapper, ScopeWrapper, VecScopeProxy, VecScopeProxyMut
+};
+use crate::unit::scope::{Scope, ScopeAccessor};
 
 impl UserData for ScopeWrapper {
 	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
@@ -13,7 +16,8 @@ impl UserData for ScopeWrapper {
 			"Scope",
 			"content",
 			|_lua, this, (recurse,): (bool,)| {
-				let it = this.0.content_iter(recurse);
+				let r = unsafe { &*this.0 as &Arc<RwLock<Scope>> };
+				let it = r.content_iter(recurse);
 				Ok(IteratorWrapper(Box::new(it)))
 			},
 			"Gets an iterator to the scope's content",
@@ -27,10 +31,10 @@ impl UserData for ScopeWrapper {
 			methods,
 			"Scope",
 			"insert",
-			|_lua, this, (index, elem,): (usize, ElemWrapper)| {
-				let mut scope = this.0.write();
-				if index > scope.content.len()
-				{
+			|_lua, this, (index, elem): (usize, ElemWrapper)| {
+				let r = unsafe { &*this.0 as &Arc<RwLock<Scope>> };
+				let mut scope = r.write();
+				if index > scope.content.len() {
 					scope.content.push(elem.0);
 				} else {
 					scope.content.insert(index, elem.0);
@@ -48,15 +52,42 @@ impl UserData for ScopeWrapper {
 	}
 }
 
-impl UserData for VecScopeWrapper {
+impl UserData for VecScopeProxy {
 	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
 		add_documented_method!(
 			methods,
 			"Scope[]",
 			"scope",
 			|_lua, this, (id,): (usize,)| {
-				if let Some(scope) = this.0.get(id).cloned() {
-					Ok(ScopeWrapper(scope))
+				let r = unsafe { &*this.0 as &Vec<Arc<RwLock<Scope>>> };
+				if let Some(scope) = r.get(id).cloned() {
+					Ok(ScopeWrapper(&scope))
+				} else {
+					Err(mlua::Error::BadArgument {
+						to: Some("scope".into()),
+						pos: 1,
+						name: Some("id".into()),
+						cause: Arc::new(mlua::Error::RuntimeError("Index out of bounds".into())),
+					})
+				}
+			},
+			"Gets a scope by id",
+			vec!["self", "id:number Id of the scope to get"],
+			Some("Scope")
+		);
+	}
+}
+
+impl UserData for VecScopeProxyMut {
+	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+		add_documented_method!(
+			methods,
+			"Scope[]",
+			"scope",
+			|_lua, this, (id,): (usize,)| {
+				let r = unsafe { &mut *this.0 as &mut Vec<Arc<RwLock<Scope>>> };
+				if let Some(scope) = r.get(id).cloned() {
+					Ok(ScopeWrapper(&scope))
 				} else {
 					Err(mlua::Error::BadArgument {
 						to: Some("scope".into()),

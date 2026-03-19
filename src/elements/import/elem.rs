@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
+use crate::lua::wrappers::*;
 use ariadne::Span;
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
-use crate::lua::wrappers::*;
 
 use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
@@ -17,13 +17,12 @@ use crate::unit::element::Element;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "InternalLinkProxy", immutable, mutable)]
 pub struct Import {
+	#[lua_ud]
 	pub(crate) location: Token,
-	#[lua_map(VecScopeWrapper)]
+	#[lua_proxy(VecScopeProxy)]
 	pub(crate) content: Vec<Arc<RwLock<Scope>>>,
 }
 
@@ -70,9 +69,14 @@ impl Element for Import {
 		Some(self)
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(InternalLinkProxy(self as *const _))
+			.unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(InternalLinkProxyMut(self as *mut _))
+			.unwrap()
 	}
 }
 

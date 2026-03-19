@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use auto_userdata::AutoUserData;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
@@ -16,10 +16,10 @@ use crate::unit::element::LinkableElement;
 use crate::unit::element::ReferenceableElement;
 use crate::unit::scope::Scope;
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "*"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "EofProxy", immutable, mutable)]
 pub struct Eof {
+	#[lua_ud]
 	pub(crate) location: Token,
 }
 
@@ -55,8 +55,11 @@ impl Element for Eof {
 		None
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(EofProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(EofProxyMut(self as *mut _)).unwrap()
 	}
 }

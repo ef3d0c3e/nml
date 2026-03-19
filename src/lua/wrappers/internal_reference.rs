@@ -6,11 +6,12 @@ use mlua::Value;
 use crate::add_documented_method;
 use crate::add_documented_method_mut;
 use crate::lua::kernel::Kernel;
-use crate::lua::wrappers::InternalReferenceWrapper;
+use crate::lua::wrappers::InternalReferenceProxy;
+use crate::lua::wrappers::InternalReferenceProxyMut;
 use crate::unit::references::InternalReference;
 use crate::unit::references::Refname;
 
-impl UserData for InternalReferenceWrapper {
+impl UserData for InternalReferenceProxy {
 	fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
 	    fields.add_field_method_set("foo", |_lua, _this, _value: mlua::Value| {
 			Ok(())
@@ -21,7 +22,7 @@ impl UserData for InternalReferenceWrapper {
 			methods,
 			"Reference",
 			"is_some",
-			|_lua, this, ()| { Ok(this.0.is_some()) },
+			|_lua, this, ()| { Ok(unsafe { &*this.0 as &Option<Arc<InternalReference>> }.is_some()) },
 			"Return true if the reference is set",
 			vec!["self",],
 			Some("bool True if the reference is set")
@@ -31,7 +32,43 @@ impl UserData for InternalReferenceWrapper {
 			"Reference",
 			"get",
 			|lua, this, ()| {
-				match &this.0 {
+				match unsafe { &*this.0 as &Option<Arc<InternalReference>> } {
+					Some(r) => {
+						let r: &'static _ = unsafe { &*Arc::as_ptr(r) };
+						Ok(Value::UserData(lua.create_userdata(r)?))
+					}
+					None => Ok(Value::Nil),
+				}
+			},
+			"Get the reference value, or nil if unset",
+			vec!["self",],
+			Some("reference? The reference value")
+		);
+	}
+}
+
+impl UserData for InternalReferenceProxyMut {
+	fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+	    fields.add_field_method_set("foo", |_lua, _this, _value: mlua::Value| {
+			Ok(())
+		});
+	}
+	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+		add_documented_method!(
+			methods,
+			"Reference",
+			"is_some",
+			|_lua, this, ()| { Ok(unsafe { &*this.0 as &Option<Arc<InternalReference>> }.is_some()) },
+			"Return true if the reference is set",
+			vec!["self",],
+			Some("bool True if the reference is set")
+		);
+		add_documented_method!(
+			methods,
+			"Reference",
+			"get",
+			|lua, this, ()| {
+				match unsafe { &*this.0 as &Option<Arc<InternalReference>> } {
 					Some(r) => {
 						let r: &'static _ = unsafe { &*Arc::as_ptr(r) };
 						Ok(Value::UserData(lua.create_userdata(r)?))
@@ -48,8 +85,9 @@ impl UserData for InternalReferenceWrapper {
 			"Reference",
 			"set",
 			|lua, this, (name,): (Option<Refname>,)| {
+				let r = unsafe { &mut *this.0 as &mut Option<Arc<InternalReference>> };
 				let Some(name) = name else {
-					this.0 = None;
+					*r = None;
 					return Ok(());
 				};
 				let Refname::Internal(_) = &name else {
@@ -63,7 +101,7 @@ impl UserData for InternalReferenceWrapper {
 					});
 				};
 				Kernel::with_context(lua, |ctx| {
-					this.0 = Some(Arc::new(InternalReference::new(ctx.location.clone(), name)));
+					*r = Some(Arc::new(InternalReference::new(ctx.location.clone(), name)));
 				});
 				Ok(())
 			},
@@ -73,3 +111,4 @@ impl UserData for InternalReferenceWrapper {
 		);
 	}
 }
+

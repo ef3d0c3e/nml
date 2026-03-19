@@ -1,4 +1,4 @@
-use core::hash;
+use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use std::fmt::Display;
@@ -11,7 +11,6 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use ariadne::Span;
-use auto_userdata::AutoUserData;
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
 use parking_lot::RwLock;
@@ -74,11 +73,10 @@ impl Display for TypstKind {
 	}
 }
 
-#[derive(Debug, AutoUserData)]
-#[auto_userdata_target = "*"]
-#[auto_userdata_target = "&"]
-#[auto_userdata_target = "&mut"]
+#[derive(Debug)]
+#[auto_userdata(proxy = "TypstProxy", immutable, mutable)]
 pub struct Typst {
+	#[lua_ud]
 	pub(crate) location: Token,
 	pub(crate) mathmode: bool,
 	#[lua_value]
@@ -268,8 +266,11 @@ impl Element for Typst {
 		))
 	}
 
-	fn lua_wrap(self: Arc<Self>, lua: &Lua) -> Option<AnyUserData> {
-		let r: &'static _ = unsafe { &*Arc::as_ptr(&self) };
-		Some(lua.create_userdata(r).unwrap())
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(TypstProxy(self as *const _)).unwrap()
+	}
+
+	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(TypstProxyMut(self as *mut _)).unwrap()
 	}
 }
