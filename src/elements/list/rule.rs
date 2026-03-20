@@ -5,12 +5,13 @@ use std::sync::Arc;
 
 use ariadne::Fmt;
 use mlua::LuaSerdeExt;
+use parking_lot::RwLock;
 use regex::Regex;
 use serde_json::json;
 
 use crate::lsp::conceal::ConcealTarget;
-use crate::lua::wrappers::*;
 use crate::lua::kernel::Kernel;
+use crate::lua::wrappers::*;
 use crate::parser::property::Property;
 use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
@@ -24,6 +25,7 @@ use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
 use crate::parser::util::escape_source;
 use crate::parser::util::parse_paragraph;
+use crate::unit::scope::Scope;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 
@@ -253,27 +255,34 @@ impl Rule for ListRule {
 			// Add conceal
 			unit.with_lsp(|lsp| {
 				let markers = captures.get(1).unwrap();
-				for (idx, marker) in markers.as_str().char_indices()
-				{
-					let token = Token::new(markers.start() + idx .. markers.start() + idx + 1, cursor.source());
+				for (idx, marker) in markers.as_str().char_indices() {
+					let token = Token::new(
+						markers.start() + idx..markers.start() + idx + 1,
+						cursor.source(),
+					);
 					match marker {
-						'*' => lsp.add_conceal(token, ConcealTarget::Token {
-							token: "bullet".into(),
-							params: json!({
-								"depth": idx,
-								"numbered": false,
-							}),
-						}),
-						'-' => lsp.add_conceal(token, ConcealTarget::Token {
-							token: "bullet".into(),
-							params: json!({
-								"depth": idx,
-								"numbered": true,
-							}),
-						}),
+						'*' => lsp.add_conceal(
+							token,
+							ConcealTarget::Token {
+								token: "bullet".into(),
+								params: json!({
+									"depth": idx,
+									"numbered": false,
+								}),
+							},
+						),
+						'-' => lsp.add_conceal(
+							token,
+							ConcealTarget::Token {
+								token: "bullet".into(),
+								params: json!({
+									"depth": idx,
+									"numbered": true,
+								}),
+							},
+						),
 
-						
-						_ => panic!("")
+						_ => panic!(""),
 					}
 				}
 			});
@@ -373,25 +382,33 @@ impl Rule for ListRule {
 	}
 
 	fn register_bindings(&self) {
-		add_documented_function_values!(
-			"list.Entry",
-			|lua: &mlua::Lua, args: mlua::MultiValue| {
-				let (bullet, content, markers) = convert_lua_args!(lua, args, (BulletMarker, "bullet"), (ScopeWrapper, "content", userdata), (Vec<ListMarker>, "markers"));
-				Ok(Kernel::with_context(lua, |ctx| ListEntry {
-					location: ctx.location.clone(),
-					bullet,
-					content: content.0.clone(),
-					markers,
-				}))
-			},
-			"Creates a new list entry",
-			vec![
-				"bullet BulletMarker Type of list bullet for this entry",
-				"content Scope Content of this entry",
-				"markers ListMarker[] Markers to this entry"
-			],
-			"ListEntry"
-		);
+		//add_documented_function_values!(
+		//	"list.Entry",
+		//	|lua: &mlua::Lua, args: mlua::MultiValue| {
+		//		let (bullet, content, markers) = parse_lua_args!(
+		//			lua,
+		//			args,
+		//			"list.Entry",
+		//			("bullet", BulletMarker, serde),
+		//			("content", ScopeWrapper, ScopeWrapper, Arc<RwLock<Scope>>, prox_any),
+		//			("depth", usize),
+		//		);
+		//		//let (bullet, content, markers) = convert_lua_args!(lua, args, (BulletMarker, "bullet"), (ScopeWrapper, "content", userdata), (Vec<ListMarker>, "markers"));
+		//		Ok(Kernel::with_context(lua, |ctx| ListEntry {
+		//			location: ctx.location.clone(),
+		//			bullet,
+		//			content: content.clone(),
+		//			markers: vec![],
+		//		}))
+		//	},
+		//	"Creates a new list entry",
+		//	vec![
+		//		"bullet BulletMarker Type of list bullet for this entry",
+		//		"content Scope Content of this entry",
+		//		"markers ListMarker[] Markers to this entry"
+		//	],
+		//	"ListEntry"
+		//);
 		add_documented_function_values!(
 			"list.List",
 			|lua: &mlua::Lua, args: mlua::MultiValue| {
@@ -400,12 +417,13 @@ impl Rule for ListRule {
 					.iter()
 					.map(|ent| ent.content.clone())
 					.collect::<Vec<_>>();
-				Ok(Kernel::with_context(lua, |ctx| ElemWrapper (Arc::new(List {
+				Ok(Kernel::with_context(lua, |ctx| {
+					ElemWrapper(Arc::new(List {
 						location: ctx.location.clone(),
 						contained,
 						entries: entries.to_owned(),
-					}),
-				)))
+					}))
+				}))
 			},
 			"Creates a new list entry",
 			vec!["entries ListEntry[] Entries for the list"],

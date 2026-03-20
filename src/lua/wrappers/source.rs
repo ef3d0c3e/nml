@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
+use crate::add_documented_method;
 use mlua::IntoLua;
 use mlua::LuaSerdeExt;
 use mlua::UserData;
-use crate::add_documented_method;
 
 use crate::lua::wrappers::SourceWrapper;
+use crate::parser::source::Source;
 
 impl UserData for SourceWrapper {
 	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
@@ -12,12 +15,12 @@ impl UserData for SourceWrapper {
 			"Source",
 			"location",
 			|lua, this, ()| {
-				match this.0.location().cloned()
-				{
+				let r = unsafe { &*this.0 as &Arc<dyn Source> };
+				match r.location().cloned() {
 					Some(token) => {
 						let ud = lua.create_userdata(token)?;
 						Ok(ud.into_lua(lua)?)
-					},
+					}
 					None => Ok(mlua::Value::Nil),
 				}
 			},
@@ -30,7 +33,8 @@ impl UserData for SourceWrapper {
 			"Source",
 			"name",
 			|lua, this, ()| {
-				Ok(lua.to_value(this.0.name()))
+				let r = unsafe { &*this.0 as &Arc<dyn Source> };
+				Ok(lua.to_value(r.name()))
 			},
 			"Get the name of the source. For SourceFile, this corresponde to the source's path",
 			vec![],
@@ -41,7 +45,8 @@ impl UserData for SourceWrapper {
 			"Source",
 			"url",
 			|lua, this, ()| {
-				Ok(lua.to_value(this.0.url()))
+				let r = unsafe { &*this.0 as &Arc<dyn Source> };
+				Ok(lua.to_value(r.url()))
 			},
 			"Get the url of the source",
 			vec![],
@@ -52,7 +57,8 @@ impl UserData for SourceWrapper {
 			"Source",
 			"content",
 			|lua, this, ()| {
-				Ok(lua.to_value(this.0.content()))
+				let r = unsafe { &*this.0 as &Arc<dyn Source> };
+				Ok(lua.to_value(r.content()))
 			},
 			"Get the source's content",
 			vec![],

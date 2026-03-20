@@ -33,7 +33,9 @@ impl UserData for ScopeWrapper {
 			"insert",
 			|_lua, this, (index, elem): (usize, ElemWrapper)| {
 				let r = unsafe { &*this.0 as &Arc<RwLock<Scope>> };
-				let mut scope = r.write();
+				println!("BEFORE");
+				let mut scope = r.write(); // Causes a deadlock when used againt Heading's display[0]
+				println!("AFTER");
 				if index > scope.content.len() {
 					scope.content.push(elem.0);
 				} else {
@@ -60,8 +62,8 @@ impl UserData for VecScopeProxy {
 			"scope",
 			|_lua, this, (id,): (usize,)| {
 				let r = unsafe { &*this.0 as &Vec<Arc<RwLock<Scope>>> };
-				if let Some(scope) = r.get(id).cloned() {
-					Ok(ScopeWrapper(&scope))
+				if let Some(scope) = r.get(id) {
+					Ok(ScopeWrapper(scope as *const Arc<RwLock<Scope>>))
 				} else {
 					Err(mlua::Error::BadArgument {
 						to: Some("scope".into()),
@@ -86,8 +88,8 @@ impl UserData for VecScopeProxyMut {
 			"scope",
 			|_lua, this, (id,): (usize,)| {
 				let r = unsafe { &mut *this.0 as &mut Vec<Arc<RwLock<Scope>>> };
-				if let Some(scope) = r.get(id).cloned() {
-					Ok(ScopeWrapper(&scope))
+				if let Some(scope) = r.get(id) {
+					Ok(ScopeWrapper(scope as *const Arc<RwLock<Scope>>))
 				} else {
 					Err(mlua::Error::BadArgument {
 						to: Some("scope".into()),

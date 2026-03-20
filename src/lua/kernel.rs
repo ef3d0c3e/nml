@@ -26,16 +26,15 @@ pub struct KernelName(pub str);
 impl KernelName {
 	/// Create a new [`KernelName`], bypassing validity checks
 	pub fn new(s: &str) -> &KernelName {
-        unsafe { &*(s as *const str as *const KernelName) }
+		unsafe { &*(s as *const str as *const KernelName) }
 	}
 
 	/// Create a new [`KernelName`]
-	pub fn try_new(s: &str) -> Result<&KernelName, String>
-	{
+	pub fn try_new(s: &str) -> Result<&KernelName, String> {
 		for c in s.chars() {
 			if c.is_whitespace() {
 				return Err(format!(
-						"Kernel names cannot contain whitespaces, found `{c}`"
+					"Kernel names cannot contain whitespaces, found `{c}`"
 				));
 			}
 			if c.is_ascii_control() {
@@ -43,7 +42,7 @@ impl KernelName {
 			}
 			if c.is_ascii_punctuation() {
 				return Err(format!(
-						"Kernel names cannot contain punctuaction, found `{c}`"
+					"Kernel names cannot contain punctuaction, found `{c}`"
 				));
 			}
 		}
@@ -51,13 +50,12 @@ impl KernelName {
 	}
 }
 
-impl ToOwned for KernelName
-{
-    type Owned = KernelNameBuf;
+impl ToOwned for KernelName {
+	type Owned = KernelNameBuf;
 
-    fn to_owned(&self) -> Self::Owned {
-        KernelNameBuf::new(self.0.to_owned())
-    }
+	fn to_owned(&self) -> Self::Owned {
+		KernelNameBuf::new(self.0.to_owned())
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -65,26 +63,25 @@ pub struct KernelNameBuf(pub String);
 
 impl KernelNameBuf {
 	/// Create a new [`KernelNameBuf`], bypassing validity checks
-	pub fn new(s: String) -> Self
-	{
+	pub fn new(s: String) -> Self {
 		Self(s)
 	}
 }
 
 impl Borrow<KernelName> for KernelNameBuf {
-    fn borrow(&self) -> &KernelName {
+	fn borrow(&self) -> &KernelName {
 		KernelName::new(self.0.as_str())
-    }
+	}
 }
 
 impl TryFrom<&str> for KernelNameBuf {
-    type Error = String;
+	type Error = String;
 
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
+	fn try_from(s: &str) -> Result<Self, Self::Error> {
 		for c in s.chars() {
 			if c.is_whitespace() {
 				return Err(format!(
-						"Kernel names cannot contain whitespaces, found `{c}`"
+					"Kernel names cannot contain whitespaces, found `{c}`"
 				));
 			}
 			if c.is_ascii_control() {
@@ -92,20 +89,20 @@ impl TryFrom<&str> for KernelNameBuf {
 			}
 			if c.is_ascii_punctuation() {
 				return Err(format!(
-						"Kernel names cannot contain punctuaction, found `{c}`"
+					"Kernel names cannot contain punctuaction, found `{c}`"
 				));
 			}
 		}
 		Ok(Self(s.into()))
-    }
+	}
 }
 
 impl std::ops::Deref for KernelNameBuf {
-    type Target = KernelName;
+	type Target = KernelName;
 
-    fn deref(&self) -> &Self::Target {
+	fn deref(&self) -> &Self::Target {
 		unsafe { &*(self.0.as_str() as *const str as *const KernelName) }
-    }
+	}
 }
 
 /// Redirected data from lua execution
@@ -199,9 +196,7 @@ impl Kernel {
 						let ctx = ctx.0 as *mut KernelContext;
 						let ctx_ref = unsafe { &mut *ctx };
 
-						// Wrap the unit (not as userdata! use a light proxy)
-						// Instead of passing a reference directly, create a proxy object with dynamic dispatch
-						let wrapper = lua.create_userdata(UnitWrapper(&mut ctx_ref.unit))?;
+						let wrapper = lua.create_userdata(UnitWrapper(ctx_ref.unit as *mut _))?;
 
 						Ok(wrapper)
 					})
@@ -316,11 +311,7 @@ impl Kernel {
 	///
 	/// This function exports a table to lua. The exported table is available under `nml.tables.{name}`.
 	/// This function will overwrite any previously defined table using the same name.
-	pub fn export_table<K: IntoLua>(
-		&self,
-		name: &str,
-		table: Vec<K>,
-	) -> Result<(), String> {
+	pub fn export_table<K: IntoLua>(&self, name: &str, table: Vec<K>) -> Result<(), String> {
 		let nml: Table = self.lua.globals().get("nml").unwrap();
 		let tables: Table = nml.get("tables").unwrap();
 		if let Err(err) = tables.raw_set(name, table) {
@@ -331,11 +322,7 @@ impl Kernel {
 	}
 
 	/// Attempt to register an AutoComnmand
-	pub fn register_autocmd(
-		&self,
-		name: &str,
-		callback: mlua::Function,
-	) -> Result<(), String> {
+	pub fn register_autocmd(&self, name: &str, callback: mlua::Function) -> Result<(), String> {
 		match name {
 			"CreateElem" => {
 				let key = self.lua.create_registry_value(callback).map_err(|err| {
@@ -349,7 +336,11 @@ impl Kernel {
 	}
 
 	/// Dispatch AutoCommand calls when creating an element
-	pub fn au_create_elem<T>(&self, unit: &mut TranslationUnit, mut elem: T) -> Result<Option<T>, String>
+	pub fn au_create_elem<T>(
+		&self,
+		unit: &mut TranslationUnit,
+		mut elem: T,
+	) -> Result<Option<T>, String>
 	where
 		T: Element + Send + 'static,
 	{
@@ -368,8 +359,7 @@ impl Kernel {
 				.create_userdata(wrapper)
 				.map_err(|err| format!("Failed to pass element {elem_name} to lua: {err}",))?;
 			result &= self.run_with_context(ctx, |_lua| {
-				fun
-					.call::<bool>(&ud)
+				fun.call::<bool>(&ud)
 					.map_err(|err| format!("CreateElem AutoCommand failed with: {err}"))
 			})?;
 			wrapper = ud.take().map_err(|err| {
@@ -396,9 +386,7 @@ pub struct LuaFunc {
 	pub ret: &'static str,
 	/// Function
 	pub fun: std::sync::Arc<
-		dyn Fn(&Lua, mlua::MultiValue) -> mlua::Result<mlua::MultiValue>
-			+ Send
-			+ Sync,
+		dyn Fn(&Lua, mlua::MultiValue) -> mlua::Result<mlua::MultiValue> + Send + Sync,
 	>,
 }
 
@@ -408,12 +396,7 @@ pub static LUA_FUNC: LazyLock<Mutex<HashMap<&'static str, LuaFunc>>> =
 pub fn wrap_lua_fn<A, R, F>(
 	f: F,
 ) -> std::sync::Arc<
-	dyn Fn(
-			&mlua::Lua,
-			mlua::MultiValue,
-		) -> mlua::Result<mlua::MultiValue>
-		+ Send
-		+ Sync,
+	dyn Fn(&mlua::Lua, mlua::MultiValue) -> mlua::Result<mlua::MultiValue> + Send + Sync,
 >
 where
 	A: mlua::FromLuaMulti + 'static,
@@ -449,19 +432,13 @@ macro_rules! add_documented_function {
 pub fn wrap_lua_fn_with_values<R, F>(
 	f: F,
 ) -> std::sync::Arc<
-	dyn for<'lua> Fn(
-			&'lua mlua::Lua,
-			mlua::MultiValue,
-		) -> mlua::Result<mlua::MultiValue>
+	dyn for<'lua> Fn(&'lua mlua::Lua, mlua::MultiValue) -> mlua::Result<mlua::MultiValue>
 		+ Send
 		+ Sync,
 >
 where
 	R: mlua::IntoLuaMulti,
-	F: Fn(&mlua::Lua, mlua::MultiValue) -> mlua::Result<R>
-		+ Send
-		+ Sync
-		+ 'static,
+	F: Fn(&mlua::Lua, mlua::MultiValue) -> mlua::Result<R> + Send + Sync + 'static,
 {
 	std::sync::Arc::new(move |lua, args| {
 		let r = f(lua, args)?;
@@ -629,6 +606,198 @@ macro_rules! convert_lua_args {
 							"Missing required UserData argument '{}'",
 							$name
 				)))
+			}
+		}
+	}};
+}
+
+/// Parse positional Lua arguments from a `mlua::MultiValue` into a flat tuple.
+///
+/// # Grammar
+/// ```ignore
+/// parse_lua_args!(lua, args, "fn_name",
+///     ("name", PlainType),                                   // FromLua
+///     ("name", PlainType, serde),                             // LuaSerdeExt::from_value
+///     ("name", ProxyType,    InnerType, prox),               // &'lua Inner, immutable only
+///     ("name", ProxyType,    InnerType, prox_mut),           // &'lua mut Inner, mutable only
+///     ("name", ProxyType, ProxyTypeMut, InnerType, prox_any),// &'lua Inner, either variant
+/// )
+/// ```
+///
+/// - Argument count mismatch or type mismatch → `mlua::Error::BadArgument`
+/// - `prox_any` tries the immutable proxy first, then the mutable one
+/// - All proxy bindings use the lua lifetime as a conservative bound
+#[macro_export]
+macro_rules! parse_lua_args {
+    ($lua:expr, $args:expr, $fn_name:expr, $(($arg_name:expr, $($rest:tt)*)),* $(,)?) => {{
+        let __args: ::mlua::MultiValue = $args;
+        let __argv: Vec<::mlua::Value> = __args.into_vec();
+        let __fn_name: &str = $fn_name;
+        let __expected = $crate::__count_args!($($arg_name),*);
+        if __argv.len() != __expected {
+            return Err(::mlua::Error::BadArgument {
+                to: Some(__fn_name.to_string()),
+                pos: 1,
+                name: None,
+                cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+                    "expected {} arguments, got {}", __expected, __argv.len()
+                ))),
+            });
+        }
+        let mut __idx: usize = 0;
+        ($($crate::__parse_one_arg!($lua, __argv, __idx, __fn_name, $arg_name, $($rest)*),)*)
+    }};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __count_args {
+    () => { 0usize };
+    ($head:expr $(, $tail:expr)*) => { 1usize + $crate::__count_args!($($tail),*) };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __parse_one_arg {
+	// ── prox: immutable proxy only → &'lua Inner ─────────────────────────────
+	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
+     $arg_name:expr, $proxy_ty:ty, $inner_ty:ty, prox) => {{
+		let __val = $argv[$idx].clone();
+		$idx += 1;
+		match __val {
+			::mlua::Value::UserData(ref __ud) => match __ud.borrow::<$proxy_ty>() {
+				Ok(__proxy) => unsafe { &*(__proxy.0 as *const $inner_ty) },
+				Err(_) => {
+					return Err(::mlua::Error::BadArgument {
+						to: Some($fn_name.to_string()),
+						pos: $idx,
+						name: Some($arg_name.to_string()),
+						cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+							"expected immutable proxy {}",
+							stringify!($proxy_ty)
+						))),
+					})
+				}
+			},
+			_ => {
+				return Err(::mlua::Error::BadArgument {
+					to: Some($fn_name.to_string()),
+					pos: $idx,
+					name: Some($arg_name.to_string()),
+					cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(
+						"expected userdata".to_string(),
+					)),
+				})
+			}
+		}
+	}};
+
+	// ── prox_mut: mutable proxy only → &'lua mut Inner ───────────────────────
+	// Pass the Mut proxy type directly as $proxy_ty.
+	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
+     $arg_name:expr, $proxy_ty:ty, $inner_ty:ty, prox_mut) => {{
+		let __val = $argv[$idx].clone();
+		$idx += 1;
+		match __val {
+			::mlua::Value::UserData(ref __ud) => match __ud.borrow::<$proxy_ty>() {
+				Ok(__proxy) => unsafe { &mut *(__proxy.0 as *mut $inner_ty) },
+				Err(_) => {
+					return Err(::mlua::Error::BadArgument {
+						to: Some($fn_name.to_string()),
+						pos: $idx,
+						name: Some($arg_name.to_string()),
+						cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+							"expected mutable proxy {}",
+							stringify!($proxy_ty)
+						))),
+					})
+				}
+			},
+			_ => {
+				return Err(::mlua::Error::BadArgument {
+					to: Some($fn_name.to_string()),
+					pos: $idx,
+					name: Some($arg_name.to_string()),
+					cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(
+						"expected userdata".to_string(),
+					)),
+				})
+			}
+		}
+	}};
+
+	// ── prox_any: immutable or mutable → &'lua Inner ─────────────────────────
+	// Tries immutable first, then mutable. Both proxy types must be passed.
+	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
+     $arg_name:expr, $proxy_ty:ty, $proxy_mut_ty:ty, $inner_ty:ty, prox_any) => {{
+		let __val = $argv[$idx].clone();
+		$idx += 1;
+		match __val {
+			::mlua::Value::UserData(ref __ud) => {
+				if let Ok(__proxy) = __ud.borrow::<$proxy_ty>() {
+					unsafe { &*(__proxy.0 as *const $inner_ty) }
+				} else if let Ok(__proxy) = __ud.borrow::<$proxy_mut_ty>() {
+					unsafe { &*(__proxy.0 as *const $inner_ty) }
+				} else {
+					return Err(::mlua::Error::BadArgument {
+						to: Some($fn_name.to_string()),
+						pos: $idx,
+						name: Some($arg_name.to_string()),
+						cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+							"expected proxy {} or {}",
+							stringify!($proxy_ty),
+							stringify!($proxy_mut_ty)
+						))),
+					});
+				}
+			}
+			_ => {
+				return Err(::mlua::Error::BadArgument {
+					to: Some($fn_name.to_string()),
+					pos: $idx,
+					name: Some($arg_name.to_string()),
+					cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(
+						"expected userdata".to_string(),
+					)),
+				})
+			}
+		}
+	}};
+
+	// ── plain FromLua ─────────────────────────────────────────────────────────
+	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
+     $arg_name:expr, $plain_ty:ty) => {{
+		let __val = $argv[$idx].clone();
+		$idx += 1;
+		match <$plain_ty as ::mlua::FromLua>::from_lua(__val, $lua) {
+			Ok(__v) => __v,
+			Err(__e) => {
+				return Err(::mlua::Error::BadArgument {
+					to: Some($fn_name.to_string()),
+					pos: $idx,
+					name: Some($arg_name.to_string()),
+					cause: ::std::sync::Arc::new(__e),
+				})
+			}
+		}
+	}};
+	// ── serde: LuaSerdeExt::from_value ───────────────────────────────────────
+	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
+     $arg_name:expr, $serde_ty:ty, serde) => {{
+		let __val = $argv[$idx].clone();
+		$idx += 1;
+		match ::mlua::LuaSerdeExt::from_value($lua, __val) {
+			Ok(__v) => {
+				let __typed: $serde_ty = __v;
+				__typed
+			}
+			Err(__e) => {
+				return Err(::mlua::Error::BadArgument {
+					to: Some($fn_name.to_string()),
+					pos: $idx,
+					name: Some($arg_name.to_string()),
+					cause: ::std::sync::Arc::new(__e),
+				})
 			}
 		}
 	}};

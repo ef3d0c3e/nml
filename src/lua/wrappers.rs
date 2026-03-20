@@ -7,6 +7,7 @@ pub mod unit;
 pub mod variable;
 pub mod source;
 pub mod internal_reference;
+mod luaproxyvec;
 
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -21,10 +22,10 @@ use crate::unit::translation::TranslationUnit;
 use crate::unit::variable::Variable;
 
 /// Wrapper for [`Variable`]
-pub struct VariableWrapper(pub Arc<dyn Variable>);
+pub struct VariableWrapper(pub *const Arc<dyn Variable>);
 
 /// Wrapper for [`TranslationUnit`]
-pub struct UnitWrapper<'a>(pub &'a mut TranslationUnit);
+pub struct UnitWrapper(pub *mut TranslationUnit);
 
 /// Wrapper for [`Scope`]
 pub struct ScopeWrapper(pub *const Arc<RwLock<Scope>>);
@@ -34,8 +35,8 @@ pub struct VecScopeProxy(pub *const Vec<Arc<RwLock<Scope>>>);
 pub struct VecScopeProxyMut(pub *mut Vec<Arc<RwLock<Scope>>>);
 
 /// Wrapper for [`Option<Arc<InternalReference>`]
-pub struct InternalReferenceProxy(pub *const Option<Arc<InternalReference>>);
-pub struct InternalReferenceProxyMut(pub *mut Option<Arc<InternalReference>>);
+pub struct InternalReferenceOptProxy(pub *const Option<Arc<InternalReference>>);
+pub struct InternalReferenceOptProxyMut(pub *mut Option<Arc<InternalReference>>);
 
 /// Wrapper for [`OnceLock`]
 pub struct OnceLockWrapper<T>(pub *const OnceLock<T>);
@@ -53,8 +54,24 @@ pub struct ElemWrapperMut(pub *mut dyn Element);
 pub struct LuaUdVecProxy<T>(pub *const Vec<T>);
 pub struct LuaUdVecProxyMut<T>(pub *mut Vec<T>);
 
+pub trait IntoLuaProxy
+{
+    type Proxy;
+    type ProxyMut;
+
+    fn as_proxy(ptr: *const Self) -> Self::Proxy;
+    fn as_proxy_mut(ptr: *mut Self) -> Self::ProxyMut;
+	fn from_proxy(proxy: &Self::Proxy) -> Self;
+	fn from_proxy_mut(proxy: &Self::ProxyMut) -> Self;
+}
+
+/// Wrapper for a Vector of LuaProxy objects
+pub struct LuaProxyVecProxy<T>(pub *const Vec<T>);
+pub struct LuaProxyVecProxyMut<T>(pub *mut Vec<T>);
+pub struct LuaProxyVecProxyOwned<T>(pub Vec<T>);
+
 /// Wrapper for [`Arc<dyn Source>`]
-pub struct SourceWrapper(pub Arc<dyn Source>);
+pub struct SourceWrapper(pub *const Arc<dyn Source>);
 
 pub trait UserDataElem
 {

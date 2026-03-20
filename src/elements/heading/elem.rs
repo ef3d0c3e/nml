@@ -158,15 +158,12 @@ pub struct Heading {
 	#[lua_proxy(VecScopeProxy)]
 	pub(crate) display: Vec<Arc<RwLock<Scope>>>,
 	/// Nesting depth
-	#[lua_value]
 	pub(crate) depth: usize,
-	#[lua_value]
 	pub(crate) numbered: bool,
-	#[lua_value]
 	pub(crate) in_toc: bool,
 	//#[lua_map(InternalReferenceWrapper)]
 	//pub(crate) reference: Option<Arc<InternalReference>>,
-	#[lua_ud(FieldInternalReference)]
+	#[lua_proxy(InternalReferenceOptProxy)]
 	pub(crate) reference: Option<Arc<InternalReference>>,
 	#[lua_ud(OnceLockWrapper)]
 	pub(crate) link: OnceLock<String>,

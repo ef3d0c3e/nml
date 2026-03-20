@@ -207,8 +207,10 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 
 	fn add_content(&self, elem: Arc<dyn Element>) {
 		let mut scope = Arc::as_ref(self).write();
-		assert_eq!(*elem.location().source(), *scope.source);
-		scope.range.end = elem.location().end();
+		if &elem.location().source() == &scope.source
+		{
+			scope.range.end = scope.range.end.max(elem.location().end());
+		}
 		scope.content.push(elem);
 	}
 

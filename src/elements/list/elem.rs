@@ -53,6 +53,28 @@ pub struct ListEntry {
 	pub(crate) markers: Vec<ListMarker>,
 }
 
+impl IntoLuaProxy for ListEntry {
+    type Proxy = ListEntryProxy;
+    type ProxyMut = ListEntryProxyMut;
+
+    fn as_proxy(ptr: *const Self) -> Self::Proxy {
+        ListEntryProxy(ptr)
+    }
+
+    fn as_proxy_mut(ptr: *mut Self) -> Self::ProxyMut {
+        ListEntryProxyMut(ptr)
+    }
+
+    fn from_proxy(proxy: &Self::Proxy) -> Self {
+		unsafe { (*proxy.0).clone() }
+    }
+
+    fn from_proxy_mut(proxy: &Self::ProxyMut) -> Self {
+		unsafe { (*proxy.0).clone() }
+    }
+
+}
+
 #[derive(Debug)]
 #[auto_userdata(proxy = "ListProxy", immutable, mutable)]
 pub struct List {
@@ -60,7 +82,7 @@ pub struct List {
 	pub(crate) location: Token,
 	#[lua_proxy(VecScopeProxy)]
 	pub(crate) contained: Vec<Arc<RwLock<Scope>>>,
-	#[lua_proxy(LuaUdVecProxy)]
+	#[lua_vec(LuaProxyVecProxy, LuaProxyVecProxyOwned, ListEntry)]
 	pub(crate) entries: Vec<ListEntry>,
 }
 

@@ -66,7 +66,7 @@ pub struct LuaPostProcess {
 	#[lua_ignore]
 	pub(crate) expanded: OnceLock<Vec<Arc<RwLock<Scope>>>>,
 	/// Lua content source
-	#[lua_ud(SourceWrapper)]
+	#[lua_proxy(SourceWrapper, immutable)]
 	pub(crate) source: Arc<dyn Source>,
 	/// Lua kernel name
 	#[lua_value]
@@ -86,7 +86,7 @@ impl LuaPostProcess {
 				ParseMode::default(),
 				true,
 				|unit, scope| {
-					let ctx = KernelContext::new(self.source.clone().into(), &*kernel, unit);
+					let ctx = KernelContext::new(self.location.clone().into(), &*kernel, unit);
 					match kernel.run_with_context(ctx, |lua| match self.eval_kind {
 						LuaEvalKind::None => lua
 							.load(self.source.content())

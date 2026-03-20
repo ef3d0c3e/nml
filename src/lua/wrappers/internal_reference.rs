@@ -6,12 +6,14 @@ use mlua::Value;
 use crate::add_documented_method;
 use crate::add_documented_method_mut;
 use crate::lua::kernel::Kernel;
-use crate::lua::wrappers::InternalReferenceProxy;
-use crate::lua::wrappers::InternalReferenceProxyMut;
+use crate::lua::wrappers::InternalReferenceOptProxy;
+use crate::lua::wrappers::InternalReferenceOptProxyMut;
 use crate::unit::references::InternalReference;
+use crate::unit::references::InternalReferenceProxy;
+use crate::unit::references::InternalReferenceProxyMut;
 use crate::unit::references::Refname;
 
-impl UserData for InternalReferenceProxy {
+impl UserData for InternalReferenceOptProxy {
 	fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
 	    fields.add_field_method_set("foo", |_lua, _this, _value: mlua::Value| {
 			Ok(())
@@ -35,7 +37,7 @@ impl UserData for InternalReferenceProxy {
 				match unsafe { &*this.0 as &Option<Arc<InternalReference>> } {
 					Some(r) => {
 						let r: &'static _ = unsafe { &*Arc::as_ptr(r) };
-						Ok(Value::UserData(lua.create_userdata(r)?))
+						Ok(Value::UserData(lua.create_userdata(InternalReferenceProxy(r as *const _))?))
 					}
 					None => Ok(Value::Nil),
 				}
@@ -47,7 +49,7 @@ impl UserData for InternalReferenceProxy {
 	}
 }
 
-impl UserData for InternalReferenceProxyMut {
+impl UserData for InternalReferenceOptProxyMut {
 	fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
 	    fields.add_field_method_set("foo", |_lua, _this, _value: mlua::Value| {
 			Ok(())
@@ -71,7 +73,7 @@ impl UserData for InternalReferenceProxyMut {
 				match unsafe { &*this.0 as &Option<Arc<InternalReference>> } {
 					Some(r) => {
 						let r: &'static _ = unsafe { &*Arc::as_ptr(r) };
-						Ok(Value::UserData(lua.create_userdata(r)?))
+						Ok(Value::UserData(lua.create_userdata(InternalReferenceProxy(r as *const _))?))
 					}
 					None => Ok(Value::Nil),
 				}
