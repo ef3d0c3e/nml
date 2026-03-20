@@ -23,6 +23,11 @@ pub fn lua_value(_args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+pub fn lua_vec(_args: TokenStream, input: TokenStream) -> TokenStream {
+	input
+}
+
+#[proc_macro_attribute]
 pub fn lua_ignore(_args: TokenStream, input: TokenStream) -> TokenStream {
 	input
 }
@@ -75,13 +80,13 @@ impl Parse for AutoUserDataArgs {
 
 /// The smart pointer wrapper around the field, if any.
 enum ProxyWrapper {
-	/// Plain field — take address directly
+	/// Plain field
 	None,
-	/// Arc<T> — as_ptr() for const, cast for mut (panics at macro level: force immutable)
+	/// Arc<T> as_ptr() for const, panic for mut
 	Arc,
-	/// Box<T> — deref to get pointer
+	/// Box<T> deref
 	Box,
-	/// Rc<T> — as_ptr() for const, no mut
+	/// Rc<T> as_ptr() for const, panic for mut
 	Rc,
 }
 
@@ -90,10 +95,10 @@ impl ProxyWrapper {
 		match ident.to_string().as_str() {
 			"Arc" => Ok(ProxyWrapper::Arc),
 			"Box" => Ok(ProxyWrapper::Box),
-			"Rc"  => Ok(ProxyWrapper::Rc),
+			"Rc" => Ok(ProxyWrapper::Rc),
 			other => Err(syn::Error::new_spanned(
 				ident,
-				format!("unsupported wrapper `{other}` — expected Arc, Box, or Rc"),
+				format!("unsupported wrapper `{other}`, expected Arc, Box, or Rc"),
 			)),
 		}
 	}
@@ -112,15 +117,24 @@ enum FieldKind {
 		wrapper: ProxyWrapper,
 		force_immutable: bool,
 	},
-	/// #[lua_ud] — clone field value, use its own UserData impl (requires Clone)
+	/// #[lua_vec(Wrapper, ElemType)] -- get only
+	/// #[lua_vec(Wrapper, OwnedType, ElemType)] -- get + set (mut proxy only)
+	/// get: Wrapper::<ElemType>(&field as *const _).into_lua(lua)
+	/// set: OwnedType::<ElemType>::from_lua(val, lua)?.0
+	LuaVec {
+		base: Ident,
+		owned: Option<Ident>,
+		elem: Ident,
+	},
+	/// #[lua_ud] clone field value, use its own UserData impl (requires Clone)
 	UserDataSelf,
-	/// #[lua_ud(SomeType)] — wrap *mut field in SomeType, which manages its own UserData
+	/// #[lua_ud(SomeType)] wrap *mut field in SomeType, which manages its own UserData
 	UserDataWrapper(Ident),
-	/// #[lua_value] — serde via mlua's serialize feature
+	/// #[lua_value] serde via mlua's serialize feature
 	Value,
-	/// #[lua_ignore] — not exposed to Lua
+	/// #[lua_ignore] not exposed to Lua
 	Ignore,
-	/// No attribute — default IntoLua/FromLua
+	/// No attribute default IntoLua/FromLua
 	Default,
 }
 
@@ -162,23 +176,72 @@ fn parse_lua_proxy(attr: &syn::Attribute) -> syn::Result<FieldKind> {
 		Ok(())
 	})?;
 
-	// Arc and Rc cannot yield *mut — force_immutable is mandatory.
-	// Warn at compile time rather than panicking at runtime.
+	// Arc and Rc cannot yield *mut force_immutable is mandatory.
 	if matches!(wrapper, ProxyWrapper::Arc | ProxyWrapper::Rc) && !force_immutable {
 		return Err(syn::Error::new(
 			attr.pound_token.spans[0],
-			"Arc and Rc fields cannot yield *mut — add `immutable`: \
+			"Arc and Rc fields cannot yield *mut, add `immutable`: \
 			 #[lua_proxy(ProxyName, Arc, immutable)]",
 		));
 	}
 
-	Ok(FieldKind::Proxy { base: base.unwrap(), wrapper, force_immutable })
+	Ok(FieldKind::Proxy {
+		base: base.unwrap(),
+		wrapper,
+		force_immutable,
+	})
+}
+
+/// Parse #[lua_vec(Wrapper, ElemType)]
+///      #[lua_vec(Wrapper, OwnedType, ElemType)]
+fn parse_lua_vec(attr: &syn::Attribute) -> syn::Result<FieldKind> {
+	let mut base: Option<Ident> = None;
+	let mut second: Option<Ident> = None;
+	let mut third: Option<Ident> = None;
+
+	attr.parse_args_with(|input: ParseStream| {
+		base = Some(input.parse::<Ident>()?);
+
+		if input.peek(Token![,]) {
+			let _: Token![,] = input.parse()?;
+			second = Some(input.parse::<Ident>()?);
+		}
+
+		if input.peek(Token![,]) {
+			let _: Token![,] = input.parse()?;
+			third = Some(input.parse::<Ident>()?);
+		}
+
+		Ok(())
+	})?;
+
+	// Two idents:   (Wrapper, ElemType) get only
+	// Three idents: (Wrapper, OwnedType, ElemType) get + set
+	let (owned, elem) = match (second, third) {
+		(Some(s), Some(t)) => (Some(s), t),
+		(Some(s), None) => (None, s),
+		_ => {
+			return Err(syn::Error::new(
+				attr.pound_token.spans[0],
+				"lua_vec requires at least two arguments: #[lua_vec(Wrapper, ElemType)]",
+			))
+		}
+	};
+
+	Ok(FieldKind::LuaVec {
+		base: base.unwrap(),
+		owned,
+		elem,
+	})
 }
 
 fn classify_field(field: &Field) -> syn::Result<FieldKind> {
 	for attr in &field.attrs {
 		if attr.path().is_ident("lua_proxy") {
 			return parse_lua_proxy(attr);
+		}
+		if attr.path().is_ident("lua_vec") {
+			return parse_lua_vec(attr);
 		}
 		if attr.path().is_ident("lua_ud") {
 			// No args: use the field type's own UserData impl (must be Clone)
@@ -216,6 +279,7 @@ fn generate_proxy(
 	for field in fields {
 		let field_name = field.ident.as_ref().unwrap();
 		let field_name_str = field_name.to_string();
+		let field_ty = &field.ty;
 		let kind = classify_field(field)?;
 
 		match kind {
@@ -253,7 +317,44 @@ fn generate_proxy(
 				}
 			}
 
-			FieldKind::Proxy { ref base, ref wrapper, force_immutable } => {
+			// #[lua_vec(Wrapper, ElemType)] get only
+			// #[lua_vec(Wrapper, OwnedType, ElemType)] get + set (mut proxy only)
+			// get: Wrapper::<ElemType>(&field as *const _).into_lua(lua)
+			// set: OwnedType::<ElemType>::from_lua(val, lua)?.0
+			FieldKind::LuaVec {
+				ref base,
+				ref owned,
+				ref elem,
+			} => {
+				field_tokens.extend(quote! {
+					fields.add_field_method_get(#field_name_str, |lua, this| {
+						::mlua::IntoLua::into_lua(
+							#base::<#elem>(unsafe { &(*this.0).#field_name as *const _ }),
+							lua,
+						)
+					});
+				});
+
+				if is_mut {
+					if let Some(ref owned_type) = owned {
+						field_tokens.extend(quote! {
+							fields.add_field_method_set(#field_name_str, |lua, this, val: ::mlua::Value| {
+								unsafe {
+									(*this.0).#field_name =
+										<#owned_type::<#elem> as ::mlua::FromLua>::from_lua(val, lua)?.0;
+								}
+								Ok(())
+							});
+						});
+					}
+				}
+			}
+
+			FieldKind::Proxy {
+				ref base,
+				ref wrapper,
+				force_immutable,
+			} => {
 				let use_mut = is_mut && !force_immutable && wrapper.supports_mut();
 
 				let proxy_ident = if use_mut {
@@ -262,7 +363,6 @@ fn generate_proxy(
 					base.clone()
 				};
 
-				// Generate the pointer expression based on the wrapper type.
 				let ptr_expr = match wrapper {
 					ProxyWrapper::None => {
 						if use_mut {
@@ -278,7 +378,6 @@ fn generate_proxy(
 							quote! { (*this.0).#field_name.as_ref() as *const _ }
 						}
 					}
-					// Arc and Rc: always immutable (enforced above in parse_lua_proxy)
 					ProxyWrapper::Arc => {
 						quote! { ::std::sync::Arc::as_ptr(&(*this.0).#field_name) }
 					}
@@ -295,7 +394,7 @@ fn generate_proxy(
 				});
 			}
 
-			// #[lua_ud] — clone the field value and use its own UserData impl
+			// #[lua_ud] clone the field value and use its own UserData impl
 			FieldKind::UserDataSelf => {
 				field_tokens.extend(quote! {
 					fields.add_field_method_get(#field_name_str, |lua, this| {
@@ -304,11 +403,16 @@ fn generate_proxy(
 				});
 			}
 
-			// #[lua_ud(SomeType)] — wrap *mut field in SomeType
+			// #[lua_ud(SomeType)] wrap field in SomeType with const/mut pointer
 			FieldKind::UserDataWrapper(ref ud_type) => {
+				let ptr_expr = if is_mut {
+					quote! { &mut (*this.0).#field_name as *mut _ }
+				} else {
+					quote! { &(*this.0).#field_name as *const _ }
+				};
 				field_tokens.extend(quote! {
 					fields.add_field_method_get(#field_name_str, |lua, this| {
-						let ptr = unsafe { &mut (*this.0).#field_name as *mut _ };
+						let ptr = unsafe { #ptr_expr };
 						lua.create_userdata(#ud_type(ptr))
 					});
 				});
@@ -317,7 +421,7 @@ fn generate_proxy(
 	}
 
 	Ok(quote! {
-		pub struct #proxy_name(#ptr_type);
+		pub struct #proxy_name(pub #ptr_type);
 
 		unsafe impl Send for #proxy_name {}
 		unsafe impl Sync for #proxy_name {}
@@ -369,6 +473,7 @@ pub fn auto_userdata(args: TokenStream, input: TokenStream) -> TokenStream {
 			for field in f.named.iter_mut() {
 				field.attrs.retain(|attr| {
 					!attr.path().is_ident("lua_proxy")
+						&& !attr.path().is_ident("lua_vec")
 						&& !attr.path().is_ident("lua_ud")
 						&& !attr.path().is_ident("lua_value")
 						&& !attr.path().is_ident("lua_ignore")
