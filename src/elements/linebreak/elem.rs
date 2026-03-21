@@ -64,16 +64,6 @@ impl Element for LineBreak {
 		Ok(())
 	}
 
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		None
-	}
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
-		None
-	}
-	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
-		None
-	}
-
 	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(LineBreakProxy(self as *const _))
 			.unwrap()

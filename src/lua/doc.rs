@@ -1,11 +1,7 @@
-use mlua::Lua;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use crate::lua::kernel::LuaFunc;
-use crate::lua::kernel::LUA_FUNC;
-use crate::parser::parser::Parser;
 
 /// Documented userdata method
 #[derive(Debug)]

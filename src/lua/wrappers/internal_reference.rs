@@ -10,7 +10,6 @@ use crate::lua::wrappers::InternalReferenceOptProxy;
 use crate::lua::wrappers::InternalReferenceOptProxyMut;
 use crate::unit::references::InternalReference;
 use crate::unit::references::InternalReferenceProxy;
-use crate::unit::references::InternalReferenceProxyMut;
 use crate::unit::references::Refname;
 
 impl UserData for InternalReferenceOptProxy {
@@ -44,7 +43,7 @@ impl UserData for InternalReferenceOptProxy {
 			},
 			"Get the reference value, or nil if unset",
 			vec!["self",],
-			Some("reference? The reference value")
+			Some("Reference? The reference value")
 		);
 	}
 }
@@ -80,7 +79,7 @@ impl UserData for InternalReferenceOptProxyMut {
 			},
 			"Get the reference value, or nil if unset",
 			vec!["self",],
-			Some("reference? The reference value")
+			Some("Reference? The reference value")
 		);
 		add_documented_method_mut!(
 			methods,

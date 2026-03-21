@@ -1,4 +1,6 @@
+use std::cell::Cell;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -6,10 +8,8 @@ use std::sync::OnceLock;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 
-use auto_userdata::auto_userdata;
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
-use mlua::UserData;
 use parking_lot::MappedRwLockWriteGuard;
 use parking_lot::RwLock;
 use parking_lot::RwLockWriteGuard;
@@ -77,6 +77,9 @@ pub struct TranslationUnit {
 	/// User-defined styles
 	//custom_styles: CustomStyleHolder,
 
+	/// Used reference links
+	pub used_links: Cell<HashSet<String>>,
+
 	/// Custom data stored by rules
 	custom_data: RwLock<HashMap<String, Arc<RwLock<dyn CustomData>>>>,
 
@@ -133,6 +136,7 @@ impl TranslationUnit {
 			current_scope: scope,
 			lsp: with_lsp.then(|| Arc::new(RwLock::new(LangServerData::default()))),
 
+			used_links: Cell::new(HashSet::default()),
 			custom_data: RwLock::default(),
 			//layouts: LayoutHolder::default(),
 			//blocks: BlockHolder::default(),
@@ -376,7 +380,7 @@ pub trait TranslationAccessors {
 }
 
 impl TranslationAccessors for TranslationUnit {
-	fn add_content<T>(&mut self, mut elem: T)
+	fn add_content<T>(&mut self, elem: T)
 	where
 		T: Element + Send + Sync + 'static
 	{

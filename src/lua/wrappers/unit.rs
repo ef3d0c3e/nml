@@ -36,6 +36,10 @@ impl UserData for UnitWrapper {
 			|lua, _this, (elem,): (ElemWrapper,)| {
 				Kernel::with_context(lua, |ctx| {
 					ctx.unit.add_content_raw(elem.0.clone());
+					if let Some(reference) = elem.0.as_referenceable()
+					{
+						ctx.unit.add_reference(reference);
+					}
 				});
 				Ok(())
 			},

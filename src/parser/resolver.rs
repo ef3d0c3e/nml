@@ -218,7 +218,7 @@ impl<'u> Resolver<'u> {
 			};
 
 			// Used links by this unit
-			let mut used_links = HashSet::default();
+			let mut used_links = unit.used_links.take();
 			unit.references().iter().for_each(|(name, reference)| {
 				let link = get_unique_link(target, &mut used_links, name);
 				reference.set_link(link);

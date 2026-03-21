@@ -1,3 +1,6 @@
+use auto_userdata::auto_userdata;
+use mlua::AnyUserData;
+use mlua::Lua;
 use std::fmt::Display;
 use std::io::Read;
 use std::io::Write;
@@ -6,9 +9,6 @@ use std::process::Stdio;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Once;
-use auto_userdata::auto_userdata;
-use mlua::AnyUserData;
-use mlua::Lua;
 
 use ariadne::Span;
 use crypto::digest::Digest;
@@ -266,17 +266,7 @@ impl Element for Latex {
 		))
 	}
 
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		None
-	}
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
-		None
-	}
-	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
-		None
-	}
-
-fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(LatexProxy(self as *const _)).unwrap()
 	}
 

@@ -174,6 +174,10 @@ impl Element for LuaPostProcess {
 		Ok(())
 	}
 
+	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
+	    Some(self)
+	}
+
 	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(LuaPostProcessProxy(self as *const _))
 			.unwrap()

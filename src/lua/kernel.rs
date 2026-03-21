@@ -7,12 +7,12 @@ use mlua::IntoLua;
 use mlua::LightUserData;
 use mlua::Lua;
 use mlua::Table;
-use mlua::UserData;
 use mlua::Value;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::lua::utils::kernel_utils;
 use crate::lua::wrappers::ElemWrapperMut;
 use crate::lua::wrappers::UnitWrapper;
 use crate::parser::reports::Report;
@@ -268,6 +268,10 @@ impl Kernel {
 				}
 			}
 		}
+
+		// Register utils
+		kernel_utils(&kernel.lua, &nml_table);
+
 		kernel.lua.globals().set("nml", nml_table).unwrap();
 
 		kernel

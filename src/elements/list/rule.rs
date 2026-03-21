@@ -4,8 +4,6 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use ariadne::Fmt;
-use mlua::LuaSerdeExt;
-use parking_lot::RwLock;
 use regex::Regex;
 use serde_json::json;
 
@@ -25,7 +23,6 @@ use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
 use crate::parser::util::escape_source;
 use crate::parser::util::parse_paragraph;
-use crate::unit::scope::Scope;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 

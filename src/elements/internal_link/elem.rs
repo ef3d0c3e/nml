@@ -36,15 +36,15 @@ pub struct ReferenceTarget {
 }
 
 impl IntoLua for ReferenceTarget {
-    fn into_lua(self, lua: &Lua) -> mlua::Result<mlua::Value> {
-        lua.to_value(&self)
-    }
+	fn into_lua(self, lua: &Lua) -> mlua::Result<mlua::Value> {
+		lua.to_value(&self)
+	}
 }
 
 impl FromLua for ReferenceTarget {
-    fn from_lua(value: mlua::Value, lua: &Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
+	fn from_lua(value: mlua::Value, lua: &Lua) -> mlua::Result<Self> {
+		lua.from_value(value)
+	}
 }
 
 #[derive(Debug)]
@@ -98,22 +98,22 @@ impl Element for InternalLink {
 		Ok(())
 	}
 
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		None
-	}
 	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
 		Some(self)
 	}
+
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		Some(self)
 	}
 
-fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
-		lua.create_userdata(InternalLinkProxy(self as *const _)).unwrap()
+	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+		lua.create_userdata(InternalLinkProxy(self as *const _))
+			.unwrap()
 	}
 
 	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
-		lua.create_userdata(InternalLinkProxyMut(self as *mut _)).unwrap()
+		lua.create_userdata(InternalLinkProxyMut(self as *mut _))
+			.unwrap()
 	}
 }
 
@@ -133,6 +133,7 @@ impl LinkableElement for InternalLink {
 	}
 
 	fn set_link(&self, reference: Reference, link: String) {
+		println!("Set_link called on {self:#?}");
 		self.reference
 			.set(ReferenceTarget { link, reference })
 			.unwrap();

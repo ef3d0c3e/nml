@@ -1,4 +1,3 @@
-use core::panic;
 
 use mlua::{FromLua, IntoLua, UserData};
 

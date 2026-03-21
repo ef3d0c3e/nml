@@ -59,6 +59,7 @@ impl Rule for MetaRule {
 							for elem in elems {
 								unit.add_content_raw(elem.0);
 							}
+							// FIXME: Dangling
 							Ok(ScopeWrapper(&scope))
 						},
 					)

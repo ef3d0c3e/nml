@@ -52,14 +52,6 @@ impl Element for ScopeElement {
 		Ok(())
 	}
 
-	fn as_referenceable(self: Arc<Self>) -> Option<Arc<dyn ReferenceableElement>> {
-		None
-	}
-
-	fn as_linkable(self: Arc<Self>) -> Option<Arc<dyn LinkableElement>> {
-		None
-	}
-
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> {
 		Some(self)
 	}

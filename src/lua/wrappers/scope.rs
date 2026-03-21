@@ -33,9 +33,7 @@ impl UserData for ScopeWrapper {
 			"insert",
 			|_lua, this, (index, elem): (usize, ElemWrapper)| {
 				let r = unsafe { &*this.0 as &Arc<RwLock<Scope>> };
-				println!("BEFORE");
-				let mut scope = r.write(); // Causes a deadlock when used againt Heading's display[0]
-				println!("AFTER");
+				let mut scope = r.write();
 				if index > scope.content.len() {
 					scope.content.push(elem.0);
 				} else {
@@ -43,10 +41,27 @@ impl UserData for ScopeWrapper {
 				}
 				Ok(())
 			},
-			"Gets an iterator to the scope's content",
+			"Insert an element in the scope",
 			vec![
 				"self",
 				"index:integer Index to insert atm 0 to insert at start",
+				"elem:ElemWrapper Element to insert"
+			],
+			None
+		);
+		add_documented_method!(
+			methods,
+			"Scope",
+			"push",
+			|_lua, this, (elem): (ElemWrapper)| {
+				let r = unsafe { &*this.0 as &Arc<RwLock<Scope>> };
+				let mut scope = r.write();
+				scope.content.push(elem.0);
+				Ok(())
+			},
+			"Add an element at the scope's end",
+			vec![
+				"self",
 				"elem:ElemWrapper Element to insert"
 			],
 			None

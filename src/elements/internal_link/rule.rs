@@ -1,4 +1,7 @@
 use crate::elements::text::elem::Text;
+use crate::lua::kernel::Kernel;
+use crate::lua::wrappers::ElemWrapper;
+use crate::lua::wrappers::ScopeWrapper;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RuleTarget;
@@ -7,11 +10,13 @@ use crate::parser::state::ParseMode;
 use crate::parser::util::escape_source;
 use crate::parser::util::parse_paragraph;
 use crate::unit::references::Refname;
+use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use ariadne::Fmt;
 use ariadne::Span;
+use parking_lot::RwLock;
 use regex::Captures;
 use regex::Regex;
 use std::sync::Arc;
@@ -246,5 +251,31 @@ impl RegexRule for InternalLinkRule {
 		&self,
 	) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
 		Some(Box::new(ReferenceCompletion {}))
+	}
+
+	fn register_bindings(&self) {
+		add_documented_function!(
+			"internal_link.InternalLink",
+			|lua: &mlua::Lua, args: mlua::MultiValue| {
+				let (refname, display) = parse_lua_args!(lua, args, "InternalLink",
+					("refname", Refname, serde),
+					("display", ScopeWrapper, ScopeWrapper, Arc<RwLock<Scope>>, prox_any),
+				);
+
+				Ok(Kernel::with_context(lua, |ctx| ElemWrapper (Arc::new(InternalLink {
+						location: ctx.location.clone(),
+						refname,
+						display: vec![display.to_owned()],
+						reference: OnceLock::new(),
+					}),
+				)))
+			},
+			"Create a new internal link element",
+			vec![
+				"refname:string Name of the linked reference",
+				"display:Scope Display scope of the link"
+			],
+			"InternalLink"
+		);
 	}
 }

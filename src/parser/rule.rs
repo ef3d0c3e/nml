@@ -8,7 +8,6 @@ use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
 use std::any::Any;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -77,7 +76,7 @@ fn topo_sort_group(
 }
 
 pub fn get_rule_registry() -> Vec<Box<dyn Rule + Send + Sync>> {
-	let mut rules = get_rules!();
+	let rules = get_rules!();
 	let n = rules.len();
 
 	// Sort by target
