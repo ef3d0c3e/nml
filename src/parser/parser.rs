@@ -80,81 +80,83 @@ impl Parser {
 					return;
 				}
 				// Update next match position
-				(*range, *data) = match rule.next_match(unit, &state.mode, &mut state.states, cursor)
-				{
-					None => (usize::MAX..usize::MAX, None),
-					Some((mut new_range, mut new_data)) => {
-						let mut local_cursor = cursor.to_owned();
-						// Check if escaped
-						while local_cursor.pos() != usize::MAX {
-							let source = cursor.source();
-							let content = source.content().as_str();
+				(*range, *data) =
+					match rule.next_match(unit, &state.mode, &mut state.states, cursor) {
+						None => (usize::MAX..usize::MAX, None),
+						Some((mut new_range, mut new_data)) => {
+							let mut local_cursor = cursor.to_owned();
+							// Check if escaped
+							while local_cursor.pos() != usize::MAX {
+								let source = cursor.source();
+								let content = source.content().as_str();
 
-							let mut codepoints = content[0..new_range.start].chars();
-							let mut escaped = false;
+								let mut codepoints = content[0..new_range.start].chars();
+								let mut escaped = false;
 
-							'inner: loop {
-								let g = codepoints.next_back();
-								if g.is_none() || g.unwrap() != '\\' {
-									break 'inner;
+								'inner: loop {
+									let g = codepoints.next_back();
+									if g.is_none() || g.unwrap() != '\\' {
+										break 'inner;
+									}
+									escaped = !escaped;
 								}
-								escaped = !escaped;
-							}
-							if !escaped {
-								break;
-							}
-							// Advance by 1 codepoint if escaped
-							match content[new_range.start..].chars().next() {
-								Some(ch) => {
-									local_cursor =
-										local_cursor.at(local_cursor.pos() + ch.len_utf8())
+								if !escaped {
+									break;
 								}
-								None => panic!(),
-							};
-							// Find next potential match
-							(new_range, new_data) = match rule.next_match(
-								unit,
-								&state.mode,
-								&mut state.states,
-								&local_cursor,
-							) {
-								None => (usize::MAX..usize::MAX, new_data), // Stop iterating
-								Some((new_range, new_data)) => (new_range, new_data),
-							};
-							local_cursor = local_cursor.at(new_range.start);
+								// Advance by 1 codepoint if escaped
+								match content[new_range.start..].chars().next() {
+									Some(ch) => {
+										local_cursor =
+											local_cursor.at(local_cursor.pos() + ch.len_utf8())
+									}
+									None => panic!(),
+								};
+								// Find next potential match
+								(new_range, new_data) = match rule.next_match(
+									unit,
+									&state.mode,
+									&mut state.states,
+									&local_cursor,
+								) {
+									None => (usize::MAX..usize::MAX, new_data), // Stop iterating
+									Some((new_range, new_data)) => (new_range, new_data),
+								};
+								local_cursor = local_cursor.at(new_range.start);
+							}
+							(new_range, Some(new_data))
 						}
-						(new_range, Some(new_data))
-					}
-				};
+					};
 			});
 
 		// Get winning match
 		let mut next = usize::MAX;
 		let mut length = 0;
 		let mut best_idx = 0;
-		for (idx, state) in state.matches.iter().enumerate()
-		{
+		for (idx, state) in state.matches.iter().enumerate() {
 			// Update if better
-			if state.0.start < next
-			{
+			if state.0.start < next {
 				next = state.0.start;
 				length = state.0.end - state.0.start;
 				best_idx = idx;
 			}
 			// On conflict pick the longest match
-			else if state.0.start == next
-			{
+			else if state.0.start == next {
 				let cur_length = state.0.end - state.0.start;
-				if cur_length < length
-				{
-				next = state.0.start;
-				length = cur_length;
-				best_idx = idx;
+				if cur_length < length {
+					next = state.0.start;
+					length = cur_length;
+					best_idx = idx;
 				}
 			}
 		}
-		if next == usize::MAX { return None }
-		return Some((cursor.at(next), &self.rules[best_idx], state.matches[best_idx].1.take().unwrap()));
+		if next == usize::MAX {
+			return None;
+		}
+		return Some((
+			cursor.at(next),
+			&self.rules[best_idx],
+			state.matches[best_idx].1.take().unwrap(),
+		));
 	}
 
 	/// Adds content from `range` as text to `unit`
