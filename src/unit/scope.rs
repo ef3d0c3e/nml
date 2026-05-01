@@ -118,6 +118,9 @@ pub trait ScopeAccessor {
 	/// Method called when the scope ends
 	fn on_end(&self, unit: &mut TranslationUnit, document: bool) -> Vec<Report>;
 
+	/// Get the scope's source
+	fn source(&self) -> Arc<dyn Source>;
+
 	/// Returns a variable as well as it's declaring scope
 	fn get_variable(&self, name: &VariableName) -> Option<(Arc<dyn Variable>, Arc<RwLock<Scope>>)>;
 
@@ -186,6 +189,11 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 			}
 		});
 		reports
+	}
+	
+	fn source(&self) -> Arc<dyn Source> {
+		let scope = self.read();
+		scope.source.clone()
 	}
 
 	fn get_variable(&self, name: &VariableName) -> Option<(Arc<dyn Variable>, Arc<RwLock<Scope>>)> {

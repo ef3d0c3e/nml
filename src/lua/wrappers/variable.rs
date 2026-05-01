@@ -19,7 +19,7 @@ impl UserData for VariableWrapper {
 			methods,
 			"Variable",
 			"location",
-			|_lua, this, ()| { Ok( unsafe { &*this.0 as &Arc<dyn Variable> }.location().clone()) },
+			|_lua, this, ()| { Ok( this.0.location().clone()) },
 			"Returns the location where the variable is defined",
 			vec!["self"],
 			Some("Token")
@@ -29,7 +29,7 @@ impl UserData for VariableWrapper {
 			"Variable",
 			"typename",
 			|lua, this, ()| {
-				lua.to_value(unsafe { &*this.0 as &Arc<dyn Variable> }.variable_typename())
+				lua.to_value(this.0.variable_typename())
 			},
 			"Returns the name of this variable's type",
 			vec!["self"],
@@ -40,7 +40,7 @@ impl UserData for VariableWrapper {
 			"Variable",
 			"name",
 			|lua, this, ()| {
-				lua.to_value(&unsafe { &*this.0 as &Arc<dyn Variable> }.name().0)
+				lua.to_value(&this.0.name().to_string())
 			},
 			"Returns the name of this variable",
 			vec!["self"],
@@ -51,7 +51,7 @@ impl UserData for VariableWrapper {
 			"Variable",
 			"value_token",
 			|_lua, this, ()| {
-				Ok(unsafe { &*this.0 as &Arc<dyn Variable> }.value_token().clone())
+				Ok(this.0.value_token().clone())
 			},
 			"Returns the token of this variable's value",
 			vec!["self"],
@@ -63,7 +63,7 @@ impl UserData for VariableWrapper {
 			"expand",
 			|lua, this, ()| {
 				Kernel::with_context(lua, |ctx| {
-					let r = unsafe { &*this.0 as &Arc<dyn Variable> };
+					let r = this.0.clone();
 					let result = r.expand(ctx.unit, ctx.location.clone());
 
 					ctx.unit.add_content_raw(Arc::new(VariableSubstitution {
@@ -83,7 +83,7 @@ impl UserData for VariableWrapper {
 			"Variable",
 			"to_string",
 			|lua, this, ()| {
-				lua.to_value(&unsafe { &*this.0 as &Arc<dyn Variable> }.to_string())
+				Ok(this.0.to_string())
 			},
 			"Converts this variable's content to a string",
 			vec!["self"],
@@ -94,6 +94,7 @@ impl UserData for VariableWrapper {
 
 #[cfg(test)]
 mod test {
+	use crate::elements::meta::eof::Eof;
 	use crate::elements::meta::scope::ScopeElement;
 	use crate::elements::style::elem::StyleElem;
 	use crate::elements::text::elem::Text;
@@ -127,11 +128,13 @@ mod test {
 						StyleElem { enable == true };
 						Text { content == "bold" };
 						StyleElem { enable == false };
+						Eof;
 					}];
 			}];
 			ScopeElement [{
 				Text { content == "**bold**" };
 			}];
+			Eof;
 		);
 	}
 }

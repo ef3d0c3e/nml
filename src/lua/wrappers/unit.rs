@@ -19,15 +19,15 @@ impl UserData for UnitWrapper {
 		});
 		methods.add_method("content", |_lua, this, (recurse,): (bool,)| {
 			let r = unsafe { &mut *this.0 as &mut TranslationUnit };
-			let it = r.get_entry_scope().content_iter(recurse);
+			let it = r.get_scope().content_iter(recurse);
 			Ok(IteratorWrapper(Box::new(it)))
 		});
 		methods.add_method("get_variable", |_lua, this, (name,): (String,)| {
 			let r = unsafe { &mut *this.0 as &mut TranslationUnit };
-			let Some((var, _)) = r.get_entry_scope().get_variable(&VariableName(name)) else {
+			let Some((var, _)) = r.get_scope().get_variable(&VariableName(name)) else {
 				return Ok(None);
 			};
-			Ok(Some(VariableWrapper(&var)))
+			Ok(Some(VariableWrapper(var)))
 		});
 		add_documented_method!(
 			methods,

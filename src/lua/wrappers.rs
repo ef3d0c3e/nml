@@ -22,7 +22,7 @@ use crate::unit::translation::TranslationUnit;
 use crate::unit::variable::Variable;
 
 /// Wrapper for [`Variable`]
-pub struct VariableWrapper(pub *const Arc<dyn Variable>);
+pub struct VariableWrapper(pub Arc<dyn Variable>);
 
 /// Wrapper for [`TranslationUnit`]
 pub struct UnitWrapper(pub *mut TranslationUnit);

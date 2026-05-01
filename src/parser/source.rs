@@ -65,7 +65,7 @@ pub struct SourceFile {
 	/// The token that created this [`SourceFile`], empty if file comes from the executable's
 	/// options.
 	location: Option<Token>,
-	/// Path relative to the compilation databse / current directory
+	/// Path relative to the compilaton databse / current directory
 	path: PathBuf,
 	/// Url to the file
 	url: Url,
@@ -462,7 +462,6 @@ impl LineCursor {
 
 /// A token is a [`Range<usize>`] in a [`Source`]
 #[derive(Debug, Clone)]
-#[auto_registry::auto_registry(registry = "lua")]
 pub struct Token {
 	pub range: Range<usize>,
 	source: Arc<dyn Source>,

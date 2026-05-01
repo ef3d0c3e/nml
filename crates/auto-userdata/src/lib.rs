@@ -130,6 +130,8 @@ enum FieldKind {
 	UserDataSelf,
 	/// #[lua_ud(SomeType)] wrap *mut field in SomeType, which manages its own UserData
 	UserDataWrapper(Ident),
+	/// #[lua_udc(SomeType)] wrap *mut field in SomeType, which manages its own UserData
+	UserDataCopyWrapper(Ident),
 	/// #[lua_value] serde via mlua's serialize feature
 	Value,
 	/// #[lua_ignore] not exposed to Lua
@@ -250,6 +252,10 @@ fn classify_field(field: &Field) -> syn::Result<FieldKind> {
 			}
 			let ud_type: Ident = attr.parse_args()?;
 			return Ok(FieldKind::UserDataWrapper(ud_type));
+		}
+		if attr.path().is_ident("lua_udc") {
+			let ud_type: Ident = attr.parse_args()?;
+			return Ok(FieldKind::UserDataCopyWrapper(ud_type));
 		}
 		if attr.path().is_ident("lua_value") {
 			return Ok(FieldKind::Value);
@@ -417,6 +423,17 @@ fn generate_proxy(
 					});
 				});
 			}
+
+			// #[lua_udc(SomeType)] wrap field in SomeType with const/mut pointer
+			FieldKind::UserDataCopyWrapper(ref ud_type) => {
+				let ptr_expr = quote! { (*this.0).#field_name.clone() };
+				field_tokens.extend(quote! {
+					fields.add_field_method_get(#field_name_str, |lua, this| {
+						let ptr = unsafe { #ptr_expr };
+						lua.create_userdata(#ud_type(ptr))
+					});
+				});
+			}
 		}
 	}
 
@@ -475,6 +492,7 @@ pub fn auto_userdata(args: TokenStream, input: TokenStream) -> TokenStream {
 					!attr.path().is_ident("lua_proxy")
 						&& !attr.path().is_ident("lua_vec")
 						&& !attr.path().is_ident("lua_ud")
+						&& !attr.path().is_ident("lua_udc")
 						&& !attr.path().is_ident("lua_value")
 						&& !attr.path().is_ident("lua_ignore")
 				});

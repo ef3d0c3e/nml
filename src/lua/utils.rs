@@ -37,8 +37,9 @@ pub fn kernel_utils(lua: &Lua, nml: &Table) {
 		lua.create_function(|lua, (target, name): (String, String)| {
 			let target = parse_target(&target)?;
 			Kernel::with_context(lua, |ctx| {
-				let used = ctx.unit.used_links.get_mut();
-				Ok(get_unique_link(target, used, &name))
+				let mut lock = ctx.unit.used_links.write();
+				let inner = lock.as_mut().unwrap();
+				Ok(get_unique_link(target, inner, &name))
 			})
 		})
 		.unwrap(),

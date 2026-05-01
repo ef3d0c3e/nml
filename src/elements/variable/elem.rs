@@ -22,7 +22,7 @@ use crate::unit::variable::Variable;
 pub struct VariableDefinition {
 	#[lua_ud]
 	pub(crate) location: Token,
-	#[lua_ud(VariableWrapper)]
+	#[lua_udc(VariableWrapper)]
 	pub(crate) variable: Arc<dyn Variable>,
 }
 
@@ -94,7 +94,7 @@ impl Element for VariableDefinition {
 pub struct VariableSubstitution {
 	#[lua_ud]
 	pub location: Token,
-	#[lua_ud(VariableWrapper)]
+	#[lua_udc(VariableWrapper)]
 	pub variable: Arc<dyn Variable>,
 	#[lua_proxy(VecScopeProxy)]
 	pub content: Vec<Arc<RwLock<Scope>>>,

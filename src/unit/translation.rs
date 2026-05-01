@@ -10,6 +10,7 @@ use crate::parser::reports::*;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use graphviz_rust::print;
 use parking_lot::MappedRwLockWriteGuard;
 use parking_lot::RwLock;
 use parking_lot::RwLockWriteGuard;
@@ -78,7 +79,7 @@ pub struct TranslationUnit {
 	//custom_styles: CustomStyleHolder,
 
 	/// Used reference links
-	pub used_links: Cell<HashSet<String>>,
+	pub used_links: RwLock<Option<HashSet<String>>>,
 
 	/// Custom data stored by rules
 	custom_data: RwLock<HashMap<String, Arc<RwLock<dyn CustomData>>>>,
@@ -136,7 +137,7 @@ impl TranslationUnit {
 			current_scope: scope,
 			lsp: with_lsp.then(|| Arc::new(RwLock::new(LangServerData::default()))),
 
-			used_links: Cell::new(HashSet::default()),
+			used_links: RwLock::new(Some(HashSet::default())),
 			custom_data: RwLock::default(),
 			//layouts: LayoutHolder::default(),
 			//blocks: BlockHolder::default(),
@@ -382,29 +383,44 @@ pub trait TranslationAccessors {
 impl TranslationAccessors for TranslationUnit {
 	fn add_content<T>(&mut self, elem: T)
 	where
-		T: Element + Send + Sync + 'static
+		T: Element + Send + Sync + 'static,
 	{
 		crate::elements::lua::custom::LuaData::initialize(self);
-		let elem = crate::elements::lua::custom::LuaData::with_kernel(
-			self,
-			KernelName::new("main"),
-			|unit, kernel| {
-				let token = elem.location().to_owned();
 
-				match kernel.au_create_elem(unit, elem) {
-					Ok(elem) => elem,
-					Err(err) => {
-						report_err!(
-							unit,
-							token.source(),
-							"AutoCommand Failed".into(),
-							span(token.range.clone(), err)
-						);
-						None
+		let mut in_virtual_source = self.current_scope.source().url().scheme() == "virtual";
+		let mut source = Some(elem.location().source());
+		while let Some(src) = source {
+			if src.url().scheme() == "virtual" {
+				in_virtual_source = true;
+				break;
+			}
+			source = src.location().map(|token| token.source())
+		}
+		// Trigger autocommand
+		let elem = if in_virtual_source {
+			Some(elem)
+		} else {
+			crate::elements::lua::custom::LuaData::with_kernel(
+				self,
+				KernelName::new("main"),
+				|unit, kernel| {
+					let token = elem.location().to_owned();
+
+					match kernel.au_create_elem(unit, elem) {
+						Ok(elem) => elem,
+						Err(err) => {
+							report_err!(
+								unit,
+								token.source(),
+								"AutoCommand Failed".into(),
+								span(token.range.clone(), err)
+							);
+							None
+						}
 					}
-				}
-			},
-		);
+				},
+			)
+		};
 
 		if let Some(elem) = elem {
 			let elem = Arc::new(elem);
