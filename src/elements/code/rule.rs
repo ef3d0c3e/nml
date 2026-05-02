@@ -1,11 +1,17 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use ariadne::Fmt;
 use regex::Regex;
 
+use mlua::LuaSerdeExt;
+use crate::lua::wrappers::*;
+use crate::add_documented_function;
 use crate::elements::code::completion::CodeCompletion;
 use crate::elements::code::elem::Code;
 use crate::elements::code::elem::CodeDisplay;
+use crate::lua::kernel::Kernel;
+use crate::lua::wrappers::ElemWrapper;
 use crate::parser::property::Property;
 use crate::parser::property::PropertyParser;
 use crate::parser::reports::macros::*;
@@ -242,5 +248,40 @@ impl RegexRule for CodeRule {
 		&self,
 	) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
 		Some(Box::new(CodeCompletion {}))
+	}
+
+	fn register_bindings(&self) {
+		add_documented_function!(
+			"code.Code",
+			|lua: &mlua::Lua, args: mlua::MultiValue| {
+				let (display, language, content) = convert_lua_args!(lua, args, (CodeDisplay, "display"), (String, "language"), (String, "content"));
+				let Some(syn) = Code::syntaxes().find_syntax_by_name(&language) else {
+					return Err(mlua::Error::BadArgument {
+						to: Some("code.Code".into()),
+						pos: 2,
+						name: Some("language".into()),
+						cause: Arc::new(mlua::Error::RuntimeError(format!(
+							"Unknown language name `{language}`"
+						))),
+					});
+				};
+
+				let elem = Kernel::with_context(lua, |ctx| Code {
+					location: ctx.location.clone(),
+					language,
+					display,
+					content,
+				});
+
+				Ok(ElemWrapper(Arc::new(elem)))
+			},
+			"Create a new code element",
+			vec![
+				"display:CodeDissplay Code display",
+				"language:string Code language",
+				"content:string Code content"
+			],
+			"Code"
+		);
 	}
 }
