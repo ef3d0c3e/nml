@@ -1,13 +1,18 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use ariadne::Fmt;
+use graphviz_rust::dot_structures::Graph;
 use regex::Captures;
 use regex::Regex;
 
+use crate::add_documented_function;
 use crate::elements::graphviz::completion::GraphvizCompletion;
 use crate::elements::graphviz::elem::layout_from_str;
 use crate::elements::graphviz::elem::Graphviz;
 use crate::layout::size::Size;
+use crate::lua::kernel::Kernel;
+use crate::lua::wrappers::ElemWrapper;
 use crate::parser::property::Property;
 use crate::parser::property::PropertyParser;
 use crate::parser::rule::RegexRule;
@@ -176,5 +181,52 @@ impl RegexRule for GraphvizRule {
 		&self,
 	) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
 		Some(Box::new(GraphvizCompletion {}))
+	}
+
+	fn register_bindings(&self) {
+		add_documented_function!(
+			"graphviz.Graphviz",
+			|lua: &mlua::Lua, (layout, width, graph): (String, Option<String>, String,)| {
+				let layout = match layout_from_str(&layout) {
+					Ok(layout) => layout,
+					Err(err) => {
+						return Err(mlua::Error::BadArgument {
+							to: Some("graphviz.Graphviz".into()),
+							pos: 1,
+							name: Some("layout".into()),
+							cause: Arc::new(mlua::Error::RuntimeError(err)),
+						})
+					}
+				};
+
+				let width = if let Some(width) = &width {
+					match Size::try_from(width.as_str()) {
+						Ok(width) => width,
+						Err(err) => {
+							return Err(mlua::Error::BadArgument {
+								to: Some("graphviz.Graphviz".into()),
+								pos: 2,
+								name: Some("width".into()),
+								cause: Arc::new(mlua::Error::RuntimeError(err)),
+							})
+						}
+					}
+				} else {
+					Size::Px(100f64)
+				};
+
+				let elem = Kernel::with_context(lua, |ctx| {
+					Graphviz { location: ctx.location.clone(), graph, layout, width }
+				});
+				Ok(ElemWrapper(Arc::new(elem)))
+			},
+			"Create a new graphviz element",
+			vec![
+				"layout:string Graphviz layout engine",
+				"width:string? Graph display width, defaults to 100%",
+				"graph:string Graph string content"
+			],
+			"Graphviz"
+		);
 	}
 }
