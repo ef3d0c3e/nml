@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
+use crate::elements::linebreak::elem::LineBreak;
 use crate::elements::list::elem::List;
+use crate::elements::meta::eof::Eof;
 use crate::elements::text::elem::Text;
 use crate::parser::parser::Parser;
 use crate::parser::source::SourceFile;
@@ -32,12 +34,15 @@ fn parser() {
 
 	validate_ast!(unit.get_entry_scope(), 0,
 		List [
-			{ Text { content == "first" }; }
-			{ Text { content == "second \tmulti  line" }; }
-			{ Text { content == "third" }; }
+			{ Text { content == "first" }; Eof; }
+			{ Text { content == "second \tmulti  line" }; Eof; }
+			{ Text { content == "third" }; Eof; }
 		];
+		LineBreak;
 		List [
-			{ Text { content == "new list" }; }
+			{ Text { content == "new list" }; Eof; }
 		];
+		LineBreak;
+		Eof;
 	);
 }

@@ -4,6 +4,8 @@ use std::slice::Iter;
 use std::sync::Arc;
 use std::usize;
 
+use graphviz_rust::print;
+
 use crate::elements::meta::eof::Eof;
 use crate::elements::text::elem::Text;
 use crate::lsp::completion::CompletionProvider;
@@ -142,7 +144,7 @@ impl Parser {
 			// On conflict pick the longest match
 			else if state.0.start == next {
 				let cur_length = state.0.end - state.0.start;
-				if cur_length < length {
+				if cur_length > length {
 					next = state.0.start;
 					length = cur_length;
 					best_idx = idx;
@@ -152,6 +154,7 @@ impl Parser {
 		if next == usize::MAX {
 			return None;
 		}
+
 		return Some((
 			cursor.at(next),
 			&self.rules[best_idx],

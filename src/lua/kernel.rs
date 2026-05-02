@@ -163,6 +163,7 @@ impl Kernel {
 					.lua
 					.create_function({
 						move |lua, msg: String| {
+							println!("[Lua] {}", msg);
 							Kernel::with_context(lua, |ctx| {
 								ctx.redirects.push(KernelRedirect {
 									source: "print".into(),

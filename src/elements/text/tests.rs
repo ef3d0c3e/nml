@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::elements::link::elem::Link;
+use crate::elements::meta::eof::Eof;
 use crate::elements::meta::scope::ScopeElement;
 use crate::elements::text::elem::Text;
 use crate::parser::parser::Parser;
@@ -29,10 +31,9 @@ fn parser() {
 fn lua() {
 	let source = Arc::new(SourceFile::with_content(
 		"".to_string(),
-		r#"TEXT
+		r#"TEXT [link](https://url)
 {:lua for scope, elem in nml.unit():content(true) do
-	nml.text.push(elem:downcast().content)
-	nml.text.push("Lua")
+	nml.unit():add_content(elem)
 end:}"#
 			.to_string(),
 		None,
@@ -43,10 +44,12 @@ end:}"#
 	assert!(reports.is_empty());
 
 	validate_ast!(unit.get_entry_scope(), 0,
-		Text { content == "TEXT" };
+		Text { content == "TEXT " };
+		Link;
 		ScopeElement [{
-			Text { content == "TEXT" };
-			Text { content == "Lua" };
+			Text { content == "TEXT " };
+			Link;
 		}];
+		Eof;
 	);
 }
