@@ -13,8 +13,6 @@ use crate::parser::source::Token;
 use crate::unit::element::ContainerElement;
 use crate::unit::element::ElemKind;
 use crate::unit::element::Element;
-use crate::unit::element::LinkableElement;
-use crate::unit::element::ReferenceableElement;
 use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 
@@ -56,12 +54,12 @@ impl Element for ScopeElement {
 		Some(self)
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(ScopeElementProxy(self as *const _))
 			.unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(ScopeElementProxyMut(self as *mut _))
 			.unwrap()
 	}

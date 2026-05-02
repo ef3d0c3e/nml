@@ -323,7 +323,7 @@ impl Rule for VariableRule {
 			let value = escape_text(
 				'\\',
 				delim,
-				content[content_range.clone()].to_string(),
+				&content[content_range.clone()],
 				false,
 			);
 			let variable = Arc::new(PropertyVariable {
@@ -340,7 +340,7 @@ impl Rule for VariableRule {
 				variable,
 			});
 		}
-		return cursor.at(end_pos + value_len + 2 * delim.len());
+		cursor.at(end_pos + value_len + 2 * delim.len())
 	}
 }
 
@@ -380,10 +380,10 @@ impl RegexRule for VariableSubstitutionRule {
 		true
 	}
 
-	fn on_regex_match<'u>(
+	fn on_regex_match(
 		&self,
 		_index: usize,
-		unit: &'u mut TranslationUnit,
+		unit: &mut TranslationUnit,
 		token: Token,
 		captures: Captures,
 	) {

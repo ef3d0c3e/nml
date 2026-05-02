@@ -363,7 +363,7 @@ impl PropertyParser {
 					(0..escaped).for_each(|_| name.push('\\'));
 					escaped = 0;
 				} else if c == ',' && !in_name {
-					if escaped % 2 == 0
+					if escaped.is_multiple_of(2)
 					// Not escaped
 					{
 						(0..escaped / 2).for_each(|_| value.push('\\'));

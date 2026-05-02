@@ -1,6 +1,5 @@
 use core::panic;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -87,7 +86,7 @@ impl<'u> Resolver<'u> {
 							),
 							note(format!(
 								"Unit 2: `{}` with key `{}`",
-								(&previous.input_file).display().fg(colors.info),
+								previous.input_file.display().fg(colors.info),
 								(&previous.reference_key).fg(colors.info)
 							))
 						))?;
@@ -138,7 +137,7 @@ impl<'u> Resolver<'u> {
 	) -> Result<(String, Reference, String), ResolveError> {
 		match refname {
 			Refname::Internal(name) => unit
-				.get_reference(&name)
+				.get_reference(name)
 				.map(|elem| {
 					let reference = Reference {
 						refname: name.to_owned(),
@@ -168,7 +167,7 @@ impl<'u> Resolver<'u> {
 						.get(path)
 						.ok_or(ResolveError::InvalidPath(path.to_owned()))?;
 					provider
-						.query_reference(cache.clone(), &name)
+						.query_reference(cache.clone(), name)
 						.map(|reference| {
 							(
 								translate_reference(
@@ -188,7 +187,7 @@ impl<'u> Resolver<'u> {
 					self.units
 						.iter()
 						.find_map(|(_, unit)| {
-							unit.query_reference(cache.clone(), &name)
+							unit.query_reference(cache.clone(), name)
 								.and_then(|reference| Some((reference, unit)))
 						})
 						.map(|(reference, provider)| {
@@ -267,7 +266,7 @@ impl<'u> Resolver<'u> {
 			let reference_key = unit.reference_key();
 			unit.get_entry_scope()
 				.content_iter(true)
-				.filter_map(|(scope, elem)| elem.as_linkable().and_then(|link| Some((scope, link))))
+				.filter_map(|(scope, elem)| elem.as_linkable().map(|link| (scope, link)))
 				.filter(|(_, elem)| elem.wants_link())
 				.for_each(|(_, linkable)| {
 					match self.resolve_reference(

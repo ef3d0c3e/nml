@@ -140,7 +140,7 @@ impl Rule for LuaRule {
 		// Find content
 		let mut content_end = end_cursor.pos();
 		loop {
-			let Some(newline) = source.content()[content_end..].find(|c| c == '\n') else {
+			let Some(newline) = source.content()[content_end..].find('\n') else {
 				report_err!(
 					unit,
 					source.clone(),
@@ -188,7 +188,7 @@ impl Rule for LuaRule {
 				ParseMode::default(),
 				true,
 				|unit, scope| {
-					let ctx = KernelContext::new(lua_source.clone().into(), &*kernel, unit);
+					let ctx = KernelContext::new(lua_source.clone().into(), &kernel, unit);
 					if let Err(err) = kernel.run_with_context(ctx, |lua| {
 						lua.load(lua_source.content())
 							.set_name(lua_source.name().display().to_string())
@@ -393,7 +393,7 @@ impl RegexRule for InlineLuaRule {
 			true,
 			|unit, scope| {
 				match LuaData::with_kernel(unit, &kernel_name, |unit, kernel| {
-					let ctx = KernelContext::new(lua_source.clone().into(), &*kernel, unit);
+					let ctx = KernelContext::new(lua_source.clone().into(), &kernel, unit);
 					kernel.run_with_context(ctx, |lua| match eval_kind {
 						LuaEvalKind::None => lua
 							.load(lua_source.content())

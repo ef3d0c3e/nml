@@ -202,7 +202,7 @@ impl RegexRule for InternalLinkRule {
 		else {
 			let display_source = token.to_source(format!(
 				"Internal link display for `{}`",
-				link_refname.to_string()
+				link_refname
 			));
 			// Add content to scope
 			unit.with_child(

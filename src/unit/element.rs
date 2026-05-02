@@ -87,9 +87,9 @@ pub trait Element: Downcast + core::fmt::Debug + Send + Sync {
 	fn as_container(self: Arc<Self>) -> Option<Arc<dyn ContainerElement>> { None }
 
 	/// Get the element's UserData instance
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData;
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData;
 	/// Get the element's mutable UserData instance
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData;
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData;
 }
 impl_downcast!(Element);
 

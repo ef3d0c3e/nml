@@ -64,7 +64,7 @@ impl Element for Heading {
 						compiler.sanitize(self.link.get().unwrap())
 					));
 				}
-				for (scope, elem) in (&self.display[0]).content_iter(false) {
+				for (scope, elem) in self.display[0].content_iter(false) {
 					elem.compile(scope, compiler, output)?;
 				}
 				if self.reference.is_some() {
@@ -111,11 +111,11 @@ impl Element for Heading {
 		}
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(HeadingProxy(self as *const _)).unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(HeadingProxyMut(self as *mut _)).unwrap()
 	}
 }

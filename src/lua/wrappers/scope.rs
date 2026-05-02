@@ -53,7 +53,7 @@ impl UserData for ScopeWrapper {
 			methods,
 			"Scope",
 			"push",
-			|_lua, this, (elem): (ElemWrapper)| {
+			|_lua, this, elem : ElemWrapper | {
 				let r = unsafe { &*this.0 as &Arc<RwLock<Scope>> };
 				let mut scope = r.write();
 				scope.content.push(elem.0);

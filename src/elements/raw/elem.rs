@@ -46,11 +46,11 @@ impl Element for Raw {
 		Ok(())
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(RawProxy(self as *const _)).unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(RawProxyMut(self as *mut _)).unwrap()
 	}
 }

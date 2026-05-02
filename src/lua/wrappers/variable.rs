@@ -82,7 +82,7 @@ impl UserData for VariableWrapper {
 			methods,
 			"Variable",
 			"to_string",
-			|lua, this, ()| {
+			|_lua, this, ()| {
 				Ok(this.0.to_string())
 			},
 			"Converts this variable's content to a string",

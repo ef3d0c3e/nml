@@ -263,11 +263,11 @@ impl Element for Typst {
 		))
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(TypstProxy(self as *const _)).unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(TypstProxyMut(self as *mut _)).unwrap()
 	}
 }

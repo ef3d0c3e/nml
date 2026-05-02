@@ -79,11 +79,11 @@ impl Element for VariableDefinition {
 		Some(get_documentation(self.element_name(), &self.variable))
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(VariableDefinitionProxy(self as *const _)).unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(VariableDefinitionProxyMut(self as *mut _)).unwrap()
 	}
 }
@@ -133,11 +133,11 @@ impl Element for VariableSubstitution {
 		Some(self)
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(VariableSubstitutionProxy(self as *const _)).unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(VariableSubstitutionProxyMut(self as *mut _)).unwrap()
 	}
 }

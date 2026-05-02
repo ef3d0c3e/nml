@@ -159,7 +159,7 @@ impl Layout for SpoilerLayout {
 						r#"<label for="{id}" class="spoiler-label">{}</label>"#,
 						data.label
 					));
-					output.add_content(format!(r#"<div class="spoiler-content">"#));
+					output.add_content(r#"<div class="spoiler-content">"#.to_string());
 				} else if token == LayoutToken::End {
 					output.add_content("</div></div>");
 				}

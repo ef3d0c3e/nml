@@ -145,7 +145,7 @@ impl ProcessQueue {
 		let mut has_error = false;
 		for (idx, input) in self.inputs.iter().enumerate() {
 			// Compute path
-			let Some(local_path) = pathdiff::diff_paths(&input, &self.project_path) else {
+			let Some(local_path) = pathdiff::diff_paths(input, &self.project_path) else {
 				Err(ProcessError::InputError(
 					format!(
 						"Failed to compute local path. Base=`{}` Input=`{}`",
@@ -179,13 +179,13 @@ impl ProcessQueue {
 
 			if !options.force_rebuild && prev_mtime >= mtime {
 				output_message(
-					ProcessQueueMessage::Skipped(&input),
+					ProcessQueueMessage::Skipped(input),
 					(1 + idx) as f64 / self.inputs.len() as f64,
 				);
 				continue;
 			}
 			output_message(
-				ProcessQueueMessage::Parsing(&input),
+				ProcessQueueMessage::Parsing(input),
 				(1 + idx) as f64 / self.inputs.len() as f64,
 			);
 
@@ -258,7 +258,7 @@ impl ProcessQueue {
 		}
 		let dependencies = resolver
 			.resolve_references(self.cache.clone(), self.compiler.target())
-			.map_err(|err| ProcessError::LinkError(err))?;
+			.map_err(ProcessError::LinkError)?;
 		let missing = self.cache.export_dependencies(&dependencies);
 		if !missing.is_empty() {
 			let mut reports = vec![];

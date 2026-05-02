@@ -75,7 +75,7 @@ impl Element for Anchor {
 			self.location.source().name().display(),
 			self.location().range.start(),
 			self.location().range.end(),
-			self.refname.to_string()
+			self.refname
 		))
 	}
 
@@ -83,11 +83,11 @@ impl Element for Anchor {
 		Some(self)
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(AnchorProxy(self as *const _)).unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(AnchorProxyMut(self as *mut _)).unwrap()
 	}
 }

@@ -49,7 +49,7 @@ impl RegexRule for BreakRule {
 		_states: &mut CustomStates,
 		_index: usize,
 	) -> bool {
-		return !mode.paragraph_only;
+		!mode.paragraph_only
 	}
 
 	fn on_regex_match<'u>(

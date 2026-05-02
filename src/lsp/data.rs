@@ -102,7 +102,7 @@ impl LangServerData {
 	}
 
 	/// Gets a source file by name, or insert a new file
-	pub fn get_source<'lsp>(&'lsp self, name: &Path) -> Option<Arc<dyn Source>> {
+	pub fn get_source(&self, name: &Path) -> Option<Arc<dyn Source>> {
 		if let Some(found) = self.sources.read().get(name) {
 			return Some(found.to_owned());
 		}
@@ -121,17 +121,14 @@ impl LangServerData {
 	where
 		F: FnOnce(&Semantics, &'lsp Tokens) -> R,
 	{
-		match Semantics::from_source(source, self) {
-			Some(sems) => Some(f(&sems, &self.semantic_tokens)),
-			None => None,
-		}
+		Semantics::from_source(source, self).map(|sems| f(&sems, &self.semantic_tokens))
 	}
 
-	pub fn add_definition<'lsp>(&'lsp self, source: Token, target: &Token) {
+	pub fn add_definition(&self, source: Token, target: &Token) {
 		definition::from_source(source, target, self);
 	}
 
-	pub fn add_hover<'lsp>(&'lsp self, range: Token, content: String) {
+	pub fn add_hover(&self, range: Token, content: String) {
 		let Some(hov) = Hover::from_source(range.source(), self) else {
 			return;
 		};
@@ -142,7 +139,7 @@ impl LangServerData {
 		});
 	}
 
-	pub fn add_conceal<'lsp>(&'lsp self, range: Token, conceal: ConcealTarget) {
+	pub fn add_conceal(&self, range: Token, conceal: ConcealTarget) {
 		let Some(con) = Conceal::from_source(range.source(), self) else {
 			return;
 		};
@@ -150,8 +147,8 @@ impl LangServerData {
 		con.add(original.range, conceal);
 	}
 
-	pub fn add_range<'lsp>(
-		&'lsp self,
+	pub fn add_range(
+		&self,
 		source: Arc<dyn Source>,
 		range: std::ops::Range<usize>,
 		data: CustomRange,

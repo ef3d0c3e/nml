@@ -177,7 +177,7 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 	fn on_end(&self, unit: &mut TranslationUnit, document: bool) -> Vec<Report> {
 		let states = {
 			let mut scope = self.write();
-			std::mem::replace(&mut scope.parser_state.states, HashMap::default())
+			std::mem::take(&mut scope.parser_state.states)
 		};
 		let mut reports = vec![];
 		states.iter().for_each(|(_, state)| {
@@ -205,7 +205,7 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 			return parent.get_variable(name);
 		}
 
-		return None;
+		None
 	}
 
 	fn insert_variable(&self, var: Arc<dyn Variable>) -> Option<Arc<dyn Variable>> {
@@ -344,6 +344,6 @@ impl Iterator for ScopeIterator {
 			return Some((self.scope.clone(), elem));
 		}
 
-		return None;
+		None
 	}
 }

@@ -163,26 +163,23 @@ impl Element for List {
 					} else {
 						output.add_content("<li>");
 					}
-					match &entry.bullet {
-						BulletMarker::Checkbox(state) => match state {
-							CheckboxState::Unchecked => {
-								output.add_content(
-									r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#,
-								);
-							}
-							CheckboxState::Partial => {
-								output.add_content(
-									r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#,
-								);
-							}
-							CheckboxState::Checked => {
-								output.add_content(
-									r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#,
-								);
-							}
-						},
-						_ => {}
-					}
+					if let BulletMarker::Checkbox(state) = &entry.bullet { match state {
+     							CheckboxState::Unchecked => {
+     								output.add_content(
+     									r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#,
+     								);
+     							}
+     							CheckboxState::Partial => {
+     								output.add_content(
+     									r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#,
+     								);
+     							}
+     							CheckboxState::Checked => {
+     								output.add_content(
+     									r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#,
+     								);
+     							}
+     						} }
 				}
 				_ => todo!(),
 			}
@@ -202,11 +199,11 @@ impl Element for List {
 		Some(self)
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(ListProxy(self as *const _)).unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(ListProxyMut(self as *mut _)).unwrap()
 	}
 }

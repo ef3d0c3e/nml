@@ -64,7 +64,7 @@ You can define and use multiple kernels to separate lua code.
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
 			insert_text: Some(format!(
 				"{}lua\n${{1:CONTENT}}\nEOF",
-				context_triggered(context, ":").then_some("").unwrap_or(":")
+				if context_triggered(context, ":") { "" } else { ":" }
 			)),
 			..CompletionItem::default()
 		});
@@ -109,7 +109,7 @@ The inline lua element supports the following kinds:
 			)),
 			kind: Some(CompletionItemKind::FUNCTION),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
-			insert_text: Some(format!("{{:lua ${{1:CONTENT}}:}}",)),
+			insert_text: Some("{:lua ${1:CONTENT}:}".to_string()),
 			..CompletionItem::default()
 		});
 	}

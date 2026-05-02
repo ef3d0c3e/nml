@@ -26,7 +26,7 @@ pub static LUA_DOCS: LazyLock<Mutex<HashMap<&'static str, UserDataDoc>>> =
 macro_rules! add_documented_method {
 	($methods:ident, $type_name:literal, $name:literal, $handler:expr, $documentation:expr, $args:expr, $ret:expr) => {{
 		$methods.add_method($name, $handler);
-		let mut docs = crate::lua::doc::LUA_DOCS.lock();
+		let mut docs = $crate::lua::doc::LUA_DOCS.lock();
 		if let Some(doc) = docs.get_mut($type_name) {
 			doc.methods.push(crate::lua::doc::LuaMethodDoc {
 				name: $name,
@@ -55,7 +55,7 @@ macro_rules! add_documented_method {
 macro_rules! add_documented_method_mut {
 	($methods:ident, $type_name:literal, $name:literal, $handler:expr, $documentation:expr, $args:expr, $ret:expr) => {{
 		$methods.add_method_mut($name, $handler);
-		let mut docs = crate::lua::doc::LUA_DOCS.lock();
+		let mut docs = $crate::lua::doc::LUA_DOCS.lock();
 		if let Some(doc) = docs.get_mut($type_name) {
 			doc.methods.push(crate::lua::doc::LuaMethodDoc {
 				name: $name,

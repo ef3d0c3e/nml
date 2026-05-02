@@ -9,11 +9,8 @@ use crate::compiler::compiler::Compiler;
 use crate::compiler::output::CompilerOutput;
 use crate::parser::reports::Report;
 use crate::parser::source::Token;
-use crate::unit::element::ContainerElement;
 use crate::unit::element::ElemKind;
 use crate::unit::element::Element;
-use crate::unit::element::LinkableElement;
-use crate::unit::element::ReferenceableElement;
 use crate::unit::scope::Scope;
 
 #[derive(Debug)]
@@ -45,11 +42,11 @@ impl Element for Eof {
 		Ok(())
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(EofProxy(self as *const _)).unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(EofProxyMut(self as *mut _)).unwrap()
 	}
 }

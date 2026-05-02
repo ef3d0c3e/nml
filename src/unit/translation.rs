@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -10,7 +9,6 @@ use crate::parser::reports::*;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
-use graphviz_rust::print;
 use parking_lot::MappedRwLockWriteGuard;
 use parking_lot::RwLock;
 use parking_lot::RwLockWriteGuard;
@@ -284,7 +282,7 @@ impl TranslationUnit {
 			self,
 		)
 	}
-	pub fn colors<'s>(&'s self) -> &'s ReportColors {
+	pub fn colors(&self) -> &ReportColors {
 		&self.colors
 	}
 
@@ -316,7 +314,7 @@ impl TranslationUnit {
 	pub fn export_references(&self, cache: Arc<Cache>) -> Result<(), String> {
 		let output = self.output.get().unwrap();
 
-		cache.export_ref_unit(&self, &output.input_file, &output.output_file);
+		cache.export_ref_unit(self, &output.input_file, &output.output_file);
 		cache.export_references(&self.reference_key(), self.references.iter())
 	}
 

@@ -52,24 +52,24 @@ impl ProjectSettings {
 
 		let cwd = current_dir().map_err(|e| format!("Failed to get working directory: {e}"))?;
 		let diff = pathdiff::diff_paths(&path, &cwd)
-			.unwrap_or(PathBuf::from(path.clone()));
+			.unwrap_or(path.clone());
 
 		self.output_path = get_path(diff.clone(), &self.output_path)?;
 		self.db_path = get_path(diff.clone(), &self.db_path)?;
 		let output_buf = PathBuf::from(&self.output_path).canonicalize().map_err(|e| format!("Failed to canonicalize `{}`: {e}", self.output_path.display()))?;
 
 		let diff = pathdiff::diff_paths(&output_buf, &cwd)
-			.unwrap_or(PathBuf::from(output_buf.clone()));
+			.unwrap_or(output_buf.clone());
 		match &mut self.output {
 			ProjectOutput::Html(html) => {
 				if let Some(icon) = &mut html.icon {
 					println!("ICON");
-					*icon = get_path(diff.clone(), &icon)?;
+					*icon = get_path(diff.clone(), icon)?;
 				}
 
 				if let Some(css) = &mut html.css {
 					println!("CSS");
-					*css = get_path(diff.clone(), &css)?;
+					*css = get_path(diff.clone(), css)?;
 				}
 			}
 		}

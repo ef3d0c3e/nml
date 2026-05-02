@@ -50,9 +50,7 @@ TODO List: ```
 			)),
 			kind: Some(CompletionItemKind::SNIPPET),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
-			insert_text: Some(format!(
-				"* ${{1:CONTENT}}"
-			)),
+			insert_text: Some("* ${1:CONTENT}".to_string()),
 			..CompletionItem::default()
 		});
 
@@ -90,9 +88,7 @@ TODO List: ```
 			)),
 			kind: Some(CompletionItemKind::SNIPPET),
 			insert_text_format: Some(InsertTextFormat::SNIPPET),
-			insert_text: Some(format!(
-				"- ${{1:CONTENT}}"
-			)),
+			insert_text: Some("- ${1:CONTENT}".to_string()),
 			..CompletionItem::default()
 		});
 	}

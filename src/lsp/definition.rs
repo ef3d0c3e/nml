@@ -23,10 +23,10 @@ pub struct DefinitionData {
 	pub definitions: RwLock<Vec<(Location, Range)>>,
 }
 
-fn from_source_impl<'lsp>(
+fn from_source_impl(
 	source: Arc<dyn Source>,
 	target: &Token,
-	lsp: &'lsp LangServerData,
+	lsp: &LangServerData,
 	original: Token,
 ) {
 	if (source.name().starts_with(":LUA:") || source.name().starts_with(":VAR:"))
@@ -43,7 +43,7 @@ fn from_source_impl<'lsp>(
 	{
 		from_source_impl(location.source(), target, lsp, original);
 		return;
-	} else if !source.downcast_ref::<SourceFile>().is_some() {
+	} else if source.downcast_ref::<SourceFile>().is_none() {
 		return;
 	}
 	let Some(def_data) = lsp.definitions.get(&original.source()) else {
@@ -101,6 +101,6 @@ fn from_source_impl<'lsp>(
 	))
 }
 
-pub(crate) fn from_source<'lsp>(source: Token, target: &Token, lsp: &'lsp LangServerData) {
+pub(crate) fn from_source(source: Token, target: &Token, lsp: &LangServerData) {
 	from_source_impl(source.source(), target, lsp, source)
 }

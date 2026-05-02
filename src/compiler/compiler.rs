@@ -40,7 +40,7 @@ pub struct Compiler {
 impl Compiler {
 	pub fn new(target: Target, cache: Arc<Cache>) -> Self {
 		Self {
-			target: target,
+			target,
 			cache,
 			sanitizer: Sanitizer::new(target),
 		}
@@ -98,7 +98,7 @@ impl Compiler {
 			}
 
 			if let Err(mut reps) = elem.compile(scope, self, &mut output) {
-				reports.extend(reps.drain(..));
+				reports.append(&mut reps);
 			}
 		}
 		println!("Output={}", output.content());
@@ -131,7 +131,7 @@ impl Compiler {
 				} else {
 					"".into()
 				};
-				output.add_content(&format!(
+				output.add_content(format!(
 					"<!DOCTYPE html><html lang=\"{}\"><head><meta charset=\"utf-8\">{icon}{css}</head><body>",
 					self.sanitize(html.language.as_str())
 				));
@@ -153,7 +153,7 @@ impl Compiler {
 	pub fn compile(&self, unit: &TranslationUnit) -> Result<String, Vec<Report>> {
 		let output = CompilerOutput::run_with_processor(
 			self.target,
-			&unit.colors(),
+			unit.colors(),
 			unit.input_path().clone(),
 			unit.output_path().cloned(),
 			|output| {

@@ -83,7 +83,7 @@ impl RegexRule for MediaRule {
 		_states: &mut CustomStates,
 		_index: usize,
 	) -> bool {
-		return !mode.paragraph_only;
+		!mode.paragraph_only
 	}
 
 	fn on_regex_match<'u>(
@@ -134,7 +134,7 @@ impl RegexRule for MediaRule {
 					unit,
 					token.source(),
 					"Invalid Media Refname".into(),
-					span(refname_group.range(), err.into())
+					span(refname_group.range(), err)
 				);
 				return;
 			}
@@ -341,7 +341,7 @@ impl RegexRule for MediaRule {
 		};
 		let mut has_group = false;
 		if let Some(elem) = unit.get_scope().content_last() {
-			if let Some(_) = elem.downcast_ref::<MediaGroup>() {
+			if elem.downcast_ref::<MediaGroup>().is_some() {
 				has_group = true
 			}
 		}

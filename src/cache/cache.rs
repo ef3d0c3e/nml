@@ -456,7 +456,6 @@ impl Cache {
 				))
 			})
 			.unwrap()
-			.into_iter()
 			.map(|v| {
 				let Ok((unit_ref, start, end, depends_for)) = v else {
 					panic!()

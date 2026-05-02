@@ -224,7 +224,7 @@ pub fn escape_text<S: AsRef<str>>(
 	for c in data.chars() {
 		if c == escape {
 			escaped += 1;
-		} else if escaped % 2 == 1 && token_it.peek().map_or(false, |p| *p == c) {
+		} else if escaped % 2 == 1 && token_it.peek().is_some_and(|p| *p == c) {
 			let _ = token_it.next();
 			if token_it.peek().is_none() {
 				(0..(escaped / 2)).for_each(|_| processed.push(escape));
@@ -264,7 +264,7 @@ pub fn parse_paragraph(
 
 			// Iterate over parsed content
 			let mut iter = scope.content_iter(true);
-			while let Some(_elem) = iter.next() {
+			for _elem in iter {
 				// TODO
 			}
 

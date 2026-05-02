@@ -13,6 +13,7 @@ use crate::unit::translation::TranslationUnit;
 pub static LUA_CUSTOM: &str = "nml.lua.kernel";
 
 /// Data for kernels
+#[derive(Default)]
 pub struct LuaData {
 	/// All registered kernels
 	pub(crate) registered: HashMap<KernelNameBuf, Arc<RwLock<Kernel>>>,
@@ -45,13 +46,6 @@ impl LuaData {
 	}
 }
 
-impl Default for LuaData {
-	fn default() -> Self {
-		Self {
-			registered: HashMap::default(),
-		}
-	}
-}
 
 impl CustomData for LuaData {
 	fn name(&self) -> &str {

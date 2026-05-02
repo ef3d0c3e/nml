@@ -82,11 +82,11 @@ impl Element for Link {
 		Some(self)
 	}
 
-fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(LinkProxy(self as *const _)).unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(LinkProxyMut(self as *mut _)).unwrap()
 	}
 }

@@ -86,7 +86,7 @@ impl LuaPostProcess {
 				ParseMode::default(),
 				true,
 				|unit, scope| {
-					let ctx = KernelContext::new(self.location.clone().into(), &*kernel, unit);
+					let ctx = KernelContext::new(self.location.clone(), &kernel, unit);
 					match kernel.run_with_context(ctx, |lua| match self.eval_kind {
 						LuaEvalKind::None => lua
 							.load(self.source.content())
@@ -168,7 +168,7 @@ impl Element for LuaPostProcess {
 	) -> Result<(), Vec<Report>> {
 		let content = self.expanded.get().expect("Expected post-processing");
 
-		for (scope, elem) in (&content[0]).content_iter(false) {
+		for (scope, elem) in content[0].content_iter(false) {
 			elem.compile(scope, compiler, output)?;
 		}
 		Ok(())
@@ -178,12 +178,12 @@ impl Element for LuaPostProcess {
 	    Some(self)
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(LuaPostProcessProxy(self as *const _))
 			.unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(LuaPostProcessProxyMut(self as *mut _))
 			.unwrap()
 	}

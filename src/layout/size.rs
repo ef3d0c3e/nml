@@ -53,7 +53,7 @@ impl TryFrom<&str> for Size {
 				return Err(format!(
 					"Failed to parse '{}' as number: {}",
 					&s[0..sep],
-					err.to_string()
+					err
 				))
 			}
 		};
@@ -61,7 +61,7 @@ impl TryFrom<&str> for Size {
 			"em" => Ok(Size::Em(size)),
 			"px" => Ok(Size::Px(size)),
 			"%" => Ok(Size::Percent(size)),
-			unit => return Err(format!("Unknown unit type: {}", unit)),
+			unit => Err(format!("Unknown unit type: {}", unit)),
 		}
 	}
 }

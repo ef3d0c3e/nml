@@ -25,7 +25,7 @@ impl Default for StyleData {
 					end_re: Regex::new(r"\*\*").unwrap(),
 					compile: Arc::new(|enable, _, compiler, output| {
 						output.add_content(match compiler.target() {
-							Target::HTML => enable.then_some("<b>").unwrap_or("</b>"),
+							Target::HTML => if enable { "<b>" } else { "</b>" },
 							_ => todo!(),
 						});
 						Ok(())
@@ -37,7 +37,7 @@ impl Default for StyleData {
 					end_re: Regex::new(r"\*").unwrap(),
 					compile: Arc::new(|enable, _, compiler, output| {
 						output.add_content(match compiler.target() {
-							Target::HTML => enable.then_some("<i>").unwrap_or("</i>"),
+							Target::HTML => if enable { "<i>" } else { "</i>" },
 							_ => todo!(),
 						});
 						Ok(())
@@ -49,7 +49,7 @@ impl Default for StyleData {
 					end_re: Regex::new(r"__").unwrap(),
 					compile: Arc::new(|enable, _, compiler, output| {
 						output.add_content(match compiler.target() {
-							Target::HTML => enable.then_some("<u>").unwrap_or("</u>"),
+							Target::HTML => if enable { "<u>" } else { "</u>" },
 							_ => todo!(),
 						});
 						Ok(())
@@ -61,7 +61,7 @@ impl Default for StyleData {
 					end_re: Regex::new(r"`").unwrap(),
 					compile: Arc::new(|enable, _, compiler, output| {
 						output.add_content(match compiler.target() {
-							Target::HTML => enable.then_some("<em>").unwrap_or("</em>"),
+							Target::HTML => if enable { "<em>" } else { "</em>" },
 							_ => todo!(),
 						});
 						Ok(())

@@ -443,7 +443,7 @@ impl LanguageServer for Backend {
 				break;
 			}
 		}
-		let Some(hover) = found.map(|elem| elem.provide_hover()).flatten() else {
+		let Some(hover) = found.and_then(|elem| elem.provide_hover()) else {
 			return Ok(None);
 		};
 		Ok(Some(Hover {
@@ -528,12 +528,12 @@ impl LanguageServer for Backend {
 		if let Some(semantic_tokens) = self.semantic_token_map.get(uri) {
 			let data = semantic_tokens
 				.iter()
-				.filter_map(|token| Some(token.clone()))
+				.filter_map(|token| Some(*token))
 				.collect::<Vec<_>>();
 
 			return Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
 				result_id: None,
-				data: data,
+				data,
 			})));
 		}
 		Ok(None)
@@ -585,9 +585,9 @@ async fn main() -> anyhow::Result<()> {
 
 		if file.exists() && file.is_file() {
 			let content = String::from_utf8(
-				read(&file).expect(format!("Failed to read {}", file.display()).as_str()),
+				read(&file).unwrap_or_else(|_| panic!("Failed to read {}", file.display())),
 			)
-			.expect(format!("Project file {} contains invalid UTF-8", file.display()).as_str());
+			.unwrap_or_else(|_| panic!("Project file {} contains invalid UTF-8", file.display()));
 			match toml::from_str::<ProjectSettings>(content.as_str()) {
 				Ok(r) => settings = r,
 				Err(err) => {

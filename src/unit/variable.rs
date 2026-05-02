@@ -34,7 +34,7 @@ impl TryFrom<&str> for VariableName {
 
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
 		let mut it = value.chars();
-		while let Some(c) = it.next() {
+		for c in it {
 			if c.is_ascii_punctuation() && !(c == '.' || c == '_') {
 				return Err(format!(
 					"Variable name `{value}` cannot contain punctuation codepoint: `{c}`"
@@ -151,12 +151,13 @@ impl Variable for ContentVariable {
 	}
 
 	fn value_token(&self) -> &Token {
-		self.content.location().map_or(&self.location, |loc| &loc)
+		self.content.location().map_or(&self.location, |loc| loc)
 	}
 
 	fn expand<'u>(&self, unit: &mut TranslationUnit, _location: Token) -> Arc<RwLock<Scope>> {
 		// Parse content
-		let content = unit.with_child(
+		
+		unit.with_child(
 			self.content.clone(),
 			ParseMode::default(),
 			true,
@@ -164,8 +165,7 @@ impl Variable for ContentVariable {
 				unit.parser.clone().parse(unit);
 				scope
 			},
-		);
-		content
+		)
 	}
 
 	fn to_string(&self) -> String {
@@ -246,7 +246,8 @@ impl Variable for PropertyVariable {
 			self.value_token.content().into(),
 		)) as Arc<dyn Source>;
 		// Add content to scope
-		let content = unit.with_child(
+		
+		unit.with_child(
 			definition_source.clone(),
 			ParseMode::default(),
 			true,
@@ -257,8 +258,7 @@ impl Variable for PropertyVariable {
 				}));
 				scope
 			},
-		);
-		content
+		)
 	}
 
 	fn to_string(&self) -> String {

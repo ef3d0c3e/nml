@@ -122,14 +122,14 @@ impl CompilerOutput {
 		let time_start = Instant::now();
 		while finished != output.tasks.len() {
 			for task in &mut output.tasks {
-				if task.result.get().is_some() || !task.handle.get().is_some() {
+				if task.result.get().is_some() || task.handle.get().is_none() {
 					continue;
 				}
 
 				if task
 					.handle
 					.get()
-					.map_or(false, |handle| handle.is_finished())
+					.is_some_and(|handle| handle.is_finished())
 				{
 					output
 						.runtime
@@ -183,7 +183,7 @@ impl CompilerOutput {
 			let Some(Err(mut err)) = task.result.take() else {
 				panic!()
 			};
-			reports.extend(err.drain(..));
+			reports.append(&mut err);
 		}
 		if !reports.is_empty() {
 			return Err(reports);

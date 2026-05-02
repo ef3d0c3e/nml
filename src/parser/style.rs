@@ -28,6 +28,7 @@ pub trait ElementStyle: Downcast + core::fmt::Debug {
 impl_downcast!(ElementStyle);
 
 /// A structure that holds registered [`ElementStyle`]
+#[derive(Default)]
 pub struct StyleHolder {
 	styles: HashMap<String, Rc<dyn ElementStyle>>,
 }
@@ -44,13 +45,6 @@ macro_rules! create_styles {
 }
 
 //#[auto_registry::generate_registry(registry = "elem_styles", target = make_styles, return_type = HashMap<String, Rc<dyn ElementStyle>>, maker = create_styles)]
-impl Default for StyleHolder {
-	fn default() -> Self {
-		Self {
-			styles: HashMap::default(), //make_styles(),
-		}
-	}
-}
 
 impl StyleHolder {
 	/// Checks if a given style key is registered

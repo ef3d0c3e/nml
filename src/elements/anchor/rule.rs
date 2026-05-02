@@ -1,3 +1,5 @@
+use crate::lua::kernel::Kernel;
+use crate::lua::wrappers::ElemWrapper;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RuleTarget;
@@ -14,6 +16,7 @@ use regex::Regex;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use crate::add_documented_function;
 use crate::parser::reports::Report;
 use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
@@ -141,5 +144,48 @@ impl RegexRule for AnchorRule {
 		&self,
 	) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
 		Some(Box::new(AnchorCompletion {}))
+	}
+
+	fn register_bindings(&self) {
+		add_documented_function!(
+			"anchor.Anchor",
+			|lua: &mlua::Lua, (name,): (String,)| {
+				let refname = match Refname::try_from(name.as_str()) {
+					Err(err) => {
+						return Err(mlua::Error::BadArgument {
+							to: Some("anchor.Anchor".into()),
+							pos: 1,
+							name: Some("name".into()),
+							cause: Arc::new(mlua::Error::RuntimeError(err)),
+						});
+					}
+					Ok(refname) => match &refname {
+						Refname::Internal(_) => refname,
+						_ => {
+							return Err(mlua::Error::BadArgument { to: Some("anchor.Anchor".into()), pos: 1, name: Some("name".into()), cause: Arc::new(mlua::Error::RuntimeError(format!("Use of reserved character: `{}` (external reference), `{}` (bibliography)", '#', '@'))) });
+						}
+					},
+				};
+				let elem = Kernel::with_context(lua, |ctx| {
+					let reference = Arc::new(InternalReference::new(
+						ctx.location
+							.source()
+							.original_range(ctx.location.range.clone()),
+						refname.clone(),
+					));
+
+					Anchor {
+						location: ctx.location.clone(),
+						refname,
+						reference,
+						link: OnceLock::default(),
+					}
+				});
+				Ok(ElemWrapper(Arc::new(elem)))
+			},
+			"Create a new anchor element",
+			vec!["name:string Anchor name"],
+			"Anchor"
+		);
 	}
 }

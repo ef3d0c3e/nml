@@ -38,7 +38,7 @@ impl KernelName {
 				));
 			}
 			if c.is_ascii_control() {
-				return Err(format!("Kernel names cannot contain control sequences"));
+				return Err("Kernel names cannot contain control sequences".to_string());
 			}
 			if c.is_ascii_punctuation() {
 				return Err(format!(
@@ -85,7 +85,7 @@ impl TryFrom<&str> for KernelNameBuf {
 				));
 			}
 			if c.is_ascii_control() {
-				return Err(format!("Kernel names cannot contain control sequences"));
+				return Err("Kernel names cannot contain control sequences".to_string());
 			}
 			if c.is_ascii_punctuation() {
 				return Err(format!(
@@ -215,7 +215,7 @@ impl Kernel {
 						Kernel::with_context(lua, |ctx| {
 							ctx.kernel
 								.register_autocmd(&name, callback)
-								.map_err(|err| mlua::Error::RuntimeError(err))
+								.map_err(mlua::Error::RuntimeError)
 						})
 					})
 					.unwrap(),
@@ -418,7 +418,7 @@ where
 #[macro_export]
 macro_rules! add_documented_function {
 	($name:literal, $handler:expr, $documentation:expr, $args:expr, $ret:expr) => {{
-		let mut funs = crate::lua::kernel::LUA_FUNC.lock();
+		let mut funs = $crate::lua::kernel::LUA_FUNC.lock();
 		let fun_name = $name.rsplit_once(".").map_or($name, |(_, last)| last);
 		funs.insert(
 			$name,
@@ -454,7 +454,7 @@ where
 #[macro_export]
 macro_rules! add_documented_function_values {
 	($name:literal, $handler:expr, $documentation:expr, $args:expr, $ret:expr) => {{
-		let mut funs = crate::lua::kernel::LUA_FUNC.lock();
+		let mut funs = $crate::lua::kernel::LUA_FUNC.lock();
 		let fun_name = $name.rsplit_once(".").map_or($name, |(_, last)| last);
 		funs.insert(
 			$name,

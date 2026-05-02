@@ -201,7 +201,7 @@ impl RegexRule for HeadingRule {
 			depth,
 			numbered,
 			in_toc,
-			reference: reference,
+			reference,
 			link: OnceLock::default(),
 		});
 	}

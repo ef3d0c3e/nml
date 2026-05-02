@@ -62,12 +62,12 @@ impl Element for LayoutElem {
 			.compile(scope, compiler, output, self.id, self.token, &self.params)
 	}
 
-	fn lua_ud(self: &Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud(&self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(LayoutElemProxy(self as *const _))
 			.unwrap()
 	}
 
-	fn lua_ud_mut(self: &mut Self, lua: &Lua) -> AnyUserData {
+	fn lua_ud_mut(&mut self, lua: &Lua) -> AnyUserData {
 		lua.create_userdata(LayoutElemProxyMut(self as *mut _))
 			.unwrap()
 	}

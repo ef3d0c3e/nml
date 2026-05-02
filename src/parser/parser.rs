@@ -4,7 +4,6 @@ use std::slice::Iter;
 use std::sync::Arc;
 use std::usize;
 
-use graphviz_rust::print;
 
 use crate::elements::meta::eof::Eof;
 use crate::elements::text::elem::Text;
@@ -155,15 +154,15 @@ impl Parser {
 			return None;
 		}
 
-		return Some((
+		Some((
 			cursor.at(next),
 			&self.rules[best_idx],
 			state.matches[best_idx].1.take().unwrap(),
-		));
+		))
 	}
 
 	/// Adds content from `range` as text to `unit`
-	fn add_text<'u>(&'u self, unit: &mut TranslationUnit, range: Range<Cursor>) {
+	fn add_text(&self, unit: &mut TranslationUnit, range: Range<Cursor>) {
 		let token: Token = (&range).into();
 		let mut first = true;
 		let mut content = token.content().chars().fold(String::default(), {
@@ -192,12 +191,12 @@ impl Parser {
 			return;
 		}
 
-		unit.add_content(Text::new(token, content.into()));
+		unit.add_content(Text::new(token, content));
 	}
 
 	/// Parses the current scope in the translation unit
 	pub fn parse(&self, unit: &mut TranslationUnit) {
-		let mut cursor = Cursor::new(0, Arc::as_ref(unit.get_scope()).read().source().into());
+		let mut cursor = Cursor::new(0, Arc::as_ref(unit.get_scope()).read().source());
 
 		while let Some((next_cursor, rule, rule_data)) = self.next_match(unit, &cursor) {
 			// Unmatched content added as text

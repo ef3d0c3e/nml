@@ -355,7 +355,7 @@ impl Rule for ListRule {
 						unit,
 						token.source(),
 						"Unable to parse List Entry".into(),
-						span(token.range.clone(), err.into())
+						span(token.range.clone(), err)
 					);
 					// Return an empty paragraph
 					return false;

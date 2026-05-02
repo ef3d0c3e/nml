@@ -7,7 +7,7 @@ pub trait AsRefForCompare<'a, T: ?Sized> {
 // For owned T: just return a reference to self
 impl<'a, T: ?Sized> AsRefForCompare<'a, T> for T {
 	fn as_ref_for_compare(&'a self) -> &'a T {
-		&self
+		self
 	}
 }
 
