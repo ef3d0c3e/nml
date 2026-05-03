@@ -28,7 +28,7 @@ pub struct VariableWrapper(pub Arc<dyn Variable>);
 pub struct UnitWrapper(pub *mut TranslationUnit);
 
 /// Wrapper for [`Scope`]
-pub struct ScopeWrapper(pub *const Arc<RwLock<Scope>>);
+pub struct ScopeWrapper(pub Arc<RwLock<Scope>>);
 
 /// Wrapper for [`Vec<Arc<RwLock<Scope>>>`]
 pub struct VecScopeProxy(pub *const Vec<Arc<RwLock<Scope>>>);

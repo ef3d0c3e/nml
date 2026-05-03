@@ -15,7 +15,7 @@ impl UserData for UnitWrapper {
 	fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("entry_scope", |_lua, this, ()| {
 			let r = unsafe { &mut *this.0 as &mut TranslationUnit };
-			Ok(ScopeWrapper(r.get_entry_scope()))
+			Ok(ScopeWrapper(r.get_entry_scope().clone()))
 		});
 		methods.add_method("content", |_lua, this, (recurse,): (bool,)| {
 			let r = unsafe { &mut *this.0 as &mut TranslationUnit };

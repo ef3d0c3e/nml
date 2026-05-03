@@ -21,7 +21,7 @@ use crate::unit::scope::ScopeAccessor;
 pub struct ScopeElement {
 	#[lua_ud]
 	pub token: Token,
-	#[lua_ud(ScopeWrapper)]
+	#[lua_udc(ScopeWrapper)]
 	pub scope: Arc<RwLock<Scope>>,
 }
 

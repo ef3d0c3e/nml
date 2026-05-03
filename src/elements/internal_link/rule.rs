@@ -259,7 +259,7 @@ impl RegexRule for InternalLinkRule {
 			|lua: &mlua::Lua, args: mlua::MultiValue| {
 				let (refname, display) = parse_lua_args!(lua, args, "InternalLink",
 					("refname", Refname, serde),
-					("display", ScopeWrapper, ScopeWrapper, Arc<RwLock<Scope>>, prox_any),
+					("display", ScopeWrapper, Arc<RwLock<Scope>>, proxc),
 				);
 
 				Ok(Kernel::with_context(lua, |ctx| ElemWrapper (Arc::new(InternalLink {

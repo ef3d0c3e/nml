@@ -47,7 +47,7 @@ pub struct ListEntry {
 	pub(crate) location: Token,
 	#[lua_value]
 	pub(crate) bullet: BulletMarker,
-	#[lua_proxy(ScopeWrapper, immutable)]
+	#[lua_udc(ScopeWrapper)]
 	pub(crate) content: Arc<RwLock<Scope>>,
 	#[lua_value]
 	pub(crate) markers: Vec<ListMarker>,

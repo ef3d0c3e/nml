@@ -624,6 +624,7 @@ macro_rules! convert_lua_args {
 ///     ("name", PlainType),                                   // FromLua
 ///     ("name", PlainType, serde),                             // LuaSerdeExt::from_value
 ///     ("name", ProxyType,    InnerType, prox),               // &'lua Inner, immutable only
+///     ("name", ProxyType,    InnerType, proxc),               // &'lua Inner, immutable only
 ///     ("name", ProxyType,    InnerType, prox_mut),           // &'lua mut Inner, mutable only
 ///     ("name", ProxyType, ProxyTypeMut, InnerType, prox_any),// &'lua Inner, either variant
 /// )
@@ -672,6 +673,38 @@ macro_rules! __parse_one_arg {
 		match __val {
 			::mlua::Value::UserData(ref __ud) => match __ud.borrow::<$proxy_ty>() {
 				Ok(__proxy) => unsafe { &*(__proxy.0 as *const $inner_ty) },
+				Err(_) => {
+					return Err(::mlua::Error::BadArgument {
+						to: Some($fn_name.to_string()),
+						pos: $idx,
+						name: Some($arg_name.to_string()),
+						cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+							"expected immutable proxy {}",
+							stringify!($proxy_ty)
+						))),
+					})
+				}
+			},
+			_ => {
+				return Err(::mlua::Error::BadArgument {
+					to: Some($fn_name.to_string()),
+					pos: $idx,
+					name: Some($arg_name.to_string()),
+					cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(
+						"expected userdata".to_string(),
+					)),
+				})
+			}
+		}
+	}};
+
+	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
+     $arg_name:expr, $proxy_ty:ty, $inner_ty:ty, proxc) => {{
+		let __val = $argv[$idx].clone();
+		$idx += 1;
+		match __val {
+			::mlua::Value::UserData(ref __ud) => match __ud.borrow::<$proxy_ty>() {
+				Ok(__proxy) => __proxy.0.clone() as $inner_ty,
 				Err(_) => {
 					return Err(::mlua::Error::BadArgument {
 						to: Some($fn_name.to_string()),

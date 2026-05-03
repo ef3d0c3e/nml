@@ -51,7 +51,7 @@ impl Rule for MetaRule {
 			"scope.Scope",
 			|lua: &Lua, (elems,): (Vec<ElemWrapper>,)| {
 				Kernel::with_context(lua, |ctx| {
-					ctx.unit.with_child(
+					let scope = ctx.unit.with_child(
 						ctx.location.source(),
 						ParseMode::default(),
 						false,
@@ -59,10 +59,10 @@ impl Rule for MetaRule {
 							for elem in elems {
 								unit.add_content_raw(elem.0);
 							}
-							// FIXME: Dangling
-							Ok(ScopeWrapper(&scope))
+							scope
 						},
-					)
+					);
+					return Ok(ScopeWrapper(scope));
 				})
 			},
 			"Creates a new scope with content",

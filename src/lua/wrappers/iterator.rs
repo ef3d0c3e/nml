@@ -13,7 +13,7 @@ impl UserData for IteratorWrapper {
 				let mut iter = this.borrow_mut::<IteratorWrapper>()?;
 				if let Some((scope, elem)) = iter.0.next() {
 					Ok(mlua::MultiValue::from_vec(vec![
-						Value::UserData(lua.create_userdata(ScopeWrapper(&scope)).unwrap()),
+						Value::UserData(lua.create_userdata(ScopeWrapper(scope)).unwrap()),
 						Value::UserData(lua.create_userdata(ElemWrapper(elem)).unwrap()),
 					]))
 				} else {

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use graphviz_rust::print;
 use mlua::UserData;
 use parking_lot::RwLock;
 
@@ -16,7 +17,7 @@ impl UserData for ScopeWrapper {
 			"Scope",
 			"content",
 			|_lua, this, (recurse,): (bool,)| {
-				let r = unsafe { &*this.0 as &Arc<RwLock<Scope>> };
+				let r = this.0.clone();
 				let it = r.content_iter(recurse);
 				Ok(IteratorWrapper(Box::new(it)))
 			},
@@ -32,8 +33,10 @@ impl UserData for ScopeWrapper {
 			"Scope",
 			"insert",
 			|_lua, this, (index, elem): (usize, ElemWrapper)| {
-				let r = unsafe { &*this.0 as &Arc<RwLock<Scope>> };
-				let mut scope = r.write();
+				let r = this.0.clone();
+				let Some(mut scope) = r.try_write() else {
+					return Err(mlua::Error::RuntimeError(format!("Attempted to modify immutable Scope")))
+				};
 				if index > scope.content.len() {
 					scope.content.push(elem.0);
 				} else {
@@ -54,8 +57,10 @@ impl UserData for ScopeWrapper {
 			"Scope",
 			"push",
 			|_lua, this, elem : ElemWrapper | {
-				let r = unsafe { &*this.0 as &Arc<RwLock<Scope>> };
-				let mut scope = r.write();
+				let r = this.0.clone();
+				let Some(mut scope) = r.try_write() else {
+					return Err(mlua::Error::RuntimeError(format!("Attempted to modify immutable Scope")))
+				};
 				scope.content.push(elem.0);
 				Ok(())
 			},
@@ -78,7 +83,7 @@ impl UserData for VecScopeProxy {
 			|_lua, this, (id,): (usize,)| {
 				let r = unsafe { &*this.0 as &Vec<Arc<RwLock<Scope>>> };
 				if let Some(scope) = r.get(id) {
-					Ok(ScopeWrapper(scope as *const Arc<RwLock<Scope>>))
+					Ok(ScopeWrapper(scope.clone()))
 				} else {
 					Err(mlua::Error::BadArgument {
 						to: Some("scope".into()),
@@ -104,7 +109,7 @@ impl UserData for VecScopeProxyMut {
 			|_lua, this, (id,): (usize,)| {
 				let r = unsafe { &mut *this.0 as &mut Vec<Arc<RwLock<Scope>>> };
 				if let Some(scope) = r.get(id) {
-					Ok(ScopeWrapper(scope as *const Arc<RwLock<Scope>>))
+					Ok(ScopeWrapper(scope.clone()))
 				} else {
 					Err(mlua::Error::BadArgument {
 						to: Some("scope".into()),
