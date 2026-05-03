@@ -1,6 +1,10 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use crate::add_documented_function;
+use crate::lua::kernel::Kernel;
+use crate::lua::wrappers::ElemWrapper;
+use crate::lua::wrappers::ScopeWrapper;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RuleTarget;
@@ -10,9 +14,11 @@ use crate::parser::state::CustomStates;
 use crate::parser::state::ParseMode;
 use crate::unit::references::InternalReference;
 use crate::unit::references::Refname;
+use crate::unit::scope::Scope;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use ariadne::Fmt;
+use parking_lot::RwLock;
 use parser::rule::RegexRule;
 use parser::source::Token;
 use parser::util::parse_paragraph;
@@ -28,7 +34,7 @@ pub struct HeadingRule {
 impl Default for HeadingRule {
 	fn default() -> Self {
 		Self {
-			re: [Regex::new(r"(?:^|\n)(#+)(?:\{(.*)\})?(\+|\*|\+\*|\*\+)?\s+(.*)").unwrap()],
+			re: [Regex::new(r"(?:^|\n)(#+)(?:\{(.*)\})?(\*)?\s+(.*)").unwrap()],
 		}
 	}
 }
@@ -65,8 +71,7 @@ impl RegexRule for HeadingRule {
 	) {
 		// Parse depth
 		let depth = matches.get(1).unwrap().len();
-		if depth > 6
-		{
+		if depth > 6 {
 			report_err!(
 				unit,
 				token.source(),
@@ -78,27 +83,24 @@ impl RegexRule for HeadingRule {
 			);
 			return;
 		}
-		unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-			sems.add(matches.get(1).unwrap().range(), tokens.heading_depth);
-		}));
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(matches.get(1).unwrap().range(), tokens.heading_depth);
+			})
+		});
 
 		// Parse optional refname
-		let refname = if let Some(refname) = matches.get(2)
-		{
-			let name = match Refname::try_from(refname.as_str())
-			{
+		let refname = if let Some(refname) = matches.get(2) {
+			let name = match Refname::try_from(refname.as_str()) {
 				// Parse error
 				Err(err) => {
 					report_err!(
 						unit,
 						token.source(),
 						"Invalid Heading Refname".into(),
-						span(
-							refname.range(),
-							err
-						)
+						span(refname.range(), err)
 					);
-					return
+					return;
 				}
 				// Check format
 				Ok(r) => {
@@ -112,47 +114,52 @@ impl RegexRule for HeadingRule {
 								"Refname does not correspond to an internal reference name!".into()
 							),
 						);
-						return
+						return;
 					};
 					r
 				}
 			};
-			unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-				sems.add(refname.start()-1..refname.start(), tokens.heading_refname_sep);
-				sems.add(refname.range(), tokens.heading_refname);
-				sems.add(refname.end()..refname.end()+1, tokens.heading_refname_sep);
-			}));
+			unit.with_lsp(|lsp| {
+				lsp.with_semantics(token.source(), |sems, tokens| {
+					sems.add(
+						refname.start() - 1..refname.start(),
+						tokens.heading_refname_sep,
+					);
+					sems.add(refname.range(), tokens.heading_refname);
+					sems.add(refname.end()..refname.end() + 1, tokens.heading_refname_sep);
+				})
+			});
 			Some(name)
-		} else { None };
+		} else {
+			None
+		};
 
 		// Parse heading kind
-		let (numbered, in_toc) = match matches.get(3).map_or("", |m| m.as_str())
-		{
-			"*+" | "+*" => (false, false),
-			"*" => (false, true),
-			"+" => (true, false),
-			"" => (true, true),
+		let in_toc = match matches.get(3).map_or("", |m| m.as_str()) {
+			"*" => false,
+			"" => true,
 			_ => {
 				report_err!(
 					unit,
 					token.source(),
-					"Invalid Heading Kind".into(),
+					"Invalid Heading Special".into(),
 					span(
 						matches.get(3).unwrap().range(),
-						format!("Heading kind must be a combination of {} or {}",
-							"*: unnumbered".fg(unit.colors().info),
-							"+: exclude form TOC".fg(unit.colors().info),
+						format!(
+							"Heading special can be:\n{}",
+							"*: to exclude heading from ToC".fg(unit.colors().info),
 						)
 					),
 				);
-				return
+				return;
 			}
 		};
-		if let Some(kind) = matches.get(3)
-		{
-			unit.with_lsp(|lsp| lsp.with_semantics(token.source(), |sems, tokens| {
-				sems.add(kind.range(), tokens.heading_kind);
-			}));
+		if let Some(kind) = matches.get(3) {
+			unit.with_lsp(|lsp| {
+				lsp.with_semantics(token.source(), |sems, tokens| {
+					sems.add(kind.range(), tokens.heading_kind);
+				})
+			});
 		}
 
 		// Parse heading display
@@ -162,14 +169,15 @@ impl RegexRule for HeadingRule {
 				unit,
 				token.source(),
 				"Empty Heading Display".into(),
-				span(
-					display.range(),
-					"Heading display is empty".into()
-				),
+				span(display.range(), "Heading display is empty".into()),
 			);
 		}
 
-		let display_source = Arc::new(VirtualSource::new(Token::new(display.range(), token.source()), "Heading display".into(), display.as_str().into()));
+		let display_source = Arc::new(VirtualSource::new(
+			Token::new(display.range(), token.source()),
+			"Heading display".into(),
+			display.as_str().into(),
+		));
 		let parsed = match parse_paragraph(unit, display_source) {
 			Err(err) => {
 				report_err!(
@@ -187,22 +195,96 @@ impl RegexRule for HeadingRule {
 		};
 
 		// Reference
-		let reference = if let Some(name) = refname
-		{
+		let reference = if let Some(name) = refname {
 			Some(Arc::new(InternalReference::new(
 				token.source().original_range(token.range.clone()),
 				name.clone(),
 			)))
-		} else { None };
+		} else {
+			None
+		};
 		// Add element
 		unit.add_content(Heading {
 			location: token.clone(),
 			display: vec![parsed],
 			depth,
-			numbered,
 			in_toc,
 			reference,
 			link: OnceLock::default(),
 		});
+	}
+
+	fn register_bindings(&self) {
+		add_documented_function!(
+			"heading.Heading",
+			|lua: &mlua::Lua, args: mlua::MultiValue| {
+				let (depth, in_toc, content, refname) = parse_lua_args!(
+					lua,
+					args,
+					"heading.Heading",
+					("depth", usize),
+					("in_toc", bool),
+					("content", ScopeWrapper, Arc<RwLock<Scope>>, proxc),
+					("refname", String, opt)
+				);
+				if depth == 0 {
+					return Err(mlua::Error::BadArgument {
+						to: Some("heading.Heading".into()),
+						pos: 1,
+						name: Some("depth".into()),
+						cause: Arc::new(mlua::Error::RuntimeError(format!("Depth must be >= 1"))),
+					});
+				}
+				let refname = if let Some(refname) = &refname {
+					match Refname::try_from(refname.as_str()) {
+						Err(err) => {
+							return Err(mlua::Error::BadArgument {
+								to: Some("heading.Heading".into()),
+								pos: 4,
+								name: Some("refname".into()),
+								cause: Arc::new(mlua::Error::RuntimeError(err)),
+							});
+						}
+						Ok(refname) => match &refname {
+							Refname::Internal(_) => Some(refname),
+							_ => {
+								return Err(mlua::Error::BadArgument { to: Some("heading.Heading".into()), pos: 4, name: Some("refname".into()), cause: Arc::new(mlua::Error::RuntimeError(format!("Use of reserved character: `{}` (external reference), `{}` (bibliography)", '#', '@'))) });
+							}
+						},
+					}
+				} else {
+					None
+				};
+
+				let elem = Kernel::with_context(lua, |ctx| {
+					let reference = refname.map(|refname| {
+						Arc::new(InternalReference::new(
+							ctx.location
+								.source()
+								.original_range(ctx.location.range.clone()),
+							refname.clone(),
+						))
+					});
+					Heading {
+						location: ctx.location.clone(),
+						display: vec![content],
+						depth,
+						in_toc,
+						reference,
+						link: OnceLock::default(),
+					}
+				});
+
+				Ok(ElemWrapper(Arc::new(elem)))
+			},
+			"Create a new heading element",
+			vec![
+				"depth:integer Heading depth",
+				"in_col:boolean Whether the heading should appear inside the Table of Content",
+				"display:Scope Heading content display",
+				"refname:string? Optional heading refname",
+			],
+			"Heading"
+		);
 	}
 }

@@ -506,6 +506,7 @@ macro_rules! convert_lua_args {
 	}};
 	// Count a single argument spec
 	(@count_single ($type:ty, $name:literal)) => { (1, 1) };
+	(@count_single ($type:ty, $name:literal, opt)) => { (0, 1) };
 	(@count_single ($type:ty, $name:literal, userdata)) => { (1, 1) };
 	(@count_single ($type:ty, $name:literal, vuserdata)) => { (1, 1) };
 	// TODO: Optional arguments
@@ -622,6 +623,7 @@ macro_rules! convert_lua_args {
 /// ```ignore
 /// parse_lua_args!(lua, args, "fn_name",
 ///     ("name", PlainType),                                   // FromLua
+///     ("name", PlainType, opt),                                   // FromLua
 ///     ("name", PlainType, serde),                             // LuaSerdeExt::from_value
 ///     ("name", ProxyType,    InnerType, prox),               // &'lua Inner, immutable only
 ///     ("name", ProxyType,    InnerType, proxc),               // &'lua Inner, immutable only
@@ -639,27 +641,9 @@ macro_rules! parse_lua_args {
         let __args: ::mlua::MultiValue = $args;
         let __argv: Vec<::mlua::Value> = __args.into_vec();
         let __fn_name: &str = $fn_name;
-        let __expected = $crate::__count_args!($($arg_name),*);
-        if __argv.len() != __expected {
-            return Err(::mlua::Error::BadArgument {
-                to: Some(__fn_name.to_string()),
-                pos: 1,
-                name: None,
-                cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
-                    "expected {} arguments, got {}", __expected, __argv.len()
-                ))),
-            });
-        }
         let mut __idx: usize = 0;
         ($($crate::__parse_one_arg!($lua, __argv, __idx, __fn_name, $arg_name, $($rest)*),)*)
     }};
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __count_args {
-    () => { 0usize };
-    ($head:expr $(, $tail:expr)*) => { 1usize + $crate::__count_args!($($tail),*) };
 }
 
 #[macro_export]
@@ -668,6 +652,17 @@ macro_rules! __parse_one_arg {
 	// ── prox: immutable proxy only → &'lua Inner ─────────────────────────────
 	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
      $arg_name:expr, $proxy_ty:ty, $inner_ty:ty, prox) => {{
+		if $idx >= $argv.len() {
+			return Err(::mlua::Error::BadArgument {
+				to: Some($fn_name.to_string()),
+				pos: $idx,
+				name: Some($arg_name.to_string()),
+				cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+					"Expected `{}' for argument #{}",
+					$arg_name, $idx,
+				))),
+			})
+		}
 		let __val = $argv[$idx].clone();
 		$idx += 1;
 		match __val {
@@ -700,6 +695,17 @@ macro_rules! __parse_one_arg {
 
 	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
      $arg_name:expr, $proxy_ty:ty, $inner_ty:ty, proxc) => {{
+		if $idx >= $argv.len() {
+			return Err(::mlua::Error::BadArgument {
+				to: Some($fn_name.to_string()),
+				pos: $idx,
+				name: Some($arg_name.to_string()),
+				cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+					"Expected `{}' for argument #{}",
+					$arg_name, $idx,
+				))),
+			})
+		}
 		let __val = $argv[$idx].clone();
 		$idx += 1;
 		match __val {
@@ -734,6 +740,17 @@ macro_rules! __parse_one_arg {
 	// Pass the Mut proxy type directly as $proxy_ty.
 	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
      $arg_name:expr, $proxy_ty:ty, $inner_ty:ty, prox_mut) => {{
+		if $idx >= $argv.len() {
+			return Err(::mlua::Error::BadArgument {
+				to: Some($fn_name.to_string()),
+				pos: $idx,
+				name: Some($arg_name.to_string()),
+				cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+					"Expected `{}' for argument #{}",
+					$arg_name, $idx,
+				))),
+			})
+		}
 		let __val = $argv[$idx].clone();
 		$idx += 1;
 		match __val {
@@ -768,6 +785,17 @@ macro_rules! __parse_one_arg {
 	// Tries immutable first, then mutable. Both proxy types must be passed.
 	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
      $arg_name:expr, $proxy_ty:ty, $proxy_mut_ty:ty, $inner_ty:ty, prox_any) => {{
+		if $idx >= $argv.len() {
+			return Err(::mlua::Error::BadArgument {
+				to: Some($fn_name.to_string()),
+				pos: $idx,
+				name: Some($arg_name.to_string()),
+				cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+					"Expected `{}' for argument #{}",
+					$arg_name, $idx,
+				))),
+			})
+		}
 		let __val = $argv[$idx].clone();
 		$idx += 1;
 		match __val {
@@ -802,9 +830,40 @@ macro_rules! __parse_one_arg {
 		}
 	}};
 
+	// FromLua + Option
+	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
+     $arg_name:expr, $plain_ty:ty, opt) => {{
+		let __val = $argv.get($idx).cloned();
+		$idx += 1;
+		if let Some(__val) = __val {
+			match <$plain_ty as ::mlua::FromLua>::from_lua(__val, $lua) {
+				Ok(__v) => Some(__v),
+				Err(__e) => {
+					return Err(::mlua::Error::BadArgument {
+						to: Some($fn_name.to_string()),
+						pos: $idx,
+						name: Some($arg_name.to_string()),
+						cause: ::std::sync::Arc::new(__e),
+					})
+				}
+			}
+		} else { None }
+	}};
+
 	// ── plain FromLua ─────────────────────────────────────────────────────────
 	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
      $arg_name:expr, $plain_ty:ty) => {{
+		if $idx >= $argv.len() {
+			return Err(::mlua::Error::BadArgument {
+				to: Some($fn_name.to_string()),
+				pos: $idx,
+				name: Some($arg_name.to_string()),
+				cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+					"Expected `{}' for argument #{}",
+					$arg_name, $idx,
+				))),
+			})
+		}
 		let __val = $argv[$idx].clone();
 		$idx += 1;
 		match <$plain_ty as ::mlua::FromLua>::from_lua(__val, $lua) {
@@ -822,6 +881,17 @@ macro_rules! __parse_one_arg {
 	// ── serde: LuaSerdeExt::from_value ───────────────────────────────────────
 	($lua:expr, $argv:expr, $idx:expr, $fn_name:expr,
      $arg_name:expr, $serde_ty:ty, serde) => {{
+		if $idx >= $argv.len() {
+			return Err(::mlua::Error::BadArgument {
+				to: Some($fn_name.to_string()),
+				pos: $idx,
+				name: Some($arg_name.to_string()),
+				cause: ::std::sync::Arc::new(::mlua::Error::RuntimeError(format!(
+					"Expected `{}' for argument #{}",
+					$arg_name, $idx,
+				))),
+			})
+		}
 		let __val = $argv[$idx].clone();
 		$idx += 1;
 		match ::mlua::LuaSerdeExt::from_value($lua, __val) {

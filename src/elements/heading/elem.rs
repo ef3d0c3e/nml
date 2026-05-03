@@ -31,7 +31,6 @@ pub struct Heading {
 	pub(crate) display: Vec<Arc<RwLock<Scope>>>,
 	/// Nesting depth
 	pub(crate) depth: usize,
-	pub(crate) numbered: bool,
 	pub(crate) in_toc: bool,
 	#[lua_proxy(InternalReferenceOptProxy)]
 	pub(crate) reference: Option<Arc<InternalReference>>,
@@ -84,14 +83,12 @@ impl Element for Heading {
 # Properties
  * **Location**: [{0}] ({1}..{2})
  * **Depth**: {3}
- * **Numbered**: {4}
- * **In TOC**: {5}
- * **Refname**: {6}",
+ * **In TOC**: {4}
+ * **Refname**: {5}",
 			self.location.source().name().display(),
 			self.location().range.start(),
 			self.location().range.end(),
 			self.depth,
-			self.numbered,
 			self.in_toc,
 			self.reference
 				.as_ref()

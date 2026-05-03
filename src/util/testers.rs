@@ -116,7 +116,7 @@ macro_rules! validate_ast {
 	}};
 	($scope:expr, $idx:expr, $t:ty { $($fields:tt)* } [ $( { $($ts:tt)* } )* ]; $($tail:tt)*) => {{
 		validate_ast!($scope, $idx, $t;);
-		validate_ast!($scope, $idx, $t { $($field == $value)* };);
+		validate_ast!($scope, $idx, $t { $($fields)* };);
 		validate_ast!($scope, $idx, $t [ $({$($ts)*})* ];);
 		validate_ast!($scope, ($idx+1), $($tail)*);
 	}};
