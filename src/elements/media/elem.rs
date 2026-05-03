@@ -175,10 +175,15 @@ impl Element for Media {
 
 				output.add_content(r#"<figure class="media">"#);
 				output.add_content(match self.media_type {
-					MediaType::Image => format!(
-						r#"<a href="{0}"><img src="{0}"{width}></a>"#,
-						compiler.sanitize(url)
-					),
+					MediaType::Image => {
+						let alt = self.caption.as_ref().map_or(" ".to_string(), |caption| {
+							format!(" alt=\"{}\"", compiler.sanitize(caption))
+						});
+						format!(
+							r#"<a href="{0}"><img src="{0}"{width}{alt}></a>"#,
+							compiler.sanitize(url)
+						)
+					}
 					MediaType::Video => format!(
 						r#"<video controls {width}><source src="{0}"></video>"#,
 						compiler.sanitize(url)

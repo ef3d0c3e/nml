@@ -29,7 +29,6 @@ fn parser() {
 	let parser = Parser::new();
 	let unit = TranslationUnit::new("".into(), Arc::new(parser), source, false, false);
 	let (reports, unit) = unit.consume("".into());
-	eprintln!("{:#?}", unit.get_entry_scope());
 	assert!(reports.is_empty());
 
 	validate_ast!(unit.get_entry_scope(), 0,
