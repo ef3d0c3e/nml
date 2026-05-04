@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::LazyLock;
 
 use mlua::IntoLua;
@@ -12,6 +13,8 @@ use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::cache::cache::Cache;
+use crate::lua::queries::kernel_queries;
 use crate::lua::utils::kernel_utils;
 use crate::lua::wrappers::ElemWrapperMut;
 use crate::lua::wrappers::UnitWrapper;
@@ -139,6 +142,7 @@ pub struct Kernel {
 	lua: Lua,
 
 	au_create_elem: RefCell<Vec<mlua::RegistryKey>>,
+	pub cache: Option<Arc<Cache>>,
 }
 
 unsafe impl Send for Kernel {}
@@ -149,11 +153,10 @@ impl Kernel {
 		let kernel = Self {
 			lua: Lua::new(),
 			au_create_elem: RefCell::default(),
-			//context: Rc::new(RefCell::default()),
+			cache: None,
 		};
 
 		// Export modified print function to redirect it's output
-
 		kernel
 			.lua
 			.globals()
@@ -272,6 +275,9 @@ impl Kernel {
 
 		// Register utils
 		kernel_utils(&kernel.lua, &nml_table);
+
+		// Register queries
+		kernel_queries(&kernel.lua, &nml_table);
 
 		kernel.lua.globals().set("nml", nml_table).unwrap();
 

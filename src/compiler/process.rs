@@ -6,9 +6,14 @@ use std::time::UNIX_EPOCH;
 
 use ariadne::Color;
 use ariadne::Fmt;
+use parking_lot::RwLockReadGuard;
+use parking_lot::RwLockWriteGuard;
 
 use crate::cache::cache::Cache;
 use crate::elements::import::elem::LazyImport;
+use crate::elements::lua::custom::LUA_CUSTOM;
+use crate::elements::lua::custom::LuaData;
+use crate::lua::kernel::KernelName;
 use crate::parser::parser::Parser;
 use crate::parser::property::PropertyValue;
 use crate::parser::reports::macros::*;
@@ -306,7 +311,7 @@ impl ProcessQueue {
 		}
 
 		// Run lazy import tasks
-		for tu in &processed {
+		for tu in &mut processed {
 			let scope = tu.get_entry_scope();
 			let lazy_imports = scope
 				.content_iter(true)
@@ -316,7 +321,7 @@ impl ProcessQueue {
 				.collect::<Vec<Arc<dyn unit::element::Element>>>();
 			for elem in lazy_imports {
 				let elem = elem.downcast_ref::<LazyImport>().unwrap();
-				elem.process(self.parser.clone())
+				elem.process(self.parser.clone(), self.cache.clone())
 					.map_err(|reports| ProcessError::CompileError(reports))?;
 			}
 		}

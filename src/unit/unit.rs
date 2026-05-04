@@ -26,6 +26,7 @@ pub struct Reference {
 }
 
 /// In-database translation unit
+#[derive(Deserialize, Serialize)]
 pub struct DatabaseUnit {
 	pub reference_key: String,
 	pub input_file: PathBuf,

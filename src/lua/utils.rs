@@ -3,6 +3,7 @@ use std::sync::Arc;
 use mlua::{Lua, Table};
 
 use crate::{
+	add_documented_function,
 	compiler::{compiler::Target, links::get_unique_link, sanitize::Sanitizer},
 	lua::kernel::Kernel,
 };

@@ -2,6 +2,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use crate::cache::cache::Cache;
+use crate::elements::lua::custom::LUA_CUSTOM;
+use crate::elements::lua::custom::LuaData;
+use crate::lua::kernel::KernelName;
 use crate::lua::wrappers::*;
 use crate::parser::parser::Parser;
 use crate::parser::reports::macros::*;
@@ -16,6 +20,7 @@ use auto_userdata::auto_userdata;
 use mlua::AnyUserData;
 use mlua::Lua;
 use parking_lot::RwLock;
+use parking_lot::RwLockWriteGuard;
 use rusqlite::Transaction;
 
 use crate::compiler::compiler::Compiler;
@@ -109,9 +114,23 @@ pub struct LazyImport {
 }
 
 impl LazyImport {
-	pub fn process(&self, parser: Arc<Parser>) -> Result<(), Vec<Report>>
+	pub fn process(&self, parser: Arc<Parser>, cache: Arc<Cache>) -> Result<(), Vec<Report>>
 	{
-		let tu = TranslationUnit::new(self.path.clone(), parser, self.source.clone(), false, true);
+		let mut tu = TranslationUnit::new(self.path.clone(), parser, self.source.clone(), false, true);
+
+		// Init lua data
+		LuaData::initialize(&mut tu);
+
+		crate::elements::lua::custom::LuaData::with_kernel(
+			&mut tu,
+			KernelName::new("main"),
+			|_, mut kernel| {
+				kernel.cache = Some(cache);
+			},
+		);
+
+		println!("SET CACHE");
+
 		let (reports, unit) = tu.consume(self.output.clone());
 		let is_meta = unit.get_scope().get_variable(&VariableName("nml.meta".into()))
 			.map_or(false, |(var, _)| {
