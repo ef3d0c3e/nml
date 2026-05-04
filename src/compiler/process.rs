@@ -8,13 +8,18 @@ use ariadne::Color;
 use ariadne::Fmt;
 
 use crate::cache::cache::Cache;
+use crate::elements::import::elem::LazyImport;
 use crate::parser::parser::Parser;
+use crate::parser::property::PropertyValue;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::resolver::Resolver;
 use crate::parser::source::SourceFile;
+use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
+use crate::unit::variable::PropertyVariable;
+use crate::unit::variable::VariableName;
 use util::settings::ProjectSettings;
 
 use super::compiler::Compiler;
@@ -227,15 +232,32 @@ impl ProcessQueue {
 			};
 
 			let (reports, unit) = unit.consume(output_file);
-			if !reports.is_empty() { has_error = true }
+			if !reports.is_empty() {
+				has_error = true
+			}
 			Report::reports_to_stdout(unit.colors(), reports);
 			if options.debug_ast {
 				println!("{:#?}", unit.get_entry_scope());
 			}
-			processed.push(unit);
+
+			// Check if the parsed unit is a meta unit
+			let is_meta = unit
+				.get_scope()
+				.get_variable(&VariableName("nml.meta".into()))
+				.map_or(false, |(var, _)| {
+					let Some(var) = var.downcast_ref::<PropertyVariable>() else {
+						return false;
+					};
+					match var.value {
+						unit::variable::PropertyValue::Integer(1) => true,
+						_ => false,
+					}
+				});
+			if !is_meta {
+				processed.push(unit);
+			}
 		}
-		if has_error
-		{
+		if has_error {
 			return Err(ProcessError::GeneralError("Failed to parse units".into()));
 		}
 
@@ -281,6 +303,22 @@ impl ProcessQueue {
 				}
 			});
 			return Err(ProcessError::LinkError(reports));
+		}
+
+		// Run lazy import tasks
+		for tu in &processed {
+			let scope = tu.get_entry_scope();
+			let lazy_imports = scope
+				.content_iter(true)
+				.filter_map(|(_, elem)| {
+					elem.downcast_ref::<LazyImport>().and(Some(elem.clone()))
+				})
+				.collect::<Vec<Arc<dyn unit::element::Element>>>();
+			for elem in lazy_imports {
+				let elem = elem.downcast_ref::<LazyImport>().unwrap();
+				elem.process(self.parser.clone())
+					.map_err(|reports| ProcessError::CompileError(reports))?;
+			}
 		}
 
 		// Apply settings

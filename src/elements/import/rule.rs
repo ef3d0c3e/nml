@@ -1,5 +1,6 @@
 use std::env::current_dir;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use ariadne::Fmt;
 use parser::rule::RegexRule;
@@ -7,6 +8,7 @@ use parser::source::Token;
 use regex::Captures;
 use regex::Regex;
 
+use crate::elements::import::elem::LazyImport;
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::rule::RuleTarget;
@@ -23,13 +25,17 @@ use super::elem::Import;
 
 #[auto_registry::auto_registry(registry = "rules")]
 pub struct ImportRule {
-	re: [Regex; 1],
+	re: [Regex; 2],
 }
 
 impl Default for ImportRule {
 	fn default() -> Self {
 		Self {
-			re: [Regex::new(r#"(?:^|\n)(@import)\s+(")?((?:[^"\\]|\\.)*)(")?([^\n]*)"#).unwrap()],
+			re: [
+				Regex::new(r#"(?:^|\n)(@import)\s+(")?((?:[^"\\]|\\.)*)(")?([^\n]*)"#).unwrap(),
+				Regex::new(r#"(?:^|\n)(@import_lazy)\s+(")?((?:[^"\\]|\\.)*)(")?([^\n]*)"#)
+					.unwrap(),
+			],
 		}
 	}
 }
@@ -59,7 +65,7 @@ impl RegexRule for ImportRule {
 
 	fn on_regex_match<'u>(
 		&self,
-		_index: usize,
+		index: usize,
 		unit: &mut TranslationUnit,
 		token: Token,
 		captures: Captures,
@@ -152,11 +158,7 @@ impl RegexRule for ImportRule {
 			}
 		};
 
-		// Parse imported
-		let source = match SourceFile::new(
-			path_buf,
-			Some(token.clone()),
-		) {
+		let source = match SourceFile::new(path_buf.clone(), Some(token.clone())) {
 			Ok(source) => source,
 			Err(err) => {
 				report_err!(
@@ -169,24 +171,39 @@ impl RegexRule for ImportRule {
 			}
 		};
 
-		let content = unit.with_child(
-			Arc::new(source),
-			ParseMode::default(),
-			true,
-			|unit, scope| {
-				unit.with_lsp(|lsp| {
-					lsp.add_definition(token.clone(), &Token::new(0..0, scope.read().source()))
-				});
-				unit.parser.clone().parse(unit);
-				scope
-			},
-		);
+		// Regular import
+		if index == 0 {
+			// Parse imported
+			let content = unit.with_child(
+				Arc::new(source),
+				ParseMode::default(),
+				true,
+				|unit, scope| {
+					unit.with_lsp(|lsp| {
+						lsp.add_definition(token.clone(), &Token::new(0..0, scope.read().source()))
+					});
+					unit.parser.clone().parse(unit);
+					scope
+				},
+			);
 
-		unit.get_scope().add_import(content.clone());
-		unit.add_content(Import {
-			location: token,
-			content: vec![content],
-		});
+			unit.get_scope().add_import(content.clone());
+			unit.add_content(Import {
+				location: token,
+				content: vec![content],
+			});
+		}
+		// Lazy import
+		else {
+
+			unit.add_content(LazyImport {
+				location: token,
+				path: path_buf,
+				output: unit.output_path().cloned().expect("Lazy imports may only be used in units that output to disk"), // TODO
+				source: Arc::new(source),
+				expanded: OnceLock::default(),
+			});
+		}
 	}
 
 	fn completion(

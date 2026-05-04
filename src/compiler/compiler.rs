@@ -31,6 +31,7 @@ impl From<&ProjectOutput> for Target {
 	}
 }
 
+#[derive(Clone)]
 pub struct Compiler {
 	target: Target,
 	cache: Arc<Cache>,
@@ -153,7 +154,6 @@ impl Compiler {
 	pub fn compile(&self, unit: &TranslationUnit) -> Result<String, Vec<Report>> {
 		let output = CompilerOutput::run_with_processor(
 			self.target,
-			unit.colors(),
 			unit.input_path().clone(),
 			unit.output_path().cloned(),
 			|output| {

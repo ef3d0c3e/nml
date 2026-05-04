@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -9,7 +10,6 @@ use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::thread::sleep;
-use std::time::Duration;
 use std::time::Instant;
 
 use crate::parser::reports::macros::*;
@@ -20,6 +20,9 @@ use ariadne::Color;
 use ariadne::Fmt;
 use parking_lot::RwLock;
 use tokio::task::JoinHandle;
+use tokio::task::JoinSet;
+use tokio::time::timeout;
+use tokio::time::Duration;
 use url::Url;
 
 use crate::make_err;
@@ -47,11 +50,18 @@ impl<T> Hash for ArcKey<T> {
 	}
 }
 
+impl<T> Clone for ArcKey<T> {
+	fn clone(&self) -> Self {
+		Self(self.0.clone())
+	}
+}
+
 /// Async task processed by the output
-#[derive(Debug)]
 pub struct OutputTask {
 	/// Task handle
-	handle: OnceCell<JoinHandle<Result<String, Vec<Report>>>>,
+	handle: Option<JoinHandle<Result<String, Vec<Report>>>>,
+	/// Task spawner
+	task: Option<Pin<Box<dyn Future<Output = Result<String, Vec<Report>>> + Send>>>,
 	/// Task location in it's original scope
 	location: Token,
 	/// Task position in the final output
@@ -76,11 +86,10 @@ pub struct CompilerOutput {
 	pub output_path: Option<PathBuf>,
 	// Holds the content of the resulting document
 	pub(crate) content: String,
-	/// Holds the spawned async tasks. After the work function has completed, these tasks will be
-	/// waited on in order to insert their result in the compiled document
+	/// Holds the list of tasks to be spawned
 	tasks: Vec<OutputTask>,
-	/// The tasks runtime
-	runtime: tokio::runtime::Runtime,
+	/// Tokio runtime
+	pub handle: tokio::runtime::Handle,
 }
 
 impl CompilerOutput {
@@ -89,7 +98,6 @@ impl CompilerOutput {
 	/// The result of async taks will be inserted into the output
 	pub fn run_with_processor<F>(
 		target: Target,
-		_colors: &ReportColors,
 		input_path: PathBuf,
 		output_path: Option<PathBuf>,
 		f: F,
@@ -97,6 +105,11 @@ impl CompilerOutput {
 	where
 		F: FnOnce(CompilerOutput) -> CompilerOutput,
 	{
+		let rt = tokio::runtime::Builder::new_multi_thread()
+			.worker_threads(8)
+			.enable_all()
+			.build()
+			.unwrap();
 		// Create the output & the runtime
 		let mut output = Self {
 			target,
@@ -107,32 +120,96 @@ impl CompilerOutput {
 			output_path,
 			content: String::default(),
 			tasks: vec![],
-			runtime: tokio::runtime::Builder::new_multi_thread()
-				.worker_threads(8)
-				.enable_all()
-				.build()
-				.unwrap(),
+			handle: rt.handle().clone(),
 		};
 
 		// Process the document with caller work-function
 		output = f(output);
 
+		rt.block_on(async {
+			let mut set = JoinSet::new();
+
+			// Spawn all tasks first.
+			for (idx, task) in output.tasks.iter_mut().enumerate() {
+				let fut = task.task.take().unwrap();
+				let timeout_ms = task.timeout.min(u128::from(u64::MAX)) as u64;
+				let name = task.name.clone();
+
+				set.spawn(async move {
+					let res = timeout(Duration::from_millis(timeout_ms), fut).await;
+					(idx, name, res)
+				});
+			}
+
+			let mut finished = 0usize;
+
+			// Collect results as tasks complete.
+			while let Some(joined) = set.join_next().await {
+				match joined {
+					Ok((idx, name, Ok(Ok(value)))) => {
+						output.tasks[idx].result.set(Ok(value)).unwrap();
+						finished += 1;
+						println!(
+							"[{}/{}] Completed task `{}`",
+							finished,
+							output.tasks.len(),
+							name
+						);
+					}
+
+					Ok((idx, name, Ok(Err(errs)))) => {
+						output.tasks[idx].result.set(Err(errs)).unwrap();
+						finished += 1;
+						println!(
+							"[{}/{}] Task `{}` finished with errors",
+							finished,
+							output.tasks.len(),
+							name
+						);
+					}
+
+					Ok((idx, name, Err(_elapsed))) => {
+						finished += 1;
+						println!(
+							"[{}/{}] Aborted task `{}`, timeout exceeded",
+							finished,
+							output.tasks.len(),
+							name
+						);
+
+						// Leave result as None; your later error pass already treats that as timeout.
+						let _ = idx;
+					}
+
+					Err(join_err) => {
+						finished += 1;
+						println!(
+							"[{}/{}] Task wrapper failed: {}",
+							finished,
+							output.tasks.len(),
+							join_err
+						);
+					}
+				}
+			}
+		});
+		/*
 		// Wait for all tasks to finish
 		let mut finished = 0;
 		let time_start = Instant::now();
 		while finished != output.tasks.len() {
 			for task in &mut output.tasks {
-				if task.result.get().is_some() || task.handle.get().is_none() {
-					continue;
-				}
+				if task.handle.is_none() {
+					let handle = rt.handle().spawn(task.task.take().unwrap());
+					task.handle = Some(handle);
+				} else { continue }
 
 				if task
 					.handle
 					.get()
 					.is_some_and(|handle| handle.is_finished())
 				{
-					output
-						.runtime
+					rt
 						.block_on(async {
 							task.result
 								.set(task.handle.take().unwrap().into_future().await.unwrap())
@@ -188,6 +265,7 @@ impl CompilerOutput {
 		if !reports.is_empty() {
 			return Err(reports);
 		}
+		*/
 
 		// Insert tasks results into output & offset references positions
 		for (pos, content) in output
@@ -213,9 +291,9 @@ impl CompilerOutput {
 	where
 		F: Future<Output = Result<String, Vec<Report>>> + Send + 'static,
 	{
-		let handle = self.runtime.spawn(task);
 		self.tasks.push(OutputTask {
-			handle: OnceCell::from(handle),
+			handle: None,
+			task: Some(task),
 			location,
 			pos: self.content.len(),
 			name,
@@ -243,25 +321,18 @@ impl CompilerOutput {
 	/// Get a unique reference id for the element's referenceable type
 	pub fn refid(&mut self, refer: &dyn ReferenceableElement) -> usize {
 		let key = refer.refcount_key();
-		if let Some(count) = self.refcount.get_mut(key)
-		{
+		if let Some(count) = self.refcount.get_mut(key) {
 			*count += 1;
 			*count
-		}
-		else
-		{
+		} else {
 			self.refcount.insert(key.to_owned(), 1);
 			1
 		}
 	}
 
 	/// Get the path of a path in the output space
-	pub fn local_path(&self, path: &Path) -> String
-	{
-		let mut base = self
-			.output_path
-			.clone()
-			.unwrap_or(self.input_path.clone());
+	pub fn local_path(&self, path: &Path) -> String {
+		let mut base = self.output_path.clone().unwrap_or(self.input_path.clone());
 		base.pop();
 		let base_clone = base.clone();
 		base.push(path);
@@ -270,12 +341,8 @@ impl CompilerOutput {
 	}
 
 	/// Get the path of an url in the output space
-	pub fn local_path_url(&self, path: &Url) -> String
-	{
-		let mut base = self
-			.output_path
-			.clone()
-			.unwrap_or(self.input_path.clone());
+	pub fn local_path_url(&self, path: &Url) -> String {
+		let mut base = self.output_path.clone().unwrap_or(self.input_path.clone());
 		base.pop();
 		let base_clone = base.clone();
 		if let Some(domain) = path.host_str() {
