@@ -1,5 +1,6 @@
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use mlua::IntoLua;
 use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
@@ -9,8 +10,12 @@ use crate::parser::source::Source;
 use crate::parser::source::Token;
 use crate::parser::source::VirtualSource;
 use crate::parser::state::ParseMode;
+use std::collections::HashMap;
+use std::hash::Hash;
+use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use super::element::Element;
 use super::scope::Scope;
@@ -116,8 +121,22 @@ pub trait Variable: Downcast + core::fmt::Debug + Send + Sync {
 	fn to_string(&self) -> String;
 
 	fn to_path(&self) -> Option<PathBuf>;
+
+	/// Serialize the variable
+	fn serialize(&self) -> Vec<u8>;
 }
 impl_downcast!(Variable);
+
+pub static VAR_TO_LUA: LazyLock<
+	HashMap<String, Box<dyn (Fn(&mlua::Lua, Vec<u8>) -> mlua::Value) + Send + Sync>>,
+> = LazyLock::new(|| {
+	let mut hm: HashMap<String, Box<dyn (Fn(&mlua::Lua, Vec<u8>) -> mlua::Value) + Send + Sync>> =
+		HashMap::new();
+
+	hm.insert("content".into(), Box::new(ContentVariable::to_lua));
+	hm.insert("property".into(), Box::new(PropertyVariable::to_lua));
+	hm
+});
 
 /// Variable that can be expanded to content
 #[derive(Debug)]
@@ -156,7 +175,7 @@ impl Variable for ContentVariable {
 
 	fn expand<'u>(&self, unit: &mut TranslationUnit, _location: Token) -> Arc<RwLock<Scope>> {
 		// Parse content
-		
+
 		unit.with_child(
 			self.content.clone(),
 			ParseMode::default(),
@@ -173,7 +192,17 @@ impl Variable for ContentVariable {
 	}
 
 	fn to_path(&self) -> Option<PathBuf> {
-	    None
+		None
+	}
+
+	fn serialize(&self) -> Vec<u8> {
+		self.content.content().as_bytes().to_owned()
+	}
+}
+
+impl ContentVariable {
+	pub fn to_lua(lua: &mlua::Lua, buf: Vec<u8>) -> mlua::Value {
+		mlua::Value::String(lua.create_string(buf.as_slice()).unwrap())
 	}
 }
 
@@ -246,7 +275,7 @@ impl Variable for PropertyVariable {
 			self.value_token.content().into(),
 		)) as Arc<dyn Source>;
 		// Add content to scope
-		
+
 		unit.with_child(
 			definition_source.clone(),
 			ParseMode::default(),
@@ -266,11 +295,47 @@ impl Variable for PropertyVariable {
 	}
 
 	fn to_path(&self) -> Option<PathBuf> {
-		match &self.value
-		{
+		match &self.value {
 			PropertyValue::Integer(_) => None,
 			PropertyValue::String(s) => Some(PathBuf::from(s)),
 			PropertyValue::Path(p) => Some(p.clone()),
+		}
+	}
+
+	fn serialize(&self) -> Vec<u8> {
+		match &self.value {
+			PropertyValue::Integer(v) => {
+				let mut res = vec![];
+				res.push(0);
+				res.extend_from_slice(&v.to_le_bytes());
+				res
+			}
+			PropertyValue::String(v) => {
+				let mut res = vec![];
+				res.push(1);
+				res.extend(v.as_bytes());
+				res
+			}
+			PropertyValue::Path(v) => {
+				let mut res = vec![];
+				res.push(1);
+				res.extend(v.as_os_str().as_bytes());
+				res
+			}
+		}
+	}
+}
+impl PropertyVariable {
+	pub fn to_lua(lua: &mlua::Lua, buf: Vec<u8>) -> mlua::Value {
+		match buf[0] {
+			0 => {
+				let mut bytes: [u8; 8] = [0; 8];
+				bytes.copy_from_slice(&buf[1..9]);
+				let v = i64::from_le_bytes(bytes);
+				mlua::Value::Integer(v)
+			}
+			1 => mlua::Value::String(lua.create_string(&buf[1..]).unwrap()),
+			_ => panic!("Invalid PropertyVariable value"),
 		}
 	}
 }

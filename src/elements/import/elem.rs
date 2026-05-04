@@ -129,8 +129,6 @@ impl LazyImport {
 			},
 		);
 
-		println!("SET CACHE");
-
 		let (reports, unit) = tu.consume(self.output.clone());
 		let is_meta = unit.get_scope().get_variable(&VariableName("nml.meta".into()))
 			.map_or(false, |(var, _)| {

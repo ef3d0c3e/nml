@@ -15,10 +15,12 @@ use tokio::sync::MutexGuard;
 
 use crate::lsp::reference::LsReference;
 use crate::parser::resolver::UnitDependency;
+use crate::parser::source::SourcePosition;
 use crate::unit::element::ReferenceableElement;
 use crate::unit::translation::TranslationUnit;
 use crate::unit::unit::DatabaseUnit;
 use crate::unit::unit::Reference;
+use crate::unit::variable::Variable;
 
 pub enum CachedError<E> {
 	SqlErr(rusqlite::Error),
@@ -152,8 +154,8 @@ impl Cache {
 			"CREATE TABLE IF NOT EXISTS exported_references(
 				name			TEXT PRIMARY KEY,
 				unit_ref		TEXT NOT NULL,
-				token_start		INTEGER NOT NULL,			
-				token_end		INTEGER NOT NULL,			
+				token_start		INTEGER NOT NULL,
+				token_end		INTEGER NOT NULL,
 				type			TEXT NOT NULL,
 				data			TEXT NOT NULL,
 				link			TEXT,
@@ -173,6 +175,21 @@ impl Cache {
 				depends_for		TEXT NOT NULL,
 				PRIMARY KEY(depends_for, unit_ref),
 				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key) ON DELETE CASCADE
+			);",
+			(),
+		)
+		.unwrap();
+		// Table containing exported variables
+		con.execute(
+			"CREATE TABLE IF NOT EXISTS exported_variables(
+				name			TEXT NOT NULL,
+				unit_ref		TEXT NOT NULL,
+				token_start		INTEGER NOT NULL,
+				token_end		INTEGER NOT NULL,
+				type			TEXT NOT NULL,
+				data			BLOB NOT NULL,
+				FOREIGN KEY(unit_ref) REFERENCES referenceable_units(reference_key) ON DELETE CASCADE,
+				PRIMARY KEY(unit_ref, name)
 			);",
 			(),
 		)
@@ -201,8 +218,12 @@ impl Cache {
 			let unloaded: (String, Vec<u8>, Option<Vec<u8>>) = unloaded.unwrap();
 			input_it(DatabaseUnit {
 				reference_key: unloaded.0.clone(),
-				input_file: PathBuf::from(unsafe { OsStr::from_encoded_bytes_unchecked(&unloaded.1) }),
-				output_file: unloaded.2.map(|path| PathBuf::from(unsafe { OsStr::from_encoded_bytes_unchecked(&path) })),
+				input_file: PathBuf::from(unsafe {
+					OsStr::from_encoded_bytes_unchecked(&unloaded.1)
+				}),
+				output_file: unloaded.2.map(|path| {
+					PathBuf::from(unsafe { OsStr::from_encoded_bytes_unchecked(&path) })
+				}),
 			})?;
 		}
 		Ok(())
@@ -249,26 +270,35 @@ impl Cache {
 	}
 
 	/// Export a referenceable unit
-	pub fn export_ref_unit(&self, unit: &TranslationUnit, input: &PathBuf, output: &Option<PathBuf>) {
+	pub fn export_ref_unit(
+		&self,
+		unit: &TranslationUnit,
+		input: &PathBuf,
+		output: &Option<PathBuf>,
+	) {
 		let con = tokio::runtime::Runtime::new()
 			.unwrap()
 			.block_on(self.get_connection());
 
 		// Find if unit reference key changed
-		if let Some(previous) = 
-			con.query_row(
-		"SELECT reference_key
+		if let Some(previous) = con
+			.query_row(
+				"SELECT reference_key
 		FROM referenceable_units
 		WHERE input_file = (?1)",
-		[input.as_os_str().as_bytes()], |row| {
-			Ok(row.get_unwrap::<_, String>(0))
-		}).optional().unwrap() {
+				[input.as_os_str().as_bytes()],
+				|row| Ok(row.get_unwrap::<_, String>(0)),
+			)
+			.optional()
+			.unwrap()
+		{
 			con.execute(
 				"DELETE
 				FROM referenceable_units
 				WHERE reference_key = (?1);",
 				[previous],
-			).unwrap();
+			)
+			.unwrap();
 		}
 
 		// Delete previous unit-related data
@@ -286,7 +316,11 @@ impl Cache {
 			(reference_key, input_file, output_file)
 		VALUES
 			(?1, ?2, ?3)",
-			(unit.reference_key(), input.as_os_str().as_bytes(), output.as_ref().map(|out| out.as_os_str().as_bytes())),
+			(
+				unit.reference_key(),
+				input.as_os_str().as_bytes(),
+				output.as_ref().map(|out| out.as_os_str().as_bytes()),
+			),
 		)
 		.unwrap();
 	}
@@ -332,7 +366,9 @@ impl Cache {
 				Ok(LsReference {
 					name: row.get_unwrap::<_, String>(0),
 					range: row.get_unwrap::<_, usize>(2)..row.get_unwrap::<_, usize>(3),
-					source_path: PathBuf::from(unsafe{ OsStr::from_encoded_bytes_unchecked(&row.get_unwrap::<_, Vec<u8>>(5)) }),
+					source_path: PathBuf::from(unsafe {
+						OsStr::from_encoded_bytes_unchecked(&row.get_unwrap::<_, Vec<u8>>(5))
+					}),
 					source_refkey: row.get_unwrap::<_, String>(1),
 					reftype: row.get_unwrap::<_, String>(4),
 				})
@@ -382,6 +418,47 @@ impl Cache {
 				)
 			})?;
 		}
+		Ok(())
+	}
+
+	pub fn export_variables<I>(&self, unit_ref: &String, variables: I) -> Result<(), String>
+	where
+		I: Iterator<Item = Arc<dyn Variable>>,
+	{
+		let con = tokio::runtime::Runtime::new()
+			.unwrap()
+			.block_on(self.get_connection());
+
+		let mut stmt = con
+			.prepare(
+				"INSERT OR REPLACE
+			INTO exported_variables (name, unit_ref, token_start, token_end, type, data)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
+			)
+			.unwrap();
+		for var in variables {
+			let serialized = var.serialize();
+			let range = var
+				.location()
+				.source()
+				.original_range(var.location().range.clone())
+				.range;
+			stmt.execute(params![
+				var.name().0,
+				unit_ref,
+				range.start,
+				range.end,
+				var.variable_typename(),
+				serialized,
+			])
+			.map_err(|err| {
+				format!(
+					"Failed to insert variable ({}, {unit_ref}): {err:#?}",
+					var.name()
+				)
+			})?;
+		}
+
 		Ok(())
 	}
 

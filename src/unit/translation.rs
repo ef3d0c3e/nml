@@ -6,12 +6,14 @@ use std::sync::OnceLock;
 
 use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
+use crate::unit::variable::Variable;
 
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 use parking_lot::MappedRwLockWriteGuard;
 use parking_lot::RwLock;
 use parking_lot::RwLockWriteGuard;
+use serde::de::VariantAccess;
 
 use crate::cache::cache::Cache;
 use crate::elements::lua::elem::LuaPostProcess;
@@ -316,6 +318,24 @@ impl TranslationUnit {
 
 		cache.export_ref_unit(self, &output.input_file, &output.output_file);
 		cache.export_references(&self.reference_key(), self.references.iter())
+	}
+
+	/// Export all variables of this [`TranslationUnit`]
+	pub fn export_variables(&self, cache: Arc<Cache>) -> Result<(), String> {
+		let mut vars: HashMap<String, Arc<dyn Variable>> = HashMap::default();
+		let mut scope = Some(self.get_scope().clone());
+		while let Some(inner) = scope {
+			let lock = inner.read();
+			for (name, var) in &lock.variables
+			{
+				if var.visibility() != &VariableVisibility::Exported { continue; }
+				if vars.contains_key(&name.0) { continue; }
+				vars.insert(name.0.clone(), var.clone());
+			}
+			scope = lock.parent().clone();
+		}
+		cache.export_variables(&self.reference_key(), vars.iter()
+			.map(|(_name, var)| var.to_owned()))
 	}
 
 	/// Checks if [`Self::custom_data`] contains data `key`

@@ -22,6 +22,9 @@ use crate::parser::reports::Report;
 use crate::parser::source::Token;
 use crate::unit::element::Element;
 use crate::unit::translation::TranslationUnit;
+use crate::unit::variable::ContentVariable;
+use crate::unit::variable::PropertyVariable;
+use crate::unit::variable::VAR_TO_LUA;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct KernelName(pub str);

@@ -282,6 +282,9 @@ impl ProcessQueue {
 			// Output references
 			unit.export_references(self.cache.clone())
 				.expect("Failed to export");
+			// Output variables
+			unit.export_variables(self.cache.clone())
+				.expect("Failed to export");
 		}
 		let dependencies = resolver
 			.resolve_references(self.cache.clone(), self.compiler.target())
