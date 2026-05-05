@@ -133,7 +133,6 @@ impl LinkableElement for InternalLink {
 	}
 
 	fn set_link(&self, reference: Reference, link: String) {
-		println!("Set_link called on {self:#?}");
 		self.reference
 			.set(ReferenceTarget { link, reference })
 			.unwrap();

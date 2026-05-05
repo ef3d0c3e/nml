@@ -11,6 +11,7 @@ use crate::unit::scope::Scope;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
+use crate::unit::variable::VariableName;
 use crate::util::settings::ProjectOutput;
 
 use super::output::CompilerOutput;
@@ -102,7 +103,6 @@ impl Compiler {
 				reports.append(&mut reps);
 			}
 		}
-		println!("Output={}", output.content());
 		output
 	}
 
@@ -114,7 +114,7 @@ impl Compiler {
 				let ProjectOutput::Html(html) = &settings.output else {
 					panic!("Invalid project settings")
 				};
-				let css = if let Some(css) =&html.css {
+				let css = if let Some(css) = &html.css {
 					let path = output.local_path(css);
 					format!(
 						"<link rel=\"stylesheet\" href=\"{}\">",
@@ -125,15 +125,20 @@ impl Compiler {
 				};
 				let icon = if let Some(icon) = &html.icon {
 					let path = output.local_path(icon);
-					format!(
-						"<link rel=\"icon\" href=\"{}\">",
-						self.sanitize(&path)
-					)
+					format!("<link rel=\"icon\" href=\"{}\">", self.sanitize(&path))
+				} else {
+					"".into()
+				};
+				let title = if let Some((title, _)) = unit
+					.get_scope()
+					.get_variable(&VariableName("html.title".into()))
+				{
+					format!("<title>{}</title>", self.sanitize(title.to_string()))
 				} else {
 					"".into()
 				};
 				output.add_content(format!(
-					"<!DOCTYPE html><html lang=\"{}\"><head><meta charset=\"utf-8\">{icon}{css}</head><body>",
+					"<!DOCTYPE html><html lang=\"{}\"><head><meta charset=\"utf-8\">{css}{icon}{title}</head><body>",
 					self.sanitize(html.language.as_str())
 				));
 			}

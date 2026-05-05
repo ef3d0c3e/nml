@@ -328,7 +328,6 @@ impl RegexRule for MediaRule {
 			token.source().original_range(token.range.clone()),
 			refname,
 		)));
-		println!("size={width:#?}");
 		let media = Media {
 			location: token.clone(),
 			url,

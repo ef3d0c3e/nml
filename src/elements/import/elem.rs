@@ -121,6 +121,7 @@ impl LazyImport {
 		// Init lua data
 		LuaData::initialize(&mut tu);
 
+		// Set cache on main kernel
 		crate::elements::lua::custom::LuaData::with_kernel(
 			&mut tu,
 			KernelName::new("main"),
