@@ -72,5 +72,43 @@ Will result in:
 			)),
 			..CompletionItem::default()
 		});
+		items.push(CompletionItem {
+			label: "@import_lazy ".to_string(),
+			detail: Some("Import a file lazily".into()),
+			documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(
+				MarkupContent {
+					kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+					value: "# Usage
+
+`@import_lazy FILE`
+
+Import another file's content lazily. Works similarly to `@import`, except the
+imported file is parsed and evaluated after the file that imported it. This lets
+the imported file run cache queries. Note that unlike `@import`, the imported
+file doesn't have access to the unit's variables and references directly.
+Instead it must query them through the cache in lua.
+
+# Examples
+
+ * `@import_lazy \"nav.nml\"` *imports file `nav.nml` into the current file*
+
+# See also
+
+ * `@import` *import another file*"
+						.into(),
+				},
+			)),
+			kind: Some(CompletionItemKind::FUNCTION),
+			insert_text_format: Some(InsertTextFormat::SNIPPET),
+			insert_text: Some(format!(
+				"{}import_lazy \"${{1:FILE}}\"",
+				if context_triggered(context, "@") {
+					""
+				} else {
+					"@"
+				}
+			)),
+			..CompletionItem::default()
+		});
 	}
 }
