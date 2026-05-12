@@ -18,3 +18,4 @@ pub mod meta;
 pub mod variable;
 pub mod media;
 pub mod typst;
+pub mod tagged;

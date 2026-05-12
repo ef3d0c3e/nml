@@ -169,6 +169,9 @@ pub struct Tokens {
 	pub layout_type: (u32, u32),
 	pub layout_opts: (u32, u32),
 
+	pub tagged_tag: (u32, u32),
+	pub tagged_delim: (u32, u32),
+
 	pub comment: (u32, u32),
 }
 
@@ -248,6 +251,9 @@ impl Default for Tokens {
 
 			layout_type: token!("constructor", "async"),
 			layout_opts: token!("number"),
+
+			tagged_tag: token!("constructor"),
+			tagged_delim: token!("macro"),
 
 			comment: token!("comment"),
 		}

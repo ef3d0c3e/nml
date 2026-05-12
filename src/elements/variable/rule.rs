@@ -113,7 +113,7 @@ impl Rule for VariableRule {
 
 		let end_pos = captures.get(0).unwrap().end();
 
-		// `:expand <name>`
+		// `:export <name>`
 		let keyword = captures.get(1).unwrap();
 		let visibility = match keyword.as_str() {
 			"set" => VariableVisibility::Internal,
