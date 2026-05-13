@@ -87,7 +87,7 @@ impl LuaPostProcess {
 				true,
 				|unit, scope| {
 					let ctx = KernelContext::new(self.location.clone(), &kernel, unit);
-					match kernel.run_with_context(ctx, |lua| match self.eval_kind {
+					match kernel.run_with_context(ctx, |_ctx, lua| match self.eval_kind {
 						LuaEvalKind::None => lua
 							.load(self.source.content())
 							.set_name(self.source.name().display().to_string())

@@ -189,7 +189,7 @@ impl Rule for LuaRule {
 				true,
 				|unit, scope| {
 					let ctx = KernelContext::new(lua_source.clone().into(), &kernel, unit);
-					if let Err(err) = kernel.run_with_context(ctx, |lua| {
+					if let Err(err) = kernel.run_with_context(ctx, |_ctx, lua| {
 						lua.load(lua_source.content())
 							.set_name(lua_source.name().display().to_string())
 							.exec()
@@ -394,7 +394,7 @@ impl RegexRule for InlineLuaRule {
 			|unit, scope| {
 				match LuaData::with_kernel(unit, &kernel_name, |unit, kernel| {
 					let ctx = KernelContext::new(lua_source.clone().into(), &kernel, unit);
-					kernel.run_with_context(ctx, |lua| match eval_kind {
+					kernel.run_with_context(ctx, |_ctx, lua| match eval_kind {
 						LuaEvalKind::None => lua
 							.load(lua_source.content())
 							.set_name(lua_source.name().display().to_string())

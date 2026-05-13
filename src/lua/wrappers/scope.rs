@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use graphviz_rust::print;
-use mlua::UserData;
+use mlua::{FromLua, UserData, Value};
 use parking_lot::RwLock;
 
 use crate::add_documented_method;
@@ -71,6 +71,23 @@ impl UserData for ScopeWrapper {
 			],
 			None
 		);
+	}
+}
+
+impl FromLua for ScopeWrapper {
+	fn from_lua(value: Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
+		let ud = match value {
+			Value::UserData(ud) => ud,
+			other => {
+				return Err(mlua::Error::FromLuaConversionError {
+					from: other.type_name(),
+					to: "ScopeWrapper".into(),
+					message: Some("expected ScopeWrapper userdata".into()),
+				})
+			}
+		};
+		let wrapper = ud.borrow::<ScopeWrapper>()?;
+		Ok(ScopeWrapper(wrapper.0.clone()))
 	}
 }
 

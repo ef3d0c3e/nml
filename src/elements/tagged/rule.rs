@@ -1,13 +1,20 @@
+use std::sync::Arc;
 use std::{any::Any, ops::Range};
 
-use crate::elements::tagged::elem::Tagged;
+use crate::elements::lua::custom::LuaData;
+use crate::elements::tagged::custom::{TaggedClosure, TaggedData, TaggedKind, TaggedProcessor};
+use crate::lua::kernel::{Kernel, KernelContext, KernelNameBuf};
+use crate::lua::wrappers::VecScopeProxy;
 use crate::parser::reports::*;
+use crate::parser::rule::RegexRule;
 use crate::parser::source::Token;
 use crate::parser::util::parse_paragraph;
 use crate::parser::{reports::macros::*, util::escape_source};
+use crate::unit::scope::Scope;
 use crate::unit::translation::TranslationAccessors;
 
 use ariadne::Fmt;
+use parking_lot::RwLock;
 use regex::Regex;
 use rusqlite::params_from_iter;
 
@@ -19,6 +26,199 @@ use crate::{
 	},
 	unit::translation::TranslationUnit,
 };
+
+#[auto_registry::auto_registry(registry = "rules")]
+pub struct TaggedProcessorRule {
+	re: [Regex; 1],
+}
+
+impl Default for TaggedProcessorRule {
+	fn default() -> Self {
+		Self {
+			re: [Regex::new(r#"(?:^|\n):tagged(?:\s+(\w+)?(?:\s+(\w+)(?:/(.*))?)?)?"#).unwrap()],
+		}
+	}
+}
+
+impl RegexRule for TaggedProcessorRule {
+	fn name(&self) -> &'static str {
+		"Tagged Processor"
+	}
+
+	fn target(&self) -> RuleTarget {
+		RuleTarget::Command
+	}
+
+	fn regexes(&self) -> &[regex::Regex] {
+		&self.re
+	}
+
+	fn enabled(
+		&self,
+		_unit: &TranslationUnit,
+		mode: &ParseMode,
+		_states: &mut CustomStates,
+		_index: usize,
+	) -> bool {
+		!mode.paragraph_only
+	}
+
+	fn on_regex_match<'u>(
+		&self,
+		_index: usize,
+		unit: &mut TranslationUnit,
+		token: Token,
+		captures: regex::Captures,
+	) {
+		let Some(tag_name) = captures.get(1) else {
+			report_err!(
+				unit,
+				token.source(),
+				"Invalid Tagged Processor".into(),
+				span(
+					token.range.clone(),
+					format!(
+						"Expected tag name after {}",
+						":tagged".fg(unit.colors().highlight)
+					)
+				)
+			);
+			return;
+		};
+		let Some(tagged_kind) = captures.get(2) else {
+			report_err!(
+				unit,
+				token.source(),
+				"Invalid Tagged Processor".into(),
+				span(
+					token.range.clone(),
+					format!(
+						"Expected tag kind after tag name {}",
+						tag_name.as_str().fg(unit.colors().highlight)
+					)
+				)
+			);
+			return;
+		};
+		let kind = match TaggedKind::try_from(tagged_kind.as_str()) {
+			Ok(kind) => kind,
+			Err(err) => {
+				report_err!(
+					unit,
+					token.source(),
+					"Invalid Tagged Processor".into(),
+					span(token.range.clone(), err)
+				);
+				return;
+			}
+		};
+		let Some(tagged_processor) = captures.get(3) else {
+			report_err!(
+				unit,
+				token.source(),
+				"Invalid Tagged Processor".into(),
+				span(
+					token.range.clone(),
+					format!(
+						"Expected tagged processor after tag kind {}",
+						tagged_kind.as_str().fg(unit.colors().highlight)
+					)
+				)
+			);
+			return;
+		};
+
+		LuaData::with_kernel(unit, &KernelNameBuf::new("main".into()), |unit, kernel| {
+			let ctx = KernelContext::new(token.clone(), &kernel, unit);
+			kernel.run_with_context(ctx, |ctx, lua| {
+				let f: mlua::Function = match lua.globals().get(tagged_processor.as_str()) {
+					Ok(f) => f,
+					Err(err) => {
+						report_err!(
+							ctx.unit,
+							token.source(),
+							"Invalid Tagged Processor".into(),
+							span(
+								token.range.clone(),
+								format!(
+									"Failed to get Lua function {}: {err}",
+									tagged_processor.as_str().fg(ctx.unit.colors().highlight)
+								)
+							)
+						);
+						return;
+					}
+				};
+				let f_key: mlua::RegistryKey = match lua.create_registry_value(f) {
+					Ok(key) => key,
+					Err(err) => {
+						report_err!(
+							ctx.unit,
+							token.source(),
+							"Invalid Tagged Processor".into(),
+							span(
+								token.range.clone(),
+								format!(
+									"Failed to create Lua registry value from {}: {err}",
+									tagged_processor.as_str().fg(ctx.unit.colors().highlight)
+								)
+							)
+						);
+						return;
+					}
+				};
+
+				let tag_name = tag_name.as_str().to_string();
+				let closure = match kind {
+					TaggedKind::Raw => TaggedClosure::Raw(Arc::new(
+						move |unit: &mut TranslationUnit,
+						      token: Token,
+						      ranges: Vec<Range<usize>>|
+						      -> mlua::Result<()> {
+							LuaData::with_kernel(
+								unit,
+								&KernelNameBuf::new("main".into()),
+								|unit, kernel| {
+									let ctx = KernelContext::new(token.clone(), &kernel, unit);
+									kernel.run_with_context(ctx, |_ctx, lua| -> mlua::Result<()> {
+										let f: mlua::Function = lua.registry_value(&f_key)?;
+										let token_ud = lua.create_userdata(token)?;
+										f.call((
+											token_ud,
+											mlua::LuaSerdeExt::to_value(lua, &ranges),
+										))
+									})
+								},
+							)
+						},
+					)),
+					TaggedKind::Parsed => TaggedClosure::Parsed(Arc::new(
+						move |unit: &mut TranslationUnit,
+						      token: Token,
+						      content: Vec<Arc<RwLock<Scope>>>| {
+							LuaData::with_kernel(
+								unit,
+								&KernelNameBuf::new("main".into()),
+								|unit, kernel| {
+									let proxy = VecScopeProxy(&content as *const _);
+									let ctx = KernelContext::new(token.clone(), &kernel, unit);
+									kernel.run_with_context(ctx, |_ctx, lua| -> mlua::Result<()> {
+										let f: mlua::Function = lua.registry_value(&f_key)?;
+										let token_ud = lua.create_userdata(token)?;
+										let content_ud = lua.create_userdata(proxy);
+										f.call((token_ud, content_ud))
+									})
+								},
+							)
+						},
+					)),
+				};
+
+				TaggedData::add_processor(ctx.unit, tag_name, TaggedProcessor { kind, closure });
+			})
+		});
+	}
+}
 
 #[auto_registry::auto_registry(registry = "rules")]
 pub struct TaggedRule {
@@ -71,6 +271,22 @@ impl Rule for TaggedRule {
 		assert_eq!(captures.get(0).unwrap().start(), cursor.pos());
 
 		let tag = captures.get(1).unwrap();
+		let Some(processor) = TaggedData::get_processor(unit, tag.as_str()) else {
+			report_err!(
+				unit,
+				cursor.source(),
+				"Invalid Tagged Content".into(),
+				span(
+					captures.get(1).unwrap().range(),
+					format!(
+						"Cannot find tag processor {}",
+						tag.as_str().fg(unit.colors().highlight)
+					)
+				)
+			);
+			return cursor.at(captures.get(0).unwrap().end());
+		};
+
 		unit.with_lsp(|lsp| {
 			lsp.with_semantics(cursor.source(), |sems, tokens| {
 				// {@
@@ -127,41 +343,16 @@ impl Rule for TaggedRule {
 			delims.push(start..last - 1);
 		}
 
-		// Build sources
-		let mut scopes = vec![];
-		for (id, range) in delims.iter().enumerate() {
-			let src = escape_source(
-				source.clone(),
-				range.clone(),
-				format!("Tagged source#{id}").into(),
-				'\\',
-				"}",
-			);
-
+		// Lsp
+		for range in delims.iter() {
 			// Start delim
 			if content.as_bytes()[range.start - 1] == b'{' {
 				unit.with_lsp(|lsp| {
 					lsp.with_semantics(cursor.source(), |sems, tokens| {
 						// {
-						sems.add(range.start - 1..range.start, tokens.tagged_delim);
+						sems.add_to_queue(range.start - 1..range.start, tokens.tagged_delim);
 					})
 				});
-			}
-
-			match parse_paragraph(unit, src.clone()) {
-				Ok(paragraph) => scopes.push(paragraph),
-				Err(err) => {
-					report_err!(
-						unit,
-						src.clone(),
-						"Invalid Tagged Content".into(),
-						span(
-							0..src.content().len(),
-							format!("Failed to parse tagged content:\n{err}")
-						)
-					);
-					return cursor.at(last);
-				}
 			}
 
 			// End delim
@@ -169,15 +360,70 @@ impl Rule for TaggedRule {
 				unit.with_lsp(|lsp| {
 					lsp.with_semantics(cursor.source(), |sems, tokens| {
 						// {
-						sems.add(range.end..range.end + 1, tokens.tagged_delim);
+						sems.add_to_queue(range.end..range.end + 1, tokens.tagged_delim);
 					})
 				});
 			}
 		}
-		unit.add_content(Tagged {
-			location: Token::new(cursor.pos()..last, source.clone()),
-			content: scopes,
-		});
+
+		let token = Token::new(cursor.pos()..last, source.clone());
+		match &processor.closure {
+			TaggedClosure::Raw(f) => {
+				if let Err(err) = (*f)(unit, token, delims)
+				{
+					report_err!(
+						unit,
+						source.clone(),
+						"Invalid Tagged Content".into(),
+						span(
+							cursor.pos()..last,
+							format!("Tagged processor failed:\n{err}")
+						)
+					);
+				}
+			},
+			TaggedClosure::Parsed(f) => {
+				let mut scopes = vec![];
+				for (id, range) in delims.iter().enumerate() {
+					let src = escape_source(
+						source.clone(),
+						range.clone(),
+						format!("Tagged source#{id}").into(),
+						'\\',
+						"}",
+					);
+
+					match parse_paragraph(unit, src.clone()) {
+						Ok(paragraph) => scopes.push(paragraph),
+						Err(err) => {
+							report_err!(
+								unit,
+								src.clone(),
+								"Invalid Tagged Content".into(),
+								span(
+									0..src.content().len(),
+									format!("Failed to parse tagged content:\n{err}")
+								)
+							);
+							return cursor.at(last);
+						}
+					}
+				}
+
+				if let Err(err) = (*f)(unit, token, scopes)
+				{
+					report_err!(
+						unit,
+						source.clone(),
+						"Invalid Tagged Content".into(),
+						span(
+							cursor.pos()..last,
+							format!("Tagged processor failed:\n{err}")
+						)
+					);
+				}
+			}
+		}
 
 		// End delim
 		unit.with_lsp(|lsp| {

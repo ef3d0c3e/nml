@@ -1,9 +1,11 @@
 use std::any::Any;
 use std::ops::Range;
+use std::sync::Arc;
 
 use mlua::Lua;
 
 use crate::add_documented_function;
+use crate::elements::meta::scope::ScopeElement;
 use crate::lua::kernel::Kernel;
 use crate::lua::wrappers::*;
 use crate::parser::rule::Rule;
@@ -64,6 +66,20 @@ impl Rule for MetaRule {
 					);
 					return Ok(ScopeWrapper(scope));
 				})
+			},
+			"Creates a new scope with content",
+			vec!["elems:Element[] Elements that will populate the newly created scope"],
+			"Scope The created scope"
+		);
+		add_documented_function!(
+			"scope.ScopeElem",
+			|lua: &Lua, (scope,): (ScopeWrapper,)| {
+				Ok(Kernel::with_context(lua, |ctx| {
+					ElemWrapper(Arc::new(ScopeElement {
+						token: ctx.location.clone(),
+						scope: scope.0,
+					}))
+				}))
 			},
 			"Creates a new scope with content",
 			vec!["elems:Element[] Elements that will populate the newly created scope"],

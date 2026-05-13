@@ -304,14 +304,14 @@ impl Kernel {
 	/// functions may require the context in order to operate
 	pub fn run_with_context<'lua, 'ctx, F, R>(&'lua self, mut ctx: KernelContext<'ctx>, f: F) -> R
 	where
-		F: FnOnce(&'lua Lua) -> R,
+		F: FnOnce(&mut KernelContext<'ctx>, &'lua Lua) -> R,
 	{
 		let ctx_ptr: *mut KernelContext = &mut ctx as *mut _;
 		let data = LightUserData(ctx_ptr as _);
 		self.lua
 			.set_named_registry_value("__REGISTRY_NML_CTX", data)
 			.unwrap();
-		let val = f(&self.lua);
+		let val = f(&mut ctx, &self.lua);
 		self.lua
 			.unset_named_registry_value("__REGISTRY_NML_CTX")
 			.unwrap();
@@ -372,7 +372,7 @@ impl Kernel {
 				.lua
 				.create_userdata(wrapper)
 				.map_err(|err| format!("Failed to pass element {elem_name} to lua: {err}",))?;
-			result &= self.run_with_context(ctx, |_lua| {
+			result &= self.run_with_context(ctx, |_ctx, _lua| {
 				fun.call::<bool>(&ud)
 					.map_err(|err| format!("CreateElem AutoCommand failed with: {err}"))
 			})?;
