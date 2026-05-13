@@ -9,6 +9,7 @@ use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use crate::unit::variable::VariableName;
+use graphviz_rust::print;
 use mlua::UserData;
 
 impl UserData for UnitWrapper {
@@ -37,9 +38,22 @@ impl UserData for UnitWrapper {
 			|lua, _this, (elem,): (ElemWrapper,)| {
 				Kernel::with_context(lua, |ctx| {
 					ctx.unit.add_content_raw(elem.0.clone());
-					if let Some(reference) = elem.0.as_referenceable()
+					if let Some(reference) = elem.0.clone().as_referenceable()
 					{
 						ctx.unit.add_reference(reference);
+					}
+					if let Some(container) = elem.0.as_container()
+					{
+						for scope in container.contained()
+						{
+							for (scope, elem) in scope.content_iter(true)
+							{
+								if let Some(reference) = elem.as_referenceable()
+								{
+									ctx.unit.add_reference(reference);
+								}
+							}
+						}
 					}
 				});
 				Ok(())

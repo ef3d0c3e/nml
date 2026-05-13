@@ -4,6 +4,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use ariadne::Fmt;
+use graphviz_rust::print;
 
 use crate::cache::cache::Cache;
 use crate::compiler::compiler::Target;
@@ -46,15 +47,17 @@ impl<'u> Resolver<'u> {
 	) -> Result<Self, Report> {
 		let mut units = HashMap::default();
 
-		cache.load_units(|unit| {
-			if units
-				.insert(unit.reference_key.clone(), OffloadedUnit::Unloaded(unit))
-				.is_some()
-			{
-				panic!("Duplicate units in database");
-			}
-			Result::<(), ()>::Ok(())
-		}).unwrap();
+		cache
+			.load_units(|unit| {
+				if units
+					.insert(unit.reference_key.clone(), OffloadedUnit::Unloaded(unit))
+					.is_some()
+				{
+					panic!("Duplicate units in database");
+				}
+				Result::<(), ()>::Ok(())
+			})
+			.unwrap();
 
 		// Add provided units
 		for loaded in provided {
@@ -266,6 +269,7 @@ impl<'u> Resolver<'u> {
 			let reference_key = unit.reference_key();
 			unit.get_entry_scope()
 				.content_iter(true)
+				.map(|(scope, elem)| (scope, elem))
 				.filter_map(|(scope, elem)| elem.as_linkable().map(|link| (scope, link)))
 				.filter(|(_, elem)| elem.wants_link())
 				.for_each(|(_, linkable)| {

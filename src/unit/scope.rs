@@ -190,7 +190,7 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 		});
 		reports
 	}
-	
+
 	fn source(&self) -> Arc<dyn Source> {
 		let scope = self.read();
 		scope.source.clone()
@@ -215,8 +215,7 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 
 	fn add_content(&self, elem: Arc<dyn Element>) {
 		let mut scope = Arc::as_ref(self).write();
-		if &elem.location().source() == &scope.source
-		{
+		if &elem.location().source() == &scope.source {
 			scope.range.end = scope.range.end.max(elem.location().end());
 		}
 		scope.content.push(elem);
@@ -279,18 +278,19 @@ impl<'s> ScopeAccessor for Arc<RwLock<Scope>> {
 
 /// DFS iterator for the syntax tree
 pub struct ScopeIterator {
-	scope: Arc<RwLock<Scope>>,
-	position: Vec<(usize, usize)>,
-	depth: Vec<Arc<dyn ContainerElement>>,
+	stack: Vec<Frame>,
 	recurse: bool,
+}
+
+struct Frame {
+	scope: Arc<RwLock<Scope>>,
+	index: usize,
 }
 
 impl ScopeIterator {
 	pub fn new(scope: Arc<RwLock<Scope>>, recurse: bool) -> Self {
 		Self {
-			scope,
-			position: vec![(0usize, 0usize); 1],
-			depth: vec![],
+			stack: vec![Frame { scope, index: 0 }],
 			recurse,
 		}
 	}
@@ -300,50 +300,44 @@ impl Iterator for ScopeIterator {
 	type Item = (Arc<RwLock<Scope>>, Arc<dyn Element>);
 
 	fn next(&mut self) -> Option<Self::Item> {
-		// Pop at the end of scope
-		while let (Some(last_depth), Some((cur_scope, cur_pos))) =
-			(self.depth.last(), self.position.last_mut())
-		{
-			if last_depth.contained().is_empty() {
-				self.depth.pop();
-				self.position.pop();
+		loop {
+			if self.stack.is_empty() {
+				return None;
+			}
+
+			let should_pop = {
+				let frame = self.stack.last_mut().unwrap();
+				let scope_len = (*frame.scope.clone()).read().content.len();
+				frame.index >= scope_len
+			};
+
+			if should_pop {
+				self.stack.pop();
 				continue;
 			}
-			let scope = last_depth.contained()[*cur_scope].clone();
-			let scope_len = (*scope.clone()).read().content.len();
 
-			if *cur_pos < scope_len {
-				let elem = (*scope.clone()).read().content[*cur_pos].clone();
-				*cur_pos += 1;
-				return Some((scope.clone(), elem));
-			}
-
-			// Check if there are more contained scopes to iterate
-			if *cur_scope + 1 < last_depth.contained().len() {
-				*cur_pos = 0;
-				*cur_scope += 1;
-			} else {
-				self.depth.pop();
-				self.position.pop();
-			}
-		}
-
-		let scope_len = (*self.scope.clone()).read().content.len();
-		let cur_pos = &mut self.position[0].1;
-		if *cur_pos < scope_len {
-			let elem = (*self.scope.clone()).read().content[*cur_pos].clone();
-			*cur_pos += 1;
+			let (scope, elem) = {
+				let frame = self.stack.last_mut().unwrap();
+				let scope = frame.scope.clone();
+				let elem = (*scope.clone()).read().content[frame.index].clone();
+				frame.index += 1;
+				(scope, elem)
+			};
 
 			if self.recurse {
 				if let Some(container) = elem.clone().as_container() {
-					self.position.push((0, 0));
-					self.depth.push(container);
+					let contained = container.contained();
+
+					for child_scope in contained.iter().rev() {
+						self.stack.push(Frame {
+							scope: child_scope.clone(),
+							index: 0,
+						});
+					}
 				}
 			}
 
-			return Some((self.scope.clone(), elem));
+			return Some((scope, elem));
 		}
-
-		None
 	}
 }
