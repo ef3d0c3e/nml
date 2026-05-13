@@ -1,10 +1,15 @@
 use std::{any::Any, ops::Range};
 
-use crate::parser::reports::macros::*;
+use crate::elements::tagged::elem::Tagged;
 use crate::parser::reports::*;
+use crate::parser::source::Token;
+use crate::parser::util::parse_paragraph;
+use crate::parser::{reports::macros::*, util::escape_source};
+use crate::unit::translation::TranslationAccessors;
 
 use ariadne::Fmt;
 use regex::Regex;
+use rusqlite::params_from_iter;
 
 use crate::{
 	parser::{
@@ -82,7 +87,13 @@ impl Rule for TaggedRule {
 		let start = captures.get(0).unwrap().end();
 		let mut last = start;
 		let mut balance = 1;
+		let mut escaped = false;
 		for (i, ch) in content[start..].char_indices() {
+			if escaped {
+				escaped = false;
+				continue;
+			}
+			escaped = ch == '\\';
 			if ch == '{' {
 				if balance == 1 {
 					last = start + i + 1;
@@ -115,18 +126,66 @@ impl Rule for TaggedRule {
 		if delims.is_empty() {
 			delims.push(start..last - 1);
 		}
-		// Trim
-		for range in delims.iter_mut() {
-			while b" \t\n".contains(&content.as_bytes()[range.start]) {
-				range.start += 1;
+
+		// Build sources
+		let mut scopes = vec![];
+		for (id, range) in delims.iter().enumerate() {
+			let src = escape_source(
+				source.clone(),
+				range.clone(),
+				format!("Tagged source#{id}").into(),
+				'\\',
+				"}",
+			);
+
+			// Start delim
+			if content.as_bytes()[range.start - 1] == b'{' {
+				unit.with_lsp(|lsp| {
+					lsp.with_semantics(cursor.source(), |sems, tokens| {
+						// {
+						sems.add(range.start - 1..range.start, tokens.tagged_delim);
+					})
+				});
 			}
-			while b" \t\n".contains(&content.as_bytes()[range.end-1]) {
-				range.end -= 1;
+
+			match parse_paragraph(unit, src.clone()) {
+				Ok(paragraph) => scopes.push(paragraph),
+				Err(err) => {
+					report_err!(
+						unit,
+						src.clone(),
+						"Invalid Tagged Content".into(),
+						span(
+							0..src.content().len(),
+							format!("Failed to parse tagged content:\n{err}")
+						)
+					);
+					return cursor.at(last);
+				}
+			}
+
+			// End delim
+			if content.as_bytes()[range.end] == b'}' {
+				unit.with_lsp(|lsp| {
+					lsp.with_semantics(cursor.source(), |sems, tokens| {
+						// {
+						sems.add(range.end..range.end + 1, tokens.tagged_delim);
+					})
+				});
 			}
 		}
-		for (i, range) in delims.iter().enumerate() {
-			println!("{i}: `{}'", &content[range.clone()]);
-		}
+		unit.add_content(Tagged {
+			location: Token::new(cursor.pos()..last, source.clone()),
+			content: scopes,
+		});
+
+		// End delim
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(cursor.source(), |sems, tokens| {
+				// {
+				sems.add(last - 1..last, tokens.tagged_delim);
+			})
+		});
 		cursor.at(last)
 	}
 }
