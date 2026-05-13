@@ -54,25 +54,24 @@ pub struct ListEntry {
 }
 
 impl IntoLuaProxy for ListEntry {
-    type Proxy = ListEntryProxy;
-    type ProxyMut = ListEntryProxyMut;
+	type Proxy = ListEntryProxy;
+	type ProxyMut = ListEntryProxyMut;
 
-    fn as_proxy(ptr: *const Self) -> Self::Proxy {
-        ListEntryProxy(ptr)
-    }
+	fn as_proxy(ptr: *const Self) -> Self::Proxy {
+		ListEntryProxy(ptr)
+	}
 
-    fn as_proxy_mut(ptr: *mut Self) -> Self::ProxyMut {
-        ListEntryProxyMut(ptr)
-    }
+	fn as_proxy_mut(ptr: *mut Self) -> Self::ProxyMut {
+		ListEntryProxyMut(ptr)
+	}
 
-    fn from_proxy(proxy: &Self::Proxy) -> Self {
+	fn from_proxy(proxy: &Self::Proxy) -> Self {
 		unsafe { (*proxy.0).clone() }
-    }
+	}
 
-    fn from_proxy_mut(proxy: &Self::ProxyMut) -> Self {
+	fn from_proxy_mut(proxy: &Self::ProxyMut) -> Self {
 		unsafe { (*proxy.0).clone() }
-    }
-
+	}
 }
 
 #[derive(Debug)]
@@ -163,23 +162,25 @@ impl Element for List {
 					} else {
 						output.add_content("<li>");
 					}
-					if let BulletMarker::Checkbox(state) = &entry.bullet { match state {
-     							CheckboxState::Unchecked => {
-     								output.add_content(
-     									r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#,
-     								);
-     							}
-     							CheckboxState::Partial => {
-     								output.add_content(
-     									r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#,
-     								);
-     							}
-     							CheckboxState::Checked => {
-     								output.add_content(
-     									r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#,
-     								);
-     							}
-     						} }
+					if let BulletMarker::Checkbox(state) = &entry.bullet {
+						match state {
+							CheckboxState::Unchecked => {
+								output.add_content(
+									r#"<input type="checkbox" class="checkbox-unchecked" onclick="return false;">"#,
+								);
+							}
+							CheckboxState::Partial => {
+								output.add_content(
+									r#"<input type="checkbox" class="checkbox-partial" onclick="return false;">"#,
+								);
+							}
+							CheckboxState::Checked => {
+								output.add_content(
+									r#"<input type="checkbox" class="checkbox-checked" onclick="return false;" checked>"#,
+								);
+							}
+						}
+					}
 				}
 				_ => todo!(),
 			}

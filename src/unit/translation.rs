@@ -88,7 +88,7 @@ pub struct TranslationUnit {
 	reports: Vec<(Arc<RwLock<Scope>>, Report)>,
 
 	/// Path relative to the database
-	path: PathBuf,
+	pub path: PathBuf,
 	/// Exported (internal) references
 	references: HashMap<String, Arc<dyn ReferenceableElement>>,
 	/// Output data extracted from parsing

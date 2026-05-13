@@ -32,6 +32,18 @@ impl From<&ProjectOutput> for Target {
 	}
 }
 
+impl TryFrom<&str> for Target {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+		match value {
+			"html" => Ok(Target::HTML),
+			"latex" => Ok(Target::LATEX),
+			_ => Err(format!("Invalid target: `{value}'"))
+		}
+    }
+}
+
 #[derive(Clone)]
 pub struct Compiler {
 	target: Target,

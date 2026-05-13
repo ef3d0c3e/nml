@@ -10,6 +10,7 @@ use mlua::Lua;
 use mlua::Table;
 use mlua::Value;
 use parking_lot::Mutex;
+use parking_lot::lock_api::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
 

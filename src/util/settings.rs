@@ -30,7 +30,7 @@ impl Default for ProjectSettings {
 	fn default() -> Self {
 		Self {
 			db_path: "".into(),
-			output_path: "out".into(),
+			output_path: "".into(),
 			output: ProjectOutput::Html(HtmlOutput {
 				language: "en-us".into(),
 				icon: None,

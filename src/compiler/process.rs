@@ -209,6 +209,9 @@ impl ProcessQueue {
 				true,
 			);
 
+			// Apply settings
+			unit.update_settings(self.settings.clone());
+
 			let output_file = match &output {
 				ProcessOutputOptions::Directory(dir) => {
 					let mut buf = dir.clone();
@@ -327,11 +330,6 @@ impl ProcessQueue {
 				elem.process(self.parser.clone(), self.cache.clone())
 					.map_err(|reports| ProcessError::CompileError(reports))?;
 			}
-		}
-
-		// Apply settings
-		for unit in &mut processed {
-			unit.update_settings(self.settings.clone());
 		}
 
 		// Compile all units
