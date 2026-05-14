@@ -11,8 +11,8 @@ use parking_lot::RwLockWriteGuard;
 
 use crate::cache::cache::Cache;
 use crate::elements::import::elem::LazyImport;
-use crate::elements::lua::custom::LUA_CUSTOM;
 use crate::elements::lua::custom::LuaData;
+use crate::elements::lua::custom::LUA_CUSTOM;
 use crate::lua::kernel::KernelName;
 use crate::parser::parser::Parser;
 use crate::parser::property::PropertyValue;
@@ -23,6 +23,7 @@ use crate::parser::source::SourceFile;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
+use crate::unit::translation::UnitMeta;
 use crate::unit::variable::PropertyVariable;
 use crate::unit::variable::VariableName;
 use util::settings::ProjectSettings;
@@ -152,6 +153,7 @@ impl ProcessQueue {
 		};
 
 		let mut processed = vec![];
+		let mut meta_units = vec![];
 		let mut has_error = false;
 		for (idx, input) in self.inputs.iter().enumerate() {
 			// Compute path
@@ -204,7 +206,7 @@ impl ProcessQueue {
 			let unit = TranslationUnit::new(
 				local_path.to_path_buf(),
 				self.parser.clone(),
-				source,
+				source.clone(),
 				false,
 				true,
 			);
@@ -239,7 +241,7 @@ impl ProcessQueue {
 				}
 			};
 
-			let (reports, unit) = unit.consume(output_file);
+			let (reports, unit) = unit.consume(output_file.clone());
 			if !reports.is_empty() {
 				has_error = true
 			}
@@ -249,20 +251,15 @@ impl ProcessQueue {
 			}
 
 			// Check if the parsed unit is a meta unit
-			let is_meta = unit
-				.get_scope()
-				.get_variable(&VariableName("nml.meta".into()))
-				.map_or(false, |(var, _)| {
-					let Some(var) = var.downcast_ref::<PropertyVariable>() else {
-						return false;
-					};
-					match var.value {
-						unit::variable::PropertyValue::Integer(1) => true,
-						_ => false,
-					}
-				});
-			if !is_meta {
-				processed.push(unit);
+			match unit.get_meta() {
+				None => processed.push(unit),
+				Some(UnitMeta::Lazy) => {
+					meta_units.push((UnitMeta::Lazy, local_path, source, output_file))
+				}
+				Some(UnitMeta::After) => {
+					meta_units.push((UnitMeta::After, local_path, source, output_file))
+				}
+				_ => {}
 			}
 		}
 		if has_error {
@@ -321,15 +318,38 @@ impl ProcessQueue {
 			let scope = tu.get_entry_scope();
 			let lazy_imports = scope
 				.content_iter(true)
-				.filter_map(|(_, elem)| {
-					elem.downcast_ref::<LazyImport>().and(Some(elem.clone()))
-				})
+				.filter_map(|(_, elem)| elem.downcast_ref::<LazyImport>().and(Some(elem.clone())))
 				.collect::<Vec<Arc<dyn unit::element::Element>>>();
 			for elem in lazy_imports {
 				let elem = elem.downcast_ref::<LazyImport>().unwrap();
 				elem.process(self.parser.clone(), self.cache.clone())
 					.map_err(|reports| ProcessError::CompileError(reports))?;
 			}
+		}
+
+		// Parse meta units
+		self.parser.set_meta_mode(true);
+		for (meta, local_path, source, output_file) in meta_units.drain(..) {
+			let unit = TranslationUnit::new(
+				local_path.to_path_buf(),
+				self.parser.clone(),
+				source.clone(),
+				false,
+				true,
+			);
+			unit.update_settings(self.settings.clone());
+			let (reports, unit) = unit.consume(output_file);
+			if !reports.is_empty() {
+				has_error = true;
+			}
+			Report::reports_to_stdout(unit.colors(), reports);
+
+			if meta == UnitMeta::After {
+				processed.push(unit);
+			}
+		}
+		if has_error {
+			return Err(ProcessError::GeneralError("Failed to parse units".into()));
 		}
 
 		// Compile all units

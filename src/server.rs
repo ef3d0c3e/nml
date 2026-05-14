@@ -38,6 +38,8 @@ use unit::scope::ScopeAccessor;
 use unit::translation::TranslationUnit;
 use util::settings::ProjectSettings;
 
+use crate::unit::translation::TranslationAccessors;
+
 pub struct Backend {
 	parser: Arc<Parser>,
 
@@ -127,7 +129,7 @@ impl Backend {
 			&self.root_path,
 		)
 		.unwrap();
-		let unit = TranslationUnit::new(path, self.parser.clone(), source.clone(), true, false);
+		let mut unit = TranslationUnit::new(path, self.parser.clone(), source.clone(), true, false);
 
 		// Set references
 		unit.with_lsp(move |mut lsp| {

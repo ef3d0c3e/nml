@@ -47,6 +47,30 @@ pub trait CustomData: Downcast + Send + Sync {
 }
 impl_downcast!(CustomData);
 
+/// [`TranslationUnit`] meta mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnitMeta {
+	/// Unit is used as a library, discard after parsing
+	Library,
+	/// Unit is meant to be parsed after resolver, but no output
+	Lazy,
+	/// Unit is processed after the resolver, outputs to a file normally
+	After,
+}
+
+impl TryFrom<&str> for UnitMeta {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+		match value {
+			"library" => Ok(UnitMeta::Library),
+			"lazy" => Ok(UnitMeta::Lazy),
+			"after" => Ok(UnitMeta::After),
+			_ => Err(format!("Invalid meta unit type `{value}'"))
+		}
+    }
+}
+
 /// Stores output data for [`TranslationUnit`]
 #[derive(Debug)]
 pub struct UnitOutput {
@@ -96,6 +120,9 @@ pub struct TranslationUnit {
 
 	/// Per unit project settings
 	settings: OnceLock<ProjectSettings>,
+
+	/// Meta unit type
+	meta: Option<UnitMeta>,
 }
 
 ///
@@ -149,6 +176,7 @@ impl TranslationUnit {
 			output: OnceLock::default(),
 
 			settings: OnceLock::default(),
+			meta: None,
 		}
 	}
 
@@ -370,6 +398,14 @@ impl TranslationUnit {
 				.expect("Mismatch data types")
 		});
 		f(mapped)
+	}
+
+	pub fn set_meta(&mut self, meta: UnitMeta) {
+		self.meta = Some(meta);
+	}
+
+	pub fn get_meta(&self) -> Option<UnitMeta> {
+		self.meta
 	}
 }
 

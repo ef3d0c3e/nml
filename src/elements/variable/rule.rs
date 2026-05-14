@@ -13,6 +13,7 @@ use crate::parser::util::escape_text;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
+use crate::unit::translation::UnitMeta;
 use crate::unit::variable::ContentVariable;
 use crate::unit::variable::PropertyValue;
 use crate::unit::variable::PropertyVariable;
@@ -248,6 +249,21 @@ impl Rule for VariableRule {
 					sems.add(value.range(), tokens.variable_val_int);
 				})
 			});
+			if &name.0 == "nml.meta" {
+				report_err!(
+					unit,
+					cursor.source(),
+					"Invalid variable definition".into(),
+					span(
+						varname.range(),
+						format!(
+							"`{}' is a reserverd variable name that cannot be an integer",
+							"nml.meta".fg(unit.colors().highlight)
+						)
+					)
+				);
+				return cursor.at(end_pos);
+			}
 			unit.get_scope().insert_variable(Arc::new(PropertyVariable {
 				location: Token::new(
 					keyword.start() - 1..val_captures.get(0).unwrap().end() - 1,
@@ -290,6 +306,21 @@ impl Rule for VariableRule {
 					);
 				})
 			});
+			if &name.0 == "nml.meta" {
+				report_err!(
+					unit,
+					cursor.source(),
+					"Invalid variable definition".into(),
+					span(
+						varname.range(),
+						format!(
+							"`{}' is a reserverd variable name that cannot be a source",
+							"nml.meta".fg(unit.colors().highlight)
+						)
+					)
+				);
+				return cursor.at(end_pos);
+			}
 			let content_source = escape_source(
 				cursor.source(),
 				content_range.clone(),
@@ -320,12 +351,29 @@ impl Rule for VariableRule {
 					);
 				})
 			});
-			let value = escape_text(
-				'\\',
-				delim,
-				&content[content_range.clone()],
-				false,
-			);
+			let value = escape_text('\\', delim, &content[content_range.clone()], false);
+
+			if &name.0 == "nml.meta" {
+				let meta = match UnitMeta::try_from(value.as_str()) {
+					Ok(meta) => meta,
+					Err(err) => {
+						report_err!(
+							unit,
+							cursor.source(),
+							"Invalid variable definition".into(),
+							span(
+								varname.range(),
+								format!(
+									"`{}' has an invalid value: {err}",
+									"nml.meta".fg(unit.colors().highlight)
+								)
+							)
+						);
+						return cursor.at(end_pos);
+					}
+				};
+				unit.set_meta(meta);
+			}
 			let variable = Arc::new(PropertyVariable {
 				location: Token::new(keyword.start() - 1..content_range.end, cursor.source()),
 				name,

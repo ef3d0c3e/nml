@@ -5,12 +5,15 @@ use std::sync::Arc;
 use std::usize;
 
 
+use parking_lot::RwLock;
+
 use crate::elements::meta::eof::Eof;
 use crate::elements::text::elem::Text;
 use crate::lsp::completion::CompletionProvider;
 use crate::unit::scope::ScopeAccessor;
 use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
+use crate::unit::translation::UnitMeta;
 
 use super::rule::Rule;
 use super::source::Cursor;
@@ -18,6 +21,8 @@ use super::source::Token;
 
 pub struct Parser {
 	rules: Vec<Box<dyn Rule + Send + Sync>>,
+	/// Set to true when the parsed must continue parsing meta units
+	parse_meta: RwLock<bool>,
 }
 
 impl Parser {
@@ -28,7 +33,7 @@ impl Parser {
 		for rule in &rules {
 			rule.register_bindings();
 		}
-		Self { rules }
+		Self { rules, parse_meta: RwLock::new(false) }
 	}
 
 	/// Updates matches from a given start position e.g [`Cursor`]
@@ -204,6 +209,11 @@ impl Parser {
 
 			// Trigger rule
 			cursor = rule.on_match(unit, &next_cursor, rule_data);
+
+			// Stop if unit meta requires it
+			if !*self.parse_meta.read() && (unit.get_meta() == Some(UnitMeta::Lazy) || unit.get_meta() == Some(UnitMeta::After)) {
+				break;
+			}
 		}
 		// Add leftover as text
 		let end_cursor = cursor.at(cursor.source().content().len());
@@ -230,6 +240,10 @@ impl Parser {
 			completors.push(completor);
 		});
 		completors
+	}
+	
+	pub fn set_meta_mode(&self, mode: bool) {
+		*self.parse_meta.write() = mode;
 	}
 }
 
