@@ -67,6 +67,10 @@ impl UserData for UnitWrapper {
 			None
 		);
 		methods.add_method("compile", |lua, this, (format, file): (String, String)| {
+			if Kernel::with_context(lua, |ctx| ctx.unit.with_lsp(|_lsp| true).unwrap_or(false)) {
+				return Ok(());
+			}
+
 			// TODO: assert is_meta
 			let r = unsafe { &mut *this.0 as &mut TranslationUnit };
 			let target =
@@ -77,9 +81,11 @@ impl UserData for UnitWrapper {
 					cause: Arc::new(mlua::Error::runtime(err)),
 				})?;
 			let (content, mut output) = Kernel::with_context(lua, |ctx| {
-				let cache = ctx.kernel.cache.clone().unwrap_or_else(|| {
-					Arc::new(Cache::new(&PathBuf::default()).unwrap())
-				});
+				let cache = ctx
+					.kernel
+					.cache
+					.clone()
+					.unwrap_or_else(|| Arc::new(Cache::new(&PathBuf::default()).unwrap()));
 				let compiler = Compiler::new(target, cache);
 				let output = ctx.unit.get_settings().output_path.clone();
 				let content = compiler.compile(r).map_err(|mut err| {
@@ -90,10 +96,10 @@ impl UserData for UnitWrapper {
 				})?;
 				Ok::<_, mlua::Error>((content, output))
 			})?;
-			
+
 			output.push(file);
 			std::fs::write(&output, content).map_err(|err| {
-					mlua::Error::runtime(format!("Failed to output unit to {}", output.display()))
+				mlua::Error::runtime(format!("Failed to output unit to {}", output.display()))
 			})?;
 			println!("Compiled unit {}", output.display());
 

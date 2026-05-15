@@ -82,7 +82,7 @@ impl Backend {
 		cache: Arc<Cache>
 	) -> Self {
 
-		Self {
+		let s = Self {
 			parser: Arc::new(Parser::new()),
 			source_files: DashMap::default(),
 			client,
@@ -105,7 +105,9 @@ impl Backend {
 			hovers_map: DashMap::default(),
 
 			lua_ranges: DashMap::new(),
-		}
+		};
+		s.parser.set_meta_mode(true);
+		s
 	}
 
 	async fn on_change(&self, params: TextDocumentItem) {
@@ -130,6 +132,7 @@ impl Backend {
 		)
 		.unwrap();
 		let mut unit = TranslationUnit::new(path, self.parser.clone(), source.clone(), true, false);
+		unit.update_settings(self.settings.clone());
 
 		// Set references
 		unit.with_lsp(move |mut lsp| {

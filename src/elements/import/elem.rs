@@ -13,6 +13,7 @@ use crate::parser::reports::*;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
 use crate::unit::translation::TranslationUnit;
+use crate::unit::translation::UnitMeta;
 use crate::unit::variable::PropertyVariable;
 use crate::unit::variable::VariableName;
 use ariadne::Span;
@@ -131,15 +132,7 @@ impl LazyImport {
 		);
 
 		let (reports, unit) = tu.consume(self.output.clone());
-		let is_meta = unit.get_scope().get_variable(&VariableName("nml.meta".into()))
-			.map_or(false, |(var, _)| {
-				let Some(var) = var.downcast_ref::<PropertyVariable>() else { return false };
-				match var.value {
-					crate::unit::variable::PropertyValue::Integer(1) => true,
-					_ => false
-				}
-			});
-		if !is_meta {
+		if unit.get_meta() != Some(UnitMeta::Library) {
 			panic!("Cannot import non-meta unit");
 			// TODO
 		}

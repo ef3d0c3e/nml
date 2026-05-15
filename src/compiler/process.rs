@@ -14,6 +14,7 @@ use crate::elements::import::elem::LazyImport;
 use crate::elements::lua::custom::LuaData;
 use crate::elements::lua::custom::LUA_CUSTOM;
 use crate::lua::kernel::KernelName;
+use crate::lua::kernel::KernelNameBuf;
 use crate::parser::parser::Parser;
 use crate::parser::property::PropertyValue;
 use crate::parser::reports::macros::*;
@@ -330,13 +331,17 @@ impl ProcessQueue {
 		// Parse meta units
 		self.parser.set_meta_mode(true);
 		for (meta, local_path, source, output_file) in meta_units.drain(..) {
-			let unit = TranslationUnit::new(
+			let mut unit = TranslationUnit::new(
 				local_path.to_path_buf(),
 				self.parser.clone(),
 				source.clone(),
 				false,
 				true,
 			);
+			LuaData::initialize(&mut unit);
+			LuaData::with_kernel(&mut unit, &KernelNameBuf("main".into()), |unit, mut kernel| {
+				kernel.cache = Some(self.cache.clone());
+			});
 			unit.update_settings(self.settings.clone());
 			let (reports, unit) = unit.consume(output_file);
 			if !reports.is_empty() {
