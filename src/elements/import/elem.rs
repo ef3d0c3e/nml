@@ -179,7 +179,11 @@ impl Element for LazyImport {
 		Some(format!(
 			"Lazy Import
 
-# Properties"
+# Properties
+ * **Location**: [{}] ({}..{})",
+			self.location.source().name().display(),
+			self.location().range.start(),
+			self.location().range.end(),
 		))
 	}
 

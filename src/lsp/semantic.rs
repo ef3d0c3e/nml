@@ -169,6 +169,11 @@ pub struct Tokens {
 	pub layout_type: (u32, u32),
 	pub layout_opts: (u32, u32),
 
+	pub tagged_proc_name: (u32, u32),
+	pub tagged_proc_mode: (u32, u32),
+	pub tagged_proc_processor: (u32, u32),
+	pub tagged_proc_sep: (u32, u32),
+
 	pub tagged_tag: (u32, u32),
 	pub tagged_delim: (u32, u32),
 
@@ -251,6 +256,11 @@ impl Default for Tokens {
 
 			layout_type: token!("constructor", "async"),
 			layout_opts: token!("number"),
+
+			tagged_proc_name: token!("constructor"),
+			tagged_proc_mode: token!("property"),
+			tagged_proc_processor: token!("function"),
+			tagged_proc_sep: token!("macro"),
 
 			tagged_tag: token!("constructor"),
 			tagged_delim: token!("macro"),

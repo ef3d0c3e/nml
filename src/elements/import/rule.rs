@@ -195,12 +195,15 @@ impl RegexRule for ImportRule {
 		}
 		// Lazy import
 		else {
-
+			let source = Arc::new(source);
+			unit.with_lsp(|lsp| {
+				lsp.add_definition(token.clone(), &Token::new(0..0, source.clone()))
+			});
 			unit.add_content(LazyImport {
 				location: token,
 				path: path_buf,
 				output: unit.output_path().cloned().expect("Lazy imports may only be used in units that output to disk"), // TODO
-				source: Arc::new(source),
+				source,
 				expanded: OnceLock::default(),
 			});
 		}

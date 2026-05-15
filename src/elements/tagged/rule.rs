@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::{any::Any, ops::Range};
 
 use crate::elements::lua::custom::LuaData;
+use crate::elements::tagged::completion::TaggedCompletion;
 use crate::elements::tagged::custom::{TaggedClosure, TaggedData, TaggedKind, TaggedProcessor};
 use crate::lua::kernel::{Kernel, KernelContext, KernelNameBuf};
 use crate::lua::wrappers::VecScopeProxy;
@@ -35,7 +36,7 @@ pub struct TaggedProcessorRule {
 impl Default for TaggedProcessorRule {
 	fn default() -> Self {
 		Self {
-			re: [Regex::new(r#"(?:^|\n):tagged(?:\s+(\w+)?(?:\s+(\w+)(?:/(.*))?)?)?"#).unwrap()],
+			re: [Regex::new(r#"(?:^|\n)(:tagged)(?:\s+(\w+)?(?:\s+(\w+)(?:/(.*))?)?)?"#).unwrap()],
 		}
 	}
 }
@@ -70,7 +71,7 @@ impl RegexRule for TaggedProcessorRule {
 		token: Token,
 		captures: regex::Captures,
 	) {
-		let Some(tag_name) = captures.get(1) else {
+		let Some(tag_name) = captures.get(2) else {
 			report_err!(
 				unit,
 				token.source(),
@@ -85,7 +86,14 @@ impl RegexRule for TaggedProcessorRule {
 			);
 			return;
 		};
-		let Some(tagged_kind) = captures.get(2) else {
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				// :tagged + name
+				sems.add(captures.get(1).unwrap().range(), tokens.command);
+				sems.add(tag_name.range(), tokens.tagged_proc_name);
+			})
+		});
+		let Some(tagged_kind) = captures.get(3) else {
 			report_err!(
 				unit,
 				token.source(),
@@ -100,6 +108,12 @@ impl RegexRule for TaggedProcessorRule {
 			);
 			return;
 		};
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				// kind
+				sems.add(tagged_kind.range(), tokens.tagged_proc_mode);
+			})
+		});
 		let kind = match TaggedKind::try_from(tagged_kind.as_str()) {
 			Ok(kind) => kind,
 			Err(err) => {
@@ -112,7 +126,7 @@ impl RegexRule for TaggedProcessorRule {
 				return;
 			}
 		};
-		let Some(tagged_processor) = captures.get(3) else {
+		let Some(tagged_processor) = captures.get(4) else {
 			report_err!(
 				unit,
 				token.source(),
@@ -127,7 +141,15 @@ impl RegexRule for TaggedProcessorRule {
 			);
 			return;
 		};
+		unit.with_lsp(|lsp| {
+			lsp.with_semantics(token.source(), |sems, tokens| {
+				sems.add(tagged_kind.end()..tagged_kind.end()+1, tokens.tagged_proc_sep);
+				// sep + processor
+				sems.add(tagged_processor.range(), tokens.tagged_proc_processor);
+			})
+		});
 
+		LuaData::initialize(unit);
 		LuaData::with_kernel(unit, &KernelNameBuf::new("main".into()), |unit, kernel| {
 			let ctx = KernelContext::new(token.clone(), &kernel, unit);
 			kernel.run_with_context(ctx, |ctx, lua| {
@@ -214,9 +236,17 @@ impl RegexRule for TaggedProcessorRule {
 					)),
 				};
 
+				eprintln!("BEFORE");
 				TaggedData::add_processor(ctx.unit, tag_name, TaggedProcessor { kind, closure });
+				eprintln!("AFTER");
 			})
 		});
+	}
+
+	fn completion(
+		&self,
+	) -> Option<Box<dyn lsp::completion::CompletionProvider + 'static + Send + Sync>> {
+		Some(Box::new(TaggedCompletion {}))
 	}
 }
 
@@ -369,8 +399,7 @@ impl Rule for TaggedRule {
 		let token = Token::new(cursor.pos()..last, source.clone());
 		match &processor.closure {
 			TaggedClosure::Raw(f) => {
-				if let Err(err) = (*f)(unit, token, delims)
-				{
+				if let Err(err) = (*f)(unit, token, delims) {
 					report_err!(
 						unit,
 						source.clone(),
@@ -381,7 +410,7 @@ impl Rule for TaggedRule {
 						)
 					);
 				}
-			},
+			}
 			TaggedClosure::Parsed(f) => {
 				let mut scopes = vec![];
 				for (id, range) in delims.iter().enumerate() {
@@ -410,8 +439,7 @@ impl Rule for TaggedRule {
 					}
 				}
 
-				if let Err(err) = (*f)(unit, token, scopes)
-				{
+				if let Err(err) = (*f)(unit, token, scopes) {
 					report_err!(
 						unit,
 						source.clone(),
@@ -428,7 +456,7 @@ impl Rule for TaggedRule {
 		// End delim
 		unit.with_lsp(|lsp| {
 			lsp.with_semantics(cursor.source(), |sems, tokens| {
-				// {
+				// }
 				sems.add(last - 1..last, tokens.tagged_delim);
 			})
 		});
