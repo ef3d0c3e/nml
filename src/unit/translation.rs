@@ -13,6 +13,7 @@ use downcast_rs::Downcast;
 use parking_lot::MappedRwLockWriteGuard;
 use parking_lot::RwLock;
 use parking_lot::RwLockWriteGuard;
+use pathdiff::diff_paths;
 use serde::de::VariantAccess;
 
 use crate::cache::cache::Cache;
@@ -59,16 +60,16 @@ pub enum UnitMeta {
 }
 
 impl TryFrom<&str> for UnitMeta {
-    type Error = String;
+	type Error = String;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+	fn try_from(value: &str) -> Result<Self, Self::Error> {
 		match value {
 			"library" => Ok(UnitMeta::Library),
 			"lazy" => Ok(UnitMeta::Lazy),
 			"after" => Ok(UnitMeta::After),
-			_ => Err(format!("Invalid meta unit type `{value}'"))
+			_ => Err(format!("Invalid meta unit type `{value}'")),
 		}
-    }
+	}
 }
 
 /// Stores output data for [`TranslationUnit`]
@@ -273,9 +274,14 @@ impl TranslationUnit {
 		let output_file = self
 			.get_scope()
 			.get_variable(&VariableName("nml.output_file".into()));
+		let output_file = if let Some(path) = output_file.map(|(var, _)| var.to_path()).flatten() {
+			diff_paths(path, self.get_settings().output_path.clone())
+		} else {
+			None
+		};
 		let output = UnitOutput {
 			input_file: self.path.clone(),
-			output_file: output_file.and_then(|(var, _)| var.to_path()),
+			output_file,
 		};
 		self.output.set(output).unwrap();
 
@@ -354,16 +360,21 @@ impl TranslationUnit {
 		let mut scope = Some(self.get_scope().clone());
 		while let Some(inner) = scope {
 			let lock = inner.read();
-			for (name, var) in &lock.variables
-			{
-				if var.visibility() != &VariableVisibility::Exported { continue; }
-				if vars.contains_key(&name.0) { continue; }
+			for (name, var) in &lock.variables {
+				if var.visibility() != &VariableVisibility::Exported {
+					continue;
+				}
+				if vars.contains_key(&name.0) {
+					continue;
+				}
 				vars.insert(name.0.clone(), var.clone());
 			}
 			scope = lock.parent().clone();
 		}
-		cache.export_variables(&self.reference_key(), vars.iter()
-			.map(|(_name, var)| var.to_owned()))
+		cache.export_variables(
+			&self.reference_key(),
+			vars.iter().map(|(_name, var)| var.to_owned()),
+		)
 	}
 
 	/// Checks if [`Self::custom_data`] contains data `key`
@@ -401,7 +412,10 @@ impl TranslationUnit {
 	}
 
 	pub fn set_meta(&mut self, meta: UnitMeta) {
-		self.meta = Some(meta);
+		if self.get_scope().read_arc().source() == self.get_entry_scope().read_arc().source()
+		{
+			self.meta = Some(meta);
+		}
 	}
 
 	pub fn get_meta(&self) -> Option<UnitMeta> {

@@ -205,6 +205,7 @@ impl RegexRule for ImportRule {
 				output: unit.output_path().cloned().expect("Lazy imports may only be used in units that output to disk"), // TODO
 				source,
 				expanded: OnceLock::default(),
+				settings: unit.get_settings().clone(),
 			});
 		}
 	}

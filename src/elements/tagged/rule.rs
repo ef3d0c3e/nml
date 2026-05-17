@@ -236,9 +236,7 @@ impl RegexRule for TaggedProcessorRule {
 					)),
 				};
 
-				eprintln!("BEFORE");
 				TaggedData::add_processor(ctx.unit, tag_name, TaggedProcessor { kind, closure });
-				eprintln!("AFTER");
 			})
 		});
 	}

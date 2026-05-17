@@ -12,6 +12,7 @@ use crate::parser::reports::macros::*;
 use crate::parser::reports::*;
 use crate::parser::source::Source;
 use crate::parser::source::SourceFile;
+use crate::unit::translation::TranslationAccessors;
 use crate::unit::translation::TranslationUnit;
 use crate::unit::translation::UnitMeta;
 use crate::unit::variable::PropertyVariable;
@@ -112,12 +113,15 @@ pub struct LazyImport {
 	pub(crate) source: Arc<dyn Source>,
 	#[lua_ignore]
 	pub(crate) expanded: OnceLock<Vec<Arc<RwLock<Scope>>>>,
+	#[lua_ignore]
+	pub(crate) settings: ProjectSettings,
 }
 
 impl LazyImport {
 	pub fn process(&self, parser: Arc<Parser>, cache: Arc<Cache>) -> Result<(), Vec<Report>>
 	{
 		let mut tu = TranslationUnit::new(self.path.clone(), parser, self.source.clone(), false, true);
+		tu.update_settings(self.settings.clone());
 
 		// Init lua data
 		LuaData::initialize(&mut tu);

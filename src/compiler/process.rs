@@ -367,9 +367,7 @@ impl ProcessQueue {
 			match self.compiler.compile(unit) {
 				Ok(content) => {
 					if let Some(output) = unit.output_path() {
-						let mut parent = PathBuf::new();
-						parent.push(output);
-						parent.pop();
+						let mut parent = self.settings.output_path.clone();
 						let parent_exists = if let Ok(meta) = std::fs::metadata(&parent) {
 							meta.is_dir()
 						} else {
@@ -391,7 +389,8 @@ impl ProcessQueue {
 								break;
 							}
 						}
-						if let Err(err) = std::fs::write(output, content) {
+						parent.push(output);
+						if let Err(err) = std::fs::write(parent, content) {
 							reports.push(make_err!(
 								unit.token().source(),
 								"Invalid output path".into(),
