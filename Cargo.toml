@@ -25,6 +25,7 @@ rust-version = "1.85"
 repository = "https://github.com/ef3d0c3e/nml"
 
 [workspace.dependencies]
+url = "2.5"
 nml-source = { path = "crates/nml-source" }
 nml-diagnostics-macros = { path = "crates/nml-diagnostics-macros" }
 nml-diagnostics = { path = "crates/nml-diagnostics" }
