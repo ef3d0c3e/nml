@@ -1,0 +1,19 @@
+[package]
+name = "nml-cli"
+description = "The nml command-line tool."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "nml"
+path = "src/main.rs"
+
+[dependencies]
+nml-build.workspace = true
+nml-lsp.workspace = true
+
+[lints]
+workspace = true

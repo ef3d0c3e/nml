@@ -1,0 +1,18 @@
+[package]
+name = "nml-lua"
+description = "The sandboxed Lua 5.4 runtime: bindings, script rules, events and slots."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+nml-source.workspace = true
+nml-diagnostics.workspace = true
+nml-grammar.workspace = true
+nml-document.workspace = true
+nml-lua-macros.workspace = true
+
+[lints]
+workspace = true

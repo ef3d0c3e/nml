@@ -1,0 +1,15 @@
+[package]
+name = "nml-diagnostics"
+description = "Diagnostics: the central DiagnosticKind enum, located messages, fixes and Fluent localization."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+nml-source.workspace = true
+nml-diagnostics-macros.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "nml-lsp"
+description = "The NML language server."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+nml-diagnostics.workspace = true
+nml-build.workspace = true
+
+[lints]
+workspace = true

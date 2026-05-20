@@ -1,0 +1,16 @@
+[package]
+name = "nml-workspace"
+description = "Workspace configuration (nml.toml), file scanning, module resolution and the SQLite index."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+nml-source.workspace = true
+nml-diagnostics.workspace = true
+nml-document.workspace = true
+
+[lints]
+workspace = true

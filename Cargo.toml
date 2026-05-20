@@ -1,0 +1,47 @@
+[workspace]
+resolver = "3"
+members = [
+	"crates/nml-source",
+	"crates/nml-diagnostics-macros",
+	"crates/nml-diagnostics",
+	"crates/nml-grammar",
+	"crates/nml-document",
+	"crates/nml-lang",
+	"crates/nml-lua-macros",
+	"crates/nml-lua",
+	"crates/nml-render",
+	"crates/nml-html",
+	"crates/nml-workspace",
+	"crates/nml-build",
+	"crates/nml-lsp",
+	"crates/nml-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+rust-version = "1.85"
+repository = "https://github.com/ef3d0c3e/nml"
+
+[workspace.dependencies]
+nml-source = { path = "crates/nml-source" }
+nml-diagnostics-macros = { path = "crates/nml-diagnostics-macros" }
+nml-diagnostics = { path = "crates/nml-diagnostics" }
+nml-grammar = { path = "crates/nml-grammar" }
+nml-document = { path = "crates/nml-document" }
+nml-lang = { path = "crates/nml-lang" }
+nml-lua-macros = { path = "crates/nml-lua-macros" }
+nml-lua = { path = "crates/nml-lua" }
+nml-render = { path = "crates/nml-render" }
+nml-html = { path = "crates/nml-html" }
+nml-workspace = { path = "crates/nml-workspace" }
+nml-build = { path = "crates/nml-build" }
+nml-lsp = { path = "crates/nml-lsp" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

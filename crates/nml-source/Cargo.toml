@@ -1,0 +1,14 @@
+[package]
+name = "nml-source"
+description = "Sources, tokens and position mapping, including virtual sources."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+
+[lints]
+workspace = true

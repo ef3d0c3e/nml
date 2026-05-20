@@ -1,0 +1,3 @@
+/target
+# Holds the Lific API key
+.mcp.json

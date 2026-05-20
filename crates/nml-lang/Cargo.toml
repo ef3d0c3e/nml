@@ -1,0 +1,17 @@
+[package]
+name = "nml-lang"
+description = "The built-in NML language: Rust rules for every core element."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+nml-source.workspace = true
+nml-diagnostics.workspace = true
+nml-grammar.workspace = true
+nml-document.workspace = true
+
+[lints]
+workspace = true

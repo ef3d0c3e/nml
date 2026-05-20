@@ -1,0 +1,18 @@
+[package]
+name = "nml-build"
+description = "The build pipeline shared by the CLI and the language server."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+nml-diagnostics.workspace = true
+nml-lang.workspace = true
+nml-lua.workspace = true
+nml-workspace.workspace = true
+nml-html.workspace = true
+
+[lints]
+workspace = true
