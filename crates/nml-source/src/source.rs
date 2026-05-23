@@ -5,6 +5,7 @@ use url::Url;
 
 use crate::Encoding;
 use crate::Position;
+use crate::virtual_source::Parent;
 
 /// The content of a document, with its location.
 ///
@@ -19,10 +20,21 @@ pub struct Source {
 	version: u64,
 	/// Byte offset at which every line starts. Always starts with `0`.
 	line_starts: Vec<usize>,
+	/// Set for virtual sources, see [`VirtualSourceBuilder`](crate::VirtualSourceBuilder).
+	pub(crate) parent: Option<Parent>,
 }
 
 impl Source {
 	pub fn new(location: Url, content: String, version: u64) -> Self {
+		Self::with_parent(location, content, version, None)
+	}
+
+	pub(crate) fn with_parent(
+		location: Url,
+		content: String,
+		version: u64,
+		parent: Option<Parent>,
+	) -> Self {
 		let line_starts = std::iter::once(0)
 			.chain(content.match_indices('\n').map(|(i, _)| i + 1))
 			.collect();
@@ -31,6 +43,7 @@ impl Source {
 			content,
 			version,
 			line_starts,
+			parent,
 		}
 	}
 
@@ -110,6 +123,10 @@ impl fmt::Debug for Source {
 		f.debug_struct("Source")
 			.field("location", &self.location.as_str())
 			.field("version", &self.version)
+			.field(
+				"parent",
+				&self.parent.as_ref().map(|p| p.source.location().as_str()),
+			)
 			.field("len", &self.content.len())
 			.finish()
 	}
