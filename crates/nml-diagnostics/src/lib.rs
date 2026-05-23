@@ -5,8 +5,11 @@
 extern crate self as nml_diagnostics;
 
 mod argument;
+#[cfg(test)]
+mod checks;
 mod diagnostic;
 mod kind;
+mod localizer;
 #[doc(hidden)]
 pub mod testing;
 
@@ -19,3 +22,6 @@ pub use diagnostic::Fix;
 pub use diagnostic::MessageContent;
 pub use kind::DiagnosticKind;
 pub use kind::KindInfo;
+pub use localizer::FALLBACK_LOCALE;
+pub use localizer::LocalizedDiagnostic;
+pub use localizer::Localizer;

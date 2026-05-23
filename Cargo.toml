@@ -29,6 +29,9 @@ proc-macro2 = "1"
 quote = "1"
 syn = "2"
 url = "2.5"
+fluent-bundle = "0.16"
+fluent-syntax = "0.12"
+unic-langid = "0.9"
 nml-source = { path = "crates/nml-source" }
 nml-diagnostics-macros = { path = "crates/nml-diagnostics-macros" }
 nml-diagnostics = { path = "crates/nml-diagnostics" }

@@ -10,6 +10,11 @@ repository.workspace = true
 [dependencies]
 nml-source.workspace = true
 nml-diagnostics-macros.workspace = true
+fluent-bundle.workspace = true
+unic-langid.workspace = true
+
+[dev-dependencies]
+fluent-syntax.workspace = true
 
 [lints]
 workspace = true
