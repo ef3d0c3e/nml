@@ -1,1 +1,21 @@
-//! Diagnostics: the central `DiagnosticKind` enum, located messages, fixes and Fluent localization.
+//! Diagnostics: the central `DiagnosticKind` enum, located messages, fixes and Fluent
+//! localization.
+
+// The derive refers to this crate as `::nml_diagnostics`, also from inside it.
+extern crate self as nml_diagnostics;
+
+mod argument;
+mod diagnostic;
+mod kind;
+#[doc(hidden)]
+pub mod testing;
+
+pub use argument::Argument;
+pub use diagnostic::Diagnostic;
+pub use diagnostic::DiagnosticMessage;
+pub use diagnostic::DiagnosticSeverity;
+pub use diagnostic::Edit;
+pub use diagnostic::Fix;
+pub use diagnostic::MessageContent;
+pub use kind::DiagnosticKind;
+pub use kind::KindInfo;
