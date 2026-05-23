@@ -10,6 +10,7 @@ mod checks;
 mod diagnostic;
 mod kind;
 mod localizer;
+mod terminal;
 #[doc(hidden)]
 pub mod testing;
 
@@ -25,3 +26,4 @@ pub use kind::KindInfo;
 pub use localizer::FALLBACK_LOCALE;
 pub use localizer::LocalizedDiagnostic;
 pub use localizer::Localizer;
+pub use terminal::render;

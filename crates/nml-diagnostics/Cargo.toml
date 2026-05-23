@@ -8,6 +8,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+ariadne.workspace = true
 nml-source.workspace = true
 nml-diagnostics-macros.workspace = true
 fluent-bundle.workspace = true
