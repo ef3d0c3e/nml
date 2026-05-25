@@ -1,0 +1,152 @@
+/// One element of a rule.
+///
+/// A rule is a sequence of atoms, matched in order without backtracking: `Or` and `Repeat`
+/// commit to a branch as soon as its first atom matches.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Atom {
+	/// Exactly this text.
+	Literal(String),
+	/// The start of a line (zero width).
+	LineStart,
+	/// A line break, or the end of the input (zero width).
+	LineEnd,
+	/// The first alternative whose first atom matches.
+	Or(Vec<Vec<Atom>>),
+	/// The atoms, repeated while their first atom matches, between `min` and `max` times.
+	Repeat {
+		atoms: Vec<Atom>,
+		min: usize,
+		max: Option<usize>,
+	},
+	/// A decimal number, optionally signed and with a fractional part.
+	Number { signed: bool, decimal: bool },
+	/// An identifier: a letter or `_`, then letters, digits, `_` and `-`.
+	Word,
+	/// Verbatim text up to the delimiter that follows.
+	Text,
+	/// Verbatim text up to the end of the line, without the line break.
+	RestOfLine,
+	/// Parsed inline content up to the delimiter that follows, within one paragraph.
+	InlineContent,
+	/// Parsed blocks up to the line-anchored delimiter that follows.
+	Content,
+	/// Names the part of the match covered by `atom`, for the rule's callback and the LSP.
+	Capture { name: String, atom: Box<Atom> },
+}
+
+impl Atom {
+	pub fn literal(text: impl Into<String>) -> Self {
+		Atom::Literal(text.into())
+	}
+
+	pub fn capture(name: impl Into<String>, atom: Atom) -> Self {
+		Atom::Capture {
+			name: name.into(),
+			atom: Box::new(atom),
+		}
+	}
+
+	pub fn or(alternatives: impl IntoIterator<Item = Vec<Atom>>) -> Self {
+		Atom::Or(alternatives.into_iter().collect())
+	}
+
+	pub fn repeat(atoms: Vec<Atom>, min: usize, max: Option<usize>) -> Self {
+		Atom::Repeat { atoms, min, max }
+	}
+
+	/// The atoms, zero or one time.
+	pub fn optional(atoms: Vec<Atom>) -> Self {
+		Atom::repeat(atoms, 0, Some(1))
+	}
+
+	/// A short description, for errors.
+	pub fn describe(&self) -> &'static str {
+		match self {
+			Atom::Literal(_) => "Literal",
+			Atom::LineStart => "LineStart",
+			Atom::LineEnd => "LineEnd",
+			Atom::Or(_) => "Or",
+			Atom::Repeat { .. } => "Repeat",
+			Atom::Number { .. } => "Number",
+			Atom::Word => "Word",
+			Atom::Text => "Text",
+			Atom::RestOfLine => "RestOfLine",
+			Atom::InlineContent => "InlineContent",
+			Atom::Content => "Content",
+			Atom::Capture { .. } => "Capture",
+		}
+	}
+
+	/// Whether the atom can tell from the current position alone if it matches, which is what
+	/// `Or` and `Repeat` need to commit to a branch.
+	pub(crate) fn decidable(&self) -> bool {
+		match self {
+			Atom::Literal(_)
+			| Atom::LineStart
+			| Atom::LineEnd
+			| Atom::Number { .. }
+			| Atom::Word => true,
+			Atom::Capture { atom, .. } => atom.decidable(),
+			Atom::Or(alternatives) => alternatives
+				.iter()
+				.all(|atoms| atoms.first().is_some_and(Atom::decidable)),
+			Atom::Repeat { atoms, min, .. } => {
+				*min > 0 && atoms.first().is_some_and(Atom::decidable)
+			}
+			Atom::Text | Atom::RestOfLine | Atom::InlineContent | Atom::Content => false,
+		}
+	}
+}
+
+/// What ends an open-ended atom.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DelimiterPattern {
+	/// Only counts at the start of a line.
+	pub anchored: bool,
+	pub kind: DelimiterKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DelimiterKind {
+	Literal(String),
+	LineEnd,
+}
+
+/// The delimiters that can come first in the concatenation of `chain`, or `None` if
+/// something else can.
+pub(crate) fn first_delimiters(chain: &[&[Atom]], anchored: bool) -> Option<Vec<DelimiterPattern>> {
+	let (head, tail) = chain.split_first()?;
+	let Some((atom, rest)) = head.split_first() else {
+		return first_delimiters(tail, anchored);
+	};
+	fn join<'a>(atoms: &[&'a [Atom]], rest: &'a [Atom], tail: &[&'a [Atom]]) -> Vec<&'a [Atom]> {
+		let mut chain = atoms.to_vec();
+		chain.push(rest);
+		chain.extend_from_slice(tail);
+		chain
+	}
+	let pattern = |kind| Some(vec![DelimiterPattern { anchored, kind }]);
+	match atom {
+		Atom::LineStart if !anchored => first_delimiters(&join(&[], rest, tail), true),
+		Atom::Literal(text) => pattern(DelimiterKind::Literal(text.clone())),
+		Atom::LineEnd if !anchored => pattern(DelimiterKind::LineEnd),
+		Atom::Capture { atom, .. } => {
+			first_delimiters(&join(&[std::slice::from_ref(atom)], rest, tail), anchored)
+		}
+		Atom::Or(alternatives) => {
+			let mut patterns = Vec::new();
+			for atoms in alternatives {
+				patterns.extend(first_delimiters(&join(&[atoms], rest, tail), anchored)?);
+			}
+			Some(patterns)
+		}
+		Atom::Repeat { atoms, min, .. } => {
+			let mut patterns = first_delimiters(&join(&[atoms], rest, tail), anchored)?;
+			if *min == 0 {
+				patterns.extend(first_delimiters(&join(&[], rest, tail), anchored)?);
+			}
+			Some(patterns)
+		}
+		_ => None,
+	}
+}
