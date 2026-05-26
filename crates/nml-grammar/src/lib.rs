@@ -2,6 +2,7 @@
 
 mod atom;
 mod rule;
+mod trie;
 
 pub use atom::Atom;
 pub use rule::Rule;

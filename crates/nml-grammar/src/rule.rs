@@ -3,6 +3,7 @@ use std::fmt;
 
 use crate::Atom;
 use crate::atom::first_delimiters;
+use crate::trie::Trie;
 
 /// A rule of the grammar: a name and the atoms it matches.
 ///
@@ -137,6 +138,8 @@ pub struct RuleSet {
 	/// Indexed by [`RuleId`]; `None` once replaced.
 	rules: Vec<Option<Rule>>,
 	by_name: HashMap<String, RuleId>,
+	block: Trie,
+	inline: Trie,
 }
 
 impl RuleSet {
@@ -189,7 +192,33 @@ impl RuleSet {
 		let id = RuleId(self.rules.len());
 		self.by_name.insert(rule.name.clone(), id);
 		self.rules.push(Some(rule));
+		self.build_tries();
 		Ok(id)
+	}
+
+	fn build_tries(&mut self) {
+		let mut block = Trie::default();
+		let mut inline = Trie::default();
+		for (id, rule) in self.iter() {
+			let trie = match rule.table() {
+				Table::Block => &mut block,
+				Table::Inline => &mut inline,
+			};
+			trie.insert(rule.opener().unwrap(), id);
+		}
+		self.block = block;
+		self.inline = inline;
+	}
+
+	/// The rule with the longest opener at the start of `text`, and the opener's length.
+	///
+	/// For the block table, `text` starts at the beginning of a line. There is no fallback: if
+	/// the rule then fails to match, that is an error.
+	pub fn dispatch(&self, table: Table, text: &str) -> Option<(RuleId, usize)> {
+		match table {
+			Table::Block => self.block.longest(text),
+			Table::Inline => self.inline.longest(text),
+		}
 	}
 
 	pub fn get(&self, id: RuleId) -> Option<&Rule> {
@@ -340,6 +369,35 @@ mod tests {
 		assert_eq!(rules.id("strong"), Some(second));
 		assert_eq!(rules.id("bold"), None);
 		assert_eq!(rules.iter().count(), 3);
+	}
+
+	#[test]
+	fn dispatch() {
+		let mut rules = RuleSet::new();
+		let bold = rules.add(bold()).unwrap();
+		let italic = rules
+			.add(Rule::new(
+				"italic",
+				vec![lit("*"), Atom::InlineContent, lit("*")],
+			))
+			.unwrap();
+		let hr = rules
+			.add(Rule::new(
+				"hr",
+				vec![Atom::LineStart, lit("***"), Atom::LineEnd],
+			))
+			.unwrap();
+
+		assert_eq!(rules.dispatch(Table::Inline, "**a**"), Some((bold, 2)));
+		assert_eq!(rules.dispatch(Table::Inline, "*a*"), Some((italic, 1)));
+		assert_eq!(rules.dispatch(Table::Inline, "***"), Some((bold, 2)));
+		assert_eq!(rules.dispatch(Table::Block, "***\n"), Some((hr, 3)));
+		assert_eq!(rules.dispatch(Table::Block, "**a"), None);
+
+		let strong = rules
+			.add(Rule::new("strong", vec![lit("**"), Atom::Text, lit("**")]).replacing("bold"))
+			.unwrap();
+		assert_eq!(rules.dispatch(Table::Inline, "**a**"), Some((strong, 2)));
 	}
 
 	#[test]
