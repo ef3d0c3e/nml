@@ -7,6 +7,7 @@ mod tree;
 mod trie;
 
 pub use atom::Atom;
+pub use parser::MAX_NESTING;
 pub use parser::Parsed;
 pub use parser::parse;
 pub use rule::Rule;

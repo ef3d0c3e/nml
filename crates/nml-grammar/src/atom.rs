@@ -189,10 +189,13 @@ pub(crate) fn first_delimiters(chain: &[&[Atom]], anchored: bool) -> Option<Vec<
 			Some(patterns)
 		}
 		Atom::Repeat { atoms, min, .. } => {
-			let mut patterns = first_delimiters(&join(&[atoms], rest, tail), anchored)?;
-			if *min == 0 {
-				patterns.extend(first_delimiters(&join(&[], rest, tail), anchored)?);
+			let repeated = first_delimiters(&join(&[atoms], rest, tail), anchored)?;
+			if *min > 0 {
+				return Some(repeated);
 			}
+			// What follows an optional part comes first: it is the delimiter an error names.
+			let mut patterns = first_delimiters(&join(&[], rest, tail), anchored)?;
+			patterns.extend(repeated);
 			Some(patterns)
 		}
 		_ => None,

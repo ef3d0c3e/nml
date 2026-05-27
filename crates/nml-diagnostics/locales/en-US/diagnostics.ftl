@@ -15,6 +15,7 @@ diagnostic-expected-atom = expected { $atom ->
         [LineEnd] the end of the line
        *[other] { $atom }
     }
+diagnostic-nesting-too-deep = constructs are nested more than { $limit } deep
 
 ## Lua (4xxx)
 

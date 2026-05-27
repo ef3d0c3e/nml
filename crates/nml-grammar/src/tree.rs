@@ -33,6 +33,9 @@ pub struct RuleMatch {
 	/// Captures in the order they matched. A capture inside a `Repeat` appears once per
 	/// repetition.
 	pub captures: Vec<Capture>,
+	/// False if the rule failed: the match then ends where it failed, and an error was
+	/// reported.
+	pub complete: bool,
 }
 
 impl RuleMatch {

@@ -51,6 +51,8 @@ pub enum DiagnosticKind {
 	/// An atom of a rule did not match; `atom` names it (`Word`, `LineEnd`, …).
 	#[diag(id = 1003, message = "diagnostic-expected-atom")]
 	ExpectedAtom { atom: String },
+	#[diag(id = 1004, message = "diagnostic-nesting-too-deep")]
+	NestingTooDeep { limit: usize },
 
 	/// A Lua error, forwarded with Lua's own text.
 	#[diag(id = 4001, message = "diagnostic-lua-error")]

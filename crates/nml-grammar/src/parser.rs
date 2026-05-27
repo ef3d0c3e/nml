@@ -21,11 +21,15 @@ use crate::atom::DelimiterKind;
 use crate::atom::DelimiterPattern;
 use crate::atom::Op;
 
+/// The deepest nesting of content atoms, which bounds the parser's recursion.
+pub const MAX_NESTING: usize = 128;
+
 /// The result of parsing a source.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parsed {
 	pub nodes: Vec<Node>,
-	/// Errors leave a usable tree: unclosed constructs end where their parent ends.
+	/// Errors leave a usable tree: a rule that fails ends where it failed, and an unclosed
+	/// construct ends where its parent ends.
 	pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -35,9 +39,10 @@ pub fn parse(rules: &RuleSet, source: Arc<Source>) -> Parsed {
 		rules,
 		text: source.content(),
 		source: &source,
+		frames: Vec::new(),
 		diagnostics: Vec::new(),
 	};
-	let nodes = parser.blocks(0, parser.text.len());
+	let (nodes, _, _) = parser.blocks(0, parser.text.len());
 	Parsed {
 		nodes,
 		diagnostics: parser.diagnostics,
@@ -48,7 +53,25 @@ struct Parser<'a> {
 	rules: &'a RuleSet,
 	source: &'a Arc<Source>,
 	text: &'a str,
+	/// The expected-delimiter stack: one frame per content atom being parsed.
+	frames: Vec<Frame>,
 	diagnostics: Vec<Diagnostic>,
+}
+
+/// The delimiters that end a content atom.
+struct Frame {
+	delimiters: Vec<DelimiterPattern>,
+	/// `InlineContent`, as opposed to `Content`.
+	inline: bool,
+}
+
+/// Why parsing a sequence of nodes stopped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stop {
+	/// The end of the region.
+	End,
+	/// A delimiter of this frame.
+	Frame(usize),
 }
 
 /// The rule being matched.
@@ -59,10 +82,23 @@ struct Context {
 	end: usize,
 }
 
-/// A rule that did not match. Its error has been reported.
-struct Failed {
-	/// Where parsing resumes.
-	resume: usize,
+/// An atom that did not match.
+struct Error {
+	diagnostic: Diagnostic,
+	/// Where the match stopped.
+	pos: usize,
+	/// The partial value of an unclosed atom, kept in the tree.
+	value: Option<Value>,
+}
+
+impl Error {
+	fn new(diagnostic: Diagnostic, pos: usize) -> Self {
+		Self {
+			diagnostic,
+			pos,
+			value: None,
+		}
+	}
 }
 
 impl Parser<'_> {
@@ -101,6 +137,18 @@ impl Parser<'_> {
 			.all(|c| c == ' ' || c == '\t')
 	}
 
+	/// The end of the paragraph-like region at `pos`: the end of the line before the next
+	/// blank line.
+	fn before_blank_line(&self, mut pos: usize, end: usize) -> usize {
+		loop {
+			let next = self.next_line(pos, end);
+			if next >= end || self.is_blank_line(next, end) {
+				return self.line_end(pos, end);
+			}
+			pos = next;
+		}
+	}
+
 	/// A line break at `pos`: its length, or `Some(0)` at the end of the region.
 	fn line_break(&self, pos: usize, end: usize) -> Option<usize> {
 		let rest = &self.text[pos..end];
@@ -119,56 +167,107 @@ impl Parser<'_> {
 		self.diagnostics.push(diagnostic);
 	}
 
-	/// Parses blocks from `pos`, at the start of a line, to `end`.
-	fn blocks(&mut self, mut pos: usize, end: usize) -> Vec<Node> {
+	/// The innermost frame with a delimiter at `pos`, and the delimiter's length. Only the
+	/// frames of the current phase count: inline frames inside inline content, block frames
+	/// between blocks.
+	fn closing(&self, pos: usize, end: usize, inline: bool) -> Option<(usize, usize)> {
+		for (index, frame) in self.frames.iter().enumerate().rev() {
+			if frame.inline != inline {
+				break;
+			}
+			if let Some(len) = frame
+				.delimiters
+				.iter()
+				.find_map(|d| self.delimiter_at(d, pos, end))
+			{
+				return Some((index, len));
+			}
+		}
+		None
+	}
+
+	/// The length of a delimiter at `pos`.
+	fn delimiter_at(&self, delimiter: &DelimiterPattern, pos: usize, end: usize) -> Option<usize> {
+		if delimiter.anchored && !self.is_line_start(pos) {
+			return None;
+		}
+		match &delimiter.kind {
+			DelimiterKind::Literal(text) => self.text[pos..end]
+				.starts_with(text.as_str())
+				.then_some(text.len()),
+			DelimiterKind::LineEnd => self.line_break(pos, end),
+		}
+	}
+
+	/// The rule to dispatch at `pos`, unless a delimiter closes the current frame there. An
+	/// opener wins only if it is longer than the delimiter: inside `*…*`, `**` opens bold,
+	/// but inside `**…**`, `**` closes.
+	fn next(&self, table: Table, pos: usize, end: usize) -> Result<Option<(RuleId, usize)>, usize> {
+		let closing = self.closing(pos, end, table == Table::Inline);
+		let opener = self.rules.dispatch(table, &self.text[pos..end]);
+		match (closing, opener) {
+			(Some((frame, len)), opener) if opener.is_none_or(|(_, l)| l <= len) => Err(frame),
+			(_, opener) => Ok(opener),
+		}
+	}
+
+	/// Parses blocks from `pos`, at the start of a line, up to `end` or a delimiter of a
+	/// block frame.
+	fn blocks(&mut self, mut pos: usize, end: usize) -> (Vec<Node>, usize, Stop) {
 		let mut nodes = Vec::new();
-		while pos < end {
+		loop {
+			if pos >= end {
+				return (nodes, end, Stop::End);
+			}
 			if self.is_blank_line(pos, end) {
 				pos = self.next_line(pos, end);
 				continue;
 			}
-			if let Some((rule, len)) = self.rules.dispatch(Table::Block, &self.text[pos..end]) {
-				match self.rule(rule, pos, pos..pos + len, end) {
-					Ok(m) => {
-						pos = m.token.end();
-						nodes.push(Node::Match(m));
-						if !self.is_line_start(pos) && pos < end {
-							let kind = DiagnosticKind::ExpectedAtom {
-								atom: "LineEnd".into(),
-							};
-							let location = self.char_token(pos, end);
-							self.error(Diagnostic::new(kind, DiagnosticMessage::new(location)));
-							pos = self.next_line(pos, end);
-						}
+			let rule = match self.next(Table::Block, pos, end) {
+				Ok(rule) => rule,
+				Err(frame) => return (nodes, pos, Stop::Frame(frame)),
+			};
+			if let Some((rule, len)) = rule {
+				let m = self.rule(rule, pos..pos + len, end);
+				let complete = m.complete;
+				pos = m.token.end();
+				nodes.push(Node::Match(m));
+				if !complete {
+					// The rest of the line is skipped.
+					if !self.is_line_start(pos) {
+						pos = self.next_line(pos, end);
 					}
-					Err(failed) => pos = failed.resume.max(self.next_line(pos, end)),
+				} else if !self.is_line_start(pos) && pos < end {
+					let kind = DiagnosticKind::ExpectedAtom {
+						atom: "LineEnd".into(),
+					};
+					let location = self.char_token(pos, end);
+					self.error(Diagnostic::new(kind, DiagnosticMessage::new(location)));
+					pos = self.next_line(pos, end);
 				}
 				continue;
 			}
 
 			let (content_end, next) = self.paragraph_end(pos, end);
-			let children = self.inline(pos, content_end);
+			let (children, _, _) = self.inline(pos, content_end);
 			nodes.push(Node::Paragraph {
 				token: self.token(pos..content_end),
 				children,
 			});
 			pos = next;
 		}
-		nodes
 	}
 
 	/// The end of the paragraph's content and the start of the line after it. A paragraph
-	/// ends before a blank line or a line where a block rule starts.
+	/// ends before a blank line, a line where a block rule starts, or a delimiter of a block
+	/// frame.
 	fn paragraph_end(&self, mut pos: usize, end: usize) -> (usize, usize) {
 		loop {
 			let content_end = self.line_end(pos, end);
 			let next = self.next_line(pos, end);
 			if next >= end
 				|| self.is_blank_line(next, end)
-				|| self
-					.rules
-					.dispatch(Table::Block, &self.text[next..end])
-					.is_some()
+				|| !matches!(self.next(Table::Block, next, end), Ok(None))
 			{
 				return (content_end, next);
 			}
@@ -176,56 +275,56 @@ impl Parser<'_> {
 		}
 	}
 
-	/// Parses inline content from `start` to `end`.
-	fn inline(&mut self, start: usize, end: usize) -> Vec<Node> {
+	/// Parses inline content from `start` up to `end` or a delimiter of an inline frame.
+	fn inline(&mut self, start: usize, end: usize) -> (Vec<Node>, usize, Stop) {
 		let mut nodes = Vec::new();
 		let mut text_start = start;
 		let mut pos = start;
-		while pos < end {
-			let Some((rule, len)) = self.rules.dispatch(Table::Inline, &self.text[pos..end]) else {
+		let stop = loop {
+			let rule = match self.next(Table::Inline, pos, end) {
+				Ok(rule) => rule,
+				Err(frame) => break Stop::Frame(frame),
+			};
+			if pos >= end {
+				break Stop::End;
+			}
+			let Some((rule, len)) = rule else {
 				pos += self.text[pos..].chars().next().unwrap().len_utf8();
 				continue;
 			};
-			match self.rule(rule, pos, pos..pos + len, end) {
-				Ok(m) => {
-					if text_start < pos {
-						nodes.push(Node::Text(self.token(text_start..pos)));
-					}
-					pos = m.token.end();
-					text_start = pos;
-					nodes.push(Node::Match(m));
-				}
-				// The opener is kept as text, so the tree still covers the source.
-				Err(failed) => pos = failed.resume,
+			if text_start < pos {
+				nodes.push(Node::Text(self.token(text_start..pos)));
 			}
+			let m = self.rule(rule, pos..pos + len, end);
+			pos = m.token.end();
+			text_start = pos;
+			nodes.push(Node::Match(m));
+		};
+		if text_start < pos {
+			nodes.push(Node::Text(self.token(text_start..pos)));
 		}
-		if text_start < end {
-			nodes.push(Node::Text(self.token(text_start..end)));
-		}
-		nodes
+		(nodes, pos, stop)
 	}
 
-	/// Matches a rule at `start`, whose opener covers `opener`.
-	fn rule(
-		&mut self,
-		rule: RuleId,
-		start: usize,
-		opener: Range<usize>,
-		end: usize,
-	) -> Result<RuleMatch, Failed> {
-		let resume = opener.end;
+	/// Matches a rule whose opener covers `opener`. A rule that fails is reported, and its
+	/// partial match ends where it failed.
+	fn rule(&mut self, rule: RuleId, opener: Range<usize>, end: usize) -> RuleMatch {
+		let start = opener.start;
 		let context = Context { rule, opener, end };
 		let mut captures = Vec::new();
-		match self.seq(&context, self.rules.ops(rule), start, &mut captures) {
-			Ok(pos) => Ok(RuleMatch {
-				rule,
-				token: self.token(start..pos),
-				captures,
-			}),
-			Err(diagnostic) => {
-				self.error(diagnostic);
-				Err(Failed { resume })
+		let (pos, complete) = match self.seq(&context, self.rules.ops(rule), start, &mut captures) {
+			Ok(pos) => (pos, true),
+			Err(error) => {
+				self.error(error.diagnostic);
+				// Resume after the opener at least, so that parsing always advances.
+				(error.pos.max(context.opener.end), false)
 			}
+		};
+		RuleMatch {
+			rule,
+			token: self.token(start..pos),
+			captures,
+			complete,
 		}
 	}
 
@@ -235,7 +334,7 @@ impl Parser<'_> {
 		ops: &[Op],
 		mut pos: usize,
 		captures: &mut Vec<Capture>,
-	) -> Result<usize, Diagnostic> {
+	) -> Result<usize, Error> {
 		for op in ops {
 			pos = self.op(context, op, pos, captures)?.0;
 		}
@@ -249,7 +348,7 @@ impl Parser<'_> {
 		op: &Op,
 		pos: usize,
 		captures: &mut Vec<Capture>,
-	) -> Result<(usize, Value), Diagnostic> {
+	) -> Result<(usize, Value), Error> {
 		let end = context.end;
 		let rest = &self.text[pos..end];
 		let matched = |len: usize| Ok((pos + len, Value::Span));
@@ -272,7 +371,7 @@ impl Parser<'_> {
 			Op::Repeat { ops, min, max } => {
 				let mut count = 0;
 				let mut pos = pos;
-				while max.is_none_or(|max| count < max) && self.starts(&ops[0], pos, end) {
+				while max.is_none_or(|max| count < max) && self.starts_seq(ops, pos, end) {
 					pos = self.seq(context, ops, pos, captures)?;
 					count += 1;
 				}
@@ -291,25 +390,49 @@ impl Parser<'_> {
 			},
 			Op::RestOfLine => Ok((self.line_end(pos, end), Value::Span)),
 			Op::Text(delimiters) => self.text_until(context, delimiters, pos),
-			Op::InlineContent(_) | Op::Content(_) => todo!("content atoms"),
+			Op::InlineContent(delimiters) => {
+				let limit = self.before_blank_line(pos, end);
+				self.content(context, delimiters, true, pos, limit)
+			}
+			Op::Content(delimiters) => self.content(context, delimiters, false, pos, end),
 			Op::Capture { name, op } => {
 				let index = captures.len();
-				let (after, value) = self.op(context, op, pos, captures)?;
-				captures.insert(
-					index,
-					Capture {
-						name: name.clone(),
-						token: self.token(pos..after),
-						value,
-					},
-				);
-				Ok((after, Value::Span))
+				let source = self.source;
+				let capture = |after: usize, value| Capture {
+					name: name.clone(),
+					token: Token::new(source.clone(), pos..after),
+					value,
+				};
+				match self.op(context, op, pos, captures) {
+					Ok((after, value)) => {
+						captures.insert(index, capture(after, value));
+						Ok((after, Value::Span))
+					}
+					Err(mut error) => {
+						if let Some(value) = error.value.take() {
+							captures.insert(index, capture(error.pos, value));
+						}
+						Err(error)
+					}
+				}
 			}
 			Op::Literal(_) | Op::LineStart => Err(self.expected(op, pos, end)),
 		}
 	}
 
-	/// Whether `op` can start at `pos`; for the first atom of an `Or` or `Repeat` branch.
+	/// Whether a branch of an `Or` or `Repeat` can start at `pos`. A leading `LineStart` is
+	/// checked together with the atom after it.
+	fn starts_seq(&self, ops: &[Op], pos: usize, end: usize) -> bool {
+		match ops {
+			[Op::LineStart, rest @ ..] if !rest.is_empty() => {
+				self.is_line_start(pos) && self.starts_seq(rest, pos, end)
+			}
+			[first, ..] => self.starts(first, pos, end),
+			[] => true,
+		}
+	}
+
+	/// Whether `op` can start at `pos`.
 	fn starts(&self, op: &Op, pos: usize, end: usize) -> bool {
 		let rest = &self.text[pos..end];
 		match op {
@@ -321,39 +444,79 @@ impl Parser<'_> {
 			Op::Capture { op, .. } => self.starts(op, pos, end),
 			Op::Or(alternatives) => alternatives
 				.iter()
-				.any(|ops| self.starts(&ops[0], pos, end)),
-			Op::Repeat { ops, .. } => self.starts(&ops[0], pos, end),
+				.any(|ops| self.starts_seq(ops, pos, end)),
+			Op::Repeat { ops, .. } => self.starts_seq(ops, pos, end),
 			Op::Text(_) | Op::RestOfLine | Op::InlineContent(_) | Op::Content(_) => true,
 		}
 	}
 
-	/// Verbatim text up to one of `delimiters`.
+	/// Verbatim text up to one of `delimiters`. Outer frames do not end it.
 	fn text_until(
 		&mut self,
 		context: &Context,
 		delimiters: &[DelimiterPattern],
 		start: usize,
-	) -> Result<(usize, Value), Diagnostic> {
+	) -> Result<(usize, Value), Error> {
 		let end = context.end;
 		let mut pos = start;
 		loop {
-			if delimiters.iter().any(|d| self.delimiter_at(d, pos, end)) {
+			if delimiters
+				.iter()
+				.any(|d| self.delimiter_at(d, pos, end).is_some())
+			{
 				return Ok((pos, Value::Span));
 			}
 			match self.text[pos..end].chars().next() {
 				Some(c) => pos += c.len_utf8(),
-				None => return Err(self.unclosed(context, delimiters, pos)),
+				None => {
+					return Err(Error {
+						diagnostic: self.unclosed(context, delimiters, pos, end),
+						pos,
+						value: Some(Value::Span),
+					});
+				}
 			}
 		}
 	}
 
-	fn delimiter_at(&self, delimiter: &DelimiterPattern, pos: usize, end: usize) -> bool {
-		if delimiter.anchored && !self.is_line_start(pos) {
-			return false;
+	/// Parsed content up to one of `delimiters`, with a frame for them on the stack. If an
+	/// outer frame's delimiter or the end of the region comes first, the construct is
+	/// unclosed: it ends there, and the outer frame continues.
+	fn content(
+		&mut self,
+		context: &Context,
+		delimiters: &[DelimiterPattern],
+		inline: bool,
+		start: usize,
+		end: usize,
+	) -> Result<(usize, Value), Error> {
+		if self.frames.len() >= MAX_NESTING {
+			let kind = DiagnosticKind::NestingTooDeep { limit: MAX_NESTING };
+			let location = self.token(context.opener.clone());
+			return Err(Error::new(
+				Diagnostic::new(kind, DiagnosticMessage::new(location)),
+				start,
+			));
 		}
-		match &delimiter.kind {
-			DelimiterKind::Literal(text) => self.text[pos..end].starts_with(text.as_str()),
-			DelimiterKind::LineEnd => self.line_break(pos, end).is_some(),
+		self.frames.push(Frame {
+			delimiters: delimiters.to_vec(),
+			inline,
+		});
+		let own = self.frames.len() - 1;
+		let (nodes, pos, stop) = if inline {
+			self.inline(start, end)
+		} else {
+			self.blocks(start, end)
+		};
+		self.frames.pop();
+		if stop == Stop::Frame(own) {
+			Ok((pos, Value::Nodes(nodes)))
+		} else {
+			Err(Error {
+				diagnostic: self.unclosed(context, delimiters, pos, end),
+				pos,
+				value: Some(Value::Nodes(nodes)),
+			})
 		}
 	}
 
@@ -364,6 +527,7 @@ impl Parser<'_> {
 		context: &Context,
 		delimiters: &[DelimiterPattern],
 		pos: usize,
+		end: usize,
 	) -> Diagnostic {
 		let rule = &self.rules.get(context.rule).unwrap().name;
 		let token = delimiters
@@ -386,7 +550,7 @@ impl Parser<'_> {
 			DiagnosticMessage::fluent(opener.clone(), "opened").arg("style", rule.as_str()),
 		)
 		.with(DiagnosticMessage::fluent(
-			self.char_token(pos, context.end),
+			self.char_token(pos, end),
 			"ended",
 		))
 		.with_fix(Fix {
@@ -401,7 +565,7 @@ impl Parser<'_> {
 		})
 	}
 
-	fn expected(&self, op: &Op, pos: usize, end: usize) -> Diagnostic {
+	fn expected(&self, op: &Op, pos: usize, end: usize) -> Error {
 		let kind = match op {
 			Op::Literal(text) => DiagnosticKind::ExpectedToken {
 				token: text.clone(),
@@ -413,7 +577,8 @@ impl Parser<'_> {
 				atom: op.describe().into(),
 			},
 		};
-		Diagnostic::new(kind, DiagnosticMessage::new(self.char_token(pos, end)))
+		let diagnostic = Diagnostic::new(kind, DiagnosticMessage::new(self.char_token(pos, end)));
+		Error::new(diagnostic, pos)
 	}
 }
 
@@ -495,11 +660,9 @@ mod tests {
 							format!("{}={value}", capture.name)
 						})
 						.collect();
-					format!(
-						"{}({})",
-						rules.get(m.rule).unwrap().name,
-						captures.join(" ")
-					)
+					let mark = if m.complete { "" } else { "!" };
+					let name = &rules.get(m.rule).unwrap().name;
+					format!("{name}{mark}({})", captures.join(" "))
 				}
 			});
 		}
@@ -570,6 +733,63 @@ mod tests {
 					lit("}"),
 				],
 			),
+			rule(
+				"bold",
+				vec![
+					lit("**"),
+					Atom::capture("body", Atom::InlineContent),
+					lit("**"),
+				],
+			),
+			rule(
+				"italic",
+				vec![
+					lit("*"),
+					Atom::capture("body", Atom::InlineContent),
+					lit("*"),
+				],
+			),
+			rule(
+				"url",
+				vec![
+					lit("["),
+					Atom::capture("text", Atom::InlineContent),
+					lit("]("),
+					Atom::capture("url", Atom::Text),
+					lit(")"),
+				],
+			),
+			rule(
+				"title",
+				vec![
+					Atom::LineStart,
+					lit("= "),
+					Atom::capture("body", Atom::InlineContent),
+					Atom::LineEnd,
+				],
+			),
+			rule(
+				"layout",
+				vec![
+					Atom::LineStart,
+					lit(":layout"),
+					Atom::LineEnd,
+					Atom::capture("body", Atom::Content),
+					Atom::repeat(
+						vec![
+							Atom::LineStart,
+							lit(":next"),
+							Atom::LineEnd,
+							Atom::capture("body", Atom::Content),
+						],
+						0,
+						None,
+					),
+					Atom::LineStart,
+					lit(":end"),
+					Atom::LineEnd,
+				],
+			),
 		] {
 			rules.add(rule).unwrap();
 		}
@@ -623,14 +843,17 @@ mod tests {
 	#[test]
 	fn failures() {
 		// Too many `#`: the `Repeat` stops at 6, then `" "` is missing.
-		let diagnostics = check("####### x\nnext", r#"P["next"]"#);
+		let diagnostics = check(
+			"####### x\nnext",
+			r######"heading!(deeper="#####") P["next"]"######,
+		);
 		assert_diagnostics!(diagnostics, [1001 @ 6..7]);
 
-		let diagnostics = check(":set 1 = 2", "");
+		let diagnostics = check(":set 1 = 2", "set!()");
 		assert_diagnostics!(diagnostics, [1003 @ 5..6]);
 
-		// The opener is kept as text and parsing resumes after it.
-		let diagnostics = check("a {} `b`", r#"P["a {} " code(code="b")]"#);
+		// The partial match ends where the rule failed, and parsing resumes there.
+		let diagnostics = check("a {} `b`", r#"P["a " list!() "} " code(code="b")]"#);
 		assert_diagnostics!(diagnostics, [1003 @ 3..4]);
 	}
 
@@ -638,7 +861,10 @@ mod tests {
 	fn unclosed_text() {
 		let rules = rules();
 		let parsed = parse(&rules, source("a `b\n\nc"));
-		assert_eq!(show(&rules, &parsed.nodes), r#"P["a `b"] P["c"]"#);
+		assert_eq!(
+			show(&rules, &parsed.nodes),
+			r#"P["a " code!(code="b")] P["c"]"#
+		);
 		assert_diagnostics!(parsed.diagnostics, [1001 @ 2..3]);
 		let diagnostic = &parsed.diagnostics[0];
 		assert_eq!(diagnostic.messages()[1].location.range(), 4..4);
@@ -666,5 +892,98 @@ mod tests {
 		assert_eq!(word("a-b_c d"), 5);
 		assert_eq!(word("_x"), 2);
 		assert_eq!(word("1x"), 0);
+	}
+
+	#[test]
+	fn nesting() {
+		let diagnostics = check(
+			"*a **b** c* **a *b* c** **`a**b`**",
+			r#"P[italic(body=["a " bold(body=["b"]) " c"]) " " bold(body=["a " italic(body=["b"]) " c"]) " " bold(body=[code(code="a**b")])]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
+	fn unclosed_inside_a_frame() {
+		// `](` belongs to the link: the bold is unclosed and ends there.
+		let rules = rules();
+		let parsed = parse(&rules, source("[a **b](url) c"));
+		assert_eq!(
+			show(&rules, &parsed.nodes),
+			r#"P[url(text=["a " bold!(body=["b"])] url="url") " c"]"#
+		);
+		assert_diagnostics!(parsed.diagnostics, [1001 @ 3..5]);
+		assert_eq!(parsed.diagnostics[0].messages()[1].location.range(), 6..7);
+		assert_eq!(
+			parsed.diagnostics[0].fixes[0].edits[0].replacement,
+			"\\*\\*"
+		);
+	}
+
+	#[test]
+	fn unclosed_at_paragraph_end() {
+		let diagnostics = check(
+			"**a *b\n\nnext",
+			r#"P[bold!(body=["a " italic!(body=["b"])])] P["next"]"#,
+		);
+		assert_diagnostics!(diagnostics, [1001 @ 4..5, 1001 @ 0..2]);
+
+		// The title's line end belongs to an outer frame: the bold ends there.
+		let diagnostics = check(
+			"= a **b\nc",
+			r#"title(body=["a " bold!(body=["b"])]) P["c"]"#,
+		);
+		assert_diagnostics!(diagnostics, [1001 @ 4..6]);
+		let diagnostics = check(
+			"= a *b*\nc",
+			r#"title(body=["a " italic(body=["b"])]) P["c"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
+	fn content() {
+		let diagnostics = check(
+			":layout\none\n\ntwo\n:next\n# three\n:end\nafter",
+			r#"layout(body=[P["one"] P["two"]] body=[heading(deeper="" title="three")]) P["after"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+
+		let diagnostics = check(
+			":layout\na\n:layout\nb\n:next\nc\n:end\n:end\n",
+			r#"layout(body=[P["a"] layout(body=[P["b"]] body=[P["c"]])])"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
+	fn unclosed_content() {
+		let rules = rules();
+		let parsed = parse(&rules, source(":layout\na\n:layout\nb\n:end\n"));
+		assert_eq!(
+			show(&rules, &parsed.nodes),
+			r#"layout!(body=[P["a"] layout(body=[P["b"]])])"#
+		);
+		assert_diagnostics!(parsed.diagnostics, [1001 @ 0..7]);
+		assert_eq!(
+			parsed.diagnostics[0].kind,
+			DiagnosticKind::ExpectedToken {
+				token: ":end".into()
+			}
+		);
+	}
+
+	#[test]
+	fn nesting_is_bounded() {
+		let rules = rules();
+		let text = "[".repeat(10_000);
+		let parsed = parse(&rules, source(&text));
+		// One error per opener: past the limit, each `[` fails on its own.
+		assert_eq!(parsed.diagnostics.len(), text.len());
+		assert_eq!(parsed.diagnostics[0].kind.id(), 1004);
+		assert_eq!(
+			parsed.diagnostics[0].primary().location.range(),
+			MAX_NESTING..MAX_NESTING + 1
+		);
 	}
 }
