@@ -48,6 +48,9 @@ pub enum DiagnosticKind {
 	ExpectedToken { token: String },
 	#[diag(id = 1002, message = "diagnostic-unexpected-token")]
 	UnexpectedToken { token: String },
+	/// An atom of a rule did not match; `atom` names it (`Word`, `LineEnd`, …).
+	#[diag(id = 1003, message = "diagnostic-expected-atom")]
+	ExpectedAtom { atom: String },
 
 	/// A Lua error, forwarded with Lua's own text.
 	#[diag(id = 4001, message = "diagnostic-lua-error")]

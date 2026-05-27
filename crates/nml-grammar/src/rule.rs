@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::Atom;
+use crate::atom::DelimiterPattern;
+use crate::atom::Op;
 use crate::atom::first_delimiters;
 use crate::trie::Trie;
 
@@ -136,10 +138,16 @@ impl std::error::Error for RuleError {}
 #[derive(Debug, Default, Clone)]
 pub struct RuleSet {
 	/// Indexed by [`RuleId`]; `None` once replaced.
-	rules: Vec<Option<Rule>>,
+	rules: Vec<Option<Entry>>,
 	by_name: HashMap<String, RuleId>,
 	block: Trie,
 	inline: Trie,
+}
+
+#[derive(Debug, Clone)]
+struct Entry {
+	rule: Rule,
+	ops: Vec<Op>,
 }
 
 impl RuleSet {
@@ -183,15 +191,15 @@ impl RuleSet {
 				}));
 			}
 		}
-		validate(&rule.atoms, &[Vec::new()]).map_err(error)?;
+		let ops = compile(&rule.atoms, &[Vec::new()]).map_err(error)?;
 
 		if let Some(replaced) = replaced {
 			let old = self.rules[replaced.0].take().unwrap();
-			self.by_name.remove(&old.name);
+			self.by_name.remove(&old.rule.name);
 		}
 		let id = RuleId(self.rules.len());
 		self.by_name.insert(rule.name.clone(), id);
-		self.rules.push(Some(rule));
+		self.rules.push(Some(Entry { rule, ops }));
 		self.build_tries();
 		Ok(id)
 	}
@@ -222,7 +230,11 @@ impl RuleSet {
 	}
 
 	pub fn get(&self, id: RuleId) -> Option<&Rule> {
-		self.rules.get(id.0)?.as_ref()
+		Some(&self.rules.get(id.0)?.as_ref()?.rule)
+	}
+
+	pub(crate) fn ops(&self, id: RuleId) -> &[Op] {
+		&self.rules[id.0].as_ref().unwrap().ops
 	}
 
 	pub fn id(&self, name: &str) -> Option<RuleId> {
@@ -234,13 +246,14 @@ impl RuleSet {
 		self.rules
 			.iter()
 			.enumerate()
-			.filter_map(|(index, rule)| Some((RuleId(index), rule.as_ref()?)))
+			.filter_map(|(index, entry)| Some((RuleId(index), &entry.as_ref()?.rule)))
 	}
 }
 
-/// Checks the atoms of a sequence. `follows` lists what can come after the sequence: one
-/// chain of atom sequences per possibility.
-fn validate(atoms: &[Atom], follows: &[Vec<&[Atom]>]) -> Result<(), RuleErrorKind> {
+/// Checks the atoms of a sequence and compiles them. `follows` lists what can come after the
+/// sequence: one chain of atom sequences per possibility.
+fn compile(atoms: &[Atom], follows: &[Vec<&[Atom]>]) -> Result<Vec<Op>, RuleErrorKind> {
+	let mut ops = Vec::with_capacity(atoms.len());
 	for (index, atom) in atoms.iter().enumerate() {
 		let rest = &atoms[index + 1..];
 		let chains: Vec<Vec<&[Atom]>> = follows
@@ -251,24 +264,50 @@ fn validate(atoms: &[Atom], follows: &[Vec<&[Atom]>]) -> Result<(), RuleErrorKin
 				chain
 			})
 			.collect();
-		match atom {
-			Atom::Text | Atom::InlineContent | Atom::Content => {
-				for chain in &chains {
-					let delimiters =
-						first_delimiters(chain, false).ok_or(RuleErrorKind::NotTerminated {
-							atom: atom.describe(),
-						})?;
-					if *atom == Atom::Content && delimiters.iter().any(|d| !d.anchored) {
-						return Err(RuleErrorKind::ContentNotLineAnchored);
+		let delimiters = || -> Result<Vec<DelimiterPattern>, RuleErrorKind> {
+			let mut delimiters = Vec::new();
+			for chain in &chains {
+				for delimiter in
+					first_delimiters(chain, false).ok_or(RuleErrorKind::NotTerminated {
+						atom: atom.describe(),
+					})? {
+					if !delimiters.contains(&delimiter) {
+						delimiters.push(delimiter);
 					}
 				}
 			}
-			Atom::Capture { atom, .. } => validate(std::slice::from_ref(atom), &chains)?,
+			Ok(delimiters)
+		};
+		ops.push(match atom {
+			Atom::Literal(text) => Op::Literal(text.clone()),
+			Atom::LineStart => Op::LineStart,
+			Atom::LineEnd => Op::LineEnd,
+			Atom::Number { signed, decimal } => Op::Number {
+				signed: *signed,
+				decimal: *decimal,
+			},
+			Atom::Word => Op::Word,
+			Atom::RestOfLine => Op::RestOfLine,
+			Atom::Text => Op::Text(delimiters()?),
+			Atom::InlineContent => Op::InlineContent(delimiters()?),
+			Atom::Content => {
+				let delimiters = delimiters()?;
+				if delimiters.iter().any(|d| !d.anchored) {
+					return Err(RuleErrorKind::ContentNotLineAnchored);
+				}
+				Op::Content(delimiters)
+			}
+			Atom::Capture { name, atom } => Op::Capture {
+				name: name.as_str().into(),
+				op: Box::new(compile(std::slice::from_ref(atom), &chains)?.pop().unwrap()),
+			},
 			Atom::Or(alternatives) => {
+				let mut compiled = Vec::new();
 				for alternative in alternatives {
 					check_branch(alternative)?;
-					validate(alternative, &chains)?;
+					compiled.push(compile(alternative, &chains)?);
 				}
+				Op::Or(compiled)
 			}
 			Atom::Repeat { atoms, min, max } => {
 				if max.is_some_and(|max| max == 0 || max < *min) {
@@ -277,12 +316,15 @@ fn validate(atoms: &[Atom], follows: &[Vec<&[Atom]>]) -> Result<(), RuleErrorKin
 				check_branch(atoms)?;
 				let mut inner = chains.clone();
 				inner.push(vec![atoms]);
-				validate(atoms, &inner)?;
+				Op::Repeat {
+					ops: compile(atoms, &inner)?,
+					min: *min,
+					max: *max,
+				}
 			}
-			_ => {}
-		}
+		});
 	}
-	Ok(())
+	Ok(ops)
 }
 
 fn check_branch(atoms: &[Atom]) -> Result<(), RuleErrorKind> {

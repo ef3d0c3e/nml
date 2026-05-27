@@ -8,6 +8,13 @@ diagnostic-expected-token = expected `{ $token }`
     .ended = ended here without `{ $token }`
     .fix-escape = Escape the opening delimiter
 diagnostic-unexpected-token = unexpected `{ $token }`
+diagnostic-expected-atom = expected { $atom ->
+        [Word] a word
+        [Number] a number
+        [LineStart] the start of a line
+        [LineEnd] the end of the line
+       *[other] { $atom }
+    }
 
 ## Lua (4xxx)
 

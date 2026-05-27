@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 /// One element of a rule.
 ///
 /// A rule is a sequence of atoms, matched in order without backtracking: `Or` and `Repeat`
@@ -94,6 +96,52 @@ impl Atom {
 				*min > 0 && atoms.first().is_some_and(Atom::decidable)
 			}
 			Atom::Text | Atom::RestOfLine | Atom::InlineContent | Atom::Content => false,
+		}
+	}
+}
+
+/// A compiled atom: open-ended atoms know the delimiters that can end them.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Op {
+	Literal(String),
+	LineStart,
+	LineEnd,
+	Or(Vec<Vec<Op>>),
+	Repeat {
+		ops: Vec<Op>,
+		min: usize,
+		max: Option<usize>,
+	},
+	Number {
+		signed: bool,
+		decimal: bool,
+	},
+	Word,
+	Text(Vec<DelimiterPattern>),
+	RestOfLine,
+	InlineContent(Vec<DelimiterPattern>),
+	Content(Vec<DelimiterPattern>),
+	Capture {
+		name: Arc<str>,
+		op: Box<Op>,
+	},
+}
+
+impl Op {
+	pub(crate) fn describe(&self) -> &'static str {
+		match self {
+			Op::Literal(_) => "Literal",
+			Op::LineStart => "LineStart",
+			Op::LineEnd => "LineEnd",
+			Op::Or(_) => "Or",
+			Op::Repeat { .. } => "Repeat",
+			Op::Number { .. } => "Number",
+			Op::Word => "Word",
+			Op::Text(_) => "Text",
+			Op::RestOfLine => "RestOfLine",
+			Op::InlineContent(_) => "InlineContent",
+			Op::Content(_) => "Content",
+			Op::Capture { op, .. } => op.describe(),
 		}
 	}
 }
