@@ -56,6 +56,8 @@ impl RuleMatch {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Capture {
 	pub name: Arc<str>,
+	/// The semantic token class declared with the capture.
+	pub class: Option<Arc<str>>,
 	pub token: Token,
 	pub value: Value,
 }

@@ -58,9 +58,63 @@ struct Parser<'a> {
 	diagnostics: Vec<Diagnostic>,
 }
 
+/// A delimiter, with captures resolved.
+#[derive(Debug, Clone)]
+struct Delimiter {
+	anchored: bool,
+	kind: Close,
+}
+
+#[derive(Debug, Clone)]
+enum Close {
+	Literal(String),
+	LineEnd,
+	/// A run of exactly this many times the character.
+	Run(char, usize),
+}
+
+impl Close {
+	fn text(&self) -> Option<String> {
+		match self {
+			Close::Literal(text) => Some(text.clone()),
+			Close::LineEnd => None,
+			Close::Run(c, n) => Some(c.to_string().repeat(*n)),
+		}
+	}
+}
+
+/// Resolves delimiter patterns against the captures of the current match. A `Same` whose
+/// capture did not match (it was in a branch not taken) is left out.
+fn resolve(patterns: &[DelimiterPattern], captures: &[Capture]) -> Vec<Delimiter> {
+	patterns
+		.iter()
+		.filter_map(|pattern| {
+			let kind = match &pattern.kind {
+				DelimiterKind::Literal(text) => Close::Literal(text.clone()),
+				DelimiterKind::LineEnd => Close::LineEnd,
+				DelimiterKind::Same { name, run } => same(captures, name, *run)?,
+			};
+			Some(Delimiter {
+				anchored: pattern.anchored,
+				kind,
+			})
+		})
+		.collect()
+}
+
+/// What `Same(name)` must match.
+fn same(captures: &[Capture], name: &str, run: Option<char>) -> Option<Close> {
+	let capture = captures.iter().rev().find(|c| &*c.name == name)?;
+	let text = capture.token.content();
+	Some(match run {
+		Some(c) => Close::Run(c, text.chars().count()),
+		None => Close::Literal(text.to_string()),
+	})
+}
+
 /// The delimiters that end a content atom.
 struct Frame {
-	delimiters: Vec<DelimiterPattern>,
+	delimiters: Vec<Delimiter>,
 	/// `InlineContent`, as opposed to `Content`.
 	inline: bool,
 }
@@ -187,16 +241,31 @@ impl Parser<'_> {
 	}
 
 	/// The length of a delimiter at `pos`.
-	fn delimiter_at(&self, delimiter: &DelimiterPattern, pos: usize, end: usize) -> Option<usize> {
+	fn delimiter_at(&self, delimiter: &Delimiter, pos: usize, end: usize) -> Option<usize> {
 		if delimiter.anchored && !self.is_line_start(pos) {
 			return None;
 		}
-		match &delimiter.kind {
-			DelimiterKind::Literal(text) => self.text[pos..end]
+		self.close_at(&delimiter.kind, pos, end)
+	}
+
+	fn close_at(&self, close: &Close, pos: usize, end: usize) -> Option<usize> {
+		match close {
+			Close::Literal(text) => self.text[pos..end]
 				.starts_with(text.as_str())
 				.then_some(text.len()),
-			DelimiterKind::LineEnd => self.line_break(pos, end),
+			Close::LineEnd => self.line_break(pos, end),
+			Close::Run(c, n) => {
+				let preceded = self.text[..pos].ends_with(*c);
+				let (count, len) = self.run(*c, pos, end);
+				(!preceded && count == *n).then_some(len)
+			}
 		}
+	}
+
+	/// The run of `c` at `pos`: its length in characters and in bytes.
+	fn run(&self, c: char, pos: usize, end: usize) -> (usize, usize) {
+		let count = self.text[pos..end].chars().take_while(|x| *x == c).count();
+		(count, count * c.len_utf8())
 	}
 
 	/// The rule to dispatch at `pos`, unless a delimiter closes the current frame there. An
@@ -362,7 +431,7 @@ impl Parser<'_> {
 			Op::Or(alternatives) => {
 				match alternatives
 					.iter()
-					.find(|ops| self.starts(&ops[0], pos, end))
+					.find(|ops| self.starts_seq(ops, pos, end, captures))
 				{
 					Some(ops) => Ok((self.seq(context, ops, pos, captures)?, Value::Span)),
 					None => Err(self.expected(op, pos, end)),
@@ -371,7 +440,8 @@ impl Parser<'_> {
 			Op::Repeat { ops, min, max } => {
 				let mut count = 0;
 				let mut pos = pos;
-				while max.is_none_or(|max| count < max) && self.starts_seq(ops, pos, end) {
+				while max.is_none_or(|max| count < max) && self.starts_seq(ops, pos, end, captures)
+				{
 					pos = self.seq(context, ops, pos, captures)?;
 					count += 1;
 				}
@@ -389,17 +459,44 @@ impl Parser<'_> {
 				len => matched(len),
 			},
 			Op::RestOfLine => Ok((self.line_end(pos, end), Value::Span)),
-			Op::Text(delimiters) => self.text_until(context, delimiters, pos),
+			Op::Text(delimiters) => self.text_until(context, &resolve(delimiters, captures), pos),
 			Op::InlineContent(delimiters) => {
 				let limit = self.before_blank_line(pos, end);
+				let delimiters = resolve(delimiters, captures);
 				self.content(context, delimiters, true, pos, limit)
 			}
-			Op::Content(delimiters) => self.content(context, delimiters, false, pos, end),
-			Op::Capture { name, op } => {
+			Op::Content(delimiters) => {
+				let delimiters = resolve(delimiters, captures);
+				self.content(context, delimiters, false, pos, end)
+			}
+			Op::Run { char, min } => match self.run(*char, pos, end) {
+				(count, len) if count >= *min => matched(len),
+				_ => Err(self.expected(op, pos, end)),
+			},
+			Op::Same { name, run } => {
+				let close = same(captures, name, *run);
+				match close
+					.as_ref()
+					.and_then(|close| self.close_at(close, pos, end))
+				{
+					Some(len) => matched(len),
+					None => {
+						let token = close.and_then(|close| close.text()).unwrap_or_default();
+						let kind = DiagnosticKind::ExpectedToken { token };
+						let location = self.char_token(pos, end);
+						Err(Error::new(
+							Diagnostic::new(kind, DiagnosticMessage::new(location)),
+							pos,
+						))
+					}
+				}
+			}
+			Op::Capture { name, class, op } => {
 				let index = captures.len();
 				let source = self.source;
 				let capture = |after: usize, value| Capture {
 					name: name.clone(),
+					class: class.clone(),
 					token: Token::new(source.clone(), pos..after),
 					value,
 				};
@@ -422,18 +519,18 @@ impl Parser<'_> {
 
 	/// Whether a branch of an `Or` or `Repeat` can start at `pos`. A leading `LineStart` is
 	/// checked together with the atom after it.
-	fn starts_seq(&self, ops: &[Op], pos: usize, end: usize) -> bool {
+	fn starts_seq(&self, ops: &[Op], pos: usize, end: usize, captures: &[Capture]) -> bool {
 		match ops {
 			[Op::LineStart, rest @ ..] if !rest.is_empty() => {
-				self.is_line_start(pos) && self.starts_seq(rest, pos, end)
+				self.is_line_start(pos) && self.starts_seq(rest, pos, end, captures)
 			}
-			[first, ..] => self.starts(first, pos, end),
+			[first, ..] => self.starts(first, pos, end, captures),
 			[] => true,
 		}
 	}
 
 	/// Whether `op` can start at `pos`.
-	fn starts(&self, op: &Op, pos: usize, end: usize) -> bool {
+	fn starts(&self, op: &Op, pos: usize, end: usize, captures: &[Capture]) -> bool {
 		let rest = &self.text[pos..end];
 		match op {
 			Op::Literal(text) => rest.starts_with(text.as_str()),
@@ -441,11 +538,14 @@ impl Parser<'_> {
 			Op::LineEnd => self.line_break(pos, end).is_some(),
 			Op::Word => word(rest) > 0,
 			Op::Number { signed, decimal } => number(rest, *signed, *decimal).is_some(),
-			Op::Capture { op, .. } => self.starts(op, pos, end),
+			Op::Capture { op, .. } => self.starts(op, pos, end, captures),
 			Op::Or(alternatives) => alternatives
 				.iter()
-				.any(|ops| self.starts_seq(ops, pos, end)),
-			Op::Repeat { ops, .. } => self.starts_seq(ops, pos, end),
+				.any(|ops| self.starts_seq(ops, pos, end, captures)),
+			Op::Repeat { ops, .. } => self.starts_seq(ops, pos, end, captures),
+			Op::Run { char, min } => self.run(*char, pos, end).0 >= *min,
+			Op::Same { name, run } => same(captures, name, *run)
+				.is_some_and(|close| self.close_at(&close, pos, end).is_some()),
 			Op::Text(_) | Op::RestOfLine | Op::InlineContent(_) | Op::Content(_) => true,
 		}
 	}
@@ -454,7 +554,7 @@ impl Parser<'_> {
 	fn text_until(
 		&mut self,
 		context: &Context,
-		delimiters: &[DelimiterPattern],
+		delimiters: &[Delimiter],
 		start: usize,
 	) -> Result<(usize, Value), Error> {
 		let end = context.end;
@@ -485,7 +585,7 @@ impl Parser<'_> {
 	fn content(
 		&mut self,
 		context: &Context,
-		delimiters: &[DelimiterPattern],
+		delimiters: Vec<Delimiter>,
 		inline: bool,
 		start: usize,
 		end: usize,
@@ -498,22 +598,19 @@ impl Parser<'_> {
 				start,
 			));
 		}
-		self.frames.push(Frame {
-			delimiters: delimiters.to_vec(),
-			inline,
-		});
+		self.frames.push(Frame { delimiters, inline });
 		let own = self.frames.len() - 1;
 		let (nodes, pos, stop) = if inline {
 			self.inline(start, end)
 		} else {
 			self.blocks(start, end)
 		};
-		self.frames.pop();
+		let delimiters = self.frames.pop().unwrap().delimiters;
 		if stop == Stop::Frame(own) {
 			Ok((pos, Value::Nodes(nodes)))
 		} else {
 			Err(Error {
-				diagnostic: self.unclosed(context, delimiters, pos, end),
+				diagnostic: self.unclosed(context, &delimiters, pos, end),
 				pos,
 				value: Some(Value::Nodes(nodes)),
 			})
@@ -525,17 +622,14 @@ impl Parser<'_> {
 	fn unclosed(
 		&self,
 		context: &Context,
-		delimiters: &[DelimiterPattern],
+		delimiters: &[Delimiter],
 		pos: usize,
 		end: usize,
 	) -> Diagnostic {
 		let rule = &self.rules.get(context.rule).unwrap().name;
 		let token = delimiters
 			.iter()
-			.find_map(|d| match &d.kind {
-				DelimiterKind::Literal(text) => Some(text.clone()),
-				DelimiterKind::LineEnd => None,
-			})
+			.find_map(|d| d.kind.text())
 			.unwrap_or_default();
 		let opener = self.token(context.opener.clone());
 		let escaped = opener.content().chars().fold(String::new(), |mut s, c| {
@@ -707,7 +801,24 @@ mod tests {
 			),
 			rule(
 				"code",
-				vec![lit("`"), Atom::capture("code", Atom::Text), lit("`")],
+				vec![
+					Atom::capture("fence", Atom::run('`', 1)).with_class("operator"),
+					Atom::capture("code", Atom::Text).with_class("string"),
+					Atom::same("fence"),
+				],
+			),
+			rule(
+				"fence",
+				vec![
+					Atom::LineStart,
+					Atom::capture("fence", Atom::run('`', 3)),
+					Atom::capture("info", Atom::RestOfLine),
+					Atom::LineEnd,
+					Atom::capture("body", Atom::Text),
+					Atom::LineStart,
+					Atom::same("fence"),
+					Atom::LineEnd,
+				],
 			),
 			rule(
 				"link",
@@ -835,7 +946,7 @@ mod tests {
 	fn inline_rules() {
 		let diagnostics = check(
 			"a `b` <x|y> <z> {a, b, c} é",
-			r#"P["a " code(code="b") " " link(url="x" title="y") " " link(url="z") " " list(item="a" item="b" item="c") " é"]"#,
+			r#"P["a " code(fence="`" code="b") " " link(url="x" title="y") " " link(url="z") " " list(item="a" item="b" item="c") " é"]"#,
 		);
 		assert_diagnostics!(diagnostics, []);
 	}
@@ -853,7 +964,10 @@ mod tests {
 		assert_diagnostics!(diagnostics, [1003 @ 5..6]);
 
 		// The partial match ends where the rule failed, and parsing resumes there.
-		let diagnostics = check("a {} `b`", r#"P["a " list!() "} " code(code="b")]"#);
+		let diagnostics = check(
+			"a {} `b`",
+			r#"P["a " list!() "} " code(fence="`" code="b")]"#,
+		);
 		assert_diagnostics!(diagnostics, [1003 @ 3..4]);
 	}
 
@@ -863,7 +977,7 @@ mod tests {
 		let parsed = parse(&rules, source("a `b\n\nc"));
 		assert_eq!(
 			show(&rules, &parsed.nodes),
-			r#"P["a " code!(code="b")] P["c"]"#
+			r#"P["a " code!(fence="`" code="b")] P["c"]"#
 		);
 		assert_diagnostics!(parsed.diagnostics, [1001 @ 2..3]);
 		let diagnostic = &parsed.diagnostics[0];
@@ -898,7 +1012,7 @@ mod tests {
 	fn nesting() {
 		let diagnostics = check(
 			"*a **b** c* **a *b* c** **`a**b`**",
-			r#"P[italic(body=["a " bold(body=["b"]) " c"]) " " bold(body=["a " italic(body=["b"]) " c"]) " " bold(body=[code(code="a**b")])]"#,
+			r#"P[italic(body=["a " bold(body=["b"]) " c"]) " " bold(body=["a " italic(body=["b"]) " c"]) " " bold(body=[code(fence="`" code="a**b")])]"#,
 		);
 		assert_diagnostics!(diagnostics, []);
 	}
@@ -985,5 +1099,40 @@ mod tests {
 			parsed.diagnostics[0].primary().location.range(),
 			MAX_NESTING..MAX_NESTING + 1
 		);
+	}
+
+	#[test]
+	fn runs() {
+		let diagnostics = check(
+			"``a`b`` `a``b` x",
+			r#"P[code(fence="``" code="a`b") " " code(fence="`" code="a``b") " x"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+
+		let diagnostics = check(
+			"```rust\nfn x() {}\n````\n```\nafter",
+			r#"fence(fence="```" info="rust" body="fn x() {}\n````\n") P["after"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+
+		let diagnostics = check("```\ncode", r#"fence!(fence="```" info="" body="code")"#);
+		assert_diagnostics!(diagnostics, [1001 @ 0..3]);
+	}
+
+	#[test]
+	fn capture_classes() {
+		let rules = rules();
+		let parsed = parse(&rules, source("`x`"));
+		let Node::Paragraph { children, .. } = &parsed.nodes[0] else {
+			panic!()
+		};
+		let Node::Match(m) = &children[0] else {
+			panic!()
+		};
+		assert_eq!(
+			m.capture("fence").unwrap().class.as_deref(),
+			Some("operator")
+		);
+		assert_eq!(m.capture("code").unwrap().class.as_deref(), Some("string"));
 	}
 }

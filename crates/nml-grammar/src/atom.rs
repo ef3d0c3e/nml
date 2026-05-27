@@ -32,8 +32,18 @@ pub enum Atom {
 	InlineContent,
 	/// Parsed blocks up to the line-anchored delimiter that follows.
 	Content,
-	/// Names the part of the match covered by `atom`, for the rule's callback and the LSP.
-	Capture { name: String, atom: Box<Atom> },
+	/// Names the part of the match covered by `atom`, for the rule's callback. `class` is the
+	/// capture's semantic token class for the LSP (`keyword`, `string`, …).
+	Capture {
+		name: String,
+		class: Option<String>,
+		atom: Box<Atom>,
+	},
+	/// A run of at least `min` times the same character, e.g. a code fence.
+	Run { char: char, min: usize },
+	/// Exactly the text of an earlier capture. For a captured `Run`, a run of exactly the
+	/// same length: inside a ```` ``` ```` fence, ```` ```` ```` does not close it.
+	Same(String),
 }
 
 impl Atom {
@@ -44,8 +54,30 @@ impl Atom {
 	pub fn capture(name: impl Into<String>, atom: Atom) -> Self {
 		Atom::Capture {
 			name: name.into(),
+			class: None,
 			atom: Box::new(atom),
 		}
+	}
+
+	/// Sets the semantic token class of a capture.
+	///
+	/// # Panics
+	///
+	/// If the atom is not a capture.
+	pub fn with_class(mut self, class: impl Into<String>) -> Self {
+		match &mut self {
+			Atom::Capture { class: slot, .. } => *slot = Some(class.into()),
+			_ => panic!("only a capture has a semantic token class"),
+		}
+		self
+	}
+
+	pub fn run(char: char, min: usize) -> Self {
+		Atom::Run { char, min }
+	}
+
+	pub fn same(name: impl Into<String>) -> Self {
+		Atom::Same(name.into())
 	}
 
 	pub fn or(alternatives: impl IntoIterator<Item = Vec<Atom>>) -> Self {
@@ -76,6 +108,8 @@ impl Atom {
 			Atom::InlineContent => "InlineContent",
 			Atom::Content => "Content",
 			Atom::Capture { .. } => "Capture",
+			Atom::Run { .. } => "Run",
+			Atom::Same(_) => "Same",
 		}
 	}
 
@@ -87,7 +121,9 @@ impl Atom {
 			| Atom::LineStart
 			| Atom::LineEnd
 			| Atom::Number { .. }
-			| Atom::Word => true,
+			| Atom::Word
+			| Atom::Run { .. }
+			| Atom::Same(_) => true,
 			Atom::Capture { atom, .. } => atom.decidable(),
 			Atom::Or(alternatives) => alternatives
 				.iter()
@@ -123,7 +159,17 @@ pub(crate) enum Op {
 	Content(Vec<DelimiterPattern>),
 	Capture {
 		name: Arc<str>,
+		class: Option<Arc<str>>,
 		op: Box<Op>,
+	},
+	Run {
+		char: char,
+		min: usize,
+	},
+	Same {
+		name: Arc<str>,
+		/// The character of the captured run, if the capture is a `Run`.
+		run: Option<char>,
 	},
 }
 
@@ -142,6 +188,8 @@ impl Op {
 			Op::InlineContent(_) => "InlineContent",
 			Op::Content(_) => "Content",
 			Op::Capture { op, .. } => op.describe(),
+			Op::Run { .. } => "Run",
+			Op::Same { .. } => "Same",
 		}
 	}
 }
@@ -158,6 +206,11 @@ pub(crate) struct DelimiterPattern {
 pub(crate) enum DelimiterKind {
 	Literal(String),
 	LineEnd,
+	/// The text of a capture, see [`Atom::Same`].
+	Same {
+		name: Arc<str>,
+		run: Option<char>,
+	},
 }
 
 /// The delimiters that can come first in the concatenation of `chain`, or `None` if
@@ -178,6 +231,10 @@ pub(crate) fn first_delimiters(chain: &[&[Atom]], anchored: bool) -> Option<Vec<
 		Atom::LineStart if !anchored => first_delimiters(&join(&[], rest, tail), true),
 		Atom::Literal(text) => pattern(DelimiterKind::Literal(text.clone())),
 		Atom::LineEnd if !anchored => pattern(DelimiterKind::LineEnd),
+		Atom::Same(name) => pattern(DelimiterKind::Same {
+			name: name.as_str().into(),
+			run: None,
+		}),
 		Atom::Capture { atom, .. } => {
 			first_delimiters(&join(&[std::slice::from_ref(atom)], rest, tail), anchored)
 		}

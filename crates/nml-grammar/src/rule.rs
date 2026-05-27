@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::Atom;
+use crate::atom::DelimiterKind;
 use crate::atom::DelimiterPattern;
 use crate::atom::Op;
 use crate::atom::first_delimiters;
@@ -42,8 +43,8 @@ impl Rule {
 		}
 	}
 
-	/// The opener: the text the rule is dispatched on.
-	pub fn opener(&self) -> Option<&str> {
+	/// The opener: the text the rule is dispatched on. For a `Run`, its shortest run.
+	pub fn opener(&self) -> Option<String> {
 		let first = match self.table() {
 			Table::Block => self.atoms.get(1),
 			Table::Inline => self.atoms.first(),
@@ -53,7 +54,8 @@ impl Rule {
 			atom = inner;
 		}
 		match atom {
-			Atom::Literal(text) if !text.is_empty() => Some(text),
+			Atom::Literal(text) if !text.is_empty() => Some(text.clone()),
+			Atom::Run { char, min } if *min > 0 => Some(char.to_string().repeat(*min)),
 			_ => None,
 		}
 	}
@@ -100,6 +102,10 @@ pub enum RuleErrorKind {
 	InvalidRepeatBounds,
 	/// An empty `Or` alternative or `Repeat` body.
 	EmptySequence,
+	/// `Same` refers to a capture that is not defined before it.
+	UnknownCapture { name: String },
+	/// A `Run` with a `min` of zero.
+	EmptyRun,
 }
 
 impl fmt::Display for RuleError {
@@ -128,6 +134,13 @@ impl fmt::Display for RuleError {
 			),
 			RuleErrorKind::InvalidRepeatBounds => write!(f, "invalid `Repeat` bounds"),
 			RuleErrorKind::EmptySequence => write!(f, "empty `Or` alternative or `Repeat` body"),
+			RuleErrorKind::UnknownCapture { name } => {
+				write!(
+					f,
+					"`Same` refers to `{name}`, which is not captured before it"
+				)
+			}
+			RuleErrorKind::EmptyRun => write!(f, "a `Run` must have a `min` of at least 1"),
 		}
 	}
 }
@@ -183,15 +196,15 @@ impl RuleSet {
 		for (id, other) in self.iter() {
 			if Some(id) != replaced
 				&& other.table() == rule.table()
-				&& other.opener() == Some(opener)
+				&& other.opener().as_ref() == Some(&opener)
 			{
 				return Err(error(RuleErrorKind::ConflictingOpener {
 					other: other.name.clone(),
-					opener: opener.to_string(),
+					opener: opener.clone(),
 				}));
 			}
 		}
-		let ops = compile(&rule.atoms, &[Vec::new()]).map_err(error)?;
+		let ops = compile(&rule.atoms, &[Vec::new()], &mut Vec::new()).map_err(error)?;
 
 		if let Some(replaced) = replaced {
 			let old = self.rules[replaced.0].take().unwrap();
@@ -212,7 +225,7 @@ impl RuleSet {
 				Table::Block => &mut block,
 				Table::Inline => &mut inline,
 			};
-			trie.insert(rule.opener().unwrap(), id);
+			trie.insert(&rule.opener().unwrap(), id);
 		}
 		self.block = block;
 		self.inline = inline;
@@ -250,9 +263,16 @@ impl RuleSet {
 	}
 }
 
+/// The captures defined so far in a rule, with the character of captured runs.
+type Captured = Vec<(String, Option<char>)>;
+
 /// Checks the atoms of a sequence and compiles them. `follows` lists what can come after the
 /// sequence: one chain of atom sequences per possibility.
-fn compile(atoms: &[Atom], follows: &[Vec<&[Atom]>]) -> Result<Vec<Op>, RuleErrorKind> {
+fn compile(
+	atoms: &[Atom],
+	follows: &[Vec<&[Atom]>],
+	captured: &mut Captured,
+) -> Result<Vec<Op>, RuleErrorKind> {
 	let mut ops = Vec::with_capacity(atoms.len());
 	for (index, atom) in atoms.iter().enumerate() {
 		let rest = &atoms[index + 1..];
@@ -264,13 +284,16 @@ fn compile(atoms: &[Atom], follows: &[Vec<&[Atom]>]) -> Result<Vec<Op>, RuleErro
 				chain
 			})
 			.collect();
-		let delimiters = || -> Result<Vec<DelimiterPattern>, RuleErrorKind> {
+		let delimiters = |captured: &Captured| -> Result<Vec<DelimiterPattern>, RuleErrorKind> {
 			let mut delimiters = Vec::new();
 			for chain in &chains {
-				for delimiter in
+				for mut delimiter in
 					first_delimiters(chain, false).ok_or(RuleErrorKind::NotTerminated {
 						atom: atom.describe(),
 					})? {
+					if let DelimiterKind::Same { name, run } = &mut delimiter.kind {
+						*run = same(captured, name)?;
+					}
 					if !delimiters.contains(&delimiter) {
 						delimiters.push(delimiter);
 					}
@@ -288,24 +311,48 @@ fn compile(atoms: &[Atom], follows: &[Vec<&[Atom]>]) -> Result<Vec<Op>, RuleErro
 			},
 			Atom::Word => Op::Word,
 			Atom::RestOfLine => Op::RestOfLine,
-			Atom::Text => Op::Text(delimiters()?),
-			Atom::InlineContent => Op::InlineContent(delimiters()?),
+			Atom::Text => Op::Text(delimiters(captured)?),
+			Atom::InlineContent => Op::InlineContent(delimiters(captured)?),
 			Atom::Content => {
-				let delimiters = delimiters()?;
+				let delimiters = delimiters(captured)?;
 				if delimiters.iter().any(|d| !d.anchored) {
 					return Err(RuleErrorKind::ContentNotLineAnchored);
 				}
 				Op::Content(delimiters)
 			}
-			Atom::Capture { name, atom } => Op::Capture {
+			Atom::Capture { name, class, atom } => {
+				let op = compile(std::slice::from_ref(atom), &chains, captured)?
+					.pop()
+					.unwrap();
+				let run = match &op {
+					Op::Run { char, .. } => Some(*char),
+					_ => None,
+				};
+				captured.push((name.clone(), run));
+				Op::Capture {
+					name: name.as_str().into(),
+					class: class.as_deref().map(Into::into),
+					op: Box::new(op),
+				}
+			}
+			Atom::Run { char, min } => {
+				if *min == 0 {
+					return Err(RuleErrorKind::EmptyRun);
+				}
+				Op::Run {
+					char: *char,
+					min: *min,
+				}
+			}
+			Atom::Same(name) => Op::Same {
 				name: name.as_str().into(),
-				op: Box::new(compile(std::slice::from_ref(atom), &chains)?.pop().unwrap()),
+				run: same(captured, name)?,
 			},
 			Atom::Or(alternatives) => {
 				let mut compiled = Vec::new();
 				for alternative in alternatives {
 					check_branch(alternative)?;
-					compiled.push(compile(alternative, &chains)?);
+					compiled.push(compile(alternative, &chains, captured)?);
 				}
 				Op::Or(compiled)
 			}
@@ -317,7 +364,7 @@ fn compile(atoms: &[Atom], follows: &[Vec<&[Atom]>]) -> Result<Vec<Op>, RuleErro
 				let mut inner = chains.clone();
 				inner.push(vec![atoms]);
 				Op::Repeat {
-					ops: compile(atoms, &inner)?,
+					ops: compile(atoms, &inner, captured)?,
 					min: *min,
 					max: *max,
 				}
@@ -325,6 +372,16 @@ fn compile(atoms: &[Atom], follows: &[Vec<&[Atom]>]) -> Result<Vec<Op>, RuleErro
 		});
 	}
 	Ok(ops)
+}
+
+/// The run character of the capture a `Same` refers to.
+fn same(captured: &Captured, name: &str) -> Result<Option<char>, RuleErrorKind> {
+	captured
+		.iter()
+		.rev()
+		.find(|(captured, _)| captured == name)
+		.map(|(_, run)| *run)
+		.ok_or_else(|| RuleErrorKind::UnknownCapture { name: name.into() })
 }
 
 fn check_branch(atoms: &[Atom]) -> Result<(), RuleErrorKind> {
@@ -373,9 +430,11 @@ mod tests {
 			],
 		);
 		assert_eq!(heading.table(), Table::Block);
-		assert_eq!(heading.opener(), Some("# "));
+		assert_eq!(heading.opener().as_deref(), Some("# "));
 		assert_eq!(bold().table(), Table::Inline);
-		assert_eq!(bold().opener(), Some("**"));
+		assert_eq!(bold().opener().as_deref(), Some("**"));
+		let code = Rule::new("code", vec![Atom::capture("fence", Atom::run('`', 2))]);
+		assert_eq!(code.opener().as_deref(), Some("``"));
 	}
 
 	#[test]
@@ -589,5 +648,46 @@ mod tests {
 			error.to_string(),
 			"rule `strong`: opener `**` is already used by rule `bold` (use `replaces` to override it)"
 		);
+	}
+
+	#[test]
+	fn same_refers_to_an_earlier_capture() {
+		let mut rules = RuleSet::new();
+		let fence = |atoms: Vec<Atom>| {
+			let mut all = vec![Atom::capture("fence", Atom::run('`', 1))];
+			all.extend(atoms);
+			Rule::new("code", all)
+		};
+		assert_eq!(
+			kind(&mut rules, fence(vec![Atom::Text, Atom::same("nope")])),
+			RuleErrorKind::UnknownCapture {
+				name: "nope".into()
+			}
+		);
+		assert_eq!(
+			kind(
+				&mut rules,
+				Rule::new(
+					"r",
+					vec![
+						lit("<"),
+						Atom::Text,
+						Atom::same("x"),
+						Atom::capture("x", lit(">")),
+					]
+				)
+			),
+			RuleErrorKind::UnknownCapture { name: "x".into() }
+		);
+		assert_eq!(
+			kind(
+				&mut rules,
+				Rule::new("r", vec![lit("<"), Atom::run('-', 0)])
+			),
+			RuleErrorKind::EmptyRun
+		);
+		rules
+			.add(fence(vec![Atom::Text, Atom::same("fence")]))
+			.unwrap();
 	}
 }
