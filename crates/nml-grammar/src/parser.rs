@@ -12,6 +12,10 @@ use nml_source::Token;
 
 use crate::Capture;
 use crate::Node;
+use crate::OptionEntry;
+use crate::OptionSchema;
+use crate::OptionValue;
+use crate::Options;
 use crate::RuleId;
 use crate::RuleMatch;
 use crate::RuleSet;
@@ -138,7 +142,7 @@ struct Context {
 
 /// An atom that did not match.
 struct Error {
-	diagnostic: Diagnostic,
+	diagnostic: Box<Diagnostic>,
 	/// Where the match stopped.
 	pos: usize,
 	/// The partial value of an unclosed atom, kept in the tree.
@@ -148,7 +152,7 @@ struct Error {
 impl Error {
 	fn new(diagnostic: Diagnostic, pos: usize) -> Self {
 		Self {
-			diagnostic,
+			diagnostic: Box::new(diagnostic),
 			pos,
 			value: None,
 		}
@@ -384,7 +388,7 @@ impl Parser<'_> {
 		let (pos, complete) = match self.seq(&context, self.rules.ops(rule), start, &mut captures) {
 			Ok(pos) => (pos, true),
 			Err(error) => {
-				self.error(error.diagnostic);
+				self.error(*error.diagnostic);
 				// Resume after the opener at least, so that parsing always advances.
 				(error.pos.max(context.opener.end), false)
 			}
@@ -469,6 +473,7 @@ impl Parser<'_> {
 				let delimiters = resolve(delimiters, captures);
 				self.content(context, delimiters, false, pos, end)
 			}
+			Op::Options(schema) => self.options(schema, pos, end),
 			Op::Run { char, min } => match self.run(*char, pos, end) {
 				(count, len) if count >= *min => matched(len),
 				_ => Err(self.expected(op, pos, end)),
@@ -544,6 +549,7 @@ impl Parser<'_> {
 				.any(|ops| self.starts_seq(ops, pos, end, captures)),
 			Op::Repeat { ops, .. } => self.starts_seq(ops, pos, end, captures),
 			Op::Run { char, min } => self.run(*char, pos, end).0 >= *min,
+			Op::Options(_) => rest.starts_with('['),
 			Op::Same { name, run } => same(captures, name, *run)
 				.is_some_and(|close| self.close_at(&close, pos, end).is_some()),
 			Op::Text(_) | Op::RestOfLine | Op::InlineContent(_) | Op::Content(_) => true,
@@ -570,7 +576,7 @@ impl Parser<'_> {
 				Some(c) => pos += c.len_utf8(),
 				None => {
 					return Err(Error {
-						diagnostic: self.unclosed(context, delimiters, pos, end),
+						diagnostic: Box::new(self.unclosed(context, delimiters, pos, end)),
 						pos,
 						value: Some(Value::Span),
 					});
@@ -610,7 +616,7 @@ impl Parser<'_> {
 			Ok((pos, Value::Nodes(nodes)))
 		} else {
 			Err(Error {
-				diagnostic: self.unclosed(context, &delimiters, pos, end),
+				diagnostic: Box::new(self.unclosed(context, &delimiters, pos, end)),
 				pos,
 				value: Some(Value::Nodes(nodes)),
 			})
@@ -657,6 +663,188 @@ impl Parser<'_> {
 				replacement: escaped,
 			}],
 		})
+	}
+
+	/// An option list at `start`. Syntax errors fail the rule; an option that does not fit
+	/// the schema is reported, and the match goes on.
+	fn options(
+		&mut self,
+		schema: &OptionSchema,
+		start: usize,
+		end: usize,
+	) -> Result<(usize, Value), Error> {
+		let line_end = self.line_end(start, end);
+		let text = &self.text[..line_end];
+		let skip = |pos: usize| line_end - text[pos..].trim_start_matches([' ', '\t']).len();
+		let fail = |this: &Self, kind, pos| {
+			let location = this.char_token(pos, end);
+			Err(Error::new(
+				Diagnostic::new(kind, DiagnosticMessage::new(location)),
+				pos,
+			))
+		};
+		let expected_token = |token: &str| DiagnosticKind::ExpectedToken {
+			token: token.into(),
+		};
+
+		if !text[start..].starts_with('[') {
+			return fail(self, expected_token("["), start);
+		}
+		let mut pos = skip(start + 1);
+		let mut entries = Vec::new();
+		if text[pos..].starts_with(']') {
+			pos += 1;
+		} else {
+			loop {
+				let len = word(&text[pos..]);
+				if len == 0 {
+					let atom = "Word".into();
+					return fail(self, DiagnosticKind::ExpectedAtom { atom }, pos);
+				}
+				let key = self.token(pos..pos + len);
+				pos = skip(pos + len);
+				let mut entry = OptionEntry {
+					key,
+					value_token: None,
+					value: None,
+				};
+				if text[pos..].starts_with('=') {
+					let value_start = skip(pos + 1);
+					let (value_end, value) = self.option_value(value_start, line_end, end)?;
+					entry.value_token = Some(self.token(value_start..value_end));
+					entry.value = Some(value);
+					pos = skip(value_end);
+				}
+				entries.push(entry);
+				match text[pos..].chars().next() {
+					Some(',') => pos = skip(pos + 1),
+					Some(']') => {
+						pos += 1;
+						break;
+					}
+					_ => return fail(self, expected_token("]"), pos),
+				}
+			}
+		}
+
+		let values = self.check_options(schema, &entries, start..pos);
+		Ok((pos, Value::Options(Options { entries, values })))
+	}
+
+	/// A value in an option list: its end and its text without quotes and escapes.
+	fn option_value(
+		&self,
+		start: usize,
+		line_end: usize,
+		end: usize,
+	) -> Result<(usize, String), Error> {
+		let text = &self.text[..line_end];
+		let mut value = String::new();
+		let mut chars = text[start..].char_indices().map(|(i, c)| (start + i, c));
+		if text[start..].starts_with('"') {
+			chars.next();
+			while let Some((i, c)) = chars.next() {
+				match c {
+					'"' => return Ok((i + 1, value)),
+					'\\' => match chars.next() {
+						Some((_, escaped)) => value.push(escaped),
+						None => break,
+					},
+					c => value.push(c),
+				}
+			}
+			let kind = DiagnosticKind::ExpectedToken { token: "\"".into() };
+			let location = self.char_token(line_end, end);
+			return Err(Error::new(
+				Diagnostic::new(kind, DiagnosticMessage::new(location)),
+				line_end,
+			));
+		}
+
+		// A bare value ends at `,` or `]`, without trailing blanks.
+		let mut value_end = start;
+		let mut trimmed = 0;
+		while let Some((i, c)) = chars.next() {
+			match c {
+				',' | ']' => break,
+				'\\' if text[i + 1..].starts_with(|c: char| c.is_ascii_punctuation()) => {
+					let (j, escaped) = chars.next().unwrap();
+					value.push(escaped);
+					value_end = j + 1;
+					trimmed = value.len();
+				}
+				c => {
+					value.push(c);
+					if c != ' ' && c != '\t' {
+						value_end = i + c.len_utf8();
+						trimmed = value.len();
+					}
+				}
+			}
+		}
+		value.truncate(trimmed);
+		Ok((value_end, value))
+	}
+
+	/// Checks entries against the schema, and returns the value of every option.
+	fn check_options(
+		&mut self,
+		schema: &OptionSchema,
+		entries: &[OptionEntry],
+		list: Range<usize>,
+	) -> Vec<(String, OptionValue)> {
+		let mut given: Vec<(&str, OptionValue)> = Vec::new();
+		for (index, entry) in entries.iter().enumerate() {
+			let name = entry.key.content();
+			let report = |kind| Diagnostic::new(kind, DiagnosticMessage::new(entry.key.clone()));
+			if let Some(first) = entries[..index]
+				.iter()
+				.find(|other| other.key.content() == name)
+			{
+				let kind = DiagnosticKind::DuplicateOption { name: name.into() };
+				let diagnostic =
+					report(kind).with(DiagnosticMessage::fluent(first.key.clone(), "first"));
+				self.error(diagnostic);
+				continue;
+			}
+			let Some(spec) = schema.get(name) else {
+				self.error(report(DiagnosticKind::UnknownOption { name: name.into() }));
+				continue;
+			};
+			match spec.kind.convert(entry.value.as_deref()) {
+				Some(value) => given.push((name, value)),
+				None => {
+					let kind = DiagnosticKind::InvalidOptionValue {
+						name: name.into(),
+						expected: spec.kind.to_string(),
+					};
+					let location = entry.value_token.clone().unwrap_or(entry.key.clone());
+					self.error(Diagnostic::new(kind, DiagnosticMessage::new(location)));
+				}
+			}
+		}
+
+		let mut values = Vec::new();
+		for spec in &schema.options {
+			let value = given
+				.iter()
+				.find(|(name, _)| *name == spec.name)
+				.map(|(_, value)| value.clone())
+				.or_else(|| spec.default.clone());
+			match value {
+				Some(value) => values.push((spec.name.clone(), value)),
+				// An invalid value was already reported.
+				None if entries.iter().any(|e| e.key.content() == spec.name) => {}
+				None => {
+					let kind = DiagnosticKind::MissingOption {
+						name: spec.name.clone(),
+					};
+					let location = self.token(list.clone());
+					self.error(Diagnostic::new(kind, DiagnosticMessage::new(location)));
+				}
+			}
+		}
+		values
 	}
 
 	fn expected(&self, op: &Op, pos: usize, end: usize) -> Error {
@@ -750,6 +938,22 @@ mod tests {
 								Value::Span => format!("{:?}", capture.token.content()),
 								Value::Number(n) => n.to_string(),
 								Value::Nodes(nodes) => format!("[{}]", show(rules, nodes)),
+								Value::Options(options) => {
+									let values: Vec<_> = options
+										.values
+										.iter()
+										.map(|(name, value)| {
+											let value = match value {
+												OptionValue::Text(text) => format!("{text:?}"),
+												OptionValue::Integer(n) => n.to_string(),
+												OptionValue::Number(n) => n.to_string(),
+												OptionValue::Bool(b) => b.to_string(),
+											};
+											format!("{name}:{value}")
+										})
+										.collect();
+									format!("{{{}}}", values.join(" "))
+								}
 							};
 							format!("{}={value}", capture.name)
 						})
@@ -1134,5 +1338,113 @@ mod tests {
 			Some("operator")
 		);
 		assert_eq!(m.capture("code").unwrap().class.as_deref(), Some("string"));
+	}
+
+	fn graph_rules() -> RuleSet {
+		use crate::OptionKind;
+		use crate::OptionSpec;
+
+		let schema = OptionSchema::new([
+			OptionSpec::new(
+				"layout",
+				OptionKind::Choice(vec!["dot".into(), "neato".into()]),
+			)
+			.with_default(OptionValue::Text("dot".into())),
+			OptionSpec::new("width", OptionKind::Integer).with_default(OptionValue::Integer(100)),
+			OptionSpec::new("scale", OptionKind::Number),
+			OptionSpec::new("caption", OptionKind::Text).with_default(OptionValue::Text("".into())),
+			OptionSpec::new("inline", OptionKind::Bool).with_default(OptionValue::Bool(false)),
+		]);
+		let mut rules = RuleSet::new();
+		rules
+			.add(Rule::new(
+				"graph",
+				vec![
+					Atom::LineStart,
+					lit(":graph"),
+					Atom::optional(vec![Atom::capture(
+						"options",
+						Atom::Options(Arc::new(schema)),
+					)]),
+					Atom::LineEnd,
+				],
+			))
+			.unwrap();
+		rules
+	}
+
+	fn check_graph(text: &str, expected: &str) -> Vec<Diagnostic> {
+		let rules = graph_rules();
+		let parsed = parse(&rules, source(text));
+		assert_eq!(show(&rules, &parsed.nodes), expected);
+		parsed.diagnostics
+	}
+
+	#[test]
+	fn options() {
+		let diagnostics = check_graph(
+			r#":graph[layout=neato, scale=1.5, caption="a, \"b\"", inline]"#,
+			r#"graph(options={layout:"neato" width:100 scale:1.5 caption:"a, \"b\"" inline:true})"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+
+		let diagnostics = check_graph(
+			r#":graph[ scale = 2 , caption=a\, b\] ,width=-3]"#,
+			r#"graph(options={layout:"dot" width:-3 scale:2 caption:"a, b]" inline:false})"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+
+		let rules = graph_rules();
+		let parsed = parse(&rules, source(":graph[caption=a  b  ,scale=1]"));
+		let Node::Match(m) = &parsed.nodes[0] else {
+			panic!()
+		};
+		let Value::Options(options) = &m.capture("options").unwrap().value else {
+			panic!()
+		};
+		assert_eq!(options.entries[0].value.as_deref(), Some("a  b"));
+		assert_eq!(
+			options.entries[0].value_token.as_ref().unwrap().range(),
+			15..19
+		);
+		assert_eq!(options.get("scale"), Some(&OptionValue::Number(1.0)));
+	}
+
+	#[test]
+	fn invalid_options() {
+		let text = ":graph[nope=1, scale=x, scale=2, layout=fdp, inline=yes]";
+		let diagnostics = check_graph(
+			text,
+			r#"graph(options={layout:"dot" width:100 caption:"" inline:false})"#,
+		);
+		assert_diagnostics!(diagnostics, [1005 @ 7..11, 1007 @ 21..22, 1006 @ 24..29, 1007 @ 40..43, 1007 @ 52..55]);
+		assert_eq!(
+			diagnostics[3].kind,
+			DiagnosticKind::InvalidOptionValue {
+				name: "layout".into(),
+				expected: "dot, neato".into()
+			}
+		);
+
+		let diagnostics = check_graph(
+			":graph[]\n:graph",
+			r#"graph(options={layout:"dot" width:100 caption:"" inline:false}) graph()"#,
+		);
+		assert_diagnostics!(diagnostics, [1008 @ 6..8]);
+	}
+
+	#[test]
+	fn option_syntax_errors() {
+		for (text, id, range) in [
+			(":graph[scale=1", 1001, 14..14),
+			(":graph[scale=1\n]", 1001, 14..15),
+			(":graph[=1]", 1003, 7..8),
+			(r#":graph[scale="1" x]"#, 1001, 17..18),
+			(r#":graph[caption="x]"#, 1001, 18..18),
+		] {
+			let rules = graph_rules();
+			let parsed = parse(&rules, source(text));
+			nml_diagnostics::testing::check(&parsed.diagnostics, &[(id, Some(range))]);
+		}
 	}
 }

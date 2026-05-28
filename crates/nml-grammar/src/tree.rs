@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use nml_source::Token;
 
+use crate::Options;
 use crate::RuleId;
 
 /// A node of the parse tree.
@@ -70,4 +71,5 @@ pub enum Value {
 	Number(f64),
 	/// Parsed content.
 	Nodes(Vec<Node>),
+	Options(Options),
 }

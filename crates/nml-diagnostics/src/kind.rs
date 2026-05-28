@@ -53,6 +53,16 @@ pub enum DiagnosticKind {
 	ExpectedAtom { atom: String },
 	#[diag(id = 1004, message = "diagnostic-nesting-too-deep")]
 	NestingTooDeep { limit: usize },
+	#[diag(id = 1005, message = "diagnostic-unknown-option")]
+	UnknownOption { name: String },
+	#[diag(id = 1006, message = "diagnostic-duplicate-option")]
+	DuplicateOption { name: String },
+	/// `expected` is the option's kind: `Text`, `Integer`, `Number`, `Bool`, or the list of
+	/// choices.
+	#[diag(id = 1007, message = "diagnostic-invalid-option-value")]
+	InvalidOptionValue { name: String, expected: String },
+	#[diag(id = 1008, message = "diagnostic-missing-option")]
+	MissingOption { name: String },
 
 	/// A Lua error, forwarded with Lua's own text.
 	#[diag(id = 4001, message = "diagnostic-lua-error")]

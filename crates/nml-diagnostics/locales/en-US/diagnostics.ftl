@@ -16,6 +16,17 @@ diagnostic-expected-atom = expected { $atom ->
        *[other] { $atom }
     }
 diagnostic-nesting-too-deep = constructs are nested more than { $limit } deep
+diagnostic-unknown-option = unknown option `{ $name }`
+diagnostic-duplicate-option = option `{ $name }` is given twice
+    .first = first given here
+diagnostic-invalid-option-value = invalid value for `{ $name }`: expected { $expected ->
+        [Text] text
+        [Integer] an integer
+        [Number] a number
+        [Bool] `true` or `false`
+       *[other] one of { $expected }
+    }
+diagnostic-missing-option = missing option `{ $name }`
 
 ## Lua (4xxx)
 

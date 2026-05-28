@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::OptionSchema;
+
 /// One element of a rule.
 ///
 /// A rule is a sequence of atoms, matched in order without backtracking: `Or` and `Repeat`
@@ -44,6 +46,8 @@ pub enum Atom {
 	/// Exactly the text of an earlier capture. For a captured `Run`, a run of exactly the
 	/// same length: inside a ```` ``` ```` fence, ```` ```` ```` does not close it.
 	Same(String),
+	/// An option list, `[key=value, …]`, on one line, checked against a schema.
+	Options(Arc<OptionSchema>),
 }
 
 impl Atom {
@@ -110,6 +114,7 @@ impl Atom {
 			Atom::Capture { .. } => "Capture",
 			Atom::Run { .. } => "Run",
 			Atom::Same(_) => "Same",
+			Atom::Options(_) => "Options",
 		}
 	}
 
@@ -123,7 +128,8 @@ impl Atom {
 			| Atom::Number { .. }
 			| Atom::Word
 			| Atom::Run { .. }
-			| Atom::Same(_) => true,
+			| Atom::Same(_)
+			| Atom::Options(_) => true,
 			Atom::Capture { atom, .. } => atom.decidable(),
 			Atom::Or(alternatives) => alternatives
 				.iter()
@@ -171,6 +177,7 @@ pub(crate) enum Op {
 		/// The character of the captured run, if the capture is a `Run`.
 		run: Option<char>,
 	},
+	Options(Arc<OptionSchema>),
 }
 
 impl Op {
@@ -190,6 +197,7 @@ impl Op {
 			Op::Capture { op, .. } => op.describe(),
 			Op::Run { .. } => "Run",
 			Op::Same { .. } => "Same",
+			Op::Options(_) => "Options",
 		}
 	}
 }

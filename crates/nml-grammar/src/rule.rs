@@ -344,6 +344,7 @@ fn compile(
 					min: *min,
 				}
 			}
+			Atom::Options(schema) => Op::Options(schema.clone()),
 			Atom::Same(name) => Op::Same {
 				name: name.as_str().into(),
 				run: same(captured, name)?,
