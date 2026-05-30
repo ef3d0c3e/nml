@@ -1,5 +1,7 @@
 use nml_source::Token;
 
+use crate::SlotId;
+
 /// Identifies an element in its [`Document`](crate::Document).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ElementId(pub(crate) u32);
@@ -19,6 +21,8 @@ pub enum ElementKind {
 	Heading {
 		level: u8,
 	},
+	/// Where a slot's value goes.
+	Slot(SlotId),
 }
 
 impl ElementKind {
@@ -30,6 +34,7 @@ impl ElementKind {
 			ElementKind::Text(_) => "text",
 			ElementKind::Style(_) => "style",
 			ElementKind::Heading { .. } => "heading",
+			ElementKind::Slot(_) => "slot",
 		}
 	}
 }

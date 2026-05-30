@@ -8,6 +8,8 @@ use crate::Attributes;
 use crate::Element;
 use crate::ElementId;
 use crate::ElementKind;
+use crate::Slot;
+use crate::SlotId;
 
 /// The element tree of a unit. It is only built through a [`DocumentBuilder`] and cannot be
 /// changed afterwards.
@@ -15,6 +17,7 @@ use crate::ElementKind;
 pub struct Document {
 	source: Arc<Source>,
 	elements: Vec<Element>,
+	slots: Vec<Slot>,
 	root: ElementId,
 }
 
@@ -29,6 +32,18 @@ impl Document {
 
 	pub fn get(&self, id: ElementId) -> &Element {
 		&self.elements[id.0 as usize]
+	}
+
+	pub fn slot(&self, id: SlotId) -> &Slot {
+		&self.slots[id.0 as usize]
+	}
+
+	/// Every slot, in the order they were added.
+	pub fn slots(&self) -> impl Iterator<Item = (SlotId, &Slot)> {
+		self.slots
+			.iter()
+			.enumerate()
+			.map(|(index, slot)| (SlotId(index as u32), slot))
 	}
 
 	pub fn children(&self, id: ElementId) -> impl Iterator<Item = (ElementId, &Element)> {
@@ -111,6 +126,7 @@ struct Open {
 pub struct DocumentBuilder<'l> {
 	source: Arc<Source>,
 	elements: Vec<Element>,
+	slots: Vec<Slot>,
 	/// The open elements; the document root is at the bottom.
 	open: Vec<Open>,
 	listeners: Vec<Listener<'l>>,
@@ -121,6 +137,7 @@ impl fmt::Debug for DocumentBuilder<'_> {
 		f.debug_struct("DocumentBuilder")
 			.field("source", &self.source)
 			.field("elements", &self.elements)
+			.field("slots", &self.slots)
 			.field("open", &self.open)
 			.field("listeners", &self.listeners.len())
 			.finish()
@@ -133,6 +150,7 @@ impl<'l> DocumentBuilder<'l> {
 		Self {
 			source,
 			elements: Vec::new(),
+			slots: Vec::new(),
 			open: vec![Open {
 				kind: ElementKind::Document,
 				token,
@@ -183,6 +201,14 @@ impl<'l> DocumentBuilder<'l> {
 		self.close()
 	}
 
+	/// Adds a slot, and the element that marks where its value goes.
+	pub fn slot(&mut self, slot: Slot, token: Token) -> SlotId {
+		let id = SlotId(u32::try_from(self.slots.len()).expect("too many slots"));
+		self.slots.push(slot);
+		self.leaf(ElementKind::Slot(id), token);
+		id
+	}
+
 	/// The number of open elements, the document root included.
 	pub fn depth(&self) -> usize {
 		self.open.len()
@@ -200,6 +226,7 @@ impl<'l> DocumentBuilder<'l> {
 		Document {
 			source: self.source,
 			elements: self.elements,
+			slots: self.slots,
 			root,
 		}
 	}
@@ -332,5 +359,31 @@ mod tests {
 	#[should_panic(expected = "no element to close")]
 	fn closing_the_root() {
 		DocumentBuilder::new(source()).close();
+	}
+
+	#[test]
+	fn slots() {
+		use crate::LinkSlot;
+		use crate::OutputContext;
+		use crate::Property;
+		use crate::SymbolRef;
+
+		let source = source();
+		let mut builder = DocumentBuilder::new(source.clone());
+		builder.open(ElementKind::Paragraph, token(&source, 9..27));
+		let link = Slot::Link(LinkSlot {
+			target: SymbolRef::new(None, "title"),
+			property: Property::Title,
+			context: OutputContext::Text,
+		});
+		let id = builder.slot(link.clone(), token(&source, 14..22));
+		builder.close();
+		let document = builder.finish();
+
+		assert_eq!(document.slot(id), &link);
+		assert_eq!(document.slots().count(), 1);
+		let (paragraph, _) = document.children(document.root()).next().unwrap();
+		let (_, element) = document.children(paragraph).next().unwrap();
+		assert_eq!(element.kind, ElementKind::Slot(id));
 	}
 }
