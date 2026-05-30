@@ -7,8 +7,11 @@ use nml_diagnostics::DiagnosticMessage;
 use nml_diagnostics::Edit;
 use nml_diagnostics::Fix;
 use nml_diagnostics::MessageContent;
+use nml_source::Bias;
 use nml_source::Source;
 use nml_source::Token;
+use nml_source::Url;
+use nml_source::VirtualSourceBuilder;
 
 use crate::Capture;
 use crate::Node;
@@ -16,6 +19,7 @@ use crate::OptionEntry;
 use crate::OptionSchema;
 use crate::OptionValue;
 use crate::Options;
+use crate::Prefix;
 use crate::RuleId;
 use crate::RuleMatch;
 use crate::RuleSet;
@@ -44,6 +48,7 @@ pub fn parse(rules: &RuleSet, source: Arc<Source>) -> Parsed {
 		text: source.content(),
 		source: &source,
 		frames: Vec::new(),
+		depth: 0,
 		diagnostics: Vec::new(),
 	};
 	let (nodes, _, _) = parser.blocks(0, parser.text.len());
@@ -59,6 +64,8 @@ struct Parser<'a> {
 	text: &'a str,
 	/// The expected-delimiter stack: one frame per content atom being parsed.
 	frames: Vec<Frame>,
+	/// The nesting of the containers and frames around this source.
+	depth: usize,
 	diagnostics: Vec<Diagnostic>,
 }
 
@@ -490,6 +497,7 @@ impl Parser<'_> {
 				self.content(context, delimiters, false, pos, end)
 			}
 			Op::Options(schema) => self.options(schema, pos, end),
+			Op::Container(prefix) => self.container(context, prefix, pos),
 			Op::Run { char, min } => match self.run(*char, pos, end) {
 				(count, len) if count >= *min => matched(len),
 				_ => Err(self.expected(op, pos, end)),
@@ -566,6 +574,7 @@ impl Parser<'_> {
 			Op::Repeat { ops, .. } => self.starts_seq(ops, pos, end, captures),
 			Op::Run { char, min } => self.run(*char, pos, end).0 >= *min,
 			Op::Options(_) => rest.starts_with('['),
+			Op::Container(_) => true,
 			Op::Same { name, run } => same(captures, name, *run)
 				.is_some_and(|close| self.close_at(&close, pos, end).is_some()),
 			Op::Text(_) | Op::RestOfLine | Op::InlineContent(_) | Op::Content(_) => true,
@@ -612,14 +621,7 @@ impl Parser<'_> {
 		start: usize,
 		end: usize,
 	) -> Result<(usize, Value), Error> {
-		if self.frames.len() >= MAX_NESTING {
-			let kind = DiagnosticKind::NestingTooDeep { limit: MAX_NESTING };
-			let location = self.token(context.opener.clone());
-			return Err(Error::new(
-				Diagnostic::new(kind, DiagnosticMessage::new(location)),
-				start,
-			));
-		}
+		self.check_nesting(context, start)?;
 		self.frames.push(Frame { delimiters, inline });
 		let own = self.frames.len() - 1;
 		let (nodes, pos, stop) = if inline {
@@ -637,6 +639,92 @@ impl Parser<'_> {
 				value: Some(Value::Nodes(nodes)),
 			})
 		}
+	}
+
+	fn check_nesting(&self, context: &Context, pos: usize) -> Result<(), Error> {
+		if self.depth + self.frames.len() < MAX_NESTING {
+			return Ok(());
+		}
+		let kind = DiagnosticKind::NestingTooDeep { limit: MAX_NESTING };
+		let location = self.token(context.opener.clone());
+		Err(Error::new(
+			Diagnostic::new(kind, DiagnosticMessage::new(location)),
+			pos,
+		))
+	}
+
+	/// A container from `start`: the lines that belong to it, without their prefix, are
+	/// parsed as blocks in a virtual source.
+	fn container(
+		&mut self,
+		context: &Context,
+		prefix: &Prefix,
+		start: usize,
+	) -> Result<(usize, Value), Error> {
+		self.check_nesting(context, start)?;
+		let end = context.end;
+		let line_start = self.text[..start].rfind('\n').map_or(0, |i| i + 1);
+		let indent = start - line_start;
+
+		let mut pieces = Vec::new();
+		let mut pos = start;
+		if !self.is_line_start(start) {
+			pos = self.next_line(start, end);
+			pieces.push(start..pos);
+		}
+		// Blank lines that belong to the container only if an indented line follows.
+		let mut pending = Vec::new();
+		while pos < end {
+			let next = self.next_line(pos, end);
+			let line = &self.text[pos..self.line_end(pos, end)];
+			let content = match prefix {
+				Prefix::Literal(prefix) if line.starts_with(prefix.as_str()) => {
+					pos + prefix.len()..next
+				}
+				Prefix::Literal(prefix) if line == prefix.trim_end() => pos + line.len()..next,
+				Prefix::Indent if indent > 0 && self.is_blank_line(pos, end) => {
+					let skip = line.len().min(indent);
+					pending.push(pos + skip..next);
+					pos = next;
+					continue;
+				}
+				Prefix::Indent if indent > 0 && line.starts_with(&" ".repeat(indent)) => {
+					pos + indent..next
+				}
+				_ => break,
+			};
+			pieces.append(&mut pending);
+			pieces.push(content);
+			pos = next;
+		}
+		// The match ends after the last line of the container, not after trailing blanks.
+		let match_end = pieces.last().map_or(start, |piece| piece.end);
+
+		let mut builder =
+			VirtualSourceBuilder::new(self.source.clone(), self.container_location(start), start);
+		for piece in pieces {
+			builder.copy(piece);
+		}
+		let source = Arc::new(builder.build());
+		let mut nested = Parser {
+			rules: self.rules,
+			text: source.content(),
+			source: &source,
+			frames: Vec::new(),
+			depth: self.depth + self.frames.len() + 1,
+			diagnostics: Vec::new(),
+		};
+		let (nodes, _, _) = nested.blocks(0, nested.text.len());
+		self.diagnostics.append(&mut nested.diagnostics);
+		Ok((match_end, Value::Nodes(nodes)))
+	}
+
+	/// `virtual:///<root path>/container/<root offset>`.
+	fn container_location(&self, start: usize) -> Url {
+		let (root, offset) = self.source.root_offset(start, Bias::Start);
+		let mut location = Url::parse("virtual:///").unwrap();
+		location.set_path(&format!("{}/container/{offset}", root.location().path()));
+		location
 	}
 
 	/// The error for a construct whose delimiter is missing: reported at the opener, with the
@@ -1482,5 +1570,99 @@ mod tests {
 		// An escaped character does not start a block either.
 		let diagnostics = check("a\n\\# x\n\\:end", r#"P["a\n" E(#) " x\n" E(:) "end"]"#);
 		assert_diagnostics!(diagnostics, []);
+	}
+
+	fn container_rules() -> RuleSet {
+		let mut rules = rules();
+		let quote = || Atom::Container(Prefix::Literal("> ".into()));
+		for rule in [
+			Rule::new(
+				"quote",
+				vec![Atom::LineStart, lit("> "), Atom::capture("body", quote())],
+			),
+			Rule::new(
+				"callout",
+				vec![
+					Atom::LineStart,
+					lit("> [!"),
+					Atom::capture("kind", Atom::Word),
+					lit("]"),
+					Atom::LineEnd,
+					Atom::capture("body", quote()),
+				],
+			),
+			Rule::new(
+				"item",
+				vec![
+					Atom::LineStart,
+					lit("- "),
+					Atom::capture("body", Atom::Container(Prefix::Indent)),
+				],
+			),
+		] {
+			rules.add(rule).unwrap();
+		}
+		rules
+	}
+
+	fn check_containers(text: &str, expected: &str) -> Vec<Diagnostic> {
+		let rules = container_rules();
+		let parsed = parse(&rules, source(text));
+		assert_eq!(show(&rules, &parsed.nodes), expected);
+		parsed.diagnostics
+	}
+
+	#[test]
+	fn containers() {
+		let diagnostics = check_containers(
+			"> a\n> **b**\n>\n> c\nd",
+			r#"quote(body=[P["a\n" bold(body=["b"])] P["c"]]) P["d"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+
+		let diagnostics = check_containers(
+			"> > x\n> > y\n> z\n",
+			r#"quote(body=[quote(body=[P["x\ny"]]) P["z"]])"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+
+		let diagnostics = check_containers(
+			"> [!note]\n> text\n\nafter",
+			r#"callout(kind="note" body=[P["text"]]) P["after"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
+	fn indented_containers() {
+		let diagnostics = check_containers(
+			"- a\n  b\n\n  - c\n\n    d\n- e\n\nf",
+			r#"item(body=[P["a\nb"] item(body=[P["c"] P["d"]])]) item(body=[P["e"]]) P["f"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
+	fn container_positions_map_to_the_file() {
+		let rules = container_rules();
+		let parsed = parse(&rules, source("> a\n> **b"));
+		assert_diagnostics!(parsed.diagnostics, [1001 @ 2..4]);
+		let primary = &parsed.diagnostics[0].primary().location;
+		assert_eq!(
+			primary.source().location().as_str(),
+			"virtual:///test.nml/container/2"
+		);
+		assert_eq!(primary.root().range(), 6..8);
+		assert_eq!(
+			primary.root().source().location().as_str(),
+			"file:///test.nml"
+		);
+	}
+
+	#[test]
+	fn container_nesting_is_bounded() {
+		let rules = container_rules();
+		let parsed = parse(&rules, source(&"> ".repeat(1000)));
+		assert_diagnostics!(parsed.diagnostics, [1004]);
 	}
 }

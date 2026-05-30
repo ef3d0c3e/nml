@@ -106,6 +106,8 @@ pub enum RuleErrorKind {
 	UnknownCapture { name: String },
 	/// A `Run` with a `min` of zero.
 	EmptyRun,
+	/// A `Container` that is not the last atom of a block rule.
+	MisplacedContainer,
 }
 
 impl fmt::Display for RuleError {
@@ -141,6 +143,9 @@ impl fmt::Display for RuleError {
 				)
 			}
 			RuleErrorKind::EmptyRun => write!(f, "a `Run` must have a `min` of at least 1"),
+			RuleErrorKind::MisplacedContainer => {
+				write!(f, "a `Container` must be the last atom of a block rule")
+			}
 		}
 	}
 }
@@ -204,6 +209,7 @@ impl RuleSet {
 				}));
 			}
 		}
+		check_containers(&rule).map_err(error)?;
 		let ops = compile(&rule.atoms, &[Vec::new()], &mut Vec::new()).map_err(error)?;
 
 		if let Some(replaced) = replaced {
@@ -345,6 +351,7 @@ fn compile(
 				}
 			}
 			Atom::Options(schema) => Op::Options(schema.clone()),
+			Atom::Container(prefix) => Op::Container(prefix.clone()),
 			Atom::Same(name) => Op::Same {
 				name: name.as_str().into(),
 				run: same(captured, name)?,
@@ -373,6 +380,34 @@ fn compile(
 		});
 	}
 	Ok(ops)
+}
+
+/// A container may only be the last atom of a block rule, possibly captured.
+fn check_containers(rule: &Rule) -> Result<(), RuleErrorKind> {
+	fn contains(atom: &Atom) -> bool {
+		match atom {
+			Atom::Container(_) => true,
+			Atom::Capture { atom, .. } => contains(atom),
+			Atom::Or(alternatives) => alternatives.iter().flatten().any(contains),
+			Atom::Repeat { atoms, .. } => atoms.iter().any(contains),
+			_ => false,
+		}
+	}
+	let Some((last, rest)) = rule.atoms.split_last() else {
+		return Ok(());
+	};
+	let mut last = last;
+	while let Atom::Capture { atom, .. } = last {
+		last = atom;
+	}
+	let misplaced = rest.iter().any(contains)
+		|| (contains(last)
+			&& (!matches!(last, Atom::Container(_)) || rule.table() != Table::Block));
+	if misplaced {
+		Err(RuleErrorKind::MisplacedContainer)
+	} else {
+		Ok(())
+	}
 }
 
 /// The run character of the capture a `Same` refers to.
@@ -689,6 +724,38 @@ mod tests {
 		);
 		rules
 			.add(fence(vec![Atom::Text, Atom::same("fence")]))
+			.unwrap();
+	}
+
+	#[test]
+	fn containers_end_block_rules() {
+		use crate::Prefix;
+
+		let mut rules = RuleSet::new();
+		let container = || Atom::Container(Prefix::Literal("> ".into()));
+		for atoms in [
+			vec![lit(">"), container()],
+			vec![Atom::LineStart, lit(">"), container(), Atom::LineEnd],
+			vec![
+				Atom::LineStart,
+				lit(">"),
+				Atom::optional(vec![lit("x"), container()]),
+			],
+		] {
+			assert_eq!(
+				kind(&mut rules, Rule::new("r", atoms)),
+				RuleErrorKind::MisplacedContainer
+			);
+		}
+		rules
+			.add(Rule::new(
+				"quote",
+				vec![
+					Atom::LineStart,
+					lit("> "),
+					Atom::capture("body", container()),
+				],
+			))
 			.unwrap();
 	}
 }

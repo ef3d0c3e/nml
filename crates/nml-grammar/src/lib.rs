@@ -8,6 +8,7 @@ mod tree;
 mod trie;
 
 pub use atom::Atom;
+pub use atom::Prefix;
 pub use options::OptionEntry;
 pub use options::OptionKind;
 pub use options::OptionSchema;

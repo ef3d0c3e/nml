@@ -48,6 +48,20 @@ pub enum Atom {
 	Same(String),
 	/// An option list, `[key=value, …]`, on one line, checked against a schema.
 	Options(Arc<OptionSchema>),
+	/// The rest of the line and the following lines that carry the prefix, with the prefix
+	/// removed, parsed as blocks. It must be the last atom of a block rule.
+	Container(Prefix),
+}
+
+/// The line prefix of a container.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Prefix {
+	/// Lines that start with this text. A line that is the prefix without its trailing
+	/// blanks (`>` for `> `) is an empty line of the container.
+	Literal(String),
+	/// Lines indented by the width of the first line up to the container (a list item's
+	/// marker). Blank lines are part of the container when an indented line follows them.
+	Indent,
 }
 
 impl Atom {
@@ -115,6 +129,7 @@ impl Atom {
 			Atom::Run { .. } => "Run",
 			Atom::Same(_) => "Same",
 			Atom::Options(_) => "Options",
+			Atom::Container(_) => "Container",
 		}
 	}
 
@@ -137,7 +152,11 @@ impl Atom {
 			Atom::Repeat { atoms, min, .. } => {
 				*min > 0 && atoms.first().is_some_and(Atom::decidable)
 			}
-			Atom::Text | Atom::RestOfLine | Atom::InlineContent | Atom::Content => false,
+			Atom::Text
+			| Atom::RestOfLine
+			| Atom::InlineContent
+			| Atom::Content
+			| Atom::Container(_) => false,
 		}
 	}
 }
@@ -178,6 +197,7 @@ pub(crate) enum Op {
 		run: Option<char>,
 	},
 	Options(Arc<OptionSchema>),
+	Container(Prefix),
 }
 
 impl Op {
@@ -198,6 +218,7 @@ impl Op {
 			Op::Run { .. } => "Run",
 			Op::Same { .. } => "Same",
 			Op::Options(_) => "Options",
+			Op::Container(_) => "Container",
 		}
 	}
 }
