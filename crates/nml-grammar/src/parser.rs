@@ -225,6 +225,13 @@ impl Parser<'_> {
 		self.diagnostics.push(diagnostic);
 	}
 
+	/// The length of an escape at `pos`: `\` and an ASCII punctuation character, which then
+	/// neither opens nor closes anything.
+	fn escape(&self, pos: usize, end: usize) -> Option<usize> {
+		let rest = &self.text.as_bytes()[pos..end];
+		(rest.len() >= 2 && rest[0] == b'\\' && rest[1].is_ascii_punctuation()).then_some(2)
+	}
+
 	/// The innermost frame with a delimiter at `pos`, and the delimiter's length. Only the
 	/// frames of the current phase count: inline frames inside inline content, block frames
 	/// between blocks.
@@ -354,6 +361,15 @@ impl Parser<'_> {
 		let mut text_start = start;
 		let mut pos = start;
 		let stop = loop {
+			if let Some(len) = self.escape(pos, end) {
+				if text_start < pos {
+					nodes.push(Node::Text(self.token(text_start..pos)));
+				}
+				nodes.push(Node::Escape(self.token(pos..pos + len)));
+				pos += len;
+				text_start = pos;
+				continue;
+			}
 			let rule = match self.next(Table::Inline, pos, end) {
 				Ok(rule) => rule,
 				Err(frame) => break Stop::Frame(frame),
@@ -928,6 +944,7 @@ mod tests {
 		for node in nodes {
 			out.push(match node {
 				Node::Text(token) => format!("{:?}", token.content()),
+				Node::Escape(token) => format!("E({})", &token.content()[1..]),
 				Node::Paragraph { children, .. } => format!("P[{}]", show(rules, children)),
 				Node::Match(m) => {
 					let captures: Vec<_> = m
@@ -1446,5 +1463,24 @@ mod tests {
 			let parsed = parse(&rules, source(text));
 			nml_diagnostics::testing::check(&parsed.diagnostics, &[(id, Some(range))]);
 		}
+	}
+
+	#[test]
+	fn escapes() {
+		let diagnostics = check(
+			r"a \*b\* \\ \q \",
+			r#"P["a " E(*) "b" E(*) " " E(\) " \\q \\"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+
+		let diagnostics = check(
+			r"*a \* b* `a\` \# x",
+			r#"P[italic(body=["a " E(*) " b"]) " " code(fence="`" code="a\\") " " E(#) " x"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+
+		// An escaped character does not start a block either.
+		let diagnostics = check("a\n\\# x\n\\:end", r#"P["a\n" E(#) " x\n" E(:) "end"]"#);
+		assert_diagnostics!(diagnostics, []);
 	}
 }

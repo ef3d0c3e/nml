@@ -10,6 +10,8 @@ use crate::RuleId;
 pub enum Node {
 	/// Text that no rule matched.
 	Text(Token),
+	/// `\` and an ASCII punctuation character, which stands for that character.
+	Escape(Token),
 	/// Inline content between blank lines that no block rule matched.
 	Paragraph { token: Token, children: Vec<Node> },
 	/// A match of a rule.
@@ -19,7 +21,7 @@ pub enum Node {
 impl Node {
 	pub fn token(&self) -> &Token {
 		match self {
-			Node::Text(token) => token,
+			Node::Text(token) | Node::Escape(token) => token,
 			Node::Paragraph { token, .. } => token,
 			Node::Match(m) => &m.token,
 		}
