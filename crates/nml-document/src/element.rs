@@ -1,0 +1,74 @@
+use nml_source::Token;
+
+/// Identifies an element in its [`Document`](crate::Document).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ElementId(pub(crate) u32);
+
+/// What an element is.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum ElementKind {
+	/// The root of a document.
+	Document,
+	Paragraph,
+	/// Text, with escapes already resolved.
+	Text(String),
+	/// Styled inline content.
+	Style(Style),
+	/// A heading; its children are the title.
+	Heading {
+		level: u8,
+	},
+}
+
+impl ElementKind {
+	/// The name of the kind, as element events see it (`heading`, `paragraph`, …).
+	pub fn name(&self) -> &'static str {
+		match self {
+			ElementKind::Document => "document",
+			ElementKind::Paragraph => "paragraph",
+			ElementKind::Text(_) => "text",
+			ElementKind::Style(_) => "style",
+			ElementKind::Heading { .. } => "heading",
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Style {
+	Bold,
+	Italic,
+	Underline,
+	Highlight,
+	Strikethrough,
+}
+
+/// The fields of an element that element events may change before it is written.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Attributes {
+	/// The reference name (`{#name}`), which also becomes the HTML `id`.
+	pub id: Option<String>,
+	pub classes: Vec<String>,
+}
+
+/// An element of the tree. Once written to a [`Document`](crate::Document), it does not
+/// change.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Element {
+	pub kind: ElementKind,
+	/// Where the element comes from.
+	pub token: Token,
+	pub attributes: Attributes,
+	pub(crate) parent: Option<ElementId>,
+	pub(crate) children: Vec<ElementId>,
+}
+
+impl Element {
+	pub fn parent(&self) -> Option<ElementId> {
+		self.parent
+	}
+
+	pub fn children(&self) -> &[ElementId] {
+		&self.children
+	}
+}
