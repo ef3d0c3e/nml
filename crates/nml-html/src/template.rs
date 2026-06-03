@@ -1,0 +1,248 @@
+use nml_document::Document;
+use nml_document::ElementId;
+use nml_document::ElementKind;
+use nml_document::OutputContext;
+use nml_document::Slot;
+use nml_document::SlotId;
+use nml_document::Style;
+
+/// A compiled page with nothing at its slots. It is never modified: filling the slots
+/// streams it, so the positions stay valid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Template {
+	pub content: String,
+	/// In order of position.
+	pub slots: Vec<TemplateSlot>,
+}
+
+/// Where a slot's value goes in a template.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TemplateSlot {
+	pub slot: SlotId,
+	/// A byte offset in the template.
+	pub position: usize,
+	pub context: OutputContext,
+}
+
+/// The page around a document.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PageOptions {
+	/// The `lang` of the page.
+	pub language: Option<String>,
+	pub title: String,
+	/// Stylesheet URLs.
+	pub stylesheets: Vec<String>,
+	pub icon: Option<String>,
+}
+
+/// Compiles a document into a full HTML page.
+pub fn compile(document: &Document, options: &PageOptions) -> Template {
+	let mut out = Output {
+		content: String::new(),
+		slots: Vec::new(),
+	};
+	out.raw("<!DOCTYPE html>\n<html");
+	if let Some(language) = &options.language {
+		out.raw(" lang=\"");
+		out.attribute(language);
+		out.raw("\"");
+	}
+	out.raw(">\n<head>\n<meta charset=\"utf-8\">\n");
+	out.raw("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+	out.raw("<title>");
+	out.text(&options.title);
+	out.raw("</title>\n");
+	for stylesheet in &options.stylesheets {
+		out.raw("<link rel=\"stylesheet\" href=\"");
+		out.attribute(stylesheet);
+		out.raw("\">\n");
+	}
+	if let Some(icon) = &options.icon {
+		out.raw("<link rel=\"icon\" href=\"");
+		out.attribute(icon);
+		out.raw("\">\n");
+	}
+	out.raw("</head>\n<body>\n");
+	out.element(document, document.root());
+	out.raw("</body>\n</html>\n");
+	Template {
+		content: out.content,
+		slots: out.slots,
+	}
+}
+
+struct Output {
+	content: String,
+	slots: Vec<TemplateSlot>,
+}
+
+impl Output {
+	fn raw(&mut self, text: &str) {
+		self.content.push_str(text);
+	}
+
+	fn text(&mut self, text: &str) {
+		escape(&mut self.content, text, false);
+	}
+
+	fn attribute(&mut self, text: &str) {
+		escape(&mut self.content, text, true);
+	}
+
+	fn children(&mut self, document: &Document, id: ElementId) {
+		for child in document.get(id).children() {
+			self.element(document, *child);
+		}
+	}
+
+	/// An opening tag with the element's id and classes.
+	fn open(&mut self, document: &Document, id: ElementId, tag: &str) {
+		let attributes = &document.get(id).attributes;
+		self.raw("<");
+		self.raw(tag);
+		if let Some(id) = &attributes.id {
+			self.raw(" id=\"");
+			self.attribute(id);
+			self.raw("\"");
+		}
+		if !attributes.classes.is_empty() {
+			self.raw(" class=\"");
+			self.attribute(&attributes.classes.join(" "));
+			self.raw("\"");
+		}
+		self.raw(">");
+	}
+
+	fn wrap(&mut self, document: &Document, id: ElementId, tag: &str) {
+		self.open(document, id, tag);
+		self.children(document, id);
+		self.raw("</");
+		self.raw(tag);
+		self.raw(">");
+	}
+
+	fn element(&mut self, document: &Document, id: ElementId) {
+		match &document.get(id).kind {
+			ElementKind::Document => self.children(document, id),
+			ElementKind::Paragraph => {
+				self.wrap(document, id, "p");
+				self.raw("\n");
+			}
+			ElementKind::Text(text) => self.text(text),
+			ElementKind::Style(style) => {
+				let tag = match style {
+					Style::Bold => "strong",
+					Style::Italic => "em",
+					Style::Underline => "u",
+					Style::Highlight => "mark",
+					Style::Strikethrough => "s",
+				};
+				self.wrap(document, id, tag);
+			}
+			ElementKind::Heading { level } => {
+				self.wrap(document, id, &format!("h{}", level.clamp(&1, &6)));
+				self.raw("\n");
+			}
+			ElementKind::Slot(slot) => {
+				let context = match document.slot(*slot) {
+					Slot::Link(link) => link.context,
+					Slot::PostParse(_) | Slot::Deferred(_) => OutputContext::Markup,
+				};
+				self.slots.push(TemplateSlot {
+					slot: *slot,
+					position: self.content.len(),
+					context,
+				});
+			}
+			kind => unimplemented!("HTML for `{}`", kind.name()),
+		}
+	}
+}
+
+/// Escapes text for HTML content, or for a double-quoted attribute.
+pub fn escape(out: &mut String, text: &str, attribute: bool) {
+	for c in text.chars() {
+		match c {
+			'&' => out.push_str("&amp;"),
+			'<' => out.push_str("&lt;"),
+			'>' => out.push_str("&gt;"),
+			'"' if attribute => out.push_str("&quot;"),
+			'\'' if attribute => out.push_str("&#39;"),
+			c => out.push(c),
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::Arc;
+
+	use nml_document::Attributes;
+	use nml_document::DocumentBuilder;
+	use nml_document::LinkSlot;
+	use nml_document::Property;
+	use nml_document::SymbolRef;
+	use nml_source::Source;
+	use nml_source::Token;
+	use nml_source::Url;
+
+	use super::*;
+
+	#[test]
+	fn page() {
+		let source = Arc::new(Source::new(
+			Url::parse("file:///a.nml").unwrap(),
+			"x".repeat(10),
+			0,
+		));
+		let token = || Token::new(source.clone(), 0..1);
+		let mut builder = DocumentBuilder::new(source.clone());
+		let attributes = Attributes {
+			id: Some("a\"b".into()),
+			classes: vec!["x".into(), "y".into()],
+		};
+		builder.open_with(ElementKind::Heading { level: 2 }, token(), attributes);
+		builder.leaf(ElementKind::Text("1 < 2 & \"3\"".into()), token());
+		builder.close();
+		builder.open(ElementKind::Paragraph, token());
+		builder.leaf(ElementKind::Text("See ".into()), token());
+		builder.open(ElementKind::Style(Style::Bold), token());
+		let slot = builder.slot(
+			Slot::Link(LinkSlot {
+				target: SymbolRef::new(None, "a"),
+				property: Property::Title,
+				context: OutputContext::Text,
+			}),
+			token(),
+		);
+		builder.close();
+		builder.close();
+		let document = builder.finish();
+
+		let options = PageOptions {
+			language: Some("en".into()),
+			title: "A & B".into(),
+			stylesheets: vec!["style.css".into()],
+			icon: None,
+		};
+		let template = compile(&document, &options);
+		let body = "<body>\n<h2 id=\"a&quot;b\" class=\"x y\">1 &lt; 2 &amp; \"3\"</h2>\n\
+			<p>See <strong></strong></p>\n</body>";
+		assert!(template.content.contains(body), "{}", template.content);
+		assert!(
+			template
+				.content
+				.starts_with("<!DOCTYPE html>\n<html lang=\"en\">")
+		);
+		assert!(template.content.contains("<title>A &amp; B</title>"));
+		assert!(
+			template
+				.content
+				.contains("<link rel=\"stylesheet\" href=\"style.css\">")
+		);
+		assert_eq!(template.slots.len(), 1);
+		let position = template.slots[0].position;
+		assert_eq!(template.slots[0].slot, slot);
+		assert_eq!(&template.content[position..position + 9], "</strong>");
+	}
+}

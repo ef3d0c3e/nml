@@ -40,6 +40,8 @@ pub enum Property {
 pub enum OutputContext {
 	Text,
 	Attribute,
+	/// Markup inserted as is: the output of post-parse and deferred slots.
+	Markup,
 }
 
 /// Filled when the unit's parse ends, by a callback in the unit's Lua state.
