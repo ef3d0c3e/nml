@@ -64,6 +64,11 @@ pub enum DiagnosticKind {
 	#[diag(id = 1008, message = "diagnostic-missing-option")]
 	MissingOption { name: String },
 
+	#[diag(id = 2001, message = "diagnostic-heading-too-deep")]
+	HeadingTooDeep { level: usize, max: usize },
+	#[diag(id = 2002, message = "diagnostic-duplicate-reference")]
+	DuplicateReference { name: String },
+
 	/// A Lua error, forwarded with Lua's own text.
 	#[diag(id = 4001, message = "diagnostic-lua-error")]
 	LuaError { message: String },

@@ -3,6 +3,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use nml_diagnostics::Diagnostic;
+use nml_diagnostics::DiagnosticKind;
+use nml_diagnostics::DiagnosticMessage;
 use nml_document::Dependency;
 use nml_document::DocumentBuilder;
 use nml_document::ElementKind;
@@ -80,6 +82,7 @@ pub fn compile(language: &Language, source: Arc<Source>) -> Compiled {
 		uses: Vec::new(),
 		dependencies: Vec::new(),
 		diagnostics: parsed.diagnostics,
+		exported: Vec::new(),
 	};
 	lower.nodes(&parsed.nodes);
 	let Lower {
@@ -109,6 +112,8 @@ pub struct Lower<'a, 'l> {
 	pub uses: Vec<Use>,
 	pub dependencies: Vec<Dependency>,
 	pub diagnostics: Vec<Diagnostic>,
+	/// Exported names and where they are written.
+	exported: Vec<(String, Token)>,
 }
 
 impl fmt::Debug for Lower<'_, '_> {
@@ -174,9 +179,49 @@ impl Lower<'_, '_> {
 		}
 	}
 
+	/// Adds an export, unless the unit already exports that name. `reference` is where the
+	/// name is written.
+	pub fn export(&mut self, export: Export, reference: Token) {
+		if let Some((_, first)) = self.exported.iter().find(|(name, _)| *name == export.name) {
+			let kind = DiagnosticKind::DuplicateReference {
+				name: export.name.clone(),
+			};
+			let diagnostic = Diagnostic::new(kind, DiagnosticMessage::new(reference))
+				.with(DiagnosticMessage::fluent(first.clone(), "first"));
+			self.diagnostics.push(diagnostic);
+			return;
+		}
+		self.exported.push((export.name.clone(), reference));
+		self.exports.push(export);
+	}
+
 	fn flush(&mut self, text: Option<(Token, String)>) {
 		if let Some((token, text)) = text {
 			self.builder.leaf(ElementKind::Text(text), token);
+		}
+	}
+}
+
+/// The text of nodes without markup, with escapes resolved.
+pub(crate) fn plain_text(nodes: &[Node]) -> String {
+	let mut text = String::new();
+	collect_text(nodes, &mut text);
+	text
+}
+
+fn collect_text(nodes: &[Node], out: &mut String) {
+	for node in nodes {
+		match node {
+			Node::Text(token) => out.push_str(token.content()),
+			Node::Escape(token) => out.push_str(&token.content()[1..]),
+			Node::Paragraph { children, .. } => collect_text(children, out),
+			Node::Match(m) => {
+				for capture in &m.captures {
+					if let Value::Nodes(nodes) = &capture.value {
+						collect_text(nodes, out);
+					}
+				}
+			}
 		}
 	}
 }

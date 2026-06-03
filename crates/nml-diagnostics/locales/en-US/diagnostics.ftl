@@ -28,6 +28,12 @@ diagnostic-invalid-option-value = invalid value for `{ $name }`: expected { $exp
     }
 diagnostic-missing-option = missing option `{ $name }`
 
+## Built-in language (2xxx)
+
+diagnostic-heading-too-deep = a heading has at most { $max } levels, not { $level }
+diagnostic-duplicate-reference = `{ $name }` is already defined in this document
+    .first = first defined here
+
 ## Lua (4xxx)
 
 diagnostic-lua-error = { $message }

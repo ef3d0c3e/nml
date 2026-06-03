@@ -1,5 +1,6 @@
 //! The built-in NML language: Rust rules for every core element.
 
+mod heading;
 mod language;
 mod style;
 
@@ -14,6 +15,7 @@ impl Language {
 	pub fn builtin() -> Self {
 		let mut language = Self::empty();
 		style::add(&mut language).expect("built-in rules are valid");
+		heading::add(&mut language).expect("built-in rules are valid");
 		language
 	}
 }
