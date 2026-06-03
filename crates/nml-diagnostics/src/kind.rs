@@ -69,6 +69,9 @@ pub enum DiagnosticKind {
 	#[diag(id = 2002, message = "diagnostic-duplicate-reference")]
 	DuplicateReference { name: String },
 
+	#[diag(id = 3001, message = "diagnostic-unresolved-reference")]
+	UnresolvedReference { target: String },
+
 	/// A Lua error, forwarded with Lua's own text.
 	#[diag(id = 4001, message = "diagnostic-lua-error")]
 	LuaError { message: String },

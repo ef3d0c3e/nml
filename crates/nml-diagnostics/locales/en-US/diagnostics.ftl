@@ -34,6 +34,10 @@ diagnostic-heading-too-deep = a heading has at most { $max } levels, not { $leve
 diagnostic-duplicate-reference = `{ $name }` is already defined in this document
     .first = first defined here
 
+## Workspace, build and imports (3xxx)
+
+diagnostic-unresolved-reference = `{ $target }` does not refer to anything
+
 ## Lua (4xxx)
 
 diagnostic-lua-error = { $message }
