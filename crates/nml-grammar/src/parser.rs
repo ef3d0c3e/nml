@@ -239,23 +239,24 @@ impl Parser<'_> {
 		(rest.len() >= 2 && rest[0] == b'\\' && rest[1].is_ascii_punctuation()).then_some(2)
 	}
 
-	/// The innermost frame with a delimiter at `pos`, and the delimiter's length. Only the
-	/// frames of the current phase count: inline frames inside inline content, block frames
-	/// between blocks.
-	fn closing(&self, pos: usize, end: usize, inline: bool) -> Option<(usize, usize)> {
-		for (index, frame) in self.frames.iter().enumerate().rev() {
-			if frame.inline != inline {
-				break;
-			}
-			if let Some(len) = frame
-				.delimiters
-				.iter()
-				.find_map(|d| self.delimiter_at(d, pos, end))
-			{
-				return Some((index, len));
-			}
-		}
-		None
+	/// The frames of the current phase, innermost first: inline frames inside inline
+	/// content, block frames between blocks.
+	fn phase_frames(&self, inline: bool) -> Vec<(usize, &Frame)> {
+		self.frames
+			.iter()
+			.enumerate()
+			.rev()
+			.take_while(|(_, frame)| frame.inline == inline)
+			.collect()
+	}
+
+	/// The length of the longest delimiter of a frame at `pos`.
+	fn frame_delimiter(&self, frame: &Frame, pos: usize, end: usize) -> Option<usize> {
+		frame
+			.delimiters
+			.iter()
+			.filter_map(|d| self.delimiter_at(d, pos, end))
+			.max()
 	}
 
 	/// The length of a delimiter at `pos`.
@@ -286,16 +287,42 @@ impl Parser<'_> {
 		(count, count * c.len_utf8())
 	}
 
-	/// The rule to dispatch at `pos`, unless a delimiter closes the current frame there. An
-	/// opener wins only if it is longer than the delimiter: inside `*…*`, `**` opens bold,
-	/// but inside `**…**`, `**` closes.
+	/// The rule to dispatch at `pos`, or the frame that a delimiter there closes.
+	///
+	/// When the innermost frame's delimiter matches, the frames below it may close right
+	/// after it: `***` closes `*` then `**`. Their delimiters form a chain, and the frame
+	/// closes if the chain is at least as long as the longest opener. So inside `*…*`, `**`
+	/// opens bold, while in `***x***`, the final `***` closes italic, then bold.
+	///
+	/// A delimiter of an outer frame alone means the inner frames are unclosed. An opener
+	/// wins over it, so that `*c*` inside `**…**` inside `*…*` is italic.
 	fn next(&self, table: Table, pos: usize, end: usize) -> Result<Option<(RuleId, usize)>, usize> {
-		let closing = self.closing(pos, end, table == Table::Inline);
 		let opener = self.rules.dispatch(table, &self.text[pos..end]);
-		match (closing, opener) {
-			(Some((frame, len)), opener) if opener.is_none_or(|(_, l)| l <= len) => Err(frame),
-			(_, opener) => Ok(opener),
+		let frames = self.phase_frames(table == Table::Inline);
+		if let Some((innermost, frame)) = frames.first()
+			&& let Some(len) = self.frame_delimiter(frame, pos, end)
+		{
+			let mut covered = len;
+			for (_, outer) in &frames[1..] {
+				match self.frame_delimiter(outer, pos + covered, end) {
+					Some(len) if len > 0 => covered += len,
+					_ => break,
+				}
+			}
+			return match opener {
+				Some((_, len)) if len > covered => Ok(opener),
+				_ => Err(*innermost),
+			};
 		}
+		if opener.is_some() {
+			return Ok(opener);
+		}
+		for (index, frame) in frames.iter().skip(1) {
+			if self.frame_delimiter(frame, pos, end).is_some() {
+				return Err(*index);
+			}
+		}
+		Ok(None)
 	}
 
 	/// Parses blocks from `pos`, at the start of a line, up to `end` or a delimiter of a
@@ -1324,6 +1351,26 @@ mod tests {
 			r#"P[italic(body=["a " bold(body=["b"]) " c"]) " " bold(body=["a " italic(body=["b"]) " c"]) " " bold(body=[code(fence="`" code="a**b")])]"#,
 		);
 		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
+	fn closing_chains() {
+		for (text, expected) in [
+			("***x***", r#"P[bold(body=[italic(body=["x"])])]"#),
+			("**a *b***", r#"P[bold(body=["a " italic(body=["b"])])]"#),
+			("*a **b***", r#"P[italic(body=["a " bold(body=["b"])])]"#),
+			(
+				"*a **b** c*",
+				r#"P[italic(body=["a " bold(body=["b"]) " c"])]"#,
+			),
+			(
+				"*a **b *c* d** e*",
+				r#"P[italic(body=["a " bold(body=["b " italic(body=["c"]) " d"]) " e"])]"#,
+			),
+		] {
+			let diagnostics = check(text, expected);
+			assert_diagnostics!(diagnostics, []);
+		}
 	}
 
 	#[test]

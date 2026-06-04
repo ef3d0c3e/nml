@@ -75,6 +75,12 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn bold_italic() {
+		let compiled = check("***x***", r#"document[paragraph[Bold[Italic["x"]]]]"#);
+		assert!(compiled.diagnostics.is_empty());
+	}
+
+	#[test]
 	fn unclosed_emphasis_keeps_its_text() {
 		let compiled = check("a **b", r#"document[paragraph["a " "b"]]"#);
 		nml_diagnostics::assert_diagnostics!(compiled.diagnostics, [1001 @ 2..4]);
