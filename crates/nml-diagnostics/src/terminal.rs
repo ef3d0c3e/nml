@@ -59,6 +59,9 @@ pub fn render(
 			} else {
 				Color::Blue
 			});
+		// ariadne does not underline a label without a message: the primary location
+		// repeats the title instead.
+		let text = text.or_else(|| (index == 0).then(|| localized.title.clone()));
 		if let Some(text) = text {
 			label = label.with_message(text);
 		}
