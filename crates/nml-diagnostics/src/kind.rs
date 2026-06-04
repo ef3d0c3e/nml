@@ -71,6 +71,15 @@ pub enum DiagnosticKind {
 
 	#[diag(id = 3001, message = "diagnostic-unresolved-reference")]
 	UnresolvedReference { target: String },
+	/// An error in `nml.toml`, with the TOML parser's own text.
+	#[diag(id = 3002, message = "diagnostic-config-error")]
+	ConfigError { message: String },
+	#[diag(id = 3003, message = "diagnostic-invalid-glob")]
+	InvalidGlob { pattern: String, message: String },
+	#[diag(id = 3004, message = "diagnostic-invalid-module-name")]
+	InvalidModuleName { name: String },
+	#[diag(id = 3005, message = "diagnostic-duplicate-module")]
+	DuplicateModule { name: String },
 
 	/// A Lua error, forwarded with Lua's own text.
 	#[diag(id = 4001, message = "diagnostic-lua-error")]

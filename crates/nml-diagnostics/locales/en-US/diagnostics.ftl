@@ -37,6 +37,11 @@ diagnostic-duplicate-reference = `{ $name }` is already defined in this document
 ## Workspace, build and imports (3xxx)
 
 diagnostic-unresolved-reference = `{ $target }` does not refer to anything
+diagnostic-config-error = invalid configuration: { $message }
+diagnostic-invalid-glob = invalid pattern `{ $pattern }`: { $message }
+diagnostic-invalid-module-name = `{ $name }` is not a valid module name: it must be a single word
+diagnostic-duplicate-module = module `{ $name }` is declared twice
+    .first = first declared here
 
 ## Lua (4xxx)
 

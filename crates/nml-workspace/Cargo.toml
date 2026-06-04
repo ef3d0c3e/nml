@@ -11,6 +11,9 @@ repository.workspace = true
 nml-source.workspace = true
 nml-diagnostics.workspace = true
 nml-document.workspace = true
+globset.workspace = true
+serde.workspace = true
+toml.workspace = true
 
 [lints]
 workspace = true
