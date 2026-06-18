@@ -798,15 +798,21 @@ impl Parser<'_> {
 
 	/// An option list at `start`. Syntax errors fail the rule; an option that does not fit
 	/// the schema is reported, and the match goes on.
+	///
+	/// Blanks and line breaks are skipped around `[`, `=`, `,` and `]`, so a list can span
+	/// several lines, but a key and a value each stay on one line. A trailing `,` is allowed.
 	fn options(
 		&mut self,
 		schema: &OptionSchema,
 		start: usize,
 		end: usize,
 	) -> Result<(usize, Value), Error> {
-		let line_end = self.line_end(start, end);
-		let text = &self.text[..line_end];
-		let skip = |pos: usize| line_end - text[pos..].trim_start_matches([' ', '\t']).len();
+		let text = &self.text[..end];
+		let skip = |pos: usize| {
+			end - text[pos..]
+				.trim_start_matches([' ', '\t', '\r', '\n'])
+				.len()
+		};
 		let fail = |this: &Self, kind, pos| {
 			let location = this.char_token(pos, end);
 			Err(Error::new(
@@ -823,52 +829,42 @@ impl Parser<'_> {
 		}
 		let mut pos = skip(start + 1);
 		let mut entries = Vec::new();
-		if text[pos..].starts_with(']') {
-			pos += 1;
-		} else {
-			loop {
-				let len = word(&text[pos..]);
-				if len == 0 {
-					let atom = "Word".into();
-					return fail(self, DiagnosticKind::ExpectedAtom { atom }, pos);
-				}
-				let key = self.token(pos..pos + len);
-				pos = skip(pos + len);
-				let mut entry = OptionEntry {
-					key,
-					value_token: None,
-					value: None,
-				};
-				if text[pos..].starts_with('=') {
-					let value_start = skip(pos + 1);
-					let (value_end, value) = self.option_value(value_start, line_end, end)?;
-					entry.value_token = Some(self.token(value_start..value_end));
-					entry.value = Some(value);
-					pos = skip(value_end);
-				}
-				entries.push(entry);
-				match text[pos..].chars().next() {
-					Some(',') => pos = skip(pos + 1),
-					Some(']') => {
-						pos += 1;
-						break;
-					}
-					_ => return fail(self, expected_token("]"), pos),
-				}
+		while !text[pos..].starts_with(']') {
+			let len = word(&text[pos..]);
+			if len == 0 {
+				let atom = "Word".into();
+				return fail(self, DiagnosticKind::ExpectedAtom { atom }, pos);
+			}
+			let key = self.token(pos..pos + len);
+			pos = skip(pos + len);
+			let mut entry = OptionEntry {
+				key,
+				value_token: None,
+				value: None,
+			};
+			if text[pos..].starts_with('=') {
+				let value_start = skip(pos + 1);
+				let (value_end, value) = self.option_value(value_start, end)?;
+				entry.value_token = Some(self.token(value_start..value_end));
+				entry.value = Some(value);
+				pos = skip(value_end);
+			}
+			entries.push(entry);
+			match text[pos..].chars().next() {
+				Some(',') => pos = skip(pos + 1),
+				Some(']') => {}
+				_ => return fail(self, expected_token("]"), pos),
 			}
 		}
+		pos += 1;
 
 		let values = self.check_options(schema, &entries, start..pos);
 		Ok((pos, Value::Options(Options { entries, values })))
 	}
 
 	/// A value in an option list: its end and its text without quotes and escapes.
-	fn option_value(
-		&self,
-		start: usize,
-		line_end: usize,
-		end: usize,
-	) -> Result<(usize, String), Error> {
+	fn option_value(&self, start: usize, end: usize) -> Result<(usize, String), Error> {
+		let line_end = self.line_end(start, end);
 		let text = &self.text[..line_end];
 		let mut value = String::new();
 		let mut chars = text[start..].char_indices().map(|(i, c)| (start + i, c));
@@ -1563,6 +1559,15 @@ mod tests {
 	}
 
 	#[test]
+	fn options_on_several_lines() {
+		let diagnostics = check_graph(
+			":graph[\n\tlayout = neato,\n\tscale =\n\t\t2,\n\tcaption = a b\n\t, inline,\n]\n",
+			r#"graph(options={layout:"neato" width:100 scale:2 caption:"a b" inline:true})"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
 	fn invalid_options() {
 		let text = ":graph[nope=1, scale=x, scale=2, layout=fdp, inline=yes]";
 		let diagnostics = check_graph(
@@ -1589,10 +1594,12 @@ mod tests {
 	fn option_syntax_errors() {
 		for (text, id, range) in [
 			(":graph[scale=1", 1001, 14..14),
-			(":graph[scale=1\n]", 1001, 14..15),
+			(":graph[scale=1\nx]", 1001, 15..16),
 			(":graph[=1]", 1003, 7..8),
 			(r#":graph[scale="1" x]"#, 1001, 17..18),
 			(r#":graph[caption="x]"#, 1001, 18..18),
+			(":graph[caption=\"x\n\"]", 1001, 17..18),
+			(":graph[,]", 1003, 7..8),
 		] {
 			let rules = graph_rules();
 			let parsed = parse(&rules, source(text));
