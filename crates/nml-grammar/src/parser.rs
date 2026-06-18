@@ -1028,7 +1028,7 @@ fn number(text: &str, signed: bool, decimal: bool) -> Option<(usize, f64)> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use nml_diagnostics::assert_diagnostics;
 	use nml_source::Url;
 
@@ -1095,7 +1095,7 @@ mod tests {
 		out.join(" ")
 	}
 
-	fn rules() -> RuleSet {
+	pub(crate) fn rules() -> RuleSet {
 		let mut rules = RuleSet::new();
 		let rule = |name, atoms| Rule::new(name, atoms);
 		for rule in [
@@ -1239,7 +1239,7 @@ mod tests {
 		rules
 	}
 
-	fn check(text: &str, expected: &str) -> Vec<Diagnostic> {
+	pub(crate) fn check(text: &str, expected: &str) -> Vec<Diagnostic> {
 		let rules = rules();
 		let parsed = parse(&rules, source(text));
 		assert_eq!(show(&rules, &parsed.nodes), expected);
@@ -1488,7 +1488,7 @@ mod tests {
 		assert_eq!(m.capture("code").unwrap().class.as_deref(), Some("string"));
 	}
 
-	fn graph_rules() -> RuleSet {
+	pub(crate) fn graph_rules() -> RuleSet {
 		use crate::OptionKind;
 		use crate::OptionSpec;
 
@@ -1521,7 +1521,7 @@ mod tests {
 		rules
 	}
 
-	fn check_graph(text: &str, expected: &str) -> Vec<Diagnostic> {
+	pub(crate) fn check_graph(text: &str, expected: &str) -> Vec<Diagnostic> {
 		let rules = graph_rules();
 		let parsed = parse(&rules, source(text));
 		assert_eq!(show(&rules, &parsed.nodes), expected);

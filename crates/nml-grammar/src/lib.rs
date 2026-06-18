@@ -4,6 +4,8 @@ mod atom;
 mod options;
 mod parser;
 mod rule;
+#[cfg(test)]
+mod tests;
 mod tree;
 mod trie;
 
