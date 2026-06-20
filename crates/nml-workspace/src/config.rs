@@ -149,6 +149,26 @@ impl Config {
 		})
 	}
 
+	/// The module path a file is imported as (`std.toc` for `<root of std>/toc.nml`), if it
+	/// is under a module root. `path` is relative to the workspace root, with `/`
+	/// separators.
+	pub fn module_path(&self, path: &str) -> Option<String> {
+		let stem = path.strip_suffix(".nml")?;
+		self.modules.iter().find_map(|module| {
+			let root: Vec<_> = module
+				.root
+				.components()
+				.filter_map(|c| match c {
+					std::path::Component::Normal(part) => Some(part.to_string_lossy()),
+					_ => None,
+				})
+				.collect();
+			let root = root.join("/");
+			let rest = stem.strip_prefix(&root)?.strip_prefix('/')?;
+			Some(format!("{}.{}", module.name, rest.replace('/', ".")))
+		})
+	}
+
 	/// Whether a file, relative to the workspace root, is a page.
 	pub fn is_page(&self, path: &Path) -> bool {
 		self.page_set.is_match(path) && !self.exclude_set.is_match(path)
@@ -245,5 +265,30 @@ root = "lib/nav"
 		)
 		.unwrap_err();
 		assert_diagnostics!(diagnostics, [3003 @ 9..15, 3004 @ 35..40, 3005 @ 103..106]);
+	}
+
+	#[test]
+	fn module_paths() {
+		let config = parse(
+			"[[module]]\nname = \"std\"\nroot = \"modules/std\"\n\
+			[[module]]\nname = \"nav\"\nroot = \"./lib/nav/\"\n",
+		)
+		.unwrap();
+		assert_eq!(
+			config.module_path("modules/std/toc.nml").as_deref(),
+			Some("std.toc")
+		);
+		assert_eq!(
+			config.module_path("modules/std/a/b.nml").as_deref(),
+			Some("std.a.b")
+		);
+		assert_eq!(
+			config.module_path("lib/nav/menu.nml").as_deref(),
+			Some("nav.menu")
+		);
+		assert_eq!(config.module_path("modules/stdx/toc.nml"), None);
+		assert_eq!(config.module_path("modules/std.nml"), None);
+		assert_eq!(config.module_path("index.nml"), None);
+		assert_eq!(config.module_path("modules/std/toc.txt"), None);
 	}
 }

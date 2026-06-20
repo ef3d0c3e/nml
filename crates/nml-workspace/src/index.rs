@@ -357,6 +357,40 @@ impl Index {
 		Ok(())
 	}
 
+	/// A value stored with the index, such as the hash of the configuration it was built
+	/// with.
+	pub fn meta(&self, key: &str) -> Result<Option<String>> {
+		Ok(self
+			.connection
+			.query_row("SELECT value FROM meta WHERE key = ?1", [key], |row| {
+				row.get(0)
+			})
+			.optional()?)
+	}
+
+	pub fn set_meta(&mut self, key: &str, value: &str) -> Result<()> {
+		self.connection.execute(
+			"INSERT INTO meta (key, value) VALUES (?1, ?2)
+			ON CONFLICT (key) DO UPDATE SET value = ?2",
+			[key, value],
+		)?;
+		Ok(())
+	}
+
+	/// The paths of the units that have this parse-time dependency.
+	pub fn dependents(&self, dependency: &Dependency) -> Result<Vec<String>> {
+		let (kind, value) = encode_dependency(dependency);
+		let mut statement = self.connection.prepare(
+			"SELECT DISTINCT units.path FROM dependencies
+			JOIN units ON units.id = dependencies.unit
+			WHERE dependencies.kind = ?1 AND dependencies.value = ?2 ORDER BY units.path",
+		)?;
+		let paths = statement
+			.query_map([kind, value.as_str()], |row| row.get(0))?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(paths)
+	}
+
 	/// Records whether the last link of a page had errors. Such pages are linked again on
 	/// every build, so their errors are reported until they are fixed; the diagnostics
 	/// themselves are not stored.
@@ -1277,5 +1311,37 @@ mod tests {
 		index.set_link_errors("a.nml", true).unwrap();
 		index.set_link_errors("a.nml", false).unwrap();
 		assert!(index.units_with_link_errors().unwrap().is_empty());
+	}
+
+	#[test]
+	fn meta_and_dependents() {
+		let mut index = Index::open_in_memory().unwrap();
+		assert_eq!(index.meta("config_hash").unwrap(), None);
+		index.set_meta("config_hash", "a").unwrap();
+		index.set_meta("config_hash", "b").unwrap();
+		assert_eq!(index.meta("config_hash").unwrap().as_deref(), Some("b"));
+
+		commit(&mut index, "x.nml", 1);
+		commit(&mut index, "y.nml", 1);
+		assert_eq!(
+			index
+				.dependents(&Dependency::Import("std.toc".into()))
+				.unwrap(),
+			["x.nml", "y.nml"]
+		);
+		assert_eq!(
+			index
+				.dependents(&Dependency::Variable(SymbolRef::in_unit(
+					"config", "version"
+				)))
+				.unwrap(),
+			["x.nml", "y.nml"]
+		);
+		assert!(
+			index
+				.dependents(&Dependency::Import("other".into()))
+				.unwrap()
+				.is_empty()
+		);
 	}
 }
