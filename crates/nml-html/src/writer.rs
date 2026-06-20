@@ -92,7 +92,7 @@ mod tests {
 		for _ in 0..=index {
 			id = Some(builder.slot(
 				Slot::Link(LinkSlot {
-					target: SymbolRef::new(None, "x"),
+					target: SymbolRef::local("x"),
 					property: Property::Title,
 					context: OutputContext::Text,
 				}),

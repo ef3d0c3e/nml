@@ -36,6 +36,10 @@ pub enum ElementKind {
 	},
 	/// Where a slot's value goes.
 	Slot(SlotId),
+	/// A link to a symbol or a page. Its URL is the `href` slot; its children are the text.
+	Reference {
+		href: SlotId,
+	},
 }
 
 impl ElementKind {
@@ -48,6 +52,7 @@ impl ElementKind {
 			ElementKind::Style(_) => "style",
 			ElementKind::Heading { .. } => "heading",
 			ElementKind::Slot(_) => "slot",
+			ElementKind::Reference { .. } => "reference",
 		}
 	}
 }

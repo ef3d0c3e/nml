@@ -5,27 +5,82 @@ use nml_source::Token;
 use crate::Document;
 use crate::ElementId;
 
-/// A symbolic reference to an exported symbol: `doc#name`, or `#name` for a lookup by name
-/// alone. It is resolved at link time, against the symbol table.
+/// Where a reference looks for its symbol.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Scope {
+	/// The current document: `[[name]]`.
+	Local,
+	/// The unit with this reference key: `[[doc#name]]`.
+	Unit(String),
+	/// Every unit; the symbol must be unique: `[[#name]]`.
+	Any,
+}
+
+/// A symbolic reference, resolved at link time against the symbol table. With an empty
+/// name in a unit's scope (`[[doc#]]`), it refers to the unit's page itself.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SymbolRef {
-	/// The unit, as written (`config` in `config#pages`).
-	pub unit: Option<String>,
+	pub scope: Scope,
 	pub name: String,
 }
 
 impl SymbolRef {
-	pub fn new(unit: Option<String>, name: impl Into<String>) -> Self {
+	pub fn local(name: impl Into<String>) -> Self {
 		Self {
-			unit,
+			scope: Scope::Local,
 			name: name.into(),
+		}
+	}
+
+	pub fn in_unit(unit: impl Into<String>, name: impl Into<String>) -> Self {
+		Self {
+			scope: Scope::Unit(unit.into()),
+			name: name.into(),
+		}
+	}
+
+	pub fn any(name: impl Into<String>) -> Self {
+		Self {
+			scope: Scope::Any,
+			name: name.into(),
+		}
+	}
+
+	/// The page of a unit.
+	pub fn page(unit: impl Into<String>) -> Self {
+		Self::in_unit(unit, "")
+	}
+
+	/// Whether it refers to a unit's page rather than a symbol.
+	pub fn is_page(&self) -> bool {
+		self.name.is_empty()
+	}
+
+	/// Parses `name`, `doc#name`, `doc#` or `#name`. Names and unit keys are not empty
+	/// (except the name of a page reference), and hold no blanks, `#` or `|`.
+	pub fn parse(text: &str) -> Option<Self> {
+		let valid = |part: &str| {
+			!part.is_empty()
+				&& !part
+					.chars()
+					.any(|c| c.is_whitespace() || c == '#' || c == '|')
+		};
+		match text.split_once('#') {
+			None => valid(text).then(|| Self::local(text)),
+			Some(("", name)) => valid(name).then(|| Self::any(name)),
+			Some((unit, "")) => valid(unit).then(|| Self::page(unit)),
+			Some((unit, name)) => (valid(unit) && valid(name)).then(|| Self::in_unit(unit, name)),
 		}
 	}
 }
 
 impl fmt::Display for SymbolRef {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}#{}", self.unit.as_deref().unwrap_or(""), self.name)
+		match &self.scope {
+			Scope::Local => write!(f, "{}", self.name),
+			Scope::Unit(unit) => write!(f, "{unit}#{}", self.name),
+			Scope::Any => write!(f, "#{}", self.name),
+		}
 	}
 }
 
@@ -160,6 +215,9 @@ pub enum Dependency {
 /// Everything a parse produces for a unit.
 #[derive(Debug, Clone)]
 pub struct Unit {
+	/// The unit's reference key, if the document sets one (`nml.reference_key`). By
+	/// default, it is the file's basename.
+	pub reference_key: Option<String>,
 	pub document: Document,
 	pub exports: Vec<Export>,
 	pub uses: Vec<Use>,
@@ -172,11 +230,26 @@ mod tests {
 
 	#[test]
 	fn symbol_refs() {
-		assert_eq!(
-			SymbolRef::new(Some("config".into()), "pages").to_string(),
-			"config#pages"
-		);
-		assert_eq!(SymbolRef::new(None, "builds").to_string(), "#builds");
+		for (text, expected) in [
+			("builds", Some(SymbolRef::local("builds"))),
+			("config#pages", Some(SymbolRef::in_unit("config", "pages"))),
+			("config#", Some(SymbolRef::page("config"))),
+			("#builds", Some(SymbolRef::any("builds"))),
+			("", None),
+			("#", None),
+			("a#b#c", None),
+			("a b", None),
+			("a#b c", None),
+			("a|b", None),
+		] {
+			let parsed = SymbolRef::parse(text);
+			assert_eq!(parsed, expected, "parsing {text:?}");
+			if let Some(parsed) = parsed {
+				assert_eq!(parsed.to_string(), text);
+			}
+		}
+		assert!(SymbolRef::page("config").is_page());
+		assert!(!SymbolRef::local("x").is_page());
 	}
 
 	#[test]

@@ -2,7 +2,9 @@
 
 mod heading;
 mod language;
+mod reference;
 mod style;
+mod variable;
 
 pub use language::Compiled;
 pub use language::Handler;
@@ -16,6 +18,8 @@ impl Language {
 		let mut language = Self::empty();
 		style::add(&mut language).expect("built-in rules are valid");
 		heading::add(&mut language).expect("built-in rules are valid");
+		reference::add(&mut language).expect("built-in rules are valid");
+		variable::add(&mut language).expect("built-in rules are valid");
 		language
 	}
 }

@@ -121,6 +121,19 @@ impl Output {
 		self.raw(">");
 	}
 
+	/// Records the position of a slot's value.
+	fn slot(&mut self, document: &Document, slot: SlotId) {
+		let context = match document.slot(slot) {
+			Slot::Link(link) => link.context,
+			Slot::PostParse(_) | Slot::Deferred(_) => OutputContext::Markup,
+		};
+		self.slots.push(TemplateSlot {
+			slot,
+			position: self.content.len(),
+			context,
+		});
+	}
+
 	fn element(&mut self, document: &Document, id: ElementId) {
 		match &document.get(id).kind {
 			ElementKind::Document => self.children(document, id),
@@ -143,16 +156,13 @@ impl Output {
 				self.wrap(document, id, &format!("h{}", level.clamp(&1, &6)));
 				self.raw("\n");
 			}
-			ElementKind::Slot(slot) => {
-				let context = match document.slot(*slot) {
-					Slot::Link(link) => link.context,
-					Slot::PostParse(_) | Slot::Deferred(_) => OutputContext::Markup,
-				};
-				self.slots.push(TemplateSlot {
-					slot: *slot,
-					position: self.content.len(),
-					context,
-				});
+			ElementKind::Slot(slot) => self.slot(document, *slot),
+			ElementKind::Reference { href } => {
+				self.raw("<a href=\"");
+				self.slot(document, *href);
+				self.raw("\">");
+				self.children(document, id);
+				self.raw("</a>");
 			}
 			kind => unimplemented!("HTML for `{}`", kind.name()),
 		}
@@ -209,7 +219,7 @@ mod tests {
 		builder.open(ElementKind::Style(Style::Bold), token());
 		let slot = builder.slot(
 			Slot::Link(LinkSlot {
-				target: SymbolRef::new(None, "a"),
+				target: SymbolRef::local("a"),
 				property: Property::Title,
 				context: OutputContext::Text,
 			}),
@@ -244,5 +254,46 @@ mod tests {
 		let position = template.slots[0].position;
 		assert_eq!(template.slots[0].slot, slot);
 		assert_eq!(&template.content[position..position + 9], "</strong>");
+	}
+
+	#[test]
+	fn references() {
+		let source = Arc::new(Source::new(
+			Url::parse("file:///a.nml").unwrap(),
+			"x".repeat(10),
+			0,
+		));
+		let token = || Token::new(source.clone(), 0..1);
+		let link = |property, context| {
+			Slot::Link(LinkSlot {
+				target: SymbolRef::any("a"),
+				property,
+				context,
+			})
+		};
+		let mut builder = DocumentBuilder::new(source.clone());
+		builder.open(ElementKind::Paragraph, token());
+		let href = builder.add_slot(link(Property::Target, OutputContext::Attribute));
+		builder.open(ElementKind::Reference { href }, token());
+		let title = builder.slot(link(Property::Title, OutputContext::Text), token());
+		builder.close();
+		builder.close();
+		let document = builder.finish();
+
+		let template = compile(&document, &PageOptions::default());
+		let body = "<p><a href=\"\"></a></p>";
+		let start = template.content.find(body).unwrap();
+		let slots: Vec<_> = template
+			.slots
+			.iter()
+			.map(|s| (s.slot, s.position - start, s.context))
+			.collect();
+		assert_eq!(
+			slots,
+			[
+				(href, 12, OutputContext::Attribute),
+				(title, 14, OutputContext::Text)
+			]
+		);
 	}
 }

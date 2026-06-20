@@ -168,7 +168,10 @@ fn unresolved(document: &Document, slot: nml_document::SlotId) -> Diagnostic {
 	};
 	let token = document
 		.descendants(document.root())
-		.find(|(_, element)| element.kind == ElementKind::Slot(slot))
+		.find(|(_, element)| match element.kind {
+			ElementKind::Slot(id) | ElementKind::Reference { href: id } => id == slot,
+			_ => false,
+		})
 		.map(|(_, element)| element.token.clone())
 		.unwrap();
 	let kind = DiagnosticKind::UnresolvedReference { target };

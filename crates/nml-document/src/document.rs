@@ -203,9 +203,15 @@ impl<'l> DocumentBuilder<'l> {
 
 	/// Adds a slot, and the element that marks where its value goes.
 	pub fn slot(&mut self, slot: Slot, token: Token) -> SlotId {
+		let id = self.add_slot(slot);
+		self.leaf(ElementKind::Slot(id), token);
+		id
+	}
+
+	/// Adds a slot that an element refers to, such as a reference's URL.
+	pub fn add_slot(&mut self, slot: Slot) -> SlotId {
 		let id = SlotId(u32::try_from(self.slots.len()).expect("too many slots"));
 		self.slots.push(slot);
-		self.leaf(ElementKind::Slot(id), token);
 		id
 	}
 
@@ -372,7 +378,7 @@ mod tests {
 		let mut builder = DocumentBuilder::new(source.clone());
 		builder.open(ElementKind::Paragraph, token(&source, 9..27));
 		let link = Slot::Link(LinkSlot {
-			target: SymbolRef::new(None, "title"),
+			target: SymbolRef::local("title"),
 			property: Property::Title,
 			context: OutputContext::Text,
 		});

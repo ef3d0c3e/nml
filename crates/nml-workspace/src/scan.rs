@@ -218,6 +218,7 @@ mod tests {
 			index
 				.commit(&StoredUnit {
 					path: &file.path,
+					name: "unit",
 					role: file.role,
 					state: file.state.clone(),
 					exports: &[],

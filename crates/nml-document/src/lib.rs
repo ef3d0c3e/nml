@@ -24,6 +24,7 @@ pub use slot::Slot;
 pub use slot::SlotId;
 pub use unit::Dependency;
 pub use unit::Export;
+pub use unit::Scope;
 pub use unit::SymbolKind;
 pub use unit::SymbolRef;
 pub use unit::Unit;

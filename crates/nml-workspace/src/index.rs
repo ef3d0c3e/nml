@@ -9,6 +9,7 @@ use nml_document::Export;
 use nml_document::LinkSlot;
 use nml_document::OutputContext;
 use nml_document::Property;
+use nml_document::Scope;
 use nml_document::SerialValue;
 use nml_document::Slot;
 use nml_document::SymbolKind;
@@ -20,18 +21,20 @@ use rusqlite::params;
 use serde_json::Value as Json;
 
 /// The version of the schema below. A database with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value ANY) STRICT;
 CREATE TABLE units (
 	id INTEGER PRIMARY KEY,
 	path TEXT NOT NULL UNIQUE,
+	name TEXT NOT NULL,
 	role TEXT NOT NULL,
 	mtime INTEGER NOT NULL,
 	size INTEGER NOT NULL,
 	hash BLOB NOT NULL
 ) STRICT;
+CREATE INDEX units_by_name ON units(name);
 CREATE TABLE exports (
 	unit INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
 	name TEXT NOT NULL,
@@ -44,6 +47,7 @@ CREATE TABLE exports (
 CREATE INDEX exports_by_name ON exports(name);
 CREATE TABLE uses (
 	unit INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+	scope TEXT NOT NULL,
 	target_unit TEXT,
 	target_name TEXT NOT NULL,
 	start INTEGER NOT NULL,
@@ -116,6 +120,8 @@ pub struct UnitRecord {
 	pub id: i64,
 	/// Relative to the workspace root, with `/` separators.
 	pub path: String,
+	/// The reference key: `doc` in `[[doc#name]]`.
+	pub name: String,
 	pub role: Role,
 	pub state: FileState,
 }
@@ -149,6 +155,8 @@ pub struct StoredSlot {
 #[derive(Debug, Clone)]
 pub struct StoredUnit<'a> {
 	pub path: &'a str,
+	/// The reference key.
+	pub name: &'a str,
 	pub role: Role,
 	pub state: FileState,
 	pub exports: &'a [Export],
@@ -252,7 +260,7 @@ impl Index {
 		Ok(self
 			.connection
 			.query_row(
-				"SELECT id, path, role, mtime, size, hash FROM units WHERE path = ?1",
+				"SELECT id, path, name, role, mtime, size, hash FROM units WHERE path = ?1",
 				[path],
 				unit_record,
 			)
@@ -263,7 +271,7 @@ impl Index {
 	pub fn units(&self) -> Result<Vec<UnitRecord>> {
 		let mut statement = self
 			.connection
-			.prepare("SELECT id, path, role, mtime, size, hash FROM units ORDER BY path")?;
+			.prepare("SELECT id, path, name, role, mtime, size, hash FROM units ORDER BY path")?;
 		let units = statement
 			.query_map([], unit_record)?
 			.collect::<rusqlite::Result<_>>()?;
@@ -334,16 +342,27 @@ impl Index {
 
 	pub fn uses(&self, unit: i64) -> Result<Vec<StoredUse>> {
 		let mut statement = self.connection.prepare(
-			"SELECT target_unit, target_name, start, end FROM uses WHERE unit = ?1 ORDER BY rowid",
+			"SELECT scope, target_unit, target_name, start, end FROM uses WHERE unit = ?1 ORDER BY rowid",
 		)?;
-		let uses = statement
-			.query_map([unit], |row| {
-				Ok(StoredUse {
-					target: SymbolRef::new(row.get(0)?, row.get::<_, String>(1)?),
-					range: offset(row, 2)?..offset(row, 3)?,
-				})
-			})?
-			.collect::<rusqlite::Result<_>>()?;
+		let rows = statement.query_map([unit], |row| {
+			Ok((
+				row.get::<_, String>(0)?,
+				row.get::<_, Option<String>>(1)?,
+				row.get::<_, String>(2)?,
+				offset(row, 3)?..offset(row, 4)?,
+			))
+		})?;
+		let mut uses = Vec::new();
+		for row in rows {
+			let (scope, target_unit, name, range) = row?;
+			uses.push(StoredUse {
+				target: SymbolRef {
+					scope: decode_scope(&scope, target_unit)?,
+					name,
+				},
+				range,
+			});
+		}
 		Ok(uses)
 	}
 
@@ -405,19 +424,20 @@ fn offset(row: &rusqlite::Row, column: usize) -> rusqlite::Result<usize> {
 }
 
 fn unit_record(row: &rusqlite::Row) -> rusqlite::Result<UnitRecord> {
-	let role: String = row.get(2)?;
+	let role: String = row.get(3)?;
 	Ok(UnitRecord {
 		id: row.get(0)?,
 		path: row.get(1)?,
+		name: row.get(2)?,
 		role: if role == "page" {
 			Role::Page
 		} else {
 			Role::Library
 		},
 		state: FileState {
-			mtime: row.get(3)?,
-			size: row.get::<_, i64>(4)? as u64,
-			hash: row.get(5)?,
+			mtime: row.get(4)?,
+			size: row.get::<_, i64>(5)? as u64,
+			hash: row.get(6)?,
 		},
 	})
 }
@@ -471,8 +491,15 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 	// Deleting the row also deletes everything stored for it.
 	tx.execute("DELETE FROM units WHERE path = ?1", [unit.path])?;
 	tx.execute(
-		"INSERT INTO units (path, role, mtime, size, hash) VALUES (?1, ?2, ?3, ?4, ?5)",
-		params![unit.path, role, state.mtime, state.size as i64, state.hash],
+		"INSERT INTO units (path, name, role, mtime, size, hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+		params![
+			unit.path,
+			unit.name,
+			role,
+			state.mtime,
+			state.size as i64,
+			state.hash
+		],
 	)?;
 	let id = tx.last_insert_rowid();
 
@@ -497,12 +524,15 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 	}
 
 	let mut statement = tx.prepare(
-		"INSERT INTO uses (unit, target_unit, target_name, start, end) VALUES (?1, ?2, ?3, ?4, ?5)",
+		"INSERT INTO uses (unit, scope, target_unit, target_name, start, end)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
 	)?;
 	for stored in unit.uses {
+		let (scope, target_unit) = encode_scope(&stored.target.scope);
 		statement.execute(params![
 			id,
-			stored.target.unit,
+			scope,
+			target_unit,
 			stored.target.name,
 			stored.range.start as i64,
 			stored.range.end as i64,
@@ -635,17 +665,36 @@ fn parse(text: &str) -> Result<Json> {
 	serde_json::from_str(text).map_err(|_| corrupt(format!("invalid JSON `{text}`")))
 }
 
+fn encode_scope(scope: &Scope) -> (&'static str, Option<&str>) {
+	match scope {
+		Scope::Local => ("local", None),
+		Scope::Unit(unit) => ("unit", Some(unit)),
+		Scope::Any => ("any", None),
+	}
+}
+
+fn decode_scope(scope: &str, unit: Option<String>) -> Result<Scope> {
+	Ok(match (scope, unit) {
+		("local", None) => Scope::Local,
+		("unit", Some(unit)) => Scope::Unit(unit),
+		("any", None) => Scope::Any,
+		_ => return Err(corrupt(format!("invalid scope `{scope}`"))),
+	})
+}
+
 fn encode_symbol(symbol: &SymbolRef) -> Json {
-	serde_json::json!({ "unit": symbol.unit, "name": symbol.name })
+	let (scope, unit) = encode_scope(&symbol.scope);
+	serde_json::json!({ "scope": scope, "unit": unit, "name": symbol.name })
 }
 
 fn decode_symbol(json: &Json) -> Result<SymbolRef> {
-	let name = json
-		.get("name")
-		.and_then(Json::as_str)
-		.ok_or_else(|| corrupt("symbol without a name"))?;
-	let unit = json.get("unit").and_then(Json::as_str).map(String::from);
-	Ok(SymbolRef::new(unit, name))
+	let text = |key| json.get(key).and_then(Json::as_str);
+	let name = text("name").ok_or_else(|| corrupt("symbol without a name"))?;
+	let scope = text("scope").ok_or_else(|| corrupt("symbol without a scope"))?;
+	Ok(SymbolRef {
+		scope: decode_scope(scope, text("unit").map(String::from))?,
+		name: name.into(),
+	})
 }
 
 fn encode_slot(slot: &Slot) -> Json {
@@ -807,7 +856,7 @@ mod tests {
 					context: OutputContext::Attribute,
 					range: 4..20,
 					slot: Slot::Link(LinkSlot {
-						target: SymbolRef::new(Some("config".into()), "pages"),
+						target: SymbolRef::in_unit("config", "pages"),
 						property: Property::Target,
 						context: OutputContext::Attribute,
 					}),
@@ -839,14 +888,24 @@ mod tests {
 
 	fn commit(index: &mut Index, path: &str, hash: u8) -> i64 {
 		let exports = exports();
-		let uses = vec![StoredUse {
-			target: SymbolRef::new(None, "builds"),
-			range: 1..9,
-		}];
+		let uses = vec![
+			StoredUse {
+				target: SymbolRef::any("builds"),
+				range: 1..9,
+			},
+			StoredUse {
+				target: SymbolRef::local("x"),
+				range: 10..15,
+			},
+			StoredUse {
+				target: SymbolRef::page("config"),
+				range: 20..32,
+			},
+		];
 		let dependencies = vec![
 			Dependency::Import("std.toc".into()),
 			Dependency::Include("parts/a.nml".into()),
-			Dependency::Variable(SymbolRef::new(Some("config".into()), "version")),
+			Dependency::Variable(SymbolRef::in_unit("config", "version")),
 			Dependency::Config,
 			Dependency::Query {
 				query: "pages".into(),
@@ -857,6 +916,7 @@ mod tests {
 		index
 			.commit(&StoredUnit {
 				path,
+				name: "a",
 				role: Role::Page,
 				state: state(hash),
 				exports: &exports,
@@ -881,7 +941,21 @@ mod tests {
 		let stored = index.exports(id).unwrap();
 		assert_eq!(stored, exports());
 		assert_eq!(stored[0].fingerprint(), exports()[0].fingerprint());
-		assert_eq!(index.uses(id).unwrap()[0].target.to_string(), "#builds");
+		let uses: Vec<_> = index
+			.uses(id)
+			.unwrap()
+			.iter()
+			.map(|u| (u.target.clone(), u.range.clone()))
+			.collect();
+		assert_eq!(
+			uses,
+			[
+				(SymbolRef::any("builds"), 1..9),
+				(SymbolRef::local("x"), 10..15),
+				(SymbolRef::page("config"), 20..32)
+			]
+		);
+		assert_eq!(record.name, "a");
 		let dependencies = index.dependencies(id).unwrap();
 		assert_eq!(dependencies.len(), 5);
 		assert_eq!(
@@ -909,6 +983,7 @@ mod tests {
 		let (library, _) = index
 			.commit(&StoredUnit {
 				path: "a.nml",
+				name: "a",
 				role: Role::Library,
 				state: state(3),
 				exports: &[],
@@ -964,6 +1039,7 @@ mod tests {
 		index
 			.commit(&StoredUnit {
 				path,
+				name: "a",
 				role: Role::Page,
 				state: state(0),
 				exports,

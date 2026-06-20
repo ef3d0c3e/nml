@@ -68,6 +68,16 @@ pub enum DiagnosticKind {
 	HeadingTooDeep { level: usize, max: usize },
 	#[diag(id = 2002, message = "diagnostic-duplicate-reference")]
 	DuplicateReference { name: String },
+	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
+	InvalidReference { target: String },
+	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]
+	InvalidVariableName { name: String },
+	#[diag(id = 2005, message = "diagnostic-unknown-variable")]
+	UnknownVariable { name: String },
+	#[diag(id = 2006, message = "diagnostic-variable-already-set")]
+	VariableAlreadySet { name: String },
+	#[diag(id = 2007, message = "diagnostic-invalid-reference-key")]
+	InvalidReferenceKey { key: String },
 
 	#[diag(id = 3001, message = "diagnostic-unresolved-reference")]
 	UnresolvedReference { target: String },

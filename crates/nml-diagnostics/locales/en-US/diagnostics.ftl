@@ -33,6 +33,12 @@ diagnostic-missing-option = missing option `{ $name }`
 diagnostic-heading-too-deep = a heading has at most { $max } levels, not { $level }
 diagnostic-duplicate-reference = `{ $name }` is already defined in this document
     .first = first defined here
+diagnostic-invalid-reference = `{ $target }` is not a reference: write `name`, `doc#name`, `doc#` or `#name`
+diagnostic-invalid-variable-name = `{ $name }` is not a variable name
+diagnostic-unknown-variable = `{ $name }` is not a variable of NML
+diagnostic-variable-already-set = `{ $name }` is already set
+    .first = first set here
+diagnostic-invalid-reference-key = `{ $key }` is not a reference key: it must be a single name without blanks, `#` or `|`
 
 ## Workspace, build and imports (3xxx)
 

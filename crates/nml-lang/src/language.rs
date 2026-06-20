@@ -82,6 +82,7 @@ pub fn compile(language: &Language, source: Arc<Source>) -> Compiled {
 		uses: Vec::new(),
 		dependencies: Vec::new(),
 		diagnostics: parsed.diagnostics,
+		variables: HashMap::new(),
 		exported: Vec::new(),
 	};
 	lower.nodes(&parsed.nodes);
@@ -91,10 +92,14 @@ pub fn compile(language: &Language, source: Arc<Source>) -> Compiled {
 		uses,
 		dependencies,
 		diagnostics,
+		mut variables,
 		..
 	} = lower;
 	Compiled {
 		unit: Unit {
+			reference_key: variables
+				.remove(crate::variable::REFERENCE_KEY)
+				.map(|(value, _)| value),
 			document: builder.finish(),
 			exports,
 			uses,
@@ -112,6 +117,8 @@ pub struct Lower<'a, 'l> {
 	pub uses: Vec<Use>,
 	pub dependencies: Vec<Dependency>,
 	pub diagnostics: Vec<Diagnostic>,
+	/// Variables set with `:set`: their value and where their name is written.
+	pub variables: HashMap<String, (String, Token)>,
 	/// Exported names and where they are written.
 	exported: Vec<(String, Token)>,
 }
