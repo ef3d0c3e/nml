@@ -13,6 +13,8 @@ nml-diagnostics.workspace = true
 nml-grammar.workspace = true
 nml-document.workspace = true
 nml-lua-macros.workspace = true
+nml-lang.workspace = true
+mlua.workspace = true
 
 [lints]
 workspace = true
