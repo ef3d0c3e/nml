@@ -2,6 +2,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use crate::Config;
@@ -73,6 +74,10 @@ impl From<IndexError> for ScanError {
 	}
 }
 
+/// Files modified this recently are hashed by the next scan as well, since timestamps can
+/// be too coarse to see an edit made right after the scan, in nanoseconds.
+const RACY_WINDOW: i64 = 2_000_000_000;
+
 /// Hashes file content.
 pub fn hash(content: &[u8]) -> Vec<u8> {
 	blake3::hash(content).as_bytes().to_vec()
@@ -88,6 +93,9 @@ pub fn scan(root: &Path, config: &Config, index: &Index) -> Result<Scan, ScanErr
 	collect(root, &skip, &mut paths)?;
 	paths.sort();
 
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.map_or(0, |d| d.as_nanos() as i64);
 	let mut units = index.units()?;
 	let mut files = Vec::new();
 	for absolute in paths {
@@ -110,6 +118,9 @@ pub fn scan(root: &Path, config: &Config, index: &Index) -> Result<Scan, ScanErr
 			.duration_since(UNIX_EPOCH)
 			.map_or(0, |d| d.as_nanos() as i64);
 		let size = metadata.len();
+		// A file modified within the racy window could change again without its mtime
+		// changing. Its state is stored with no mtime, so the next scan hashes it.
+		let stored_mtime = if now - mtime < RACY_WINDOW { 0 } else { mtime };
 
 		let stored = units
 			.iter()
@@ -124,7 +135,7 @@ pub fn scan(root: &Path, config: &Config, index: &Index) -> Result<Scan, ScanErr
 		} else {
 			let bytes = fs::read(&absolute).map_err(io_error)?;
 			let state = FileState {
-				mtime,
+				mtime: stored_mtime,
 				size,
 				hash: hash(&bytes),
 			};
@@ -201,10 +212,23 @@ mod tests {
 			Self(dir)
 		}
 
-		fn write(&self, path: &str, content: &str) {
+		/// Writes a file, with a modification time `age` seconds ago, out of the racy
+		/// window unless `age` is 0.
+		fn write_aged(&self, path: &str, content: &str, age: u64) {
 			let path = self.0.join(path);
 			fs::create_dir_all(path.parent().unwrap()).unwrap();
-			fs::write(path, content).unwrap();
+			fs::write(&path, content).unwrap();
+			let mtime = SystemTime::now() - std::time::Duration::from_secs(age);
+			fs::File::options()
+				.write(true)
+				.open(&path)
+				.unwrap()
+				.set_modified(mtime)
+				.unwrap();
+		}
+
+		fn write(&self, path: &str, content: &str) {
+			self.write_aged(path, content, 60);
 		}
 	}
 
@@ -219,6 +243,7 @@ mod tests {
 				.commit(&StoredUnit {
 					path: &file.path,
 					name: "unit",
+					title: "Unit",
 					role: file.role,
 					state: file.state.clone(),
 					exports: &[],
@@ -341,5 +366,32 @@ mod tests {
 		let scanned = scan(root, &config("pages = []"), &index).unwrap();
 		assert_eq!(changes(&scanned), [("a.nml", Change::Modified, true)]);
 		assert_eq!(scanned.files[0].role, Role::Library);
+	}
+
+	#[test]
+	fn recent_files_are_always_hashed() {
+		let workspace = Workspace::new("racy");
+		let root = &workspace.0;
+		workspace.write_aged("a.nml", "abc", 0);
+		let config = config("");
+		let mut index = Index::open_in_memory().unwrap();
+		let first = scan(root, &config, &index).unwrap();
+		assert_eq!(first.files[0].state.mtime, 0);
+		commit_all(&mut index, &first);
+
+		// An edit of the same size in the same timestamp tick is still found.
+		let mtime = fs::metadata(root.join("a.nml"))
+			.unwrap()
+			.modified()
+			.unwrap();
+		fs::write(root.join("a.nml"), "xyz").unwrap();
+		fs::File::options()
+			.write(true)
+			.open(root.join("a.nml"))
+			.unwrap()
+			.set_modified(mtime)
+			.unwrap();
+		let second = scan(root, &config, &index).unwrap();
+		assert_eq!(changes(&second), [("a.nml", Change::Modified, true)]);
 	}
 }

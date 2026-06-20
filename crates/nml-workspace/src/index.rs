@@ -21,7 +21,7 @@ use rusqlite::params;
 use serde_json::Value as Json;
 
 /// The version of the schema below. A database with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 4;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value ANY) STRICT;
@@ -29,10 +29,12 @@ CREATE TABLE units (
 	id INTEGER PRIMARY KEY,
 	path TEXT NOT NULL UNIQUE,
 	name TEXT NOT NULL,
+	title TEXT NOT NULL,
 	role TEXT NOT NULL,
 	mtime INTEGER NOT NULL,
 	size INTEGER NOT NULL,
-	hash BLOB NOT NULL
+	hash BLOB NOT NULL,
+	link_errors INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 CREATE INDEX units_by_name ON units(name);
 CREATE TABLE exports (
@@ -122,6 +124,8 @@ pub struct UnitRecord {
 	pub path: String,
 	/// The reference key: `doc` in `[[doc#name]]`.
 	pub name: String,
+	/// The title links to its page show.
+	pub title: String,
 	pub role: Role,
 	pub state: FileState,
 }
@@ -157,6 +161,7 @@ pub struct StoredUnit<'a> {
 	pub path: &'a str,
 	/// The reference key.
 	pub name: &'a str,
+	pub title: &'a str,
 	pub role: Role,
 	pub state: FileState,
 	pub exports: &'a [Export],
@@ -260,18 +265,67 @@ impl Index {
 		Ok(self
 			.connection
 			.query_row(
-				"SELECT id, path, name, role, mtime, size, hash FROM units WHERE path = ?1",
+				"SELECT id, path, name, title, role, mtime, size, hash FROM units WHERE path = ?1",
 				[path],
 				unit_record,
 			)
 			.optional()?)
 	}
 
-	/// Every unit, by path.
-	pub fn units(&self) -> Result<Vec<UnitRecord>> {
+	pub fn unit_by_id(&self, id: i64) -> Result<Option<UnitRecord>> {
+		Ok(self
+			.connection
+			.query_row(
+				"SELECT id, path, name, title, role, mtime, size, hash FROM units WHERE id = ?1",
+				[id],
+				unit_record,
+			)
+			.optional()?)
+	}
+
+	/// The units with this reference key: more than one makes references to it ambiguous.
+	pub fn units_named(&self, name: &str) -> Result<Vec<UnitRecord>> {
+		let mut statement = self.connection.prepare(
+			"SELECT id, path, name, title, role, mtime, size, hash FROM units
+			WHERE name = ?1 ORDER BY path",
+		)?;
+		let units = statement
+			.query_map([name], unit_record)?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(units)
+	}
+
+	/// The IDs of the exporting units of every symbol with this name.
+	pub fn exporters(&self, name: &str) -> Result<Vec<i64>> {
 		let mut statement = self
 			.connection
-			.prepare("SELECT id, path, name, role, mtime, size, hash FROM units ORDER BY path")?;
+			.prepare("SELECT unit FROM exports WHERE name = ?1 ORDER BY unit")?;
+		let units = statement
+			.query_map([name], |row| row.get(0))?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(units)
+	}
+
+	/// The IDs of the units with a use that may resolve to symbol `name` of the unit with key
+	/// `unit`: `[[unit#name]]` or `[[#name]]`. With an empty name, the uses of the unit's
+	/// page (`[[unit#]]`).
+	pub fn users(&self, unit: &str, name: &str) -> Result<Vec<i64>> {
+		let mut statement = self.connection.prepare(
+			"SELECT DISTINCT unit FROM uses WHERE target_name = ?2
+			AND ((scope = 'unit' AND target_unit = ?1) OR (scope = 'any' AND ?2 != ''))
+			ORDER BY unit",
+		)?;
+		let units = statement
+			.query_map([unit, name], |row| row.get(0))?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(units)
+	}
+
+	/// Every unit, by path.
+	pub fn units(&self) -> Result<Vec<UnitRecord>> {
+		let mut statement = self.connection.prepare(
+			"SELECT id, path, name, title, role, mtime, size, hash FROM units ORDER BY path",
+		)?;
 		let units = statement
 			.query_map([], unit_record)?
 			.collect::<rusqlite::Result<_>>()?;
@@ -303,6 +357,28 @@ impl Index {
 		Ok(())
 	}
 
+	/// Records whether the last link of a page had errors. Such pages are linked again on
+	/// every build, so their errors are reported until they are fixed; the diagnostics
+	/// themselves are not stored.
+	pub fn set_link_errors(&mut self, path: &str, errors: bool) -> Result<()> {
+		self.connection.execute(
+			"UPDATE units SET link_errors = ?2 WHERE path = ?1",
+			params![path, errors],
+		)?;
+		Ok(())
+	}
+
+	/// The paths of the pages whose last link had errors.
+	pub fn units_with_link_errors(&self) -> Result<Vec<String>> {
+		let mut statement = self
+			.connection
+			.prepare("SELECT path FROM units WHERE link_errors ORDER BY path")?;
+		let paths = statement
+			.query_map([], |row| row.get(0))?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(paths)
+	}
+
 	/// Removes a unit and everything stored for it. Returns its exports, as removed symbols.
 	pub fn remove(&mut self, path: &str) -> Result<Vec<SymbolChange>> {
 		let tx = self.connection.transaction()?;
@@ -310,6 +386,13 @@ impl Index {
 		tx.execute("DELETE FROM units WHERE path = ?1", [path])?;
 		tx.commit()?;
 		Ok(diff(path, old, Vec::new()))
+	}
+
+	pub fn export(&self, unit: i64, name: &str) -> Result<Option<Export>> {
+		Ok(self
+			.exports(unit)?
+			.into_iter()
+			.find(|export| export.name == name))
 	}
 
 	pub fn exports(&self, unit: i64) -> Result<Vec<Export>> {
@@ -424,20 +507,21 @@ fn offset(row: &rusqlite::Row, column: usize) -> rusqlite::Result<usize> {
 }
 
 fn unit_record(row: &rusqlite::Row) -> rusqlite::Result<UnitRecord> {
-	let role: String = row.get(3)?;
+	let role: String = row.get(4)?;
 	Ok(UnitRecord {
 		id: row.get(0)?,
 		path: row.get(1)?,
 		name: row.get(2)?,
+		title: row.get(3)?,
 		role: if role == "page" {
 			Role::Page
 		} else {
 			Role::Library
 		},
 		state: FileState {
-			mtime: row.get(4)?,
-			size: row.get::<_, i64>(5)? as u64,
-			hash: row.get(6)?,
+			mtime: row.get(5)?,
+			size: row.get::<_, i64>(6)? as u64,
+			hash: row.get(7)?,
 		},
 	})
 }
@@ -491,10 +575,12 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 	// Deleting the row also deletes everything stored for it.
 	tx.execute("DELETE FROM units WHERE path = ?1", [unit.path])?;
 	tx.execute(
-		"INSERT INTO units (path, name, role, mtime, size, hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+		"INSERT INTO units (path, name, title, role, mtime, size, hash)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
 		params![
 			unit.path,
 			unit.name,
+			unit.title,
 			role,
 			state.mtime,
 			state.size as i64,
@@ -917,6 +1003,7 @@ mod tests {
 			.commit(&StoredUnit {
 				path,
 				name: "a",
+				title: "A",
 				role: Role::Page,
 				state: state(hash),
 				exports: &exports,
@@ -956,6 +1043,7 @@ mod tests {
 			]
 		);
 		assert_eq!(record.name, "a");
+		assert_eq!(record.title, "A");
 		let dependencies = index.dependencies(id).unwrap();
 		assert_eq!(dependencies.len(), 5);
 		assert_eq!(
@@ -984,6 +1072,7 @@ mod tests {
 			.commit(&StoredUnit {
 				path: "a.nml",
 				name: "a",
+				title: "A",
 				role: Role::Library,
 				state: state(3),
 				exports: &[],
@@ -1040,6 +1129,7 @@ mod tests {
 			.commit(&StoredUnit {
 				path,
 				name: "a",
+				title: "A",
 				role: Role::Page,
 				state: state(0),
 				exports,
@@ -1104,5 +1194,88 @@ mod tests {
 			[("a.nml", "x", Removed), ("a.nml", "z", Removed)]
 		);
 		assert!(index.remove("a.nml").unwrap().is_empty());
+	}
+
+	#[test]
+	fn lookups() {
+		let mut index = Index::open_in_memory().unwrap();
+		let heading = |name: &str| Export::new(name, SymbolKind::Heading, None);
+		let mut add = |path: &str, name: &str, exports: &[Export], uses: &[SymbolRef]| {
+			let uses: Vec<_> = uses
+				.iter()
+				.map(|target| StoredUse {
+					target: target.clone(),
+					range: 0..1,
+				})
+				.collect();
+			index
+				.commit(&StoredUnit {
+					path,
+					name,
+					title: name,
+					role: Role::Page,
+					state: state(0),
+					exports,
+					uses: &uses,
+					dependencies: &[],
+					template: None,
+				})
+				.unwrap()
+				.0
+		};
+		let a = add("a.nml", "a", &[heading("x"), heading("y")], &[]);
+		let b = add(
+			"docs/b.nml",
+			"b",
+			&[heading("x")],
+			&[SymbolRef::in_unit("a", "x")],
+		);
+		let c = add(
+			"c.nml",
+			"b",
+			&[],
+			&[SymbolRef::any("x"), SymbolRef::page("a")],
+		);
+		let d = add(
+			"d.nml",
+			"d",
+			&[],
+			&[SymbolRef::local("x"), SymbolRef::in_unit("a", "y")],
+		);
+
+		assert_eq!(index.unit_by_id(b).unwrap().unwrap().path, "docs/b.nml");
+		let named: Vec<_> = index
+			.units_named("b")
+			.unwrap()
+			.into_iter()
+			.map(|u| u.id)
+			.collect();
+		assert_eq!(named, [c, b]);
+		assert_eq!(index.exporters("x").unwrap(), [a, b]);
+		assert_eq!(index.export(a, "y").unwrap().unwrap().name, "y");
+		assert!(index.export(a, "z").unwrap().is_none());
+
+		// Local uses never point to another unit.
+		assert_eq!(index.users("a", "x").unwrap(), [b, c]);
+		assert_eq!(index.users("a", "y").unwrap(), [d]);
+		assert_eq!(index.users("b", "x").unwrap(), [c]);
+		assert_eq!(index.users("a", "").unwrap(), [c]);
+		assert!(index.users("z", "").unwrap().is_empty());
+	}
+
+	#[test]
+	fn link_errors() {
+		let mut index = Index::open_in_memory().unwrap();
+		commit(&mut index, "a.nml", 1);
+		commit(&mut index, "b.nml", 1);
+		assert!(index.units_with_link_errors().unwrap().is_empty());
+		index.set_link_errors("b.nml", true).unwrap();
+		assert_eq!(index.units_with_link_errors().unwrap(), ["b.nml"]);
+		// A new commit starts without errors: the unit is linked anyway.
+		commit(&mut index, "b.nml", 2);
+		assert!(index.units_with_link_errors().unwrap().is_empty());
+		index.set_link_errors("a.nml", true).unwrap();
+		index.set_link_errors("a.nml", false).unwrap();
+		assert!(index.units_with_link_errors().unwrap().is_empty());
 	}
 }
