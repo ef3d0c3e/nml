@@ -6,6 +6,19 @@ use crate::SlotId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ElementId(pub(crate) u32);
 
+impl ElementId {
+	/// The index of the element in its document, for storage.
+	pub fn index(self) -> u32 {
+		self.0
+	}
+
+	/// The ID of the element at `index`, read back from storage. It is only meaningful for
+	/// the document it was taken from.
+	pub fn from_index(index: u32) -> Self {
+		Self(index)
+	}
+}
+
 /// What an element is.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
