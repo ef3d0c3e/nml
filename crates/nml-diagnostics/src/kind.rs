@@ -81,6 +81,8 @@ pub enum DiagnosticKind {
 
 	#[diag(id = 3001, message = "diagnostic-unresolved-reference")]
 	UnresolvedReference { target: String },
+	#[diag(id = 3006, message = "diagnostic-ambiguous-reference")]
+	AmbiguousReference { target: String, count: usize },
 	/// An error in `nml.toml`, with the TOML parser's own text.
 	#[diag(id = 3002, message = "diagnostic-config-error")]
 	ConfigError { message: String },

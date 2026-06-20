@@ -43,6 +43,7 @@ diagnostic-invalid-reference-key = `{ $key }` is not a reference key: it must be
 ## Workspace, build and imports (3xxx)
 
 diagnostic-unresolved-reference = `{ $target }` does not refer to anything
+diagnostic-ambiguous-reference = `{ $target }` is ambiguous: { $count } units match it
 diagnostic-config-error = invalid configuration: { $message }
 diagnostic-invalid-glob = invalid pattern `{ $pattern }`: { $message }
 diagnostic-invalid-module-name = `{ $name }` is not a valid module name: it must be a single word

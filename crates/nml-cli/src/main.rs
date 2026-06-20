@@ -48,7 +48,8 @@ fn build(root: PathBuf) -> ExitCode {
 		let _ = nml_diagnostics::render(diagnostic, &localizer, color, &mut stderr);
 	}
 	eprintln!(
-		"{} page(s) written, {} failed",
+		"{} parsed, {} page(s) written, {} failed",
+		report.parsed.len(),
 		report.written.len(),
 		report.failed.len()
 	);
