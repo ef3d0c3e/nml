@@ -50,8 +50,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			return;
 		}
 		if text == REFERENCE_KEY
-			&& nml_document::SymbolRef::parse(value.content())
-				.is_none_or(|r| r.scope != nml_document::Scope::Local)
+			&& SymbolRef::parse(value.content()).is_none_or(|r| r.scope != Scope::Local)
 		{
 			let kind = DiagnosticKind::InvalidReferenceKey {
 				key: value.content().into(),
