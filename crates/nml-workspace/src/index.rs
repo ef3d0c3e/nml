@@ -261,6 +261,16 @@ impl Index {
 		Ok(id)
 	}
 
+	/// Records a new state for a file whose content did not change (e.g. it was touched), so
+	/// that the next scan takes the fast path.
+	pub fn update_state(&mut self, path: &str, state: &FileState) -> Result<()> {
+		self.connection.execute(
+			"UPDATE units SET mtime = ?2, size = ?3, hash = ?4 WHERE path = ?1",
+			params![path, state.mtime, state.size as i64, state.hash],
+		)?;
+		Ok(())
+	}
+
 	/// Removes a unit and everything stored for it.
 	pub fn remove(&mut self, path: &str) -> Result<()> {
 		self.connection

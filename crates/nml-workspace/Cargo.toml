@@ -11,6 +11,7 @@ repository.workspace = true
 nml-source.workspace = true
 nml-diagnostics.workspace = true
 nml-document.workspace = true
+blake3.workspace = true
 globset.workspace = true
 rusqlite.workspace = true
 serde.workspace = true

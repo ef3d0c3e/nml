@@ -2,6 +2,7 @@
 
 mod config;
 mod index;
+mod scan;
 
 pub use config::CONFIG_FILE;
 pub use config::Config;
@@ -17,3 +18,9 @@ pub use index::StoredTemplate;
 pub use index::StoredUnit;
 pub use index::StoredUse;
 pub use index::UnitRecord;
+pub use scan::Change;
+pub use scan::Scan;
+pub use scan::ScanError;
+pub use scan::ScannedFile;
+pub use scan::hash;
+pub use scan::scan;
