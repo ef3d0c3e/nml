@@ -463,3 +463,37 @@ fn includes_and_imports_invalidate_their_users() {
 	assert_eq!(report.failed, ["a.nml"]);
 	assert_diagnostics!(report.diagnostics, [3008]);
 }
+
+#[test]
+fn outputs_of_removed_pages_are_deleted() {
+	let workspace = Workspace::new(
+		"collect",
+		&[
+			("nml.toml", ""),
+			("a.nml", "# A\n"),
+			("docs/deep/b.nml", "# B\n"),
+			("docs/c.nml", "# C\n"),
+		],
+	);
+	workspace.build();
+	// A file of the user's in the output directory.
+	workspace.write("public/style.css", "p {}");
+
+	workspace.remove("docs/deep/b.nml");
+	let report = workspace.build();
+	assert_eq!(report.deleted, ["docs/deep/b.nml"]);
+	assert!(!workspace.0.join("public/docs/deep").exists());
+	assert!(workspace.0.join("public/docs/c.html").exists());
+
+	// `docs/c` becomes a library: its output goes, and `docs/` with it.
+	workspace.write("nml.toml", "exclude = [\"docs/**\"]\n");
+	let report = workspace.build();
+	assert_eq!(report.deleted, ["docs/c.nml"]);
+	assert!(!workspace.0.join("public/docs").exists());
+	assert!(workspace.0.join("public/a.html").exists());
+	assert!(workspace.0.join("public/style.css").exists());
+
+	// Removing a library deletes nothing.
+	workspace.remove("docs/c.nml");
+	assert!(workspace.build().deleted.is_empty());
+}

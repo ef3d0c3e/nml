@@ -58,6 +58,8 @@ pub struct BuildReport {
 	/// Units that did not parse. Their last valid state stays in the index, and their
 	/// page is not rewritten.
 	pub failed: Vec<String>,
+	/// Pages whose output was deleted: removed, or no longer pages.
+	pub deleted: Vec<String>,
 	pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -255,6 +257,31 @@ impl Builder {
 			self.affected.insert((unit.name.clone(), change.name));
 		}
 		self.affected.insert((unit.name, String::new()));
+		if unit.role == Role::Page {
+			self.delete_output(path)?;
+		}
+		Ok(())
+	}
+
+	/// Deletes the output of a page that is gone or no longer a page, and the directories
+	/// it leaves empty. Only pages the index knows are deleted: other files in the output
+	/// directory are left alone.
+	fn delete_output(&mut self, path: &str) -> Result<(), BuildError> {
+		let target = self.output.join(output_path(path));
+		match fs::remove_file(&target) {
+			Ok(()) => {}
+			Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+			Err(e) => return Err(BuildError::Io(target, e)),
+		}
+		self.report.deleted.push(path.to_string());
+		let mut dir = target.parent();
+		while let Some(current) = dir.filter(|d| *d != self.output && d.starts_with(&self.output)) {
+			// Fails when the directory is not empty, which ends the walk.
+			if fs::remove_dir(current).is_err() {
+				break;
+			}
+			dir = current.parent();
+		}
 		Ok(())
 	}
 
@@ -322,6 +349,7 @@ impl Builder {
 					.insert((name.to_string(), export.name.clone()));
 			}
 		}
+		let was_page = old.as_ref().is_some_and(|old| old.role == Role::Page);
 		if let Some(old) = old.filter(|old| old.name != name) {
 			self.affected.insert((old.name.clone(), String::new()));
 			for export in old_exports {
@@ -330,6 +358,8 @@ impl Builder {
 		}
 		if file.role == Role::Page {
 			self.to_link.insert(file.path.clone());
+		} else if was_page {
+			self.delete_output(&file.path)?;
 		}
 		Ok(())
 	}
