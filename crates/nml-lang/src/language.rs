@@ -1,3 +1,5 @@
+use std::any::Any;
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
@@ -112,6 +114,7 @@ pub fn compile(
 		files: vec![path.to_string()],
 		imports: Vec::new(),
 		exported: Vec::new(),
+		extensions: HashMap::new(),
 	};
 	lower.nodes(&parsed.nodes);
 	let Lower {
@@ -157,6 +160,8 @@ pub struct Lower<'a, 'l> {
 	pub imports: Vec<(String, Token)>,
 	/// Exported names and where they are written.
 	exported: Vec<(String, Token)>,
+	/// State that other crates keep for the unit, by type (the Lua runtime).
+	extensions: HashMap<TypeId, Box<dyn Any>>,
 }
 
 impl fmt::Debug for Lower<'_, '_> {
@@ -232,6 +237,15 @@ impl<'a> Lower<'a, '_> {
 		}
 	}
 
+	/// The unit's state of type `T`, created by `init` the first time it is asked for.
+	pub fn extension<T: 'static>(&mut self, init: impl FnOnce() -> T) -> &mut T {
+		self.extensions
+			.entry(TypeId::of::<T>())
+			.or_insert_with(|| Box::new(init()))
+			.downcast_mut()
+			.expect("extensions are keyed by their type")
+	}
+
 	/// Records a parse-time dependency, once.
 	pub fn depend(&mut self, dependency: Dependency) {
 		if !self.dependencies.contains(&dependency) {
@@ -283,5 +297,46 @@ fn collect_text(nodes: &[Node], out: &mut String) {
 				}
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::Arc;
+
+	use nml_document::ElementKind;
+	use nml_grammar::Atom;
+	use nml_grammar::Rule;
+	use nml_source::Source;
+	use nml_source::Url;
+
+	use crate::Language;
+	use crate::MemoryResolver;
+	use crate::compile;
+	use crate::tests::show;
+
+	#[test]
+	fn extensions_live_for_the_unit() {
+		let mut language = Language::empty();
+		language
+			.add(Rule::new("count", vec![Atom::literal("@")]), |lower, m| {
+				let count = lower.extension(|| 0usize);
+				*count += 1;
+				let text = count.to_string();
+				lower.builder.leaf(ElementKind::Text(text), m.token.clone());
+			})
+			.unwrap();
+		let source = Source::new(Url::parse("file:///a.nml").unwrap(), "@ @ @".into(), 0);
+		let compiled = compile(
+			&language,
+			Arc::new(source),
+			"a.nml",
+			&MemoryResolver::default(),
+		);
+		let document = &compiled.unit.document;
+		assert_eq!(
+			show(document, document.root()),
+			r#"document[paragraph["1" " " "2" " " "3"]]"#
+		);
 	}
 }
