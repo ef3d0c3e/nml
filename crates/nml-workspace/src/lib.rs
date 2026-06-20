@@ -17,6 +17,8 @@ pub use index::StoredSlot;
 pub use index::StoredTemplate;
 pub use index::StoredUnit;
 pub use index::StoredUse;
+pub use index::SymbolChange;
+pub use index::SymbolChangeKind;
 pub use index::UnitRecord;
 pub use scan::Change;
 pub use scan::Scan;

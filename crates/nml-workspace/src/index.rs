@@ -158,6 +158,23 @@ pub struct StoredUnit<'a> {
 	pub template: Option<&'a StoredTemplate>,
 }
 
+/// A symbol whose visible state changed, for the link stage.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct SymbolChange {
+	/// The path of the exporting unit.
+	pub unit: String,
+	pub name: String,
+	pub kind: SymbolChangeKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum SymbolChangeKind {
+	Added,
+	Removed,
+	/// Its fingerprint changed: what links to it display may differ.
+	Changed,
+}
+
 /// The workspace database.
 #[derive(Debug)]
 pub struct Index {
@@ -253,12 +270,19 @@ impl Index {
 		Ok(units)
 	}
 
-	/// Replaces everything stored for a unit, in one transaction. Returns the unit's ID.
-	pub fn commit(&mut self, unit: &StoredUnit) -> Result<i64> {
+	/// Replaces everything stored for a unit, in one transaction. Returns the unit's ID and
+	/// the symbols whose visible state changed.
+	pub fn commit(&mut self, unit: &StoredUnit) -> Result<(i64, Vec<SymbolChange>)> {
 		let tx = self.connection.transaction()?;
+		let old = fingerprints(&tx, unit.path)?;
 		let id = commit(&tx, unit)?;
 		tx.commit()?;
-		Ok(id)
+		let new = unit
+			.exports
+			.iter()
+			.map(|export| (export.name.clone(), export.fingerprint()))
+			.collect();
+		Ok((id, diff(unit.path, old, new)))
 	}
 
 	/// Records a new state for a file whose content did not change (e.g. it was touched), so
@@ -271,11 +295,13 @@ impl Index {
 		Ok(())
 	}
 
-	/// Removes a unit and everything stored for it.
-	pub fn remove(&mut self, path: &str) -> Result<()> {
-		self.connection
-			.execute("DELETE FROM units WHERE path = ?1", [path])?;
-		Ok(())
+	/// Removes a unit and everything stored for it. Returns its exports, as removed symbols.
+	pub fn remove(&mut self, path: &str) -> Result<Vec<SymbolChange>> {
+		let tx = self.connection.transaction()?;
+		let old = fingerprints(&tx, path)?;
+		tx.execute("DELETE FROM units WHERE path = ?1", [path])?;
+		tx.commit()?;
+		Ok(diff(path, old, Vec::new()))
 	}
 
 	pub fn exports(&self, unit: i64) -> Result<Vec<Export>> {
@@ -394,6 +420,46 @@ fn unit_record(row: &rusqlite::Row) -> rusqlite::Result<UnitRecord> {
 			hash: row.get(5)?,
 		},
 	})
+}
+
+/// The exports of a unit, by name, with their fingerprints.
+fn fingerprints(tx: &Transaction, path: &str) -> Result<Vec<(String, u64)>> {
+	let mut statement = tx.prepare(
+		"SELECT exports.name, exports.fingerprint FROM exports
+		JOIN units ON units.id = exports.unit WHERE units.path = ?1",
+	)?;
+	let rows = statement
+		.query_map([path], |row| {
+			Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u64))
+		})?
+		.collect::<rusqlite::Result<_>>()?;
+	Ok(rows)
+}
+
+/// The symbol changes between two export lists of a unit, sorted by name.
+fn diff(unit: &str, old: Vec<(String, u64)>, new: Vec<(String, u64)>) -> Vec<SymbolChange> {
+	let change = |name: &str, kind| SymbolChange {
+		unit: unit.to_string(),
+		name: name.to_string(),
+		kind,
+	};
+	let mut changes = Vec::new();
+	for (name, fingerprint) in &new {
+		match old.iter().find(|(old, _)| old == name) {
+			None => changes.push(change(name, SymbolChangeKind::Added)),
+			Some((_, old)) if old != fingerprint => {
+				changes.push(change(name, SymbolChangeKind::Changed));
+			}
+			Some(_) => {}
+		}
+	}
+	for (name, _) in &old {
+		if !new.iter().any(|(new, _)| new == name) {
+			changes.push(change(name, SymbolChangeKind::Removed));
+		}
+	}
+	changes.sort();
+	changes
 }
 
 fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
@@ -799,6 +865,7 @@ mod tests {
 				template: Some(&template),
 			})
 			.unwrap()
+			.0
 	}
 
 	#[test]
@@ -839,7 +906,7 @@ mod tests {
 		assert_eq!(units[0].state.hash, vec![2; 32]);
 		assert_eq!(index.exports(id).unwrap().len(), 2);
 
-		let library = index
+		let (library, _) = index
 			.commit(&StoredUnit {
 				path: "a.nml",
 				role: Role::Library,
@@ -891,5 +958,75 @@ mod tests {
 		drop(index);
 		assert_eq!(Index::open(&path).unwrap().units().unwrap().len(), 1);
 		std::fs::remove_dir_all(dir).unwrap();
+	}
+
+	fn commit_exports(index: &mut Index, path: &str, exports: &[Export]) -> Vec<SymbolChange> {
+		index
+			.commit(&StoredUnit {
+				path,
+				role: Role::Page,
+				state: state(0),
+				exports,
+				uses: &[],
+				dependencies: &[],
+				template: None,
+			})
+			.unwrap()
+			.1
+	}
+
+	fn changes(changes: &[SymbolChange]) -> Vec<(&str, &str, SymbolChangeKind)> {
+		changes
+			.iter()
+			.map(|c| (c.unit.as_str(), c.name.as_str(), c.kind))
+			.collect()
+	}
+
+	#[test]
+	fn symbol_changes() {
+		use SymbolChangeKind::*;
+
+		let heading = |name: &str, title: &str| {
+			Export::new(name, SymbolKind::Heading, Some(ElementId::from_index(1)))
+				.with("title", title)
+		};
+		let mut index = Index::open_in_memory().unwrap();
+
+		let first = commit_exports(&mut index, "a.nml", &[heading("x", "X"), heading("y", "Y")]);
+		assert_eq!(
+			changes(&first),
+			[("a.nml", "x", Added), ("a.nml", "y", Added)]
+		);
+
+		// Same fingerprints: a moved heading (another element) is not a change.
+		let moved = Export::new("x", SymbolKind::Heading, Some(ElementId::from_index(9)))
+			.with("title", "X");
+		let same = commit_exports(&mut index, "a.nml", &[heading("y", "Y"), moved]);
+		assert!(same.is_empty());
+
+		let next = commit_exports(
+			&mut index,
+			"a.nml",
+			&[heading("x", "New"), heading("z", "Z")],
+		);
+		assert_eq!(
+			changes(&next),
+			[
+				("a.nml", "x", Changed),
+				("a.nml", "y", Removed),
+				("a.nml", "z", Added)
+			]
+		);
+
+		// Another unit's symbols are its own.
+		let other = commit_exports(&mut index, "b.nml", &[heading("x", "New")]);
+		assert_eq!(changes(&other), [("b.nml", "x", Added)]);
+
+		let removed = index.remove("a.nml").unwrap();
+		assert_eq!(
+			changes(&removed),
+			[("a.nml", "x", Removed), ("a.nml", "z", Removed)]
+		);
+		assert!(index.remove("a.nml").unwrap().is_empty());
 	}
 }
