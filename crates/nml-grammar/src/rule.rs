@@ -243,8 +243,8 @@ impl RuleSet {
 	/// the rule then fails to match, that is an error.
 	pub fn dispatch(&self, table: Table, text: &str) -> Option<(RuleId, usize)> {
 		match table {
-			Table::Block => self.block.longest(text),
-			Table::Inline => self.inline.longest(text),
+			Table::Block => self.block.longest(text, true),
+			Table::Inline => self.inline.longest(text, false),
 		}
 	}
 
