@@ -8,6 +8,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+rayon.workspace = true
 nml-source.workspace = true
 nml-document.workspace = true
 nml-diagnostics.workspace = true

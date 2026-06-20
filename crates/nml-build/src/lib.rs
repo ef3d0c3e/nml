@@ -14,6 +14,7 @@ use nml_diagnostics::Diagnostic;
 use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
 use nml_diagnostics::DiagnosticSeverity;
+use nml_document::Dependency;
 use nml_document::Document;
 use nml_document::ElementKind;
 use nml_document::Slot;
@@ -21,6 +22,7 @@ use nml_document::SlotId;
 use nml_document::Use;
 use nml_html::PageOptions;
 use nml_html::Resolved;
+use nml_lang::Compiled;
 use nml_lang::Language;
 use nml_source::Source;
 use nml_source::Token;
@@ -37,6 +39,7 @@ use nml_workspace::StoredSlot;
 use nml_workspace::StoredTemplate;
 use nml_workspace::StoredUnit;
 use nml_workspace::StoredUse;
+use rayon::prelude::*;
 
 use crate::link::LinkError;
 use crate::link::Linker;
@@ -123,7 +126,8 @@ pub fn build(root: &Path) -> Result<BuildReport, BuildError> {
 	if !config_path.exists() {
 		return Err(BuildError::NoConfig(root));
 	}
-	let config = match Config::parse(read(&config_path)?) {
+	let config_source = read(&config_path)?;
+	let config = match Config::parse(config_source.clone()) {
 		Ok(config) => config,
 		Err(diagnostics) => {
 			return Ok(BuildReport {
@@ -132,6 +136,10 @@ pub fn build(root: &Path) -> Result<BuildReport, BuildError> {
 			});
 		}
 	};
+	let config_hash = nml_workspace::hash(config_source.content().as_bytes())
+		.iter()
+		.map(|byte| format!("{byte:02x}"))
+		.collect::<String>();
 	let index = Index::open(&root.join(&config.database))?;
 	let mut builder = Builder {
 		output: root.join(&config.output),
@@ -144,7 +152,7 @@ pub fn build(root: &Path) -> Result<BuildReport, BuildError> {
 		to_link: BTreeSet::new(),
 		report: BuildReport::default(),
 	};
-	builder.run()?;
+	builder.run(&config_hash)?;
 	Ok(builder.report)
 }
 
@@ -165,22 +173,51 @@ struct Builder {
 }
 
 impl Builder {
-	fn run(&mut self) -> Result<(), BuildError> {
+	fn run(&mut self, config_hash: &str) -> Result<(), BuildError> {
 		let scan = nml_workspace::scan(&self.root, &self.config, &self.index)?;
 		for path in &scan.removed {
 			self.remove(path)?;
 		}
+
+		// Invalidate: changed files, everything if the configuration changed, and the
+		// dependents of both, transitively.
+		let config_changed = self.index.meta(CONFIG_HASH)?.as_deref() != Some(config_hash);
+		let mut invalid: BTreeSet<String> = scan
+			.files
+			.iter()
+			.filter(|file| config_changed || file.change != Change::Unchanged)
+			.map(|file| file.path.clone())
+			.collect();
+		let existing: BTreeSet<&str> = scan.files.iter().map(|f| f.path.as_str()).collect();
+		let seeds = invalid.iter().chain(&scan.removed).cloned().collect();
+		invalidate(&self.index, &self.config, seeds, &existing, &mut invalid)?;
+
+		let mut to_parse = Vec::new();
 		for file in &scan.files {
-			match file.change {
-				Change::Unchanged => {
-					let stored = self.index.unit(&file.path)?.unwrap();
-					if file.refresh(&stored.state) {
-						self.index.update_state(&file.path, &file.state)?;
-					}
-				}
-				Change::Added | Change::Modified => self.parse(file)?,
+			if invalid.contains(&file.path) {
+				let source = match &file.content {
+					Some(content) => source(&file.absolute, content.clone()),
+					None => read(&file.absolute)?,
+				};
+				to_parse.push((file, source));
+				continue;
+			}
+			let stored = self.index.unit(&file.path)?.unwrap();
+			if file.refresh(&stored.state) {
+				self.index.update_state(&file.path, &file.state)?;
 			}
 		}
+
+		// Units parse in parallel; they are committed in path order.
+		let language = &self.language;
+		let compiled: Vec<_> = to_parse
+			.par_iter()
+			.map(|(_, source)| nml_lang::compile(language, source.clone()))
+			.collect();
+		for ((file, source), compiled) in to_parse.into_iter().zip(compiled) {
+			self.commit(file, source, compiled)?;
+		}
+		self.index.set_meta(CONFIG_HASH, config_hash)?;
 
 		// Relink the pages whose last link had errors, and those that use an affected
 		// symbol.
@@ -212,15 +249,15 @@ impl Builder {
 		Ok(())
 	}
 
-	/// Parses a file and commits its unit, unless it has errors.
-	fn parse(&mut self, file: &ScannedFile) -> Result<(), BuildError> {
-		let source = match &file.content {
-			Some(content) => source(&file.absolute, content.clone()),
-			None => read(&file.absolute)?,
-		};
-		self.sources.insert(file.path.clone(), source.clone());
+	/// Commits a parsed unit, unless it has errors.
+	fn commit(
+		&mut self,
+		file: &ScannedFile,
+		source: Arc<Source>,
+		compiled: Compiled,
+	) -> Result<(), BuildError> {
+		self.sources.insert(file.path.clone(), source);
 		self.report.parsed.push(file.path.clone());
-		let compiled = nml_lang::compile(&self.language, source);
 		let failed = has_errors(&compiled.diagnostics);
 		self.report.diagnostics.extend(compiled.diagnostics);
 		if failed {
@@ -362,6 +399,36 @@ impl Builder {
 		self.report.written.push(path.to_string());
 		Ok(())
 	}
+}
+
+/// The key of the configuration's hash in the index: a new configuration invalidates every
+/// unit.
+const CONFIG_HASH: &str = "config_hash";
+
+/// Adds to `invalid` the units that depend, transitively, on the units at the `seeds`
+/// paths: they include it, or import it as a module. Only existing files are added.
+fn invalidate(
+	index: &Index,
+	config: &Config,
+	seeds: Vec<String>,
+	existing: &BTreeSet<&str>,
+	invalid: &mut BTreeSet<String>,
+) -> Result<(), BuildError> {
+	let mut queue = seeds;
+	while let Some(path) = queue.pop() {
+		let mut dependencies = vec![Dependency::Include(path.clone())];
+		if let Some(module) = config.module_path(&path) {
+			dependencies.push(Dependency::Import(module));
+		}
+		for dependency in dependencies {
+			for dependent in index.dependents(&dependency)? {
+				if existing.contains(dependent.as_str()) && invalid.insert(dependent.clone()) {
+					queue.push(dependent);
+				}
+			}
+		}
+	}
+	Ok(())
 }
 
 /// The text of the document's first heading.

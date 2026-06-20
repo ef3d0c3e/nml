@@ -325,3 +325,92 @@ fn link_errors_are_reported_until_fixed() {
 	let report = workspace.build();
 	assert!(report.written.is_empty());
 }
+
+#[test]
+fn configuration_changes_invalidate_everything() {
+	let workspace = Workspace::new(
+		"config-change",
+		&[("nml.toml", ""), ("a.nml", "# A\n"), ("b.nml", "# B\n")],
+	);
+	workspace.build();
+	assert!(workspace.build().parsed.is_empty());
+
+	workspace.write("nml.toml", "[html]\nlanguage = \"fr\"\n");
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["a.nml", "b.nml"]);
+	assert_eq!(report.written, ["a.nml", "b.nml"]);
+	assert!(workspace.output("a.html").contains("<html lang=\"fr\">"));
+	assert!(workspace.build().parsed.is_empty());
+}
+
+#[test]
+fn dependents_are_invalidated_transitively() {
+	use nml_workspace::FileState;
+
+	let url = Url::parse("file:///w/nml.toml").unwrap();
+	let config = Config::parse(Arc::new(Source::new(
+		url,
+		"[[module]]\nname = \"std\"\nroot = \"modules/std\"\n".into(),
+		0,
+	)))
+	.unwrap();
+	let mut index = Index::open_in_memory().unwrap();
+	let mut add = |path: &str, dependencies: &[Dependency]| {
+		index
+			.commit(&StoredUnit {
+				path,
+				name: path,
+				title: path,
+				role: Role::Page,
+				state: FileState {
+					mtime: 0,
+					size: 0,
+					hash: Vec::new(),
+				},
+				exports: &[],
+				uses: &[],
+				dependencies,
+				template: None,
+			})
+			.unwrap();
+	};
+	// a imports std.toc, which includes parts/x.nml. b includes a. c is independent.
+	add(
+		"modules/std/toc.nml",
+		&[Dependency::Include("parts/x.nml".into())],
+	);
+	add("a.nml", &[Dependency::Import("std.toc".into())]);
+	add("b.nml", &[Dependency::Include("a.nml".into())]);
+	add("c.nml", &[Dependency::Config]);
+	add("parts/x.nml", &[]);
+
+	let existing: BTreeSet<&str> = [
+		"a.nml",
+		"b.nml",
+		"c.nml",
+		"modules/std/toc.nml",
+		"parts/x.nml",
+	]
+	.into_iter()
+	.collect();
+	let run = |seeds: &[&str], existing: &BTreeSet<&str>| {
+		let mut invalid: BTreeSet<String> = seeds.iter().map(|s| s.to_string()).collect();
+		let seeds = invalid.iter().cloned().collect();
+		invalidate(&index, &config, seeds, existing, &mut invalid).unwrap();
+		invalid.into_iter().collect::<Vec<_>>()
+	};
+	assert_eq!(
+		run(&["parts/x.nml"], &existing),
+		["a.nml", "b.nml", "modules/std/toc.nml", "parts/x.nml"]
+	);
+	assert_eq!(run(&["a.nml"], &existing), ["a.nml", "b.nml"]);
+	assert_eq!(run(&["b.nml"], &existing), ["b.nml"]);
+	assert_eq!(run(&["c.nml"], &existing), ["c.nml"]);
+
+	// A removed file is a seed, but only existing files are parsed.
+	let without_a: BTreeSet<&str> = existing.iter().copied().filter(|p| *p != "a.nml").collect();
+	assert_eq!(
+		run(&["modules/std/toc.nml"], &without_a),
+		["modules/std/toc.nml"]
+	);
+}
