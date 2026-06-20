@@ -24,6 +24,9 @@ use nml_html::PageOptions;
 use nml_html::Resolved;
 use nml_lang::Compiled;
 use nml_lang::Language;
+use nml_lang::ResolveError;
+use nml_lang::Resolver;
+use nml_lang::resolve_path;
 use nml_source::Source;
 use nml_source::Token;
 use nml_source::Url;
@@ -210,9 +213,15 @@ impl Builder {
 
 		// Units parse in parallel; they are committed in path order.
 		let language = &self.language;
+		let resolver = WorkspaceResolver {
+			root: &self.root,
+			config: &self.config,
+		};
 		let compiled: Vec<_> = to_parse
 			.par_iter()
-			.map(|(_, source)| nml_lang::compile(language, source.clone()))
+			.map(|(file, source)| {
+				nml_lang::compile(language, source.clone(), &file.path, &resolver)
+			})
 			.collect();
 		for ((file, source), compiled) in to_parse.into_iter().zip(compiled) {
 			self.commit(file, source, compiled)?;
@@ -398,6 +407,46 @@ impl Builder {
 		self.report.diagnostics.extend(reported);
 		self.report.written.push(path.to_string());
 		Ok(())
+	}
+}
+
+/// Finds included files and imported modules on disk.
+struct WorkspaceResolver<'a> {
+	root: &'a Path,
+	config: &'a Config,
+}
+
+impl Resolver for WorkspaceResolver<'_> {
+	fn include(&self, from: &str, path: &str) -> Result<(String, Arc<Source>), ResolveError> {
+		let not_found = |path: &str| ResolveError::NotFound { path: path.into() };
+		let resolved = resolve_path(from, path).ok_or_else(|| not_found(path))?;
+		let absolute = self.root.join(&resolved);
+		let content = fs::read_to_string(&absolute).map_err(|_| not_found(&resolved))?;
+		Ok((resolved, source(&absolute, content)))
+	}
+
+	fn module(&self, module: &str) -> Result<String, ResolveError> {
+		let (name, rest) = module.split_once('.').unwrap_or((module, ""));
+		let root = self
+			.config
+			.modules
+			.iter()
+			.find(|m| m.name == name)
+			.ok_or_else(|| ResolveError::UnknownModule { name: name.into() })?;
+		let root: Vec<_> = root
+			.root
+			.components()
+			.filter_map(|c| match c {
+				std::path::Component::Normal(part) => Some(part.to_string_lossy()),
+				_ => None,
+			})
+			.collect();
+		let path = format!("{}/{}.nml", root.join("/"), rest.replace('.', "/"));
+		if self.root.join(&path).is_file() {
+			Ok(path)
+		} else {
+			Err(ResolveError::NotFound { path })
+		}
 	}
 }
 

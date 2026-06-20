@@ -414,3 +414,52 @@ fn dependents_are_invalidated_transitively() {
 		["modules/std/toc.nml"]
 	);
 }
+
+#[test]
+fn includes_and_imports_invalidate_their_users() {
+	let workspace = Workspace::new(
+		"includes",
+		&[
+			(
+				"nml.toml",
+				"exclude = [\"parts/**\", \"modules/**\"]\n[[module]]\nname = \"std\"\nroot = \"modules/std\"\n",
+			),
+			("a.nml", ":import std.toc\n# A\n:include parts/intro\n"),
+			("b.nml", "# B\n[[a#intro]]\n"),
+			("c.nml", "# C\n"),
+			("parts/intro.nml", "## Intro {#intro}\n"),
+			("modules/std/toc.nml", "toc\n"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(
+		workspace
+			.output("a.html")
+			.contains("<h2 id=\"intro\">Intro</h2>")
+	);
+	assert!(
+		workspace
+			.output("b.html")
+			.contains("<a href=\"a.html#intro\">Intro</a>")
+	);
+
+	// The included file changes: `a` is parsed again, and `b` relinked for the new title.
+	workspace.write("parts/intro.nml", "## Introduction {#intro}\n");
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["a.nml", "parts/intro.nml"]);
+	assert_eq!(report.written, ["a.nml", "b.nml"]);
+	assert!(workspace.output("b.html").contains(">Introduction</a>"));
+
+	// The module changes: its importer is parsed again.
+	workspace.write("modules/std/toc.nml", "new toc\n");
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["a.nml", "modules/std/toc.nml"]);
+	assert_eq!(report.written, ["a.nml"]);
+
+	// The included file is removed: `a` fails, and keeps its last valid state.
+	workspace.remove("parts/intro.nml");
+	let report = workspace.build();
+	assert_eq!(report.failed, ["a.nml"]);
+	assert_diagnostics!(report.diagnostics, [3008]);
+}
