@@ -1,8 +1,11 @@
 //! The built-in NML language: Rust rules for every core element.
 
 mod heading;
+mod import;
+mod include;
 mod language;
 mod reference;
+mod resolve;
 mod style;
 mod variable;
 
@@ -11,6 +14,10 @@ pub use language::Handler;
 pub use language::Language;
 pub use language::Lower;
 pub use language::compile;
+pub use resolve::MemoryResolver;
+pub use resolve::ResolveError;
+pub use resolve::Resolver;
+pub use resolve::resolve_path;
 
 impl Language {
 	/// The built-in language.
@@ -20,6 +27,8 @@ impl Language {
 		heading::add(&mut language).expect("built-in rules are valid");
 		reference::add(&mut language).expect("built-in rules are valid");
 		variable::add(&mut language).expect("built-in rules are valid");
+		import::add(&mut language).expect("built-in rules are valid");
+		include::add(&mut language).expect("built-in rules are valid");
 		language
 	}
 }
@@ -37,8 +46,25 @@ pub(crate) mod tests {
 	use super::*;
 
 	pub(crate) fn compile_text(text: &str) -> Compiled {
-		let source = Source::new(Url::parse("file:///a.nml").unwrap(), text.into(), 0);
-		compile(&Language::builtin(), Arc::new(source))
+		compile_with(text, &[])
+	}
+
+	/// Compiles `page.nml`, with other files of the workspace in memory, and the module
+	/// `std` at `modules/std`.
+	pub(crate) fn compile_with(text: &str, files: &[(&str, &str)]) -> Compiled {
+		let source = Source::new(Url::parse("file:///page.nml").unwrap(), text.into(), 0);
+		let mut resolver = MemoryResolver::default();
+		resolver.files.insert("page.nml".into(), text.into());
+		for (path, content) in files {
+			resolver.files.insert(path.to_string(), content.to_string());
+		}
+		resolver.modules.insert("std".into(), "modules/std".into());
+		compile(
+			&Language::builtin(),
+			Arc::new(source),
+			"page.nml",
+			&resolver,
+		)
 	}
 
 	/// A compact rendering of a document: `kind[children]`, text quoted.

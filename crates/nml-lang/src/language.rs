@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -21,6 +22,8 @@ use nml_grammar::Value;
 use nml_source::Source;
 use nml_source::Token;
 
+use crate::Resolver;
+
 /// Lowers a match of its rule into document elements.
 pub type Handler = Box<dyn Fn(&mut Lower<'_, '_>, &RuleMatch) + Send + Sync>;
 
@@ -28,6 +31,8 @@ pub type Handler = Box<dyn Fn(&mut Lower<'_, '_>, &RuleMatch) + Send + Sync>;
 pub struct Language {
 	rules: RuleSet,
 	handlers: HashMap<RuleId, Handler>,
+	/// Rules allowed in the prologue: they do not end it.
+	prologue: HashSet<RuleId>,
 }
 
 impl fmt::Debug for Language {
@@ -44,6 +49,7 @@ impl Language {
 		Self {
 			rules: RuleSet::new(),
 			handlers: HashMap::new(),
+			prologue: HashSet::new(),
 		}
 	}
 
@@ -55,6 +61,18 @@ impl Language {
 	) -> Result<RuleId, RuleError> {
 		let id = self.rules.add(rule)?;
 		self.handlers.insert(id, Box::new(handler));
+		Ok(id)
+	}
+
+	/// Adds a rule that may appear in the prologue: the commands before the first content
+	/// block, such as `:import` and `:set`.
+	pub fn add_prologue(
+		&mut self,
+		rule: Rule,
+		handler: impl Fn(&mut Lower<'_, '_>, &RuleMatch) + Send + Sync + 'static,
+	) -> Result<RuleId, RuleError> {
+		let id = self.add(rule, handler)?;
+		self.prologue.insert(id);
 		Ok(id)
 	}
 
@@ -72,17 +90,27 @@ pub struct Compiled {
 	pub diagnostics: Vec<Diagnostic>,
 }
 
-/// Parses a source and lowers it into a unit.
-pub fn compile(language: &Language, source: Arc<Source>) -> Compiled {
+/// Parses a source and lowers it into a unit. `path` is the source's path in the
+/// workspace; `resolver` finds the files it includes and the modules it imports.
+pub fn compile(
+	language: &Language,
+	source: Arc<Source>,
+	path: &str,
+	resolver: &dyn Resolver,
+) -> Compiled {
 	let parsed = nml_grammar::parse(&language.rules, source.clone());
 	let mut lower = Lower {
 		language,
+		resolver,
 		builder: DocumentBuilder::new(source),
 		exports: Vec::new(),
 		uses: Vec::new(),
 		dependencies: Vec::new(),
 		diagnostics: parsed.diagnostics,
 		variables: HashMap::new(),
+		prologue: true,
+		files: vec![path.to_string()],
+		imports: Vec::new(),
 		exported: Vec::new(),
 	};
 	lower.nodes(&parsed.nodes);
@@ -112,6 +140,7 @@ pub fn compile(language: &Language, source: Arc<Source>) -> Compiled {
 /// The state of lowering a parse tree into a unit, given to rule handlers.
 pub struct Lower<'a, 'l> {
 	language: &'a Language,
+	pub resolver: &'a dyn Resolver,
 	pub builder: DocumentBuilder<'l>,
 	pub exports: Vec<Export>,
 	pub uses: Vec<Use>,
@@ -119,6 +148,13 @@ pub struct Lower<'a, 'l> {
 	pub diagnostics: Vec<Diagnostic>,
 	/// Variables set with `:set`: their value and where their name is written.
 	pub variables: HashMap<String, (String, Token)>,
+	/// Whether the lowering is still in the prologue.
+	pub prologue: bool,
+	/// The workspace paths of the unit's file and of the files being included in it, the
+	/// innermost last.
+	pub files: Vec<String>,
+	/// Namespaces of the imported modules, and where they are written.
+	pub imports: Vec<(String, Token)>,
 	/// Exported names and where they are written.
 	exported: Vec<(String, Token)>,
 }
@@ -131,11 +167,21 @@ impl fmt::Debug for Lower<'_, '_> {
 	}
 }
 
-impl Lower<'_, '_> {
+impl<'a> Lower<'a, '_> {
+	pub fn language(&self) -> &'a Language {
+		self.language
+	}
+
 	/// Lowers nodes into the open element. Adjacent text and escapes become one text element.
 	pub fn nodes(&mut self, nodes: &[Node]) {
 		let mut text: Option<(Token, String)> = None;
 		for node in nodes {
+			// A block at the top of the unit ends the prologue, unless its rule is allowed in it.
+			if self.builder.depth() == 1
+				&& !matches!(node, Node::Match(m) if self.language.prologue.contains(&m.rule))
+			{
+				self.prologue = false;
+			}
 			match node {
 				Node::Text(token) | Node::Escape(token) => {
 					let content = match node {
@@ -183,6 +229,13 @@ impl Lower<'_, '_> {
 	pub fn capture(&mut self, m: &RuleMatch, name: &str) {
 		if let Some(Value::Nodes(nodes)) = m.capture(name).map(|capture| &capture.value) {
 			self.nodes(nodes);
+		}
+	}
+
+	/// Records a parse-time dependency, once.
+	pub fn depend(&mut self, dependency: Dependency) {
+		if !self.dependencies.contains(&dependency) {
+			self.dependencies.push(dependency);
 		}
 	}
 

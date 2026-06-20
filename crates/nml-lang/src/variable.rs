@@ -28,7 +28,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::LineEnd,
 		],
 	);
-	language.add(rule, |lower, m| {
+	language.add_prologue(rule, |lower, m| {
 		let name = m.capture("name").unwrap().token.clone();
 		let value = m.capture("value").unwrap().token.clone();
 		let error = |kind| Diagnostic::new(kind, DiagnosticMessage::new(name.clone()));

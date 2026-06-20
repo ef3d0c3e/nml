@@ -39,11 +39,18 @@ diagnostic-unknown-variable = `{ $name }` is not a variable of NML
 diagnostic-variable-already-set = `{ $name }` is already set
     .first = first set here
 diagnostic-invalid-reference-key = `{ $key }` is not a reference key: it must be a single name without blanks, `#` or `|`
+diagnostic-import-outside-prologue = `{ $module }` is imported after the prologue: imports come before the first content block
+diagnostic-duplicate-import = the namespace `{ $namespace }` is already imported
+    .first = first imported here
+diagnostic-invalid-module-path = `{ $module }` is not a module path: write `module.path.to.file`
 
 ## Workspace, build and imports (3xxx)
 
 diagnostic-unresolved-reference = `{ $target }` does not refer to anything
 diagnostic-ambiguous-reference = `{ $target }` is ambiguous: { $count } units match it
+diagnostic-unknown-module = no module is named `{ $name }` in nml.toml
+diagnostic-file-not-found = `{ $path }` does not exist in the workspace
+diagnostic-include-cycle = including `{ $path }` here would include it in itself
 diagnostic-config-error = invalid configuration: { $message }
 diagnostic-invalid-glob = invalid pattern `{ $pattern }`: { $message }
 diagnostic-invalid-module-name = `{ $name }` is not a valid module name: it must be a single word

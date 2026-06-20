@@ -78,11 +78,23 @@ pub enum DiagnosticKind {
 	VariableAlreadySet { name: String },
 	#[diag(id = 2007, message = "diagnostic-invalid-reference-key")]
 	InvalidReferenceKey { key: String },
+	#[diag(id = 2008, message = "diagnostic-import-outside-prologue")]
+	ImportOutsidePrologue { module: String },
+	#[diag(id = 2009, message = "diagnostic-duplicate-import")]
+	DuplicateImport { namespace: String },
+	#[diag(id = 2010, message = "diagnostic-invalid-module-path")]
+	InvalidModulePath { module: String },
 
 	#[diag(id = 3001, message = "diagnostic-unresolved-reference")]
 	UnresolvedReference { target: String },
 	#[diag(id = 3006, message = "diagnostic-ambiguous-reference")]
 	AmbiguousReference { target: String, count: usize },
+	#[diag(id = 3007, message = "diagnostic-unknown-module")]
+	UnknownModule { name: String },
+	#[diag(id = 3008, message = "diagnostic-file-not-found")]
+	FileNotFound { path: String },
+	#[diag(id = 3009, message = "diagnostic-include-cycle")]
+	IncludeCycle { path: String },
 	/// An error in `nml.toml`, with the TOML parser's own text.
 	#[diag(id = 3002, message = "diagnostic-config-error")]
 	ConfigError { message: String },
