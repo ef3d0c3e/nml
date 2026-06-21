@@ -61,7 +61,9 @@ impl Runtime {
 		// Bytecode is never loaded, so it does not need to be produced either.
 		let string: mlua::Table = globals.get("string")?;
 		string.raw_set("dump", mlua::Nil)?;
-		globals.raw_set("nml", lua.create_table()?)?;
+		let api = lua.create_table()?;
+		crate::api::register(&lua, &api, crate::API)?;
+		globals.raw_set("nml", api)?;
 
 		lua.set_memory_limit(limits.memory)?;
 		let executed = Rc::new(Cell::new(0u64));
