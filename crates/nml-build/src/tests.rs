@@ -497,3 +497,24 @@ fn outputs_of_removed_pages_are_deleted() {
 	workspace.remove("docs/c.nml");
 	assert!(workspace.build().deleted.is_empty());
 }
+
+#[test]
+fn lua() {
+	let workspace = Workspace::new(
+		"lua",
+		&[
+			("nml.toml", ""),
+			(
+				"a.nml",
+				":lua\n```\nfunction greet(name) return 'Hello, ' .. name end\n```\n\n:lua`greet('NML')`!\n",
+			),
+			("b.nml", "x :lua`nil + 1`\n"),
+		],
+	);
+	let report = workspace.build();
+	assert_eq!(report.failed, ["b.nml"]);
+	assert_diagnostics!(report.diagnostics, [4001]);
+	let location = report.diagnostics[0].primary().location.root();
+	assert_eq!((location.range(), location.content()), (7..14, "nil + 1"));
+	assert!(workspace.output("a.html").contains("<p>Hello, NML!</p>"));
+}

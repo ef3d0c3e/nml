@@ -151,7 +151,7 @@ pub fn build(root: &Path) -> Result<BuildReport, BuildError> {
 		root,
 		config,
 		index,
-		language: Language::builtin(),
+		language: language(),
 		sources: HashMap::new(),
 		affected: BTreeSet::new(),
 		to_link: BTreeSet::new(),
@@ -438,6 +438,13 @@ impl Builder {
 		self.report.written.push(path.to_string());
 		Ok(())
 	}
+}
+
+/// The language of the workspace: the built-in rules and Lua.
+pub fn language() -> Language {
+	let mut language = Language::builtin();
+	nml_lua::add(&mut language).expect("the Lua rules are valid");
+	language
 }
 
 /// Finds included files and imported modules on disk.
