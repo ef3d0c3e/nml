@@ -60,3 +60,4 @@ diagnostic-duplicate-module = module `{ $name }` is declared twice
 ## Lua (4xxx)
 
 diagnostic-lua-error = { $message }
+diagnostic-lua-fence-language = a `:lua` block holds Lua, not `{ $language }`: leave the fence bare

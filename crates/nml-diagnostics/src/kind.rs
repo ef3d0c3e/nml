@@ -108,6 +108,9 @@ pub enum DiagnosticKind {
 	/// A Lua error, forwarded with Lua's own text.
 	#[diag(id = 4001, message = "diagnostic-lua-error")]
 	LuaError { message: String },
+	/// A `:lua` block whose fence names another language.
+	#[diag(id = 4002, message = "diagnostic-lua-fence-language")]
+	LuaFenceLanguage { language: String },
 }
 
 /// Static description of a [`DiagnosticKind`] variant.

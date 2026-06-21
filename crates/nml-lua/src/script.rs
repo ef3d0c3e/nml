@@ -1,0 +1,224 @@
+use std::sync::Arc;
+
+use mlua::Value;
+use nml_diagnostics::Diagnostic;
+use nml_diagnostics::DiagnosticKind;
+use nml_diagnostics::DiagnosticMessage;
+use nml_document::ElementKind;
+use nml_grammar::Atom;
+use nml_grammar::Rule;
+use nml_grammar::RuleError;
+use nml_lang::Language;
+use nml_lang::Lower;
+use nml_source::Source;
+use nml_source::Token;
+use nml_source::Url;
+use nml_source::VirtualSourceBuilder;
+
+use crate::Limits;
+use crate::Runtime;
+use crate::error::Chunks;
+
+/// The Lua state of the unit being lowered, and its chunks.
+pub(crate) struct UnitLua {
+	pub runtime: Runtime,
+	pub chunks: Chunks,
+}
+
+pub(crate) fn unit_lua<'a>(lower: &'a mut Lower<'_, '_>) -> &'a mut UnitLua {
+	lower.extension(|| UnitLua {
+		runtime: Runtime::new(Limits::default()).expect("a Lua state can be created"),
+		chunks: Chunks::default(),
+	})
+}
+
+/// A chunk for the code at `code`: a virtual source of it, preceded by `prefix`, registered
+/// under a name made of the file and the offset.
+fn chunk(lower: &mut Lower<'_, '_>, code: &Token, prefix: &str) -> (String, Arc<Source>) {
+	let path = lower.files.last().unwrap().clone();
+	let name = format!("{path}@{}", code.start());
+	let url = Url::parse(&format!("virtual:///{path}/lua/{}", code.start())).unwrap();
+	let mut builder = VirtualSourceBuilder::new(code.source().clone(), url, code.start());
+	builder.insert(prefix);
+	builder.copy(code.range());
+	let source = Arc::new(builder.build());
+	unit_lua(lower).chunks.add(name.clone(), source.clone());
+	(name, source)
+}
+
+/// `:lua` and a bare (or `lua`) fence runs the code in the unit's state; ``:lua`expr` ``
+/// shows the value of `expr`, or runs statements and shows nothing.
+pub fn add(language: &mut Language) -> Result<(), RuleError> {
+	let block = Rule::new(
+		"lua",
+		vec![
+			Atom::LineStart,
+			Atom::capture("command", Atom::literal(":lua")).with_class("keyword"),
+			Atom::LineEnd,
+			Atom::LineStart,
+			Atom::capture("fence", Atom::run('`', 3)).with_class("operator"),
+			Atom::capture("info", Atom::RestOfLine),
+			Atom::LineEnd,
+			Atom::capture("code", Atom::Text),
+			Atom::LineStart,
+			Atom::same("fence"),
+			Atom::LineEnd,
+		],
+	);
+	language.add(block, |lower, m| {
+		let info = &m.capture("info").unwrap().token;
+		if !matches!(info.content().trim(), "" | "lua") {
+			let kind = DiagnosticKind::LuaFenceLanguage {
+				language: info.content().trim().into(),
+			};
+			let message = DiagnosticMessage::new(info.clone());
+			lower.diagnostics.push(Diagnostic::new(kind, message));
+			return;
+		}
+		let code = m.capture("code").unwrap().token.clone();
+		let (name, source) = chunk(lower, &code, "");
+		let unit = unit_lua(lower);
+		if let Err(error) = unit.runtime.run(source.content(), &name) {
+			let diagnostic = unit.chunks.diagnostic(&error, m.token.clone());
+			lower.diagnostics.push(diagnostic);
+		}
+	})?;
+
+	let role = Rule::new(
+		"lua-role",
+		vec![
+			Atom::capture("command", Atom::literal(":lua")).with_class("keyword"),
+			Atom::capture("fence", Atom::run('`', 1)).with_class("operator"),
+			Atom::capture("code", Atom::Text),
+			Atom::same("fence"),
+		],
+	);
+	language.add(role, |lower, m| {
+		let code = m.capture("code").unwrap().token.clone();
+		match evaluate(lower, &code) {
+			Ok(Some(text)) => {
+				lower.builder.leaf(ElementKind::Text(text), m.token.clone());
+			}
+			Ok(None) => {}
+			Err(error) => {
+				let diagnostic = unit_lua(lower).chunks.diagnostic(&error, m.token.clone());
+				lower.diagnostics.push(diagnostic);
+			}
+		}
+	})?;
+	Ok(())
+}
+
+/// Evaluates a role's code: as an expression if it is one, as statements otherwise. Returns
+/// the text of its value.
+fn evaluate(lower: &mut Lower<'_, '_>, code: &Token) -> mlua::Result<Option<String>> {
+	let (name, source) = chunk(lower, code, "return ");
+	let function = match unit_lua(lower).runtime.load(source.content(), &name) {
+		Ok(function) => function,
+		Err(mlua::Error::SyntaxError { .. }) => {
+			let (name, source) = chunk(lower, code, "");
+			unit_lua(lower).runtime.load(source.content(), &name)?
+		}
+		Err(error) => return Err(error),
+	};
+	let value: Value = function.call(())?;
+	match value {
+		Value::Nil => Ok(None),
+		Value::String(text) => Ok(Some(text.to_str()?.to_string())),
+		Value::Integer(n) => Ok(Some(n.to_string())),
+		Value::Number(n) => Ok(Some(value_text(n))),
+		other => Err(mlua::Error::runtime(format!(
+			"a `:lua` role shows strings and numbers, not a {}",
+			other.type_name()
+		))),
+	}
+}
+
+/// A float as Lua shows it.
+fn value_text(n: f64) -> String {
+	if n.fract() == 0.0 && n.is_finite() {
+		format!("{n:.1}")
+	} else {
+		n.to_string()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use nml_diagnostics::assert_diagnostics;
+	use nml_lang::Compiled;
+	use nml_lang::MemoryResolver;
+
+	use super::*;
+
+	fn compile(text: &str) -> Compiled {
+		let mut language = Language::builtin();
+		add(&mut language).unwrap();
+		let source = Source::new(Url::parse("file:///page.nml").unwrap(), text.into(), 0);
+		let mut resolver = MemoryResolver::default();
+		resolver.files.insert("page.nml".into(), text.into());
+		nml_lang::compile(&language, Arc::new(source), "page.nml", &resolver)
+	}
+
+	fn text(compiled: &Compiled) -> String {
+		let document = &compiled.unit.document;
+		document.text(document.root())
+	}
+
+	#[test]
+	fn blocks_and_roles() {
+		let compiled = compile(
+			":lua\n```\nfunction year() return 2026 end\nname = 'NML'\n```\n\n\
+			Copyright :lua`year()` :lua``name .. '`'``, :lua`1.5 * 2`, :lua`0.5`.",
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		assert_eq!(text(&compiled), "Copyright 2026 NML`, 3.0, 0.5.");
+	}
+
+	#[test]
+	fn roles_can_run_statements() {
+		let compiled = compile(":lua`x = 1` :lua`x = x + 1` :lua`x`");
+		assert_diagnostics!(compiled.diagnostics, []);
+		assert_eq!(text(&compiled), "  2");
+		let compiled = compile(":lua`nil`.");
+		assert_eq!(text(&compiled), ".");
+	}
+
+	#[test]
+	fn errors_point_into_the_document() {
+		let compiled = compile(":lua\n```\nlocal a = 1\nlocal b = nil + a\n```\n");
+		assert_diagnostics!(compiled.diagnostics, [4001]);
+		let location = compiled.diagnostics[0].primary().location.root();
+		assert_eq!(location.content(), "local b = nil + a");
+		assert_eq!(location.source().location().as_str(), "file:///page.nml");
+
+		let compiled = compile("a :lua`1 +` b");
+		assert_diagnostics!(compiled.diagnostics, [4001]);
+		assert_eq!(
+			compiled.diagnostics[0].primary().location.root().content(),
+			"1 +"
+		);
+
+		let compiled = compile("a :lua`{}` b");
+		assert_diagnostics!(compiled.diagnostics, [4001]);
+		let DiagnosticKind::LuaError { message } = &compiled.diagnostics[0].kind else {
+			panic!()
+		};
+		assert!(message.contains("not a table"), "{message}");
+	}
+
+	#[test]
+	fn fence_language() {
+		let compiled = compile(":lua\n```lua\nx = 1\n```\n");
+		assert_diagnostics!(compiled.diagnostics, []);
+		let compiled = compile(":lua\n```rust\nx = 1\n```\n");
+		assert_diagnostics!(compiled.diagnostics, [4002 @ 8..12]);
+	}
+
+	#[test]
+	fn state_is_per_unit() {
+		compile(":lua`shared = 1`");
+		let compiled = compile(":lua`shared`");
+		assert_eq!(text(&compiled), "");
+	}
+}

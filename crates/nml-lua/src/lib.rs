@@ -2,6 +2,8 @@
 
 mod error;
 mod runtime;
+mod script;
 
 pub use runtime::Limits;
 pub use runtime::Runtime;
+pub use script::add;

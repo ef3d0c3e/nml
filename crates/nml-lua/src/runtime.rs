@@ -93,6 +93,14 @@ impl Runtime {
 			.expect("the runtime defines `nml`")
 	}
 
+	/// Compiles a chunk without running it.
+	pub fn load(&self, code: &str, name: &str) -> mlua::Result<mlua::Function> {
+		self.lua
+			.load(code)
+			.set_name(format!("={name}"))
+			.into_function()
+	}
+
 	/// Runs a chunk. `name` is what Lua's errors show for it (`name:3: …`).
 	pub fn run(&self, code: &str, name: &str) -> mlua::Result<MultiValue> {
 		self.lua.load(code).set_name(format!("={name}")).eval()
