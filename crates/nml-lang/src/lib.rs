@@ -10,6 +10,7 @@ mod style;
 mod variable;
 
 pub use language::Compiled;
+pub use language::Finisher;
 pub use language::Handler;
 pub use language::Language;
 pub use language::Lower;

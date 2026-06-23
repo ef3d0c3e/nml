@@ -115,8 +115,15 @@ pub fn compile(
 		imports: Vec::new(),
 		exported: Vec::new(),
 		extensions: HashMap::new(),
+		finishers: Vec::new(),
 	};
 	lower.nodes(&parsed.nodes);
+	// Finishers may add more finishers.
+	while !lower.finishers.is_empty() {
+		for finisher in std::mem::take(&mut lower.finishers) {
+			finisher(&mut lower);
+		}
+	}
 	let Lower {
 		builder,
 		exports,
@@ -162,7 +169,12 @@ pub struct Lower<'a, 'l> {
 	exported: Vec<(String, Token)>,
 	/// State that other crates keep for the unit, by type (the Lua runtime).
 	extensions: HashMap<TypeId, Box<dyn Any>>,
+	/// Run when the lowering ends, in the order they were added.
+	finishers: Vec<Finisher>,
 }
+
+/// Code run when a unit's lowering ends.
+pub type Finisher = Box<dyn FnOnce(&mut Lower<'_, '_>)>;
 
 impl fmt::Debug for Lower<'_, '_> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -244,6 +256,16 @@ impl<'a> Lower<'a, '_> {
 			.or_insert_with(|| Box::new(init()))
 			.downcast_mut()
 			.expect("extensions are keyed by their type")
+	}
+
+	/// The unit's state of type `T`, if it was created.
+	pub fn extension_mut<T: 'static>(&mut self) -> Option<&mut T> {
+		self.extensions.get_mut(&TypeId::of::<T>())?.downcast_mut()
+	}
+
+	/// Runs `finisher` when the lowering ends, after every node is lowered.
+	pub fn on_finish(&mut self, finisher: impl FnOnce(&mut Lower<'_, '_>) + 'static) {
+		self.finishers.push(Box::new(finisher));
 	}
 
 	/// Records a parse-time dependency, once.
@@ -337,6 +359,37 @@ mod tests {
 		assert_eq!(
 			show(document, document.root()),
 			r#"document[paragraph["1" " " "2" " " "3"]]"#
+		);
+	}
+
+	#[test]
+	fn finishers_run_at_the_end() {
+		let mut language = Language::empty();
+		language
+			.add(Rule::new("mark", vec![Atom::literal("@")]), |lower, m| {
+				let token = m.token.clone();
+				lower.on_finish(move |lower| {
+					// Runs after the paragraph is closed: the text goes at the end.
+					lower
+						.builder
+						.leaf(ElementKind::Text("!".into()), token.clone());
+					lower.on_finish(move |lower| {
+						lower.builder.leaf(ElementKind::Text("?".into()), token);
+					});
+				});
+			})
+			.unwrap();
+		let source = Source::new(Url::parse("file:///a.nml").unwrap(), "a @ b".into(), 0);
+		let compiled = compile(
+			&language,
+			Arc::new(source),
+			"a.nml",
+			&MemoryResolver::default(),
+		);
+		let document = &compiled.unit.document;
+		assert_eq!(
+			show(document, document.root()),
+			r#"document[paragraph["a " " b"] "!" "?"]"#
 		);
 	}
 }
