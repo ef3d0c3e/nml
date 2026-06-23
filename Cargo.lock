@@ -599,6 +599,8 @@ dependencies = [
  "nml-build",
  "nml-diagnostics",
  "nml-lsp",
+ "nml-lua",
+ "nml-workspace",
 ]
 
 [[package]]
@@ -682,6 +684,11 @@ dependencies = [
 [[package]]
 name = "nml-lua-macros"
 version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "nml-render"

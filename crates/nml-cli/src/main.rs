@@ -17,6 +17,12 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+	/// Set up a workspace: an `nml.toml` if it has none, and the Lua declarations for LuaLS.
+	Init {
+		/// The workspace root.
+		#[arg(default_value = ".")]
+		root: PathBuf,
+	},
 	/// Build every page of a workspace.
 	Build {
 		/// The workspace root, which holds `nml.toml`.
@@ -27,7 +33,37 @@ enum Command {
 
 fn main() -> ExitCode {
 	match Cli::parse().command {
+		Command::Init { root } => init(root),
 		Command::Build { root } => build(root),
+	}
+}
+
+/// A starting `nml.toml`.
+const DEFAULT_CONFIG: &str = r#"# Which .nml files are pages; the others are libraries.
+pages = ["**/*.nml"]
+exclude = []
+
+[html]
+language = "en"
+"#;
+
+fn init(root: PathBuf) -> ExitCode {
+	let config = root.join(nml_workspace::CONFIG_FILE);
+	let result = std::fs::create_dir_all(&root)
+		.and_then(|()| match config.exists() {
+			true => Ok(()),
+			false => std::fs::write(&config, DEFAULT_CONFIG),
+		})
+		.and_then(|()| nml_lua::write_types(&root));
+	match result {
+		Ok(()) => {
+			eprintln!("workspace ready in {}", root.display());
+			ExitCode::SUCCESS
+		}
+		Err(error) => {
+			eprintln!("error: {error}");
+			ExitCode::FAILURE
+		}
 	}
 }
 

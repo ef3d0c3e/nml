@@ -14,6 +14,8 @@ path = "src/main.rs"
 [dependencies]
 clap.workspace = true
 nml-diagnostics.workspace = true
+nml-lua.workspace = true
+nml-workspace.workspace = true
 nml-build.workspace = true
 nml-lsp.workspace = true
 
