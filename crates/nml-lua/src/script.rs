@@ -15,22 +15,7 @@ use nml_source::Token;
 use nml_source::Url;
 use nml_source::VirtualSourceBuilder;
 
-use crate::Limits;
-use crate::Runtime;
-use crate::error::Chunks;
-
-/// The Lua state of the unit being lowered, and its chunks.
-pub(crate) struct UnitLua {
-	pub runtime: Runtime,
-	pub chunks: Chunks,
-}
-
-pub(crate) fn unit_lua<'a>(lower: &'a mut Lower<'_, '_>) -> &'a mut UnitLua {
-	lower.extension(|| UnitLua {
-		runtime: Runtime::new(Limits::default()).expect("a Lua state can be created"),
-		chunks: Chunks::default(),
-	})
-}
+use crate::unit::unit_lua;
 
 /// A chunk for the code at `code`: a virtual source of it, preceded by `prefix`, registered
 /// under a name made of the file and the offset.
@@ -42,7 +27,10 @@ fn chunk(lower: &mut Lower<'_, '_>, code: &Token, prefix: &str) -> (String, Arc<
 	builder.insert(prefix);
 	builder.copy(code.range());
 	let source = Arc::new(builder.build());
-	unit_lua(lower).chunks.add(name.clone(), source.clone());
+	unit_lua(lower)
+		.chunks
+		.borrow_mut()
+		.add(name.clone(), source.clone());
 	(name, source)
 }
 
@@ -65,7 +53,7 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::LineEnd,
 		],
 	);
-	language.add(block, |lower, m| {
+	language.add_prologue(block, |lower, m| {
 		let info = &m.capture("info").unwrap().token;
 		if !matches!(info.content().trim(), "" | "lua") {
 			let kind = DiagnosticKind::LuaFenceLanguage {
@@ -79,7 +67,7 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 		let (name, source) = chunk(lower, &code, "");
 		let unit = unit_lua(lower);
 		if let Err(error) = unit.runtime.run(source.content(), &name) {
-			let diagnostic = unit.chunks.diagnostic(&error, m.token.clone());
+			let diagnostic = unit.chunks.borrow().diagnostic(&error, m.token.clone());
 			lower.diagnostics.push(diagnostic);
 		}
 	})?;
@@ -101,7 +89,10 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 			}
 			Ok(None) => {}
 			Err(error) => {
-				let diagnostic = unit_lua(lower).chunks.diagnostic(&error, m.token.clone());
+				let diagnostic = unit_lua(lower)
+					.chunks
+					.borrow()
+					.diagnostic(&error, m.token.clone());
 				lower.diagnostics.push(diagnostic);
 			}
 		}
@@ -147,18 +138,9 @@ fn value_text(n: f64) -> String {
 mod tests {
 	use nml_diagnostics::assert_diagnostics;
 	use nml_lang::Compiled;
-	use nml_lang::MemoryResolver;
 
 	use super::*;
-
-	fn compile(text: &str) -> Compiled {
-		let mut language = Language::builtin();
-		add(&mut language).unwrap();
-		let source = Source::new(Url::parse("file:///page.nml").unwrap(), text.into(), 0);
-		let mut resolver = MemoryResolver::default();
-		resolver.files.insert("page.nml".into(), text.into());
-		nml_lang::compile(&language, Arc::new(source), "page.nml", &resolver)
-	}
+	use crate::tests::compile;
 
 	fn text(compiled: &Compiled) -> String {
 		let document = &compiled.unit.document;

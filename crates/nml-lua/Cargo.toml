@@ -16,5 +16,8 @@ nml-lua-macros.workspace = true
 nml-lang.workspace = true
 mlua.workspace = true
 
+[dev-dependencies]
+nml-html.workspace = true
+
 [lints]
 workspace = true

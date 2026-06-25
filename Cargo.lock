@@ -676,6 +676,7 @@ dependencies = [
  "nml-diagnostics",
  "nml-document",
  "nml-grammar",
+ "nml-html",
  "nml-lang",
  "nml-lua-macros",
  "nml-source",

@@ -46,7 +46,7 @@ pub struct ApiFunction {
 }
 
 /// Every function of the `nml` table.
-pub const API: &[ApiFunction] = &[];
+pub const API: &[ApiFunction] = crate::events::FUNCTIONS;
 
 /// Adds API functions to the `nml` table.
 pub(crate) fn register(lua: &Lua, table: &Table, functions: &[ApiFunction]) -> mlua::Result<()> {
