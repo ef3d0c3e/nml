@@ -126,6 +126,7 @@ impl Output {
 		let context = match document.slot(slot) {
 			Slot::Link(link) => link.context,
 			Slot::PostParse(_) | Slot::Deferred(_) => OutputContext::Markup,
+			Slot::Text(_) => OutputContext::Text,
 		};
 		self.slots.push(TemplateSlot {
 			slot,
@@ -156,7 +157,10 @@ impl Output {
 				self.wrap(document, id, &format!("h{}", level.clamp(&1, &6)));
 				self.raw("\n");
 			}
-			ElementKind::Slot(slot) => self.slot(document, *slot),
+			ElementKind::Slot(slot) => match document.slot(*slot) {
+				Slot::Text(text) => self.text(text),
+				_ => self.slot(document, *slot),
+			},
 			ElementKind::Reference { href } => {
 				self.raw("<a href=\"");
 				self.slot(document, *href);

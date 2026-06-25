@@ -10,6 +10,9 @@ pub enum Slot {
 	Link(LinkSlot),
 	PostParse(PostParseSlot),
 	Deferred(DeferredSlot),
+	/// A slot filled before the document was finished, such as a post-parse slot: its
+	/// text is part of the page.
+	Text(String),
 }
 
 /// Filled at link time from a symbol of the symbol table, possibly in a later build than the

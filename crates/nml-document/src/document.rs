@@ -215,6 +215,15 @@ impl<'l> DocumentBuilder<'l> {
 		id
 	}
 
+	/// Fills a slot before the document is finished: a post-parse slot gets its value.
+	///
+	/// # Panics
+	///
+	/// If the slot does not exist.
+	pub fn fill_slot(&mut self, id: SlotId, slot: Slot) {
+		self.slots[id.0 as usize] = slot;
+	}
+
 	/// The number of open elements, the document root included.
 	pub fn depth(&self) -> usize {
 		self.open.len()
