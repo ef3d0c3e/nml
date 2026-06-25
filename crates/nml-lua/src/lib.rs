@@ -6,6 +6,7 @@ extern crate self as nml_lua;
 mod api;
 mod error;
 mod events;
+mod post_parse;
 mod runtime;
 mod script;
 mod unit;

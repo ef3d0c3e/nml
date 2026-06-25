@@ -52,9 +52,6 @@ fn on(
 	Ok(())
 }
 
-/// The functions of this module.
-pub(crate) const FUNCTIONS: &[api::ApiFunction] = &[ON];
-
 /// Calls the listeners of the element about to be written. Errors are kept in `errors`.
 pub(crate) fn dispatch(
 	lua: &Lua,

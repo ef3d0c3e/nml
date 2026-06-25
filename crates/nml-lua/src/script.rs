@@ -15,6 +15,8 @@ use nml_source::Token;
 use nml_source::Url;
 use nml_source::VirtualSourceBuilder;
 
+use crate::post_parse;
+use crate::post_parse::PostParse;
 use crate::unit::unit_lua;
 
 /// A chunk for the code at `code`: a virtual source of it, preceded by `prefix`, registered
@@ -84,10 +86,23 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 	language.add(role, |lower, m| {
 		let code = m.capture("code").unwrap().token.clone();
 		match evaluate(lower, &code) {
-			Ok(Some(text)) => {
-				lower.builder.leaf(ElementKind::Text(text), m.token.clone());
+			Ok(Value::UserData(data)) if data.is::<PostParse>() => {
+				let callback = data.borrow::<PostParse>().unwrap().0;
+				post_parse::defer(lower, callback, m.token.clone());
 			}
-			Ok(None) => {}
+			Ok(value) => match to_text(value, "a `:lua` role") {
+				Ok(Some(text)) => {
+					lower.builder.leaf(ElementKind::Text(text), m.token.clone());
+				}
+				Ok(None) => {}
+				Err(error) => {
+					let diagnostic = unit_lua(lower)
+						.chunks
+						.borrow()
+						.diagnostic(&error, m.token.clone());
+					lower.diagnostics.push(diagnostic);
+				}
+			},
 			Err(error) => {
 				let diagnostic = unit_lua(lower)
 					.chunks
@@ -100,9 +115,8 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 	Ok(())
 }
 
-/// Evaluates a role's code: as an expression if it is one, as statements otherwise. Returns
-/// the text of its value.
-fn evaluate(lower: &mut Lower<'_, '_>, code: &Token) -> mlua::Result<Option<String>> {
+/// Evaluates a role's code: as an expression if it is one, as statements otherwise.
+fn evaluate(lower: &mut Lower<'_, '_>, code: &Token) -> mlua::Result<Value> {
 	let (name, source) = chunk(lower, code, "return ");
 	let function = match unit_lua(lower).runtime.load(source.content(), &name) {
 		Ok(function) => function,
@@ -112,14 +126,19 @@ fn evaluate(lower: &mut Lower<'_, '_>, code: &Token) -> mlua::Result<Option<Stri
 		}
 		Err(error) => return Err(error),
 	};
-	let value: Value = function.call(())?;
+	function.call(())
+}
+
+/// The text of a value shown in the document: strings and numbers, or nothing for `nil`.
+/// `what` names what shows it, for the error.
+pub(crate) fn to_text(value: Value, what: &str) -> mlua::Result<Option<String>> {
 	match value {
 		Value::Nil => Ok(None),
 		Value::String(text) => Ok(Some(text.to_str()?.to_string())),
 		Value::Integer(n) => Ok(Some(n.to_string())),
 		Value::Number(n) => Ok(Some(value_text(n))),
 		other => Err(mlua::Error::runtime(format!(
-			"a `:lua` role shows strings and numbers, not a {}",
+			"{what} shows strings and numbers, not a {}",
 			other.type_name()
 		))),
 	}
