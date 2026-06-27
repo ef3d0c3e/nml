@@ -20,6 +20,7 @@ pub use options::Options;
 pub use parser::MAX_NESTING;
 pub use parser::Parsed;
 pub use parser::parse;
+pub use parser::parse_from;
 pub use rule::Rule;
 pub use rule::RuleError;
 pub use rule::RuleErrorKind;

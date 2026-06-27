@@ -43,6 +43,15 @@ pub struct Parsed {
 
 /// Parses a source with a rule set.
 pub fn parse(rules: &RuleSet, source: Arc<Source>) -> Parsed {
+	parse_from(rules, source, 0)
+}
+
+/// Parses a source from `start`, the start of a line, to its end.
+///
+/// # Panics
+///
+/// If `start` is not the start of a line.
+pub fn parse_from(rules: &RuleSet, source: Arc<Source>, start: usize) -> Parsed {
 	let mut parser = Parser {
 		rules,
 		text: source.content(),
@@ -51,7 +60,11 @@ pub fn parse(rules: &RuleSet, source: Arc<Source>) -> Parsed {
 		depth: 0,
 		diagnostics: Vec::new(),
 	};
-	let (nodes, _, _) = parser.blocks(0, parser.text.len());
+	assert!(
+		parser.is_line_start(start),
+		"{start} is not the start of a line"
+	);
+	let (nodes, _, _) = parser.blocks(start, parser.text.len());
 	Parsed {
 		nodes,
 		diagnostics: parser.diagnostics,
@@ -1244,6 +1257,17 @@ pub(crate) mod tests {
 		let parsed = parse(&rules, source(text));
 		assert_eq!(show(&rules, &parsed.nodes), expected);
 		parsed.diagnostics
+	}
+
+	#[test]
+	fn parse_from_a_line() {
+		let rules = rules();
+		let parsed = parse_from(&rules, source("**a\n\n# B\nc"), 5);
+		assert_eq!(
+			show(&rules, &parsed.nodes),
+			r#"heading(deeper="" title="B") P["c"]"#
+		);
+		assert!(parsed.diagnostics.is_empty());
 	}
 
 	#[test]
