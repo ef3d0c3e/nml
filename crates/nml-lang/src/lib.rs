@@ -20,6 +20,7 @@ pub use language::compile;
 pub use resolve::MemoryResolver;
 pub use resolve::ResolveError;
 pub use resolve::Resolver;
+pub use resolve::resolve_file;
 pub use resolve::resolve_path;
 
 impl Language {
@@ -66,7 +67,7 @@ pub(crate) mod tests {
 			&Language::builtin(),
 			Arc::new(source),
 			"page.nml",
-			&resolver,
+			Arc::new(resolver),
 		)
 	}
 

@@ -129,7 +129,7 @@ pub fn compile(
 	language: &Language,
 	source: Arc<Source>,
 	path: &str,
-	resolver: &dyn Resolver,
+	resolver: Arc<dyn Resolver>,
 ) -> Compiled {
 	let parsed = nml_grammar::parse(&language.rules, source.clone());
 	let mut lower = Lower {
@@ -181,7 +181,7 @@ pub fn compile(
 /// The state of lowering a parse tree into a unit, given to rule handlers.
 pub struct Lower<'a, 'l> {
 	language: &'a Language,
-	pub resolver: &'a dyn Resolver,
+	pub resolver: Arc<dyn Resolver>,
 	pub builder: DocumentBuilder<'l>,
 	pub exports: Vec<Export>,
 	pub uses: Vec<Use>,
@@ -384,7 +384,7 @@ mod tests {
 			&language,
 			Arc::new(source),
 			"a.nml",
-			&MemoryResolver::default(),
+			Arc::new(MemoryResolver::default()),
 		);
 		let document = &compiled.unit.document;
 		assert_eq!(
@@ -415,7 +415,7 @@ mod tests {
 			&language,
 			Arc::new(source),
 			"a.nml",
-			&MemoryResolver::default(),
+			Arc::new(MemoryResolver::default()),
 		);
 		let document = &compiled.unit.document;
 		assert_eq!(
