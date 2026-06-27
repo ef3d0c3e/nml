@@ -422,6 +422,18 @@ impl Index {
 		Ok(())
 	}
 
+	/// The paths of the units whose template has a deferred slot.
+	pub fn units_with_deferred_slots(&self) -> Result<Vec<String>> {
+		let mut statement = self.connection.prepare(
+			"SELECT DISTINCT units.path FROM slots JOIN units ON units.id = slots.unit
+			WHERE slots.slot LIKE '{\"deferred\"%' ORDER BY units.path",
+		)?;
+		let paths = statement
+			.query_map([], |row| row.get(0))?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(paths)
+	}
+
 	/// The paths of the pages whose last link had errors.
 	pub fn units_with_link_errors(&self) -> Result<Vec<String>> {
 		let mut statement = self
@@ -1139,6 +1151,7 @@ mod tests {
 			}
 		);
 		assert_eq!(index.template(id).unwrap(), Some(template()));
+		assert_eq!(index.units_with_deferred_slots().unwrap(), ["docs/a.nml"]);
 	}
 
 	#[test]
