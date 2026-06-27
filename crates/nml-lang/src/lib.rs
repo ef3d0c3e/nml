@@ -12,6 +12,8 @@ mod variable;
 pub use language::Compiled;
 pub use language::Finisher;
 pub use language::Handler;
+pub use language::Import;
+pub use language::ImportHook;
 pub use language::Language;
 pub use language::Lower;
 pub use language::compile;

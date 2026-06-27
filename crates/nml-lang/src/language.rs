@@ -29,12 +29,30 @@ use crate::Resolver;
 /// Lowers a match of its rule into document elements.
 pub type Handler = Box<dyn Fn(&mut Lower<'_, '_>, &RuleMatch) + Send + Sync>;
 
+/// Called for every module a unit imports, once it is resolved.
+pub type ImportHook = Box<dyn Fn(&mut Lower<'_, '_>, &Import) + Send + Sync>;
+
+/// A resolved import.
+#[derive(Debug, Clone)]
+pub struct Import {
+	/// The module path, `std.toc`.
+	pub module: String,
+	/// What the module's exports are visible as.
+	pub namespace: String,
+	/// The module's file, in the workspace.
+	pub path: String,
+	pub source: Arc<Source>,
+	/// Where the import is written.
+	pub token: Token,
+}
+
 /// A grammar and the handlers of its rules.
 pub struct Language {
 	rules: RuleSet,
 	handlers: HashMap<RuleId, Handler>,
 	/// Rules allowed in the prologue: they do not end it.
 	prologue: HashSet<RuleId>,
+	import_hooks: Vec<ImportHook>,
 }
 
 impl fmt::Debug for Language {
@@ -52,6 +70,7 @@ impl Language {
 			rules: RuleSet::new(),
 			handlers: HashMap::new(),
 			prologue: HashSet::new(),
+			import_hooks: Vec::new(),
 		}
 	}
 
@@ -76,6 +95,18 @@ impl Language {
 		let id = self.add(rule, handler)?;
 		self.prologue.insert(id);
 		Ok(id)
+	}
+
+	/// Adds a hook called for every resolved import, which loads what the module exports.
+	pub fn on_import(
+		&mut self,
+		hook: impl Fn(&mut Lower<'_, '_>, &Import) + Send + Sync + 'static,
+	) {
+		self.import_hooks.push(Box::new(hook));
+	}
+
+	pub(crate) fn import_hooks(&self) -> &[ImportHook] {
+		&self.import_hooks
 	}
 
 	pub fn rules(&self) -> &RuleSet {

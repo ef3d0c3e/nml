@@ -19,8 +19,8 @@ pub trait Resolver: Sync {
 	/// The file `path` included from the file at `from`: its workspace path and source.
 	fn include(&self, from: &str, path: &str) -> Result<(String, Arc<Source>), ResolveError>;
 
-	/// The workspace path of a module (`std.toc`).
-	fn module(&self, module: &str) -> Result<String, ResolveError>;
+	/// A module (`std.toc`): its workspace path and source.
+	fn module(&self, module: &str) -> Result<(String, Arc<Source>), ResolveError>;
 }
 
 /// The workspace path of `path` written in the file at `from`: relative to that file's
@@ -72,17 +72,21 @@ impl Resolver for MemoryResolver {
 		Ok((resolved, source))
 	}
 
-	fn module(&self, module: &str) -> Result<String, ResolveError> {
+	fn module(&self, module: &str) -> Result<(String, Arc<Source>), ResolveError> {
 		let (name, rest) = module.split_once('.').unwrap_or((module, ""));
 		let root = self
 			.modules
 			.get(name)
 			.ok_or_else(|| ResolveError::UnknownModule { name: name.into() })?;
 		let path = format!("{root}/{}.nml", rest.replace('.', "/"));
-		if rest.is_empty() || !self.files.contains_key(&path) {
-			return Err(ResolveError::NotFound { path });
+		match self.files.get(&path) {
+			Some(content) if !rest.is_empty() => {
+				let url = Url::parse(&format!("file:///{path}")).unwrap();
+				let source = Arc::new(Source::new(url, content.clone(), 0));
+				Ok((path, source))
+			}
+			_ => Err(ResolveError::NotFound { path }),
 		}
-		Ok(path)
 	}
 }
 

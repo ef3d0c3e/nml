@@ -6,6 +6,7 @@ use nml_grammar::Atom;
 use nml_grammar::Rule;
 use nml_grammar::RuleError;
 
+use crate::Import;
 use crate::Language;
 use crate::ResolveError;
 
@@ -46,14 +47,17 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			lower.diagnostics.push(report(kind));
 			return;
 		}
-		if let Err(error) = lower.resolver.module(path) {
-			let kind = match error {
-				ResolveError::UnknownModule { name } => DiagnosticKind::UnknownModule { name },
-				ResolveError::NotFound { path } => DiagnosticKind::FileNotFound { path },
-			};
-			lower.diagnostics.push(report(kind));
-			return;
-		}
+		let (file, source) = match lower.resolver.module(path) {
+			Ok(found) => found,
+			Err(error) => {
+				let kind = match error {
+					ResolveError::UnknownModule { name } => DiagnosticKind::UnknownModule { name },
+					ResolveError::NotFound { path } => DiagnosticKind::FileNotFound { path },
+				};
+				lower.diagnostics.push(report(kind));
+				return;
+			}
+		};
 
 		let (namespace, token) = match m.capture("alias") {
 			Some(alias) => (alias.token.content().to_string(), alias.token.clone()),
@@ -66,8 +70,18 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			lower.diagnostics.push(diagnostic);
 			return;
 		}
-		lower.imports.push((namespace, token));
+		lower.imports.push((namespace.clone(), token));
 		lower.depend(Dependency::Import(path.into()));
+		let import = Import {
+			module: path.into(),
+			namespace,
+			path: file,
+			source,
+			token: module.clone(),
+		};
+		for hook in lower.language().import_hooks() {
+			hook(lower, &import);
+		}
 	})?;
 	Ok(())
 }

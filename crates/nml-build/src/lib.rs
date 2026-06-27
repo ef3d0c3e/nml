@@ -462,7 +462,7 @@ impl Resolver for WorkspaceResolver<'_> {
 		Ok((resolved, source(&absolute, content)))
 	}
 
-	fn module(&self, module: &str) -> Result<String, ResolveError> {
+	fn module(&self, module: &str) -> Result<(String, Arc<Source>), ResolveError> {
 		let (name, rest) = module.split_once('.').unwrap_or((module, ""));
 		let root = self
 			.config
@@ -479,10 +479,10 @@ impl Resolver for WorkspaceResolver<'_> {
 			})
 			.collect();
 		let path = format!("{}/{}.nml", root.join("/"), rest.replace('.', "/"));
-		if self.root.join(&path).is_file() {
-			Ok(path)
-		} else {
-			Err(ResolveError::NotFound { path })
+		let absolute = self.root.join(&path);
+		match fs::read_to_string(&absolute) {
+			Ok(content) if !rest.is_empty() => Ok((path, source(&absolute, content))),
+			_ => Err(ResolveError::NotFound { path }),
 		}
 	}
 }
