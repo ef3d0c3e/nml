@@ -69,7 +69,7 @@ fn value_atom(name: &str) -> Atom {
 }
 
 /// Sets the value atoms in the `nml` table.
-pub(crate) fn register_values(lua: &Lua, table: &Table) -> mlua::Result<()> {
+pub(crate) fn register_values(table: &Table) -> mlua::Result<()> {
 	for (name, _) in VALUES {
 		table.raw_set(
 			*name,
@@ -78,7 +78,6 @@ pub(crate) fn register_values(lua: &Lua, table: &Table) -> mlua::Result<()> {
 			},
 		)?;
 	}
-	let _ = lua;
 	Ok(())
 }
 
