@@ -518,3 +518,25 @@ fn lua() {
 	assert_eq!((location.range(), location.content()), (7..14, "nil + 1"));
 	assert!(workspace.output("a.html").contains("<p>Hello, NML!</p>"));
 }
+
+#[test]
+fn module_lua_reaches_its_importers() {
+	let workspace = Workspace::new(
+		"module-lua",
+		&[
+			(
+				"nml.toml",
+				"exclude = [\"modules/**\"]\n[[module]]\nname = \"std\"\nroot = \"modules/std\"\n",
+			),
+			("a.nml", ":import std.util\n\n:lua`util.name`\n"),
+			("modules/std/util.nml", ":lua\n```\nname = 'first'\n```\n"),
+		],
+	);
+	assert_diagnostics!(workspace.build().diagnostics, []);
+	assert!(workspace.output("a.html").contains("<p>first</p>"));
+
+	workspace.write("modules/std/util.nml", ":lua\n```\nname = 'second'\n```\n");
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["a.nml", "modules/std/util.nml"]);
+	assert!(workspace.output("a.html").contains("<p>second</p>"));
+}

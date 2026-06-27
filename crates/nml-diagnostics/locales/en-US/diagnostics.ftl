@@ -51,6 +51,7 @@ diagnostic-ambiguous-reference = `{ $target }` is ambiguous: { $count } units ma
 diagnostic-unknown-module = no module is named `{ $name }` in nml.toml
 diagnostic-file-not-found = `{ $path }` does not exist in the workspace
 diagnostic-include-cycle = including `{ $path }` here would include it in itself
+diagnostic-import-cycle = importing `{ $path }` here makes it import itself
 diagnostic-config-error = invalid configuration: { $message }
 diagnostic-invalid-glob = invalid pattern `{ $pattern }`: { $message }
 diagnostic-invalid-module-name = `{ $name }` is not a valid module name: it must be a single word

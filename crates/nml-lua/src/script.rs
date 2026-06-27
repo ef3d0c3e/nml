@@ -19,10 +19,14 @@ use crate::post_parse;
 use crate::post_parse::PostParse;
 use crate::unit::unit_lua;
 
-/// A chunk for the code at `code`: a virtual source of it, preceded by `prefix`, registered
-/// under a name made of the file and the offset.
-fn chunk(lower: &mut Lower<'_, '_>, code: &Token, prefix: &str) -> (String, Arc<Source>) {
-	let path = lower.files.last().unwrap().clone();
+/// A chunk for the code at `code`, in the file at `path`: a virtual source of it, preceded by
+/// `prefix`, registered under a name made of the file and the offset.
+pub(crate) fn chunk(
+	lower: &mut Lower<'_, '_>,
+	path: &str,
+	code: &Token,
+	prefix: &str,
+) -> (String, Arc<Source>) {
 	let name = format!("{path}@{}", code.start());
 	let url = Url::parse(&format!("virtual:///{path}/lua/{}", code.start())).unwrap();
 	let mut builder = VirtualSourceBuilder::new(code.source().clone(), url, code.start());
@@ -39,6 +43,7 @@ fn chunk(lower: &mut Lower<'_, '_>, code: &Token, prefix: &str) -> (String, Arc<
 /// `:lua` and a bare (or `lua`) fence runs the code in the unit's state; ``:lua`expr` ``
 /// shows the value of `expr`, or runs statements and shows nothing.
 pub fn add(language: &mut Language) -> Result<(), RuleError> {
+	crate::module::add(language);
 	let block = Rule::new(
 		"lua",
 		vec![
@@ -66,7 +71,8 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 			return;
 		}
 		let code = m.capture("code").unwrap().token.clone();
-		let (name, source) = chunk(lower, &code, "");
+		let path = lower.files.last().unwrap().clone();
+		let (name, source) = chunk(lower, &path, &code, "");
 		let unit = unit_lua(lower);
 		if let Err(error) = unit.runtime.run(source.content(), &name) {
 			let diagnostic = unit.chunks.borrow().diagnostic(&error, m.token.clone());
@@ -117,11 +123,12 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 
 /// Evaluates a role's code: as an expression if it is one, as statements otherwise.
 fn evaluate(lower: &mut Lower<'_, '_>, code: &Token) -> mlua::Result<Value> {
-	let (name, source) = chunk(lower, code, "return ");
+	let path = lower.files.last().unwrap().clone();
+	let (name, source) = chunk(lower, &path, code, "return ");
 	let function = match unit_lua(lower).runtime.load(source.content(), &name) {
 		Ok(function) => function,
 		Err(mlua::Error::SyntaxError { .. }) => {
-			let (name, source) = chunk(lower, code, "");
+			let (name, source) = chunk(lower, &path, code, "");
 			unit_lua(lower).runtime.load(source.content(), &name)?
 		}
 		Err(error) => return Err(error),

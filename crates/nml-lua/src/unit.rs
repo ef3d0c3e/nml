@@ -8,6 +8,7 @@ use crate::Limits;
 use crate::Runtime;
 use crate::error::Chunks;
 use crate::events;
+use crate::module::Modules;
 use crate::post_parse;
 
 /// The Lua of the unit being lowered: its state, its chunks, and the errors raised where no
@@ -17,6 +18,7 @@ pub(crate) struct UnitLua {
 	pub chunks: Rc<RefCell<Chunks>>,
 	pub errors: Rc<RefCell<Vec<Diagnostic>>>,
 	pub pending: post_parse::Pending,
+	pub modules: Modules,
 }
 
 /// The unit's Lua, created on first use.
@@ -27,6 +29,7 @@ pub(crate) fn unit_lua<'a>(lower: &'a mut Lower<'_, '_>) -> &'a mut UnitLua {
 			chunks: Rc::default(),
 			errors: Rc::default(),
 			pending: post_parse::Pending::default(),
+			modules: Modules::default(),
 		};
 		let lua = unit.runtime.lua().clone();
 		let chunks = unit.chunks.clone();

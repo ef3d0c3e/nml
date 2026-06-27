@@ -6,6 +6,7 @@ extern crate self as nml_lua;
 mod api;
 mod error;
 mod events;
+mod module;
 mod post_parse;
 mod runtime;
 mod script;
@@ -33,11 +34,21 @@ pub(crate) mod tests {
 
 	/// Compiles `page.nml` with the built-in rules and Lua.
 	pub(crate) fn compile(text: &str) -> Compiled {
+		compile_with(text, &[])
+	}
+
+	/// Compiles `page.nml` with other files in memory, and the module `std` at
+	/// `modules/std`.
+	pub(crate) fn compile_with(text: &str, files: &[(&str, &str)]) -> Compiled {
 		let mut language = Language::builtin();
 		crate::add(&mut language).unwrap();
 		let source = Source::new(Url::parse("file:///page.nml").unwrap(), text.into(), 0);
 		let mut resolver = MemoryResolver::default();
 		resolver.files.insert("page.nml".into(), text.into());
+		for (path, content) in files {
+			resolver.files.insert(path.to_string(), content.to_string());
+		}
+		resolver.modules.insert("std".into(), "modules/std".into());
 		nml_lang::compile(&language, Arc::new(source), "page.nml", &resolver)
 	}
 

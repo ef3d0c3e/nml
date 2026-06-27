@@ -95,6 +95,8 @@ pub enum DiagnosticKind {
 	FileNotFound { path: String },
 	#[diag(id = 3009, message = "diagnostic-include-cycle")]
 	IncludeCycle { path: String },
+	#[diag(id = 3010, message = "diagnostic-import-cycle")]
+	ImportCycle { path: String },
 	/// An error in `nml.toml`, with the TOML parser's own text.
 	#[diag(id = 3002, message = "diagnostic-config-error")]
 	ConfigError { message: String },

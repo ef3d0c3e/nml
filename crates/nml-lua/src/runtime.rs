@@ -103,6 +103,20 @@ impl Runtime {
 			.into_function()
 	}
 
+	/// Compiles a chunk whose globals are `env`.
+	pub fn load_in(
+		&self,
+		code: &str,
+		name: &str,
+		env: mlua::Table,
+	) -> mlua::Result<mlua::Function> {
+		self.lua
+			.load(code)
+			.set_name(format!("={name}"))
+			.set_environment(env)
+			.into_function()
+	}
+
 	/// Runs a chunk. `name` is what Lua's errors show for it (`name:3: …`).
 	pub fn run(&self, code: &str, name: &str) -> mlua::Result<MultiValue> {
 		self.lua.load(code).set_name(format!("={name}")).eval()
