@@ -540,3 +540,31 @@ fn module_lua_reaches_its_importers() {
 	assert_eq!(report.parsed, ["a.nml", "modules/std/util.nml"]);
 	assert!(workspace.output("a.html").contains("<p>second</p>"));
 }
+
+#[test]
+fn files_read_by_scripts_are_dependencies() {
+	let workspace = Workspace::new(
+		"read",
+		&[
+			("nml.toml", ""),
+			("a.nml", "Rows: :lua`select(2, nml.read('data.csv'):gsub('\\n', ''))`\n"),
+			("b.nml", "# B\n"),
+			("data.csv", "x\ny\n"),
+		],
+	);
+	assert_diagnostics!(workspace.build().diagnostics, []);
+	assert!(workspace.output("a.html").contains("<p>Rows: 2</p>"));
+	assert!(workspace.build().parsed.is_empty());
+
+	// The CSV changes: only its reader is parsed again.
+	workspace.write("data.csv", "x\ny\nz\n");
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["a.nml"]);
+	assert!(workspace.output("a.html").contains("<p>Rows: 3</p>"));
+
+	// It disappears: the reader fails, and keeps its last state.
+	workspace.remove("data.csv");
+	let report = workspace.build();
+	assert_eq!(report.failed, ["a.nml"]);
+	assert_diagnostics!(report.diagnostics, [4001]);
+}

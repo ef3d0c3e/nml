@@ -26,6 +26,7 @@ use nml_lang::Compiled;
 use nml_lang::Language;
 use nml_lang::ResolveError;
 use nml_lang::Resolver;
+use nml_lang::resolve_file;
 use nml_lang::resolve_path;
 use nml_source::Source;
 use nml_source::Token;
@@ -141,10 +142,7 @@ pub fn build(root: &Path) -> Result<BuildReport, BuildError> {
 			});
 		}
 	};
-	let config_hash = nml_workspace::hash(config_source.content().as_bytes())
-		.iter()
-		.map(|byte| format!("{byte:02x}"))
-		.collect::<String>();
+	let config_hash = hex(&nml_workspace::hash(config_source.content().as_bytes()));
 	let index = Index::open(&root.join(&config.database))?;
 	let mut builder = Builder {
 		output: root.join(&config.output),
@@ -194,6 +192,18 @@ impl Builder {
 			.map(|file| file.path.clone())
 			.collect();
 		let existing: BTreeSet<&str> = scan.files.iter().map(|f| f.path.as_str()).collect();
+		// Units whose scripts read a file that changed or disappeared.
+		let mut hashes: HashMap<String, Option<String>> = HashMap::new();
+		for (unit, path, hash) in self.index.file_dependencies()? {
+			let current = hashes.entry(path.clone()).or_insert_with(|| {
+				fs::read(self.root.join(&path))
+					.ok()
+					.map(|bytes| hex(&nml_workspace::hash(&bytes)))
+			});
+			if current.as_deref() != Some(hash.as_str()) && existing.contains(unit.as_str()) {
+				invalid.insert(unit);
+			}
+		}
 		let seeds = invalid.iter().chain(&scan.removed).cloned().collect();
 		invalidate(&self.index, &self.config, seeds, &existing, &mut invalid)?;
 
@@ -215,14 +225,14 @@ impl Builder {
 
 		// Units parse in parallel; they are committed in path order.
 		let language = &self.language;
-		let resolver = WorkspaceResolver {
-			root: &self.root,
-			config: &self.config,
-		};
+		let resolver: Arc<dyn Resolver> = Arc::new(WorkspaceResolver {
+			root: self.root.clone(),
+			modules: self.config.modules.clone(),
+		});
 		let compiled: Vec<_> = to_parse
 			.par_iter()
 			.map(|(file, source)| {
-				nml_lang::compile(language, source.clone(), &file.path, &resolver)
+				nml_lang::compile(language, source.clone(), &file.path, resolver.clone())
 			})
 			.collect();
 		for ((file, source), compiled) in to_parse.into_iter().zip(compiled) {
@@ -448,12 +458,20 @@ pub fn language() -> Language {
 }
 
 /// Finds included files and imported modules on disk.
-struct WorkspaceResolver<'a> {
-	root: &'a Path,
-	config: &'a Config,
+struct WorkspaceResolver {
+	root: PathBuf,
+	modules: Vec<nml_workspace::Module>,
 }
 
-impl Resolver for WorkspaceResolver<'_> {
+impl Resolver for WorkspaceResolver {
+	fn read(&self, from: &str, path: &str) -> Result<(String, String), ResolveError> {
+		let not_found = |path: &str| ResolveError::NotFound { path: path.into() };
+		let resolved = resolve_file(from, path).ok_or_else(|| not_found(path))?;
+		let content =
+			fs::read_to_string(self.root.join(&resolved)).map_err(|_| not_found(&resolved))?;
+		Ok((resolved, content))
+	}
+
 	fn include(&self, from: &str, path: &str) -> Result<(String, Arc<Source>), ResolveError> {
 		let not_found = |path: &str| ResolveError::NotFound { path: path.into() };
 		let resolved = resolve_path(from, path).ok_or_else(|| not_found(path))?;
@@ -465,7 +483,6 @@ impl Resolver for WorkspaceResolver<'_> {
 	fn module(&self, module: &str) -> Result<(String, Arc<Source>), ResolveError> {
 		let (name, rest) = module.split_once('.').unwrap_or((module, ""));
 		let root = self
-			.config
 			.modules
 			.iter()
 			.find(|m| m.name == name)
@@ -485,6 +502,11 @@ impl Resolver for WorkspaceResolver<'_> {
 			_ => Err(ResolveError::NotFound { path }),
 		}
 	}
+}
+
+/// Bytes in lowercase hexadecimal.
+fn hex(bytes: &[u8]) -> String {
+	bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// The key of the configuration's hash in the index: a new configuration invalidates every
