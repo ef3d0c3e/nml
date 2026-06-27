@@ -2,13 +2,13 @@ use std::cell::RefCell;
 
 use mlua::Function;
 use mlua::Lua;
-use mlua::Table;
 use nml_diagnostics::Diagnostic;
 use nml_document::Draft;
 use nml_document::ElementKind;
 
 use crate::api;
 use crate::error::Chunks;
+use crate::userdata;
 
 /// The element kinds listeners can ask for.
 const KINDS: &[&str] = &[
@@ -27,14 +27,13 @@ struct Listeners(Vec<(String, Function)>);
 
 /// Calls `listener` with every element of `kind` before it is written.
 ///
-/// The listener receives the element as a table with its `kind`, its `text` (without
-/// markup), its `id` and `classes`, and the fields of its kind (`level` for a heading,
-/// `style` for a style). Changing `id` and `classes` changes the element.
+/// The listener receives the element (see `nml.Element`). Changing its `id` and `classes`
+/// changes the element.
 #[api]
 fn on(
 	lua: &Lua,
 	kind: String,
-	#[lua(type = "fun(element: table)")] listener: Function,
+	#[lua(type = "fun(element: nml.Element)")] listener: Function,
 ) -> mlua::Result<()> {
 	if !KINDS.contains(&kind.as_str()) {
 		return Err(mlua::Error::runtime(format!(
@@ -80,36 +79,48 @@ pub(crate) fn dispatch(
 	}
 }
 
+/// An element about to be written, as listeners see it.
+#[derive(Clone)]
+#[userdata(name = "nml.Element")]
+pub(crate) struct ElementData {
+	/// The element's kind: `heading`, `paragraph`, …
+	#[lua(readonly)]
+	kind: String,
+	/// The text below the element, without markup.
+	#[lua(readonly)]
+	text: String,
+	/// The reference name, which is also the HTML `id`.
+	id: Option<String>,
+	/// The HTML classes. Assign a new list to change them.
+	classes: Vec<String>,
+	/// A heading's level.
+	#[lua(readonly)]
+	level: Option<i64>,
+	/// A style's name: `bold`, `italic`, …
+	#[lua(readonly)]
+	style: Option<String>,
+}
+
 fn call(lua: &Lua, draft: Draft<'_>, listeners: &[Function]) -> mlua::Result<()> {
-	let element = lua.create_table()?;
-	element.set("kind", draft.kind.name())?;
-	element.set("text", draft.text())?;
-	match draft.kind {
-		ElementKind::Heading { level } => element.set("level", *level)?,
-		ElementKind::Style(style) => element.set("style", format!("{style:?}").to_lowercase())?,
-		_ => {}
-	}
-	element.set("id", draft.attributes.id.clone())?;
-	element.set(
-		"classes",
-		lua.create_sequence_from(draft.attributes.classes.iter().cloned())?,
-	)?;
+	let (level, style) = match draft.kind {
+		ElementKind::Heading { level } => (Some(i64::from(*level)), None),
+		ElementKind::Style(style) => (None, Some(format!("{style:?}").to_lowercase())),
+		_ => (None, None),
+	};
+	let element = lua.create_userdata(ElementData {
+		kind: draft.kind.name().into(),
+		text: draft.text(),
+		id: draft.attributes.id.clone(),
+		classes: draft.attributes.classes.clone(),
+		level,
+		style,
+	})?;
 	for listener in listeners {
 		listener.call::<()>(&element)?;
 	}
-
-	let id: Option<String> = element
-		.get("id")
-		.map_err(|_| mlua::Error::runtime("`id` must be a string or nil"))?;
-	let classes: Table = element
-		.get("classes")
-		.map_err(|_| mlua::Error::runtime("`classes` must be a table of strings"))?;
-	let classes = classes
-		.sequence_values::<String>()
-		.collect::<mlua::Result<Vec<_>>>()
-		.map_err(|_| mlua::Error::runtime("`classes` must be a table of strings"))?;
-	draft.attributes.id = id;
-	draft.attributes.classes = classes;
+	let element = element.borrow::<ElementData>()?;
+	draft.attributes.id = element.id.clone();
+	draft.attributes.classes = element.classes.clone();
 	Ok(())
 }
 
@@ -129,7 +140,9 @@ headings = {}
 nml.on("heading", function(h)
 	table.insert(headings, h.level .. ":" .. h.text)
 	h.id = h.id or ("h-" .. #headings)
-	table.insert(h.classes, "numbered")
+	local classes = h.classes
+	table.insert(classes, "numbered")
+	h.classes = classes
 end)
 ```
 
@@ -172,5 +185,36 @@ Count: :lua`#headings`, :lua`table.concat(headings, ", ")`.
 
 		let compiled = compile(":lua`nml.on('nope', print)`");
 		assert_diagnostics!(compiled.diagnostics, [4001]);
+	}
+
+	#[test]
+	fn read_only_fields() {
+		let compiled =
+			compile(":lua\n```\nnml.on('heading', function(h) h.level = 3 end)\n```\n\n# A\n");
+		assert_diagnostics!(compiled.diagnostics, [4001]);
+		let nml_diagnostics::DiagnosticKind::LuaError { message } = &compiled.diagnostics[0].kind
+		else {
+			panic!()
+		};
+		assert!(message.contains("level"), "{message}");
+	}
+
+	#[test]
+	fn declaration() {
+		let declarations = crate::luacats(&[], &[super::ElementData::LUA_CLASS]);
+		assert!(
+			declarations.contains(
+				"---An element about to be written, as listeners see it.
+---@class nml.Element
+---@field kind string (read-only) The element's kind: `heading`, `paragraph`, …
+---@field text string (read-only) The text below the element, without markup.
+---@field id string? The reference name, which is also the HTML `id`.
+---@field classes string[] The HTML classes. Assign a new list to change them.
+---@field level integer? (read-only) A heading's level.
+---@field style string? (read-only) A style's name: `bold`, `italic`, …
+"
+			),
+			"{declarations}"
+		);
 	}
 }

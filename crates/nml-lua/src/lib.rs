@@ -14,10 +14,14 @@ mod unit;
 
 pub use api::API;
 pub use api::ApiFunction;
+pub use api::CLASSES;
+pub use api::LuaClass;
+pub use api::LuaField;
 pub use api::TYPES_DIR;
 pub use api::luacats;
 pub use api::write_types;
 pub use nml_lua_macros::api;
+pub use nml_lua_macros::userdata;
 pub use runtime::Limits;
 pub use runtime::Runtime;
 pub use script::add;
