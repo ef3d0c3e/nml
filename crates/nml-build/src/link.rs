@@ -3,6 +3,7 @@ use nml_document::LinkSlot;
 use nml_document::Property;
 use nml_document::Scope;
 use nml_document::SymbolRef;
+use nml_lang::relative_url;
 use nml_workspace::Index;
 use nml_workspace::IndexError;
 use nml_workspace::Role;
@@ -107,49 +108,5 @@ impl Linker<'_> {
 			Property::Other(name) => property(name).unwrap_or_default(),
 			_ => String::new(),
 		})
-	}
-}
-
-/// The output path of a unit: its path with `.html`.
-pub(crate) fn output_path(path: &str) -> String {
-	match path.strip_suffix(".nml") {
-		Some(stem) => format!("{stem}.html"),
-		None => format!("{path}.html"),
-	}
-}
-
-/// The URL of the page of unit `to`, relative to the page of unit `from`.
-pub(crate) fn relative_url(from: &str, to: &str) -> String {
-	let from: Vec<&str> = from.split('/').collect();
-	let to_path = output_path(to);
-	let to: Vec<&str> = to_path.split('/').collect();
-	let from_dirs = &from[..from.len() - 1];
-	let common = from_dirs
-		.iter()
-		.zip(&to[..to.len() - 1])
-		.take_while(|(a, b)| a == b)
-		.count();
-	let mut parts = vec![".."; from_dirs.len() - common];
-	parts.extend(&to[common..]);
-	parts.join("/")
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn relative_urls() {
-		for (from, to, url) in [
-			("a.nml", "b.nml", "b.html"),
-			("a.nml", "a.nml", "a.html"),
-			("docs/a.nml", "b.nml", "../b.html"),
-			("a.nml", "docs/b.nml", "docs/b.html"),
-			("docs/x/a.nml", "docs/y/b.nml", "../y/b.html"),
-			("docs/x/a.nml", "docs/x/b.nml", "b.html"),
-			("x/y/a.nml", "z.nml", "../../z.html"),
-		] {
-			assert_eq!(relative_url(from, to), url, "from {from} to {to}");
-		}
 	}
 }

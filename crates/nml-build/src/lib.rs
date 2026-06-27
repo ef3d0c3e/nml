@@ -26,6 +26,7 @@ use nml_lang::Compiled;
 use nml_lang::Language;
 use nml_lang::ResolveError;
 use nml_lang::Resolver;
+use nml_lang::output_path;
 use nml_lang::resolve_file;
 use nml_lang::resolve_path;
 use nml_source::Source;
@@ -47,7 +48,6 @@ use rayon::prelude::*;
 
 use crate::link::LinkError;
 use crate::link::Linker;
-use crate::link::output_path;
 
 /// The result of a build.
 #[derive(Debug, Default)]

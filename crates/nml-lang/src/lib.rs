@@ -21,6 +21,8 @@ pub use language::compile;
 pub use resolve::MemoryResolver;
 pub use resolve::ResolveError;
 pub use resolve::Resolver;
+pub use resolve::output_path;
+pub use resolve::relative_url;
 pub use resolve::resolve_file;
 pub use resolve::resolve_path;
 

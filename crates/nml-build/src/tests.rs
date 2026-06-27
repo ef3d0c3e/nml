@@ -547,7 +547,10 @@ fn files_read_by_scripts_are_dependencies() {
 		"read",
 		&[
 			("nml.toml", ""),
-			("a.nml", "Rows: :lua`select(2, nml.read('data.csv'):gsub('\\n', ''))`\n"),
+			(
+				"a.nml",
+				"Rows: :lua`select(2, nml.read('data.csv'):gsub('\\n', ''))`\n",
+			),
 			("b.nml", "# B\n"),
 			("data.csv", "x\ny\n"),
 		],
