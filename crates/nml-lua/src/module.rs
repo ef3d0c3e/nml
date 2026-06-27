@@ -62,7 +62,7 @@ fn load(
 		return None;
 	}
 	modules.loading.push(path.to_string());
-	let exports = run(lower, path, source);
+	let exports = run(lower, path, source, token);
 	let modules = &mut unit_lua(lower).modules;
 	modules.loading.pop();
 	let exports = exports?;
@@ -71,7 +71,7 @@ fn load(
 }
 
 /// Runs a module's `:lua` blocks and imports, and returns its exports.
-fn run(lower: &mut Lower<'_, '_>, path: &str, source: Arc<Source>) -> Option<Table> {
+fn run(lower: &mut Lower<'_, '_>, path: &str, source: Arc<Source>, token: &Token) -> Option<Table> {
 	let rules = lower.language().rules();
 	let lua_rule = rules.id("lua");
 	let import_rule = rules.id("import");
@@ -133,6 +133,8 @@ fn run(lower: &mut Lower<'_, '_>, path: &str, source: Arc<Source>) -> Option<Tab
 			}
 		}
 	}
+
+	crate::rules::register(lower, token);
 
 	// The exports are what the module defined, without the fallback to the globals.
 	let exports = lua.create_table().ok()?;

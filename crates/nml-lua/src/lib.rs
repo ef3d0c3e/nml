@@ -9,6 +9,7 @@ mod events;
 mod files;
 mod module;
 mod post_parse;
+mod rules;
 mod runtime;
 mod script;
 mod unit;

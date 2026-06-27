@@ -62,3 +62,5 @@ diagnostic-duplicate-module = module `{ $name }` is declared twice
 
 diagnostic-lua-error = { $message }
 diagnostic-lua-fence-language = a `:lua` block holds Lua, not `{ $language }`: leave the fence bare
+diagnostic-lua-rule-outside-prologue = the rule `{ $rule }` is defined after the prologue: define rules in the prologue or in a module
+diagnostic-invalid-lua-rule = the rule `{ $rule }` cannot be added: { $message }

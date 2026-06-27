@@ -201,7 +201,7 @@ Count: :lua`#headings`, :lua`table.concat(headings, ", ")`.
 
 	#[test]
 	fn declaration() {
-		let declarations = crate::luacats(&[], &[super::ElementData::LUA_CLASS]);
+		let declarations = crate::luacats(&[], &[super::ElementData::LUA_CLASS], &[]);
 		assert!(
 			declarations.contains(
 				"---An element about to be written, as listeners see it.

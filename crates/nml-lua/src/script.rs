@@ -78,6 +78,7 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 			let diagnostic = unit.chunks.borrow().diagnostic(&error, m.token.clone());
 			lower.diagnostics.push(diagnostic);
 		}
+		crate::rules::register(lower, &m.token);
 	})?;
 
 	let role = Rule::new(
@@ -91,7 +92,9 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 	);
 	language.add(role, |lower, m| {
 		let code = m.capture("code").unwrap().token.clone();
-		match evaluate(lower, &code) {
+		let evaluated = evaluate(lower, &code);
+		crate::rules::register(lower, &m.token);
+		match evaluated {
 			Ok(Value::UserData(data)) if data.is::<PostParse>() => {
 				let callback = data.borrow::<PostParse>().unwrap().0;
 				post_parse::defer(lower, callback, m.token.clone());

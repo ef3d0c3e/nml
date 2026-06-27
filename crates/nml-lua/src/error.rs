@@ -39,12 +39,7 @@ impl Chunks {
 	/// file through their virtual source. Errors that name no known chunk are reported at
 	/// `fallback`.
 	pub fn diagnostic(&self, error: &mlua::Error, fallback: Token) -> Diagnostic {
-		let text = match error {
-			mlua::Error::RuntimeError(text) => text.clone(),
-			mlua::Error::SyntaxError { message, .. } => message.clone(),
-			mlua::Error::CallbackError { traceback, cause } => format!("{cause}\n{traceback}"),
-			error => error.to_string(),
-		};
+		let text = text(error);
 		let (message, traceback) = match text.split_once("\nstack traceback:") {
 			Some((message, traceback)) => (message, traceback),
 			None => (text.as_str(), ""),
@@ -65,6 +60,16 @@ impl Chunks {
 			}
 		}
 		diagnostic
+	}
+}
+
+/// The text of an error: Lua's message, without mlua's prefixes, and the traceback.
+fn text(error: &mlua::Error) -> String {
+	match error {
+		mlua::Error::RuntimeError(text) => text.clone(),
+		mlua::Error::SyntaxError { message, .. } => message.clone(),
+		mlua::Error::CallbackError { traceback, cause } => format!("{}\n{traceback}", text(cause)),
+		error => error.to_string(),
 	}
 }
 

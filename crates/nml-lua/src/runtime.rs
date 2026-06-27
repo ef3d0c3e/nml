@@ -63,6 +63,7 @@ impl Runtime {
 		string.raw_set("dump", mlua::Nil)?;
 		let api = lua.create_table()?;
 		crate::api::register(&lua, &api, crate::API)?;
+		crate::rules::register_values(&lua, &api)?;
 		globals.raw_set("nml", api)?;
 
 		lua.set_memory_limit(limits.memory)?;

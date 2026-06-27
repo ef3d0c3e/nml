@@ -113,6 +113,11 @@ pub enum DiagnosticKind {
 	/// A `:lua` block whose fence names another language.
 	#[diag(id = 4002, message = "diagnostic-lua-fence-language")]
 	LuaFenceLanguage { language: String },
+	#[diag(id = 4003, message = "diagnostic-lua-rule-outside-prologue")]
+	LuaRuleOutsidePrologue { rule: String },
+	/// `message` is the grammar's reason, in English.
+	#[diag(id = 4004, message = "diagnostic-invalid-lua-rule")]
+	InvalidLuaRule { rule: String, message: String },
 }
 
 /// Static description of a [`DiagnosticKind`] variant.
