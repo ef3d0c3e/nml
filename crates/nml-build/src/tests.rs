@@ -571,3 +571,63 @@ fn files_read_by_scripts_are_dependencies() {
 	assert_eq!(report.failed, ["a.nml"]);
 	assert_diagnostics!(report.diagnostics, [4001]);
 }
+
+#[test]
+fn navigation_from_deferred_slots() {
+	let nav = r#":lua
+```
+function menu()
+	local items = {}
+	for _, page in ipairs(nml.pages()) do
+		table.insert(items, '<a href="' .. page.url .. '">' .. page.title .. '</a>')
+	end
+	return '<nav>' .. table.concat(items, ' ') .. '</nav>'
+end
+```
+"#;
+	let workspace = Workspace::new(
+		"navigation",
+		&[
+			(
+				"nml.toml",
+				"exclude = [\"modules/**\"]\n[[module]]\nname = \"std\"\nroot = \"modules/std\"\n",
+			),
+			(
+				"index.nml",
+				":import std.nav\n# Home\n:lua`nml.defer('std.nav', 'menu')`\n",
+			),
+			("docs/guide.nml", "# Guide\n"),
+			("modules/std/nav.nml", nav),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(
+		workspace.output("index.html").contains(
+			r#"<nav><a href="docs/guide.html">Guide</a> <a href="index.html">Home</a></nav>"#
+		),
+		"{}",
+		workspace.output("index.html")
+	);
+
+	// A new page: the page with the menu is relinked, not parsed.
+	workspace.write("about.nml", "# About\n");
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["about.nml"]);
+	assert_eq!(report.written, ["about.nml", "index.nml"]);
+	assert!(
+		workspace
+			.output("index.html")
+			.contains(r#"<a href="about.html">About</a>"#)
+	);
+
+	// A new title, likewise.
+	workspace.write("docs/guide.nml", "# User guide\n");
+	let report = workspace.build();
+	assert_eq!(report.written, ["docs/guide.nml", "index.nml"]);
+	assert!(workspace.output("index.html").contains(">User guide</a>"));
+
+	// A change pages cannot see: only the page itself.
+	workspace.write("docs/guide.nml", "# User guide\ntext\n");
+	assert_eq!(workspace.build().written, ["docs/guide.nml"]);
+}

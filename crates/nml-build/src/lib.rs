@@ -29,6 +29,8 @@ use nml_lang::Resolver;
 use nml_lang::output_path;
 use nml_lang::resolve_file;
 use nml_lang::resolve_path;
+use nml_lua::DeferredRuntime;
+use nml_lua::PageInfo;
 use nml_source::Source;
 use nml_source::Token;
 use nml_source::Url;
@@ -144,10 +146,17 @@ pub fn build(root: &Path) -> Result<BuildReport, BuildError> {
 	};
 	let config_hash = hex(&nml_workspace::hash(config_source.content().as_bytes()));
 	let index = Index::open(&root.join(&config.database))?;
+	let resolver: Arc<dyn Resolver> = Arc::new(WorkspaceResolver {
+		root: root.clone(),
+		modules: config.modules.clone(),
+	});
 	let mut builder = Builder {
 		output: root.join(&config.output),
 		root,
 		config,
+		resolver,
+		pages: None,
+		pages_changed: false,
 		index,
 		language: language(),
 		sources: HashMap::new(),
@@ -162,6 +171,12 @@ pub fn build(root: &Path) -> Result<BuildReport, BuildError> {
 struct Builder {
 	root: PathBuf,
 	config: Config,
+	resolver: Arc<dyn Resolver>,
+	/// The pages of the workspace, for deferred functions, once every unit is committed.
+	pages: Option<Arc<Vec<PageInfo>>>,
+	/// Whether a page was added, removed, or changed its key or title: pages that list the
+	/// workspace's pages are relinked.
+	pages_changed: bool,
 	index: Index,
 	output: PathBuf,
 	language: Language,
@@ -225,10 +240,7 @@ impl Builder {
 
 		// Units parse in parallel; they are committed in path order.
 		let language = &self.language;
-		let resolver: Arc<dyn Resolver> = Arc::new(WorkspaceResolver {
-			root: self.root.clone(),
-			modules: self.config.modules.clone(),
-		});
+		let resolver = &self.resolver;
 		let compiled: Vec<_> = to_parse
 			.par_iter()
 			.map(|(file, source)| {
@@ -240,8 +252,13 @@ impl Builder {
 		}
 		self.index.set_meta(CONFIG_HASH, config_hash)?;
 
-		// Relink the pages whose last link had errors, and those that use an affected
-		// symbol.
+		// Relink the pages whose last link had errors, those that use an affected symbol, and
+		// those with deferred slots if the pages changed.
+		if self.pages_changed {
+			for path in self.index.units_with_deferred_slots()? {
+				self.to_link.insert(path);
+			}
+		}
 		for path in self.index.units_with_link_errors()? {
 			self.to_link.insert(path);
 		}
@@ -268,6 +285,7 @@ impl Builder {
 		}
 		self.affected.insert((unit.name, String::new()));
 		if unit.role == Role::Page {
+			self.pages_changed = true;
 			self.delete_output(path)?;
 		}
 		Ok(())
@@ -353,6 +371,7 @@ impl Builder {
 			.as_ref()
 			.is_none_or(|old| old.name != name || old.title != title || old.role != file.role);
 		if identity_changed {
+			self.pages_changed = true;
 			self.affected.insert((name.to_string(), String::new()));
 			for export in &unit.exports {
 				self.affected
@@ -389,6 +408,24 @@ impl Builder {
 		}
 		let mut file = io::BufWriter::new(fs::File::create(&target).map_err(io_error)?);
 
+		let pages = match &self.pages {
+			Some(pages) => pages.clone(),
+			None => {
+				let pages: Vec<_> = self
+					.index
+					.units()?
+					.into_iter()
+					.filter(|unit| unit.role == Role::Page)
+					.map(|unit| PageInfo {
+						path: unit.path,
+						name: unit.name,
+						title: unit.title,
+					})
+					.collect();
+				self.pages.insert(Arc::new(pages)).clone()
+			}
+		};
+		let mut deferred = None;
 		let linker = Linker {
 			index: &self.index,
 			unit: &unit,
@@ -404,9 +441,23 @@ impl Builder {
 			&positions,
 			|index| {
 				let stored = &template.slots[index];
-				let Slot::Link(link) = &stored.slot else {
-					// Deferred slots are filled by Lua (Phase 4).
-					return Resolved::Value(String::new());
+				let link = match &stored.slot {
+					Slot::Link(link) => link,
+					Slot::Deferred(slot) => {
+						let runtime = deferred.get_or_insert_with(|| {
+							DeferredRuntime::new(
+								self.resolver.clone(),
+								pages.clone(),
+								path.to_string(),
+							)
+						});
+						let token = Token::new(source.clone(), stored.range.clone());
+						return match runtime.fill(slot, &token) {
+							Ok(html) => Resolved::Value(html),
+							Err(diagnostic) => Resolved::Missing(diagnostic),
+						};
+					}
+					_ => return Resolved::Value(String::new()),
 				};
 				let target = link.target.to_string();
 				let kind = match linker.value(link) {
