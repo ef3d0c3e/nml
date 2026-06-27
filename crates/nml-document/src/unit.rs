@@ -208,6 +208,9 @@ pub enum Dependency {
 	Variable(SymbolRef),
 	/// The workspace configuration.
 	Config,
+	/// A file read by a script, by workspace path, with the hash of its content when it was
+	/// read.
+	File { path: String, hash: String },
 	/// A workspace query run during the parse, with a fingerprint of its result.
 	Query { query: String, fingerprint: u64 },
 }

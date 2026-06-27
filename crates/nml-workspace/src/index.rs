@@ -377,6 +377,26 @@ impl Index {
 		Ok(())
 	}
 
+	/// Every file read by scripts: (unit path, file path, hash when read).
+	pub fn file_dependencies(&self) -> Result<Vec<(String, String, String)>> {
+		let mut statement = self.connection.prepare(
+			"SELECT units.path, dependencies.value FROM dependencies
+			JOIN units ON units.id = dependencies.unit
+			WHERE dependencies.kind = 'file' ORDER BY units.path",
+		)?;
+		let rows = statement.query_map([], |row| {
+			Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+		})?;
+		let mut files = Vec::new();
+		for row in rows {
+			let (unit, value) = row?;
+			if let Dependency::File { path, hash } = dependency("file", &value)? {
+				files.push((unit, path, hash));
+			}
+		}
+		Ok(files)
+	}
+
 	/// The paths of the units that have this parse-time dependency.
 	pub fn dependents(&self, dependency: &Dependency) -> Result<Vec<String>> {
 		let (kind, value) = encode_dependency(dependency);
@@ -748,6 +768,10 @@ fn encode_dependency(dependency: &Dependency) -> (&'static str, String) {
 		Dependency::Include(path) => ("include", path.clone()),
 		Dependency::Variable(symbol) => ("variable", encode_symbol(symbol).to_string()),
 		Dependency::Config => ("config", String::new()),
+		Dependency::File { path, hash } => (
+			"file",
+			serde_json::json!({ "path": path, "hash": hash }).to_string(),
+		),
 		Dependency::Query { query, fingerprint } => (
 			"query",
 			serde_json::json!({ "query": query, "fingerprint": *fingerprint as i64 }).to_string(),
@@ -762,6 +786,19 @@ fn dependency(kind: &str, value: &str) -> Result<Dependency> {
 		"include" => Dependency::Include(value.into()),
 		"variable" => Dependency::Variable(decode_symbol(&parse(value)?)?),
 		"config" => Dependency::Config,
+		"file" => {
+			let map = object(value)?;
+			let text = |key: &str| {
+				map.get(key)
+					.and_then(Json::as_str)
+					.map(String::from)
+					.ok_or_else(|| corrupt(format!("file dependency without `{key}`")))
+			};
+			Dependency::File {
+				path: text("path")?,
+				hash: text("hash")?,
+			}
+		}
 		"query" => {
 			let map = object(value)?;
 			Dependency::Query {
@@ -1029,6 +1066,10 @@ mod tests {
 			Dependency::Include("parts/a.nml".into()),
 			Dependency::Variable(SymbolRef::in_unit("config", "version")),
 			Dependency::Config,
+			Dependency::File {
+				path: "data/table.csv".into(),
+				hash: "ab12".into(),
+			},
 			Dependency::Query {
 				query: "pages".into(),
 				fingerprint: u64::MAX - 1,
@@ -1081,9 +1122,17 @@ mod tests {
 		assert_eq!(record.name, "a");
 		assert_eq!(record.title, "A");
 		let dependencies = index.dependencies(id).unwrap();
-		assert_eq!(dependencies.len(), 5);
+		assert_eq!(dependencies.len(), 6);
 		assert_eq!(
-			dependencies[4],
+			index.file_dependencies().unwrap(),
+			[(
+				"docs/a.nml".to_string(),
+				"data/table.csv".to_string(),
+				"ab12".to_string()
+			)]
+		);
+		assert_eq!(
+			dependencies[5],
 			Dependency::Query {
 				query: "pages".into(),
 				fingerprint: u64::MAX - 1
