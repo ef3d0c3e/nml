@@ -15,6 +15,7 @@ nml-document.workspace = true
 nml-lua-macros.workspace = true
 nml-lang.workspace = true
 mlua.workspace = true
+blake3.workspace = true
 
 [dev-dependencies]
 nml-html.workspace = true

@@ -8,6 +8,7 @@ use crate::Limits;
 use crate::Runtime;
 use crate::error::Chunks;
 use crate::events;
+use crate::files;
 use crate::module::Modules;
 use crate::post_parse;
 
@@ -32,12 +33,15 @@ pub(crate) fn unit_lua<'a>(lower: &'a mut Lower<'_, '_>) -> &'a mut UnitLua {
 			modules: Modules::default(),
 		};
 		let lua = unit.runtime.lua().clone();
+		let files = files::Files::new(lower.resolver.clone(), lower.files[0].clone());
+		lua.set_app_data(files);
 		let chunks = unit.chunks.clone();
 		let errors = unit.errors.clone();
 		lower
 			.builder
 			.on_write(move |draft| events::dispatch(&lua, draft, &chunks, &errors));
 		lower.on_finish(post_parse::fill);
+		lower.on_finish(files::record);
 		lower.on_finish(|lower| {
 			let errors = std::mem::take(&mut *unit_lua(lower).errors.borrow_mut());
 			lower.diagnostics.extend(errors);

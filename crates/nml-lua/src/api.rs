@@ -68,7 +68,11 @@ pub struct LuaField {
 pub const CLASSES: &[LuaClass] = &[crate::events::ElementData::LUA_CLASS];
 
 /// Every function of the `nml` table.
-pub const API: &[ApiFunction] = &[crate::events::ON, crate::post_parse::POST_PARSE];
+pub const API: &[ApiFunction] = &[
+	crate::events::ON,
+	crate::post_parse::POST_PARSE,
+	crate::files::READ,
+];
 
 /// Adds API functions to the `nml` table.
 pub(crate) fn register(lua: &Lua, table: &Table, functions: &[ApiFunction]) -> mlua::Result<()> {

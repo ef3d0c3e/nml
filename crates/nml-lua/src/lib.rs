@@ -6,6 +6,7 @@ extern crate self as nml_lua;
 mod api;
 mod error;
 mod events;
+mod files;
 mod module;
 mod post_parse;
 mod runtime;
@@ -53,7 +54,7 @@ pub(crate) mod tests {
 			resolver.files.insert(path.to_string(), content.to_string());
 		}
 		resolver.modules.insert("std".into(), "modules/std".into());
-		nml_lang::compile(&language, Arc::new(source), "page.nml", &resolver)
+		nml_lang::compile(&language, Arc::new(source), "page.nml", Arc::new(resolver))
 	}
 
 	/// The HTML of a compiled unit, without filling its slots.
