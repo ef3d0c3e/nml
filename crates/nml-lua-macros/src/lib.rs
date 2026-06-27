@@ -331,7 +331,15 @@ fn expand(
 
 	let returns = match returns_override {
 		Some(returns) => returns,
-		None => lua_type(result_type(&function.sig.output)?)?,
+		None => {
+			let ty = result_type(&function.sig.output)?;
+			lua_type(ty).map_err(|_| {
+				syn::Error::new_spanned(
+					ty,
+					"no LuaCATS type for this type: add #[api(returns = \"…\")]",
+				)
+			})?
+		}
 	};
 	let returns = if returns == "nil" {
 		quote! { None }
