@@ -43,6 +43,35 @@ impl Rule {
 		}
 	}
 
+	/// The names of the captures inside a `Repeat`: they can match any number of times, so
+	/// their values are lists, even with one or no match.
+	pub fn repeated_captures(&self) -> Vec<&str> {
+		fn walk<'a>(atoms: &'a [Atom], repeated: bool, out: &mut Vec<&'a str>) {
+			for atom in atoms {
+				match atom {
+					Atom::Capture { name, atom, .. } => {
+						if repeated && !out.contains(&name.as_str()) {
+							out.push(name);
+						}
+						walk(std::slice::from_ref(atom), repeated, out);
+					}
+					Atom::Repeat { atoms, max, .. } => {
+						walk(atoms, repeated || *max != Some(1), out);
+					}
+					Atom::Or(alternatives) => {
+						for alternative in alternatives {
+							walk(alternative, repeated, out);
+						}
+					}
+					_ => {}
+				}
+			}
+		}
+		let mut out = Vec::new();
+		walk(&self.atoms, false, &mut out);
+		out
+	}
+
 	/// The opener: the text the rule is dispatched on. For a `Run`, its shortest run.
 	pub fn opener(&self) -> Option<String> {
 		let first = match self.table() {
@@ -471,6 +500,30 @@ mod tests {
 		assert_eq!(bold().opener().as_deref(), Some("**"));
 		let code = Rule::new("code", vec![Atom::capture("fence", Atom::run('`', 2))]);
 		assert_eq!(code.opener().as_deref(), Some("``"));
+	}
+
+	#[test]
+	fn repeated_captures() {
+		let rule = Rule::new(
+			"r",
+			vec![
+				lit("<"),
+				Atom::capture("one", Atom::Word),
+				Atom::repeat(
+					vec![
+						lit(","),
+						Atom::capture("item", Atom::Word),
+						Atom::or([vec![Atom::capture("nested", lit("!"))]]),
+					],
+					0,
+					None,
+				),
+				// An optional part matches at most once: not a list.
+				Atom::optional(vec![lit("|"), Atom::capture("extra", Atom::Word)]),
+				Atom::repeat(vec![Atom::capture("item", lit("."))], 1, Some(3)),
+			],
+		);
+		assert_eq!(rule.repeated_captures(), ["item", "nested"]);
 	}
 
 	#[test]
