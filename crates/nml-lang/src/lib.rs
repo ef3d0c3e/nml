@@ -9,6 +9,7 @@ mod resolve;
 mod style;
 mod variable;
 
+pub use language::AddRuleError;
 pub use language::Compiled;
 pub use language::Finisher;
 pub use language::Handler;

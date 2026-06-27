@@ -27,10 +27,10 @@ use nml_source::Token;
 use crate::Resolver;
 
 /// Lowers a match of its rule into document elements.
-pub type Handler = Box<dyn Fn(&mut Lower<'_, '_>, &RuleMatch) + Send + Sync>;
+pub type Handler = Arc<dyn Fn(&mut Lower<'_, '_>, &RuleMatch) + Send + Sync>;
 
 /// Called for every module a unit imports, once it is resolved.
-pub type ImportHook = Box<dyn Fn(&mut Lower<'_, '_>, &Import) + Send + Sync>;
+pub type ImportHook = Arc<dyn Fn(&mut Lower<'_, '_>, &Import) + Send + Sync>;
 
 /// A resolved import.
 #[derive(Debug, Clone)]
@@ -47,6 +47,7 @@ pub struct Import {
 }
 
 /// A grammar and the handlers of its rules.
+#[derive(Clone)]
 pub struct Language {
 	rules: RuleSet,
 	handlers: HashMap<RuleId, Handler>,
@@ -81,7 +82,7 @@ impl Language {
 		handler: impl Fn(&mut Lower<'_, '_>, &RuleMatch) + Send + Sync + 'static,
 	) -> Result<RuleId, RuleError> {
 		let id = self.rules.add(rule)?;
-		self.handlers.insert(id, Box::new(handler));
+		self.handlers.insert(id, Arc::new(handler));
 		Ok(id)
 	}
 
@@ -102,7 +103,7 @@ impl Language {
 		&mut self,
 		hook: impl Fn(&mut Lower<'_, '_>, &Import) + Send + Sync + 'static,
 	) {
-		self.import_hooks.push(Box::new(hook));
+		self.import_hooks.push(Arc::new(hook));
 	}
 
 	pub(crate) fn import_hooks(&self) -> &[ImportHook] {
@@ -133,13 +134,14 @@ pub fn compile(
 ) -> Compiled {
 	let parsed = nml_grammar::parse(&language.rules, source.clone());
 	let mut lower = Lower {
-		language,
+		base: language,
+		extended: None,
 		resolver,
-		builder: DocumentBuilder::new(source),
+		builder: DocumentBuilder::new(source.clone()),
 		exports: Vec::new(),
 		uses: Vec::new(),
 		dependencies: Vec::new(),
-		diagnostics: parsed.diagnostics,
+		diagnostics: Vec::new(),
 		variables: HashMap::new(),
 		prologue: true,
 		files: vec![path.to_string()],
@@ -148,7 +150,30 @@ pub fn compile(
 		extensions: HashMap::new(),
 		finishers: Vec::new(),
 	};
-	lower.nodes(&parsed.nodes);
+	let mut parse_diagnostics = parsed.diagnostics;
+	let mut nodes = parsed.nodes;
+	let mut index = 0;
+	while index < nodes.len() {
+		// The prologue ends here: if it extended the grammar, the body is parsed again with
+		// the extended grammar.
+		if lower.prologue && !lower.is_prologue_node(&nodes[index]) {
+			lower.prologue = false;
+			if let Some(extended) = lower.extended.clone() {
+				let start = nodes[index].token().start();
+				let reparsed = nml_grammar::parse_from(extended.rules(), source.clone(), start);
+				parse_diagnostics.retain(|diagnostic| {
+					let location = &diagnostic.primary().location;
+					!Arc::ptr_eq(location.source(), &source) || location.start() < start
+				});
+				parse_diagnostics.extend(reparsed.diagnostics);
+				nodes = reparsed.nodes;
+				index = 0;
+				continue;
+			}
+		}
+		lower.nodes(std::slice::from_ref(&nodes[index]));
+		index += 1;
+	}
 	// Finishers may add more finishers.
 	while !lower.finishers.is_empty() {
 		for finisher in std::mem::take(&mut lower.finishers) {
@@ -160,10 +185,12 @@ pub fn compile(
 		exports,
 		uses,
 		dependencies,
-		diagnostics,
+		diagnostics: lowering_diagnostics,
 		mut variables,
 		..
 	} = lower;
+	let mut diagnostics = parse_diagnostics;
+	diagnostics.extend(lowering_diagnostics);
 	Compiled {
 		unit: Unit {
 			reference_key: variables
@@ -180,7 +207,9 @@ pub fn compile(
 
 /// The state of lowering a parse tree into a unit, given to rule handlers.
 pub struct Lower<'a, 'l> {
-	language: &'a Language,
+	base: &'a Language,
+	/// The unit's grammar, if its prologue extended the base one.
+	extended: Option<Arc<Language>>,
 	pub resolver: Arc<dyn Resolver>,
 	pub builder: DocumentBuilder<'l>,
 	pub exports: Vec<Export>,
@@ -215,9 +244,39 @@ impl fmt::Debug for Lower<'_, '_> {
 	}
 }
 
-impl<'a> Lower<'a, '_> {
-	pub fn language(&self) -> &'a Language {
-		self.language
+/// Why a rule cannot be added to a unit's grammar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AddRuleError {
+	/// Grammar extensions come from the prologue or imported modules only.
+	OutsidePrologue,
+	Rule(RuleError),
+}
+
+impl Lower<'_, '_> {
+	/// The unit's grammar: the base one, extended by the prologue.
+	pub fn language(&self) -> &Language {
+		self.extended.as_deref().unwrap_or(self.base)
+	}
+
+	/// Adds a rule to the unit's grammar. Only allowed in the prologue: the body is parsed
+	/// with the extended grammar.
+	pub fn add_rule(
+		&mut self,
+		rule: Rule,
+		handler: impl Fn(&mut Lower<'_, '_>, &RuleMatch) + Send + Sync + 'static,
+	) -> Result<RuleId, AddRuleError> {
+		if !self.prologue {
+			return Err(AddRuleError::OutsidePrologue);
+		}
+		let base = self.base;
+		let language = self.extended.get_or_insert_with(|| Arc::new(base.clone()));
+		Arc::make_mut(language)
+			.add(rule, handler)
+			.map_err(AddRuleError::Rule)
+	}
+
+	fn is_prologue_node(&self, node: &Node) -> bool {
+		matches!(node, Node::Match(m) if self.language().prologue.contains(&m.rule))
 	}
 
 	/// Lowers nodes into the open element. Adjacent text and escapes become one text element.
@@ -225,9 +284,7 @@ impl<'a> Lower<'a, '_> {
 		let mut text: Option<(Token, String)> = None;
 		for node in nodes {
 			// A block at the top of the unit ends the prologue, unless its rule is allowed in it.
-			if self.builder.depth() == 1
-				&& !matches!(node, Node::Match(m) if self.language.prologue.contains(&m.rule))
-			{
+			if self.builder.depth() == 1 && !self.is_prologue_node(node) {
 				self.prologue = false;
 			}
 			match node {
@@ -256,7 +313,7 @@ impl<'a> Lower<'a, '_> {
 				Node::Match(m) => {
 					self.flush(text.take());
 					if m.complete {
-						let handler = &self.language.handlers[&m.rule];
+						let handler = self.language().handlers[&m.rule].clone();
 						handler(self, m);
 					} else {
 						// The unit has an error and will not be committed; its content is
@@ -422,5 +479,105 @@ mod tests {
 			show(document, document.root()),
 			r#"document[paragraph["a " " b"] "!" "?"]"#
 		);
+	}
+
+	/// A language whose `:enable` command, in the prologue, adds a rule for `@`.
+	fn extensible() -> Language {
+		let mut language = Language::empty();
+		language
+			.add_prologue(
+				Rule::new(
+					"enable",
+					vec![Atom::LineStart, Atom::literal(":enable"), Atom::LineEnd],
+				),
+				|lower, m| {
+					let result =
+						lower.add_rule(Rule::new("at", vec![Atom::literal("@")]), |lower, m| {
+							lower
+								.builder
+								.leaf(ElementKind::Text("AT".into()), m.token.clone());
+						});
+					if let Err(error) = result {
+						let text = format!("{error:?}");
+						lower.builder.leaf(ElementKind::Text(text), m.token.clone());
+					}
+				},
+			)
+			.unwrap();
+		language
+	}
+
+	fn compile_text(language: &Language, text: &str) -> crate::Compiled {
+		let source = Source::new(Url::parse("file:///a.nml").unwrap(), text.into(), 0);
+		compile(
+			language,
+			Arc::new(source),
+			"a.nml",
+			Arc::new(MemoryResolver::default()),
+		)
+	}
+
+	#[test]
+	fn the_prologue_extends_the_grammar() {
+		let language = extensible();
+		let compiled = compile_text(&language, ":enable\n\na @ b\n\n:enable\n");
+		let document = &compiled.unit.document;
+		assert_eq!(
+			show(document, document.root()),
+			r#"document[paragraph["a " "AT" " b"] "OutsidePrologue"]"#
+		);
+		assert!(compiled.diagnostics.is_empty());
+
+		// The base language is not changed.
+		assert!(language.rules().id("at").is_none());
+		let compiled = compile_text(&language, "a @ b");
+		let document = &compiled.unit.document;
+		assert_eq!(
+			show(document, document.root()),
+			r#"document[paragraph["a @ b"]]"#
+		);
+	}
+
+	#[test]
+	fn errors_of_the_first_parse_are_dropped_with_it() {
+		// With the base grammar, `<` opens a construct that `>` must close. The prologue
+		// replaces that rule with a plain `<`, so the body's unclosed `<` is no error.
+		let mut language = Language::empty();
+		language
+			.add(
+				Rule::new(
+					"angle",
+					vec![Atom::literal("<"), Atom::Text, Atom::literal(">")],
+				),
+				|_, _| {},
+			)
+			.unwrap();
+		language
+			.add_prologue(
+				Rule::new(
+					"plain",
+					vec![Atom::LineStart, Atom::literal(":plain"), Atom::LineEnd],
+				),
+				|lower, _| {
+					let rule = Rule::new("lt", vec![Atom::literal("<")]).replacing("angle");
+					lower
+						.add_rule(rule, |lower, m| {
+							lower
+								.builder
+								.leaf(ElementKind::Text("<".into()), m.token.clone());
+						})
+						.unwrap();
+				},
+			)
+			.unwrap();
+
+		let compiled = compile_text(&language, ":plain\n\na < b\n");
+		assert!(
+			compiled.diagnostics.is_empty(),
+			"{:?}",
+			compiled.diagnostics
+		);
+		let compiled = compile_text(&language, "a < b\n");
+		nml_diagnostics::assert_diagnostics!(compiled.diagnostics, [1001]);
 	}
 }

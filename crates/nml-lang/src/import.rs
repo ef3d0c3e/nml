@@ -79,7 +79,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			source,
 			token: module.clone(),
 		};
-		for hook in lower.language().import_hooks() {
+		for hook in lower.language().import_hooks().to_vec() {
 			hook(lower, &import);
 		}
 	})?;

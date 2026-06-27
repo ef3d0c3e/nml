@@ -72,8 +72,10 @@ fn load(
 
 /// Runs a module's `:lua` blocks and imports, and returns its exports.
 fn run(lower: &mut Lower<'_, '_>, path: &str, source: Arc<Source>) -> Option<Table> {
-	let language = lower.language();
-	let parsed = nml_grammar::parse(language.rules(), source);
+	let rules = lower.language().rules();
+	let lua_rule = rules.id("lua");
+	let import_rule = rules.id("import");
+	let parsed = nml_grammar::parse(rules, source);
 	let failed = parsed
 		.diagnostics
 		.iter()
@@ -96,9 +98,6 @@ fn run(lower: &mut Lower<'_, '_>, path: &str, source: Arc<Source>) -> Option<Tab
 	meta.raw_set("__index", lua.globals()).ok()?;
 	env.set_metatable(Some(meta)).ok()?;
 
-	let rules = language.rules();
-	let lua_rule = rules.id("lua");
-	let import_rule = rules.id("import");
 	for node in &parsed.nodes {
 		let Node::Match(m) = node else { continue };
 		if Some(m.rule) == lua_rule {
