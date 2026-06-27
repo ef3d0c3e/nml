@@ -4,7 +4,9 @@ use mlua::Value;
 use nml_diagnostics::Diagnostic;
 use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
+use nml_document::Dependency;
 use nml_document::ElementKind;
+use nml_document::Slot;
 use nml_grammar::Atom;
 use nml_grammar::Rule;
 use nml_grammar::RuleError;
@@ -15,6 +17,7 @@ use nml_source::Token;
 use nml_source::Url;
 use nml_source::VirtualSourceBuilder;
 
+use crate::deferred::Defer;
 use crate::post_parse;
 use crate::post_parse::PostParse;
 use crate::unit::unit_lua;
@@ -95,6 +98,19 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 		let evaluated = evaluate(lower, &code);
 		crate::rules::register(lower, &m.token);
 		match evaluated {
+			Ok(Value::UserData(data)) if data.is::<Defer>() => {
+				let slot = data.borrow::<Defer>().unwrap().0.clone();
+				let imported = Dependency::Import(slot.module.clone());
+				if lower.dependencies.contains(&imported) {
+					lower.builder.slot(Slot::Deferred(slot), m.token.clone());
+				} else {
+					let kind = DiagnosticKind::DeferredModuleNotImported {
+						module: slot.module,
+					};
+					let message = DiagnosticMessage::new(m.token.clone());
+					lower.diagnostics.push(Diagnostic::new(kind, message));
+				}
+			}
 			Ok(Value::UserData(data)) if data.is::<PostParse>() => {
 				let callback = data.borrow::<PostParse>().unwrap().0;
 				post_parse::defer(lower, callback, m.token.clone());

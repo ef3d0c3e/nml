@@ -4,6 +4,7 @@
 extern crate self as nml_lua;
 
 mod api;
+mod deferred;
 mod error;
 mod events;
 mod files;
@@ -22,6 +23,8 @@ pub use api::LuaField;
 pub use api::TYPES_DIR;
 pub use api::luacats;
 pub use api::write_types;
+pub use deferred::DeferredRuntime;
+pub use deferred::PageInfo;
 pub use nml_lua_macros::api;
 pub use nml_lua_macros::userdata;
 pub use runtime::Limits;

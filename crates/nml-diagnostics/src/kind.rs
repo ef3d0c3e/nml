@@ -118,6 +118,8 @@ pub enum DiagnosticKind {
 	/// `message` is the grammar's reason, in English.
 	#[diag(id = 4004, message = "diagnostic-invalid-lua-rule")]
 	InvalidLuaRule { rule: String, message: String },
+	#[diag(id = 4005, message = "diagnostic-deferred-module-not-imported")]
+	DeferredModuleNotImported { module: String },
 }
 
 /// Static description of a [`DiagnosticKind`] variant.

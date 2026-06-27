@@ -75,6 +75,8 @@ pub const API: &[ApiFunction] = &[
 	crate::events::ON,
 	crate::post_parse::POST_PARSE,
 	crate::files::READ,
+	crate::deferred::DEFER,
+	crate::deferred::PAGES,
 	crate::rules::RULE,
 	crate::rules::CAPTURE,
 	crate::rules::OPTIONAL,
