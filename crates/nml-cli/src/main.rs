@@ -23,6 +23,8 @@ enum Command {
 		#[arg(default_value = ".")]
 		root: PathBuf,
 	},
+	/// Run the language server on stdin and stdout.
+	Lsp,
 	/// Build every page of a workspace.
 	Build {
 		/// The workspace root, which holds `nml.toml`.
@@ -35,6 +37,13 @@ fn main() -> ExitCode {
 	match Cli::parse().command {
 		Command::Init { root } => init(root),
 		Command::Build { root } => build(root),
+		Command::Lsp => match nml_lsp::run_stdio() {
+			Ok(()) => ExitCode::SUCCESS,
+			Err(error) => {
+				eprintln!("error: {error}");
+				ExitCode::FAILURE
+			}
+		},
 	}
 }
 
