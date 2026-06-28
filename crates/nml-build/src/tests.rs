@@ -631,3 +631,39 @@ end
 	workspace.write("docs/guide.nml", "# User guide\ntext\n");
 	assert_eq!(workspace.build().written, ["docs/guide.nml"]);
 }
+
+#[test]
+fn builds_without_writing() {
+	let workspace = Workspace::new(
+		"no-write",
+		&[
+			("nml.toml", ""),
+			("a.nml", "[[#missing]]\n"),
+			("b.nml", "# B\n"),
+		],
+	);
+	let report = build_with(&workspace.0, BuildOptions { write: false }).unwrap();
+	assert_eq!(report.written, ["a.nml", "b.nml"]);
+	assert_diagnostics!(report.diagnostics, [3001]);
+	assert!(!workspace.0.join("public").exists());
+
+	// The index is up to date: a build that writes only writes what is relinked.
+	workspace.remove("b.nml");
+	let report = build_with(&workspace.0, BuildOptions { write: false }).unwrap();
+	assert!(report.deleted.is_empty());
+	assert!(!workspace.0.join("public").exists());
+}
+
+#[test]
+fn overlays_replace_files() {
+	let workspace = Workspace::new("overlay", &[("nml.toml", ""), ("part.nml", "on disk\n")]);
+	let resolver = WorkspaceResolver::new(workspace.0.clone(), Vec::new());
+	let (_, source) = resolver.include("a.nml", "part").unwrap();
+	assert_eq!(source.content(), "on disk\n");
+
+	let overlay = [("part.nml".to_string(), "in memory\n".to_string())].into();
+	let resolver = resolver.with_overlay(overlay);
+	let (_, source) = resolver.include("a.nml", "part").unwrap();
+	assert_eq!(source.content(), "in memory\n");
+	assert_eq!(resolver.read("a.nml", "part.nml").unwrap().1, "in memory\n");
+}

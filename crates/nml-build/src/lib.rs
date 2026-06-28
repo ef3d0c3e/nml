@@ -129,6 +129,25 @@ fn read(path: &Path) -> Result<Arc<Source>, BuildError> {
 /// Builds the workspace at `root` incrementally: changed files are parsed again, and pages
 /// whose references may resolve differently are relinked from their stored templates.
 pub fn build(root: &Path) -> Result<BuildReport, BuildError> {
+	build_with(root, BuildOptions::default())
+}
+
+/// How to build.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuildOptions {
+	/// Write the pages and delete the outputs of removed ones. The language server builds
+	/// without writing: it only needs the index and the diagnostics.
+	pub write: bool,
+}
+
+impl Default for BuildOptions {
+	fn default() -> Self {
+		Self { write: true }
+	}
+}
+
+/// Builds the workspace at `root` incrementally, with options.
+pub fn build_with(root: &Path, options: BuildOptions) -> Result<BuildReport, BuildError> {
 	let root = fs::canonicalize(root).map_err(|e| BuildError::Io(root.into(), e))?;
 	let config_path = root.join(CONFIG_FILE);
 	if !config_path.exists() {
@@ -146,11 +165,10 @@ pub fn build(root: &Path) -> Result<BuildReport, BuildError> {
 	};
 	let config_hash = hex(&nml_workspace::hash(config_source.content().as_bytes()));
 	let index = Index::open(&root.join(&config.database))?;
-	let resolver: Arc<dyn Resolver> = Arc::new(WorkspaceResolver {
-		root: root.clone(),
-		modules: config.modules.clone(),
-	});
+	let resolver: Arc<dyn Resolver> =
+		Arc::new(WorkspaceResolver::new(root.clone(), config.modules.clone()));
 	let mut builder = Builder {
+		write: options.write,
 		output: root.join(&config.output),
 		root,
 		config,
@@ -169,6 +187,8 @@ pub fn build(root: &Path) -> Result<BuildReport, BuildError> {
 }
 
 struct Builder {
+	/// Whether outputs are written; see [`BuildOptions::write`].
+	write: bool,
 	root: PathBuf,
 	config: Config,
 	resolver: Arc<dyn Resolver>,
@@ -295,6 +315,9 @@ impl Builder {
 	/// it leaves empty. Only pages the index knows are deleted: other files in the output
 	/// directory are left alone.
 	fn delete_output(&mut self, path: &str) -> Result<(), BuildError> {
+		if !self.write {
+			return Ok(());
+		}
 		let target = self.output.join(output_path(path));
 		match fs::remove_file(&target) {
 			Ok(()) => {}
@@ -403,10 +426,16 @@ impl Builder {
 		};
 		let target = self.output.join(output_path(path));
 		let io_error = |e| BuildError::Io(target.clone(), e);
-		if let Some(parent) = target.parent() {
-			fs::create_dir_all(parent).map_err(|e| BuildError::Io(parent.into(), e))?;
-		}
-		let mut file = io::BufWriter::new(fs::File::create(&target).map_err(io_error)?);
+		let mut file: Box<dyn io::Write> = if self.write {
+			if let Some(parent) = target.parent() {
+				fs::create_dir_all(parent).map_err(|e| BuildError::Io(parent.into(), e))?;
+			}
+			Box::new(io::BufWriter::new(
+				fs::File::create(&target).map_err(io_error)?,
+			))
+		} else {
+			Box::new(io::sink())
+		};
 
 		let pages = match &self.pages {
 			Some(pages) => pages.clone(),
@@ -508,27 +537,60 @@ pub fn language() -> Language {
 	language
 }
 
-/// Finds included files and imported modules on disk.
-struct WorkspaceResolver {
+/// Finds included files, read files and imported modules in the workspace: in the overlay
+/// first (unsaved buffers of an editor), then on disk.
+#[derive(Debug, Clone)]
+pub struct WorkspaceResolver {
 	root: PathBuf,
 	modules: Vec<nml_workspace::Module>,
+	/// Contents by workspace path.
+	overlay: HashMap<String, String>,
+}
+
+impl WorkspaceResolver {
+	pub fn new(root: PathBuf, modules: Vec<nml_workspace::Module>) -> Self {
+		Self {
+			root,
+			modules,
+			overlay: HashMap::new(),
+		}
+	}
+
+	/// Files whose content is taken from memory instead of the disk.
+	pub fn with_overlay(mut self, overlay: HashMap<String, String>) -> Self {
+		self.overlay = overlay;
+		self
+	}
+
+	/// The content of a workspace file: from the overlay, or the disk.
+	fn content(&self, path: &str) -> Option<String> {
+		match self.overlay.get(path) {
+			Some(content) => Some(content.clone()),
+			None => fs::read_to_string(self.root.join(path)).ok(),
+		}
+	}
 }
 
 impl Resolver for WorkspaceResolver {
 	fn read(&self, from: &str, path: &str) -> Result<(String, String), ResolveError> {
 		let not_found = |path: &str| ResolveError::NotFound { path: path.into() };
 		let resolved = resolve_file(from, path).ok_or_else(|| not_found(path))?;
-		let content =
-			fs::read_to_string(self.root.join(&resolved)).map_err(|_| not_found(&resolved))?;
+		let content = self
+			.content(&resolved)
+			.ok_or_else(|| not_found(&resolved))?;
 		Ok((resolved, content))
 	}
 
 	fn include(&self, from: &str, path: &str) -> Result<(String, Arc<Source>), ResolveError> {
 		let not_found = |path: &str| ResolveError::NotFound { path: path.into() };
 		let resolved = resolve_path(from, path).ok_or_else(|| not_found(path))?;
-		let absolute = self.root.join(&resolved);
-		let content = fs::read_to_string(&absolute).map_err(|_| not_found(&resolved))?;
-		Ok((resolved, source(&absolute, content)))
+		let content = self
+			.content(&resolved)
+			.ok_or_else(|| not_found(&resolved))?;
+		Ok((
+			resolved.clone(),
+			source(&self.root.join(&resolved), content),
+		))
 	}
 
 	fn module(&self, module: &str) -> Result<(String, Arc<Source>), ResolveError> {
@@ -547,9 +609,11 @@ impl Resolver for WorkspaceResolver {
 			})
 			.collect();
 		let path = format!("{}/{}.nml", root.join("/"), rest.replace('.', "/"));
-		let absolute = self.root.join(&path);
-		match fs::read_to_string(&absolute) {
-			Ok(content) if !rest.is_empty() => Ok((path, source(&absolute, content))),
+		match self.content(&path) {
+			Some(content) if !rest.is_empty() => {
+				let absolute = self.root.join(&path);
+				Ok((path, source(&absolute, content)))
+			}
 			_ => Err(ResolveError::NotFound { path }),
 		}
 	}
