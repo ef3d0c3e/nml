@@ -186,6 +186,9 @@ struct LuaRules {
 /// Defines a rule of the grammar: `name`, its `atoms` (strings are literals), and the
 /// `handler` that builds its elements from the match `m` with `out`. Rules are defined in
 /// the prologue or in modules; the document's body is parsed with them.
+///
+/// `m.text` is the matched text, and `m.captures` the text of each capture by name. A
+/// capture inside `nml.many` is a list of texts, empty if it never matched.
 #[api]
 fn rule(
 	lua: &Lua,
@@ -279,9 +282,24 @@ fn call(
 	m: &RuleMatch,
 	function: &Function,
 ) -> mlua::Result<()> {
+	// A capture inside a repeated part is a list of texts, even with one or no match.
+	let rule = lower.language().rules().get(m.rule).unwrap();
+	let repeated: Vec<String> = rule
+		.repeated_captures()
+		.into_iter()
+		.map(String::from)
+		.collect();
 	let captures = lua.create_table()?;
+	for name in &repeated {
+		captures.raw_set(name.as_str(), lua.create_table()?)?;
+	}
 	for capture in &m.captures {
-		captures.raw_set(&*capture.name, capture.token.content())?;
+		if repeated.iter().any(|name| **name == *capture.name) {
+			let list: Table = captures.raw_get(&*capture.name)?;
+			list.raw_push(capture.token.content())?;
+		} else {
+			captures.raw_set(&*capture.name, capture.token.content())?;
+		}
 	}
 	let matched = lua.create_table()?;
 	matched.raw_set("text", m.token.content())?;
@@ -434,9 +452,12 @@ nml.rule {
 	atoms = {
 		"#{",
 		nml.many({ nml.capture("tag", nml.word), nml.optional({ ", " }) }, 1),
+		nml.many({ "!", nml.capture("none", nml.word) }),
 		nml.one_of({ { "}" }, { "|", nml.capture("extra", nml.text), "}" } }),
 	},
-	handler = function(m, out) out:text("[" .. m.captures.tag .. "]") end,
+	handler = function(m, out)
+		out:text("[" .. table.concat(m.captures.tag, " ") .. "/" .. #m.captures.none .. "]")
+	end,
 }
 ```
 
@@ -444,9 +465,9 @@ Tags: #{a, b, c} #{d|x}
 "##,
 		);
 		assert_diagnostics!(compiled.diagnostics, []);
-		// `m.captures` holds the last capture of each name.
+		// Repeated captures are lists, empty when nothing matched.
 		assert!(
-			html(&compiled).contains("<p>Tags: [c] [d]</p>"),
+			html(&compiled).contains("<p>Tags: [a b c/0] [d/0]</p>"),
 			"{}",
 			html(&compiled)
 		);
