@@ -119,6 +119,12 @@ impl Language {
 #[derive(Debug)]
 pub struct Compiled {
 	pub unit: Unit,
+	/// The parse tree that was lowered: the prologue, then the body (parsed again with the
+	/// extended grammar, if the prologue extended it). For editors.
+	pub tree: Vec<Node>,
+	/// The unit's grammar, if its prologue extended the base one: the rules of `tree` are
+	/// in it.
+	pub language: Option<Arc<Language>>,
 	/// Parse errors and errors found while lowering. A unit with errors is not committed to
 	/// the workspace.
 	pub diagnostics: Vec<Diagnostic>,
@@ -152,6 +158,7 @@ pub fn compile(
 	};
 	let mut parse_diagnostics = parsed.diagnostics;
 	let mut nodes = parsed.nodes;
+	let mut tree = Vec::new();
 	let mut index = 0;
 	while index < nodes.len() {
 		// The prologue ends here: if it extended the grammar, the body is parsed again with
@@ -172,6 +179,7 @@ pub fn compile(
 			}
 		}
 		lower.nodes(std::slice::from_ref(&nodes[index]));
+		tree.push(nodes[index].clone());
 		index += 1;
 	}
 	// Finishers may add more finishers.
@@ -187,6 +195,7 @@ pub fn compile(
 		dependencies,
 		diagnostics: lowering_diagnostics,
 		mut variables,
+		extended,
 		..
 	} = lower;
 	let mut diagnostics = parse_diagnostics;
@@ -201,6 +210,8 @@ pub fn compile(
 			uses,
 			dependencies,
 		},
+		tree,
+		language: extended,
 		diagnostics,
 	}
 }
