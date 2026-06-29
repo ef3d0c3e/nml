@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops::Range;
 
 use nml_source::Token;
 
@@ -112,6 +113,9 @@ pub struct Export {
 	pub kind: SymbolKind,
 	/// The element that declares it.
 	pub element: Option<ElementId>,
+	/// Where it is declared: the workspace path of the file (the unit's, or an included
+	/// one) and the range of the name. For editors; not part of the fingerprint.
+	pub declared: Option<(String, Range<usize>)>,
 	/// What dependents can see: target fragment, title, caption, number, value, … Sorted by
 	/// name, so the fingerprint does not depend on the order they were added in.
 	properties: Vec<(String, String)>,
@@ -123,6 +127,7 @@ impl Export {
 			name: name.into(),
 			kind,
 			element,
+			declared: None,
 			properties: Vec::new(),
 		}
 	}

@@ -86,6 +86,9 @@ mod tests {
 		let export = &compiled.unit.exports[0];
 		assert_eq!(export.name, "builds");
 		assert_eq!(export.property("title"), Some("Incremental builds"));
+		let (file, range) = export.declared.clone().unwrap();
+		assert_eq!(file, "page.nml");
+		assert_eq!(&compiled.unit.document.source().content()[range], "builds");
 	}
 
 	#[test]

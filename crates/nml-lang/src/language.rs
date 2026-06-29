@@ -375,8 +375,10 @@ impl Lower<'_, '_> {
 	}
 
 	/// Adds an export, unless the unit already exports that name. `reference` is where the
-	/// name is written.
-	pub fn export(&mut self, export: Export, reference: Token) {
+	/// name is written: it becomes the export's declaration.
+	pub fn export(&mut self, mut export: Export, reference: Token) {
+		let file = self.files.last().unwrap().clone();
+		export.declared = Some((file, reference.root().range()));
 		if let Some((_, first)) = self.exported.iter().find(|(name, _)| *name == export.name) {
 			let kind = DiagnosticKind::DuplicateReference {
 				name: export.name.clone(),

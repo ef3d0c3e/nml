@@ -21,7 +21,7 @@ use rusqlite::params;
 use serde_json::Value as Json;
 
 /// The version of the schema below. A database with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value ANY) STRICT;
@@ -42,6 +42,9 @@ CREATE TABLE exports (
 	name TEXT NOT NULL,
 	kind TEXT NOT NULL,
 	element INTEGER,
+	declared_path TEXT,
+	declared_start INTEGER,
+	declared_end INTEGER,
 	properties TEXT NOT NULL,
 	fingerprint INTEGER NOT NULL,
 	PRIMARY KEY (unit, name)
@@ -463,7 +466,8 @@ impl Index {
 
 	pub fn exports(&self, unit: i64) -> Result<Vec<Export>> {
 		let mut statement = self.connection.prepare(
-			"SELECT name, kind, element, properties FROM exports WHERE unit = ?1 ORDER BY rowid",
+			"SELECT name, kind, element, properties, declared_path, declared_start, declared_end
+			FROM exports WHERE unit = ?1 ORDER BY rowid",
 		)?;
 		let rows = statement.query_map([unit], |row| {
 			Ok((
@@ -471,11 +475,14 @@ impl Index {
 				row.get::<_, String>(1)?,
 				row.get::<_, Option<u32>>(2)?,
 				row.get::<_, String>(3)?,
+				row.get::<_, Option<String>>(4)?,
+				row.get::<_, Option<i64>>(5)?,
+				row.get::<_, Option<i64>>(6)?,
 			))
 		})?;
 		let mut exports = Vec::new();
 		for row in rows {
-			let (name, kind, element, properties) = row?;
+			let (name, kind, element, properties, path, start, end) = row?;
 			let mut export = Export::new(
 				name,
 				symbol_kind(&kind)?,
@@ -483,6 +490,9 @@ impl Index {
 			);
 			for (property, value) in object(&properties)? {
 				export = export.with(property, value.as_str().unwrap_or_default());
+			}
+			if let (Some(path), Some(start), Some(end)) = (path, start, end) {
+				export.declared = Some((path, start as usize..end as usize));
 			}
 			exports.push(export);
 		}
@@ -656,8 +666,9 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 	let id = tx.last_insert_rowid();
 
 	let mut statement = tx.prepare(
-		"INSERT INTO exports (unit, name, kind, element, properties, fingerprint)
-		VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+		"INSERT INTO exports (unit, name, kind, element, properties, fingerprint,
+		declared_path, declared_start, declared_end)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
 	)?;
 	for export in unit.exports {
 		let properties: serde_json::Map<String, Json> = export
@@ -672,6 +683,12 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 			export.element.map(ElementId::index),
 			Json::Object(properties).to_string(),
 			export.fingerprint() as i64,
+			export.declared.as_ref().map(|(path, _)| path),
+			export
+				.declared
+				.as_ref()
+				.map(|(_, range)| range.start as i64),
+			export.declared.as_ref().map(|(_, range)| range.end as i64),
 		])?;
 	}
 
@@ -1007,13 +1024,15 @@ mod tests {
 	}
 
 	fn exports() -> Vec<Export> {
+		let mut builds = Export::new(
+			"builds",
+			SymbolKind::Heading,
+			Some(ElementId::from_index(3)),
+		)
+		.with("title", "Incremental builds");
+		builds.declared = Some(("parts/intro.nml".into(), 10..16));
 		vec![
-			Export::new(
-				"builds",
-				SymbolKind::Heading,
-				Some(ElementId::from_index(3)),
-			)
-			.with("title", "Incremental builds"),
+			builds,
 			Export::new("x", SymbolKind::Variable, None).with("value", "1"),
 		]
 	}

@@ -81,6 +81,11 @@ mod tests {
 		);
 		// What the included file declares belongs to the includer.
 		assert_eq!(compiled.unit.exports[0].name, "intro");
+		// Declared in the included file.
+		assert_eq!(
+			compiled.unit.exports[0].declared,
+			Some(("parts/intro.nml".into(), 11..16))
+		);
 		assert_eq!(
 			compiled.unit.dependencies,
 			[
