@@ -1,6 +1,7 @@
 //! The NML language server.
 
 mod convert;
+mod semantic;
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -12,12 +13,18 @@ use std::sync::Arc;
 use lsp_server::Connection;
 use lsp_server::Message;
 use lsp_server::Notification;
+use lsp_server::Response;
 use lsp_types::DidChangeTextDocumentParams;
 use lsp_types::DidCloseTextDocumentParams;
 use lsp_types::DidOpenTextDocumentParams;
 use lsp_types::InitializeParams;
 use lsp_types::PublishDiagnosticsParams;
 use lsp_types::SaveOptions;
+use lsp_types::SemanticTokens;
+use lsp_types::SemanticTokensFullOptions;
+use lsp_types::SemanticTokensOptions;
+use lsp_types::SemanticTokensParams;
+use lsp_types::SemanticTokensServerCapabilities;
 use lsp_types::ServerCapabilities;
 use lsp_types::TextDocumentSyncCapability;
 use lsp_types::TextDocumentSyncKind;
@@ -30,6 +37,8 @@ use lsp_types::notification::DidOpenTextDocument;
 use lsp_types::notification::DidSaveTextDocument;
 use lsp_types::notification::Notification as _;
 use lsp_types::notification::PublishDiagnostics;
+use lsp_types::request::Request as _;
+use lsp_types::request::SemanticTokensFullRequest;
 use nml_build::BuildOptions;
 use nml_build::WorkspaceResolver;
 use nml_diagnostics::Diagnostic;
@@ -63,6 +72,13 @@ pub fn run(connection: Connection) -> Result<()> {
 				..TextDocumentSyncOptions::default()
 			},
 		)),
+		semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+			SemanticTokensOptions {
+				legend: semantic::legend(),
+				full: Some(SemanticTokensFullOptions::Bool(true)),
+				..SemanticTokensOptions::default()
+			},
+		)),
 		..ServerCapabilities::default()
 	};
 	let params = connection.initialize(serde_json::to_value(capabilities)?)?;
@@ -94,6 +110,13 @@ struct Server {
 	buffers: HashMap<Url, String>,
 	/// The files with diagnostics from the last build, to clear them when they are fixed.
 	built: BTreeSet<Url>,
+	/// The last analysis of each open document.
+	analyses: HashMap<Url, Analysis>,
+}
+
+/// What the server knows of an open document, from its last compilation.
+struct Analysis {
+	tree: Vec<nml_grammar::Node>,
 }
 
 impl Server {
@@ -113,6 +136,7 @@ impl Server {
 			localizer: Localizer::from_env(),
 			buffers: HashMap::new(),
 			built: BTreeSet::new(),
+			analyses: HashMap::new(),
 		}
 	}
 
@@ -123,12 +147,41 @@ impl Server {
 					if self.connection.handle_shutdown(&request)? {
 						return Ok(());
 					}
+					let id = request.id.clone();
+					let response = match self.request(request) {
+						Ok(result) => Response::new_ok(id, result),
+						Err(error) => Response::new_err(
+							id,
+							lsp_server::ErrorCode::InternalError as i32,
+							error.to_string(),
+						),
+					};
+					self.connection.sender.send(response.into())?;
 				}
 				Message::Notification(notification) => self.notification(notification)?,
 				Message::Response(_) => {}
 			}
 		}
 		Ok(())
+	}
+
+	fn request(&mut self, request: lsp_server::Request) -> Result<serde_json::Value> {
+		match request.method.as_str() {
+			SemanticTokensFullRequest::METHOD => {
+				let params: SemanticTokensParams = serde_json::from_value(request.params)?;
+				let url = Url::parse(params.text_document.uri.as_str())?;
+				let data = match self.analyses.get(&url) {
+					Some(analysis) => semantic::tokens(&analysis.tree, &url),
+					None => Vec::new(),
+				};
+				let tokens = SemanticTokens {
+					result_id: None,
+					data,
+				};
+				Ok(serde_json::to_value(tokens)?)
+			}
+			method => Err(format!("unsupported request `{method}`").into()),
+		}
 	}
 
 	fn notification(&mut self, notification: Notification) -> Result<()> {
@@ -155,6 +208,7 @@ impl Server {
 					serde_json::from_value(notification.params)?;
 				let url = Url::parse(params.text_document.uri.as_str())?;
 				self.buffers.remove(&url);
+				self.analyses.remove(&url);
 			}
 			DidSaveTextDocument::METHOD => self.build()?,
 			_ => {}
@@ -199,6 +253,12 @@ impl Server {
 		let resolver = WorkspaceResolver::new(root, modules).with_overlay(overlay);
 		let source = Arc::new(Source::new(url.clone(), text.clone(), 0));
 		let compiled = nml_lang::compile(&self.language, source, &path, Arc::new(resolver));
+		self.analyses.insert(
+			url.clone(),
+			Analysis {
+				tree: compiled.tree.clone(),
+			},
+		);
 
 		// Diagnostics located in other files (an included file) are reported with them.
 		let diagnostics = compiled

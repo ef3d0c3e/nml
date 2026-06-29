@@ -255,3 +255,53 @@ fn saving_builds_the_workspace() {
 	assert_eq!(published.uri.as_str(), workspace.url("a.nml").as_str());
 	assert!(published.diagnostics.is_empty());
 }
+
+/// Semantic tokens as (line, column, length, type name).
+fn decode(tokens: &[lsp_types::SemanticToken]) -> Vec<(u32, u32, u32, String)> {
+	let legend = semantic::legend();
+	let mut out = Vec::new();
+	let (mut line, mut column) = (0, 0);
+	for token in tokens {
+		line += token.delta_line;
+		column = if token.delta_line == 0 {
+			column + token.delta_start
+		} else {
+			token.delta_start
+		};
+		let kind = legend.token_types[token.token_type as usize]
+			.as_str()
+			.to_string();
+		out.push((line, column, token.length, kind));
+	}
+	out
+}
+
+#[test]
+fn semantic_tokens() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
+	client.open(&url, "## Title {#top}\n> é **b**\n:lua`x = 1`\n");
+	client.diagnostics();
+	let result = client.request(
+		SemanticTokensFullRequest::METHOD,
+		serde_json::to_value(SemanticTokensParams {
+			text_document: TextDocumentIdentifier::new(uri(&url)),
+			work_done_progress_params: Default::default(),
+			partial_result_params: Default::default(),
+		})
+		.unwrap(),
+	);
+	let tokens: SemanticTokens = serde_json::from_value(result).unwrap();
+	assert_eq!(
+		decode(&tokens.data),
+		[
+			(0, 0, 2, "operator".into()),
+			(0, 11, 3, "variable".into()),
+			// After `> é `: `é` is one UTF-16 unit.
+			(1, 4, 2, "operator".into()),
+			(1, 7, 2, "operator".into()),
+			(2, 0, 4, "keyword".into()),
+			(2, 4, 1, "operator".into()),
+		]
+	);
+}

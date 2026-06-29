@@ -718,6 +718,7 @@ dependencies = [
  "lsp-types",
  "nml-build",
  "nml-diagnostics",
+ "nml-grammar",
  "nml-lang",
  "nml-source",
  "nml-workspace",
