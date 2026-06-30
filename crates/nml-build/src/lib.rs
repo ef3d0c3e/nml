@@ -2,6 +2,10 @@
 
 mod link;
 
+pub use link::LinkError;
+pub use link::Target;
+pub use link::resolve;
+
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fs;
@@ -48,7 +52,6 @@ use nml_workspace::StoredUnit;
 use nml_workspace::StoredUse;
 use rayon::prelude::*;
 
-use crate::link::LinkError;
 use crate::link::Linker;
 
 /// The result of a build.

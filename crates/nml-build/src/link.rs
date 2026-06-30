@@ -11,7 +11,7 @@ use nml_workspace::UnitRecord;
 
 /// Why a reference does not resolve.
 #[derive(Debug)]
-pub(crate) enum LinkError {
+pub enum LinkError {
 	Unresolved,
 	/// So many units match.
 	Ambiguous(usize),
@@ -25,9 +25,16 @@ impl From<IndexError> for LinkError {
 }
 
 /// What a reference resolves to: a unit, and a symbol of it unless it is a page reference.
-struct Target {
-	unit: UnitRecord,
-	export: Option<Export>,
+#[derive(Debug, Clone)]
+pub struct Target {
+	pub unit: UnitRecord,
+	pub export: Option<Export>,
+}
+
+/// Resolves a reference written in the unit `unit` against the index, as the link stage
+/// does.
+pub fn resolve(index: &Index, unit: &UnitRecord, target: &SymbolRef) -> Result<Target, LinkError> {
+	Linker { index, unit }.resolve(target)
 }
 
 /// Resolves the references of one unit against the index.
