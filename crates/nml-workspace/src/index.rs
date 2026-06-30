@@ -324,6 +324,26 @@ impl Index {
 		Ok(units)
 	}
 
+	/// Every use that may refer to symbol `name` of the unit with key `unit`: in another unit
+	/// (`[[unit#name]]`), anywhere (`[[#name]]`), or in the unit itself (`[[name]]`). As
+	/// (path of the using unit, range of the use).
+	pub fn uses_of(&self, unit: &str, name: &str) -> Result<Vec<(String, Range<usize>)>> {
+		let mut statement = self.connection.prepare(
+			"SELECT units.path, uses.start, uses.end FROM uses JOIN units ON units.id = uses.unit
+			WHERE uses.target_name = ?2 AND (
+				(uses.scope = 'unit' AND uses.target_unit = ?1)
+				OR uses.scope = 'any'
+				OR (uses.scope = 'local' AND units.name = ?1))
+			ORDER BY units.path, uses.start",
+		)?;
+		let uses = statement
+			.query_map([unit, name], |row| {
+				Ok((row.get(0)?, offset(row, 1)?..offset(row, 2)?))
+			})?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(uses)
+	}
+
 	/// Every unit, by path.
 	pub fn units(&self) -> Result<Vec<UnitRecord>> {
 		let mut statement = self.connection.prepare(
@@ -1374,6 +1394,21 @@ mod tests {
 
 		// Local uses never point to another unit.
 		assert_eq!(index.users("a", "x").unwrap(), [b, c]);
+		let uses: Vec<_> = index
+			.uses_of("a", "y")
+			.unwrap()
+			.into_iter()
+			.map(|(path, _)| path)
+			.collect();
+		assert_eq!(uses, ["d.nml"]);
+		let uses: Vec<_> = index
+			.uses_of("d", "x")
+			.unwrap()
+			.into_iter()
+			.map(|(path, _)| path)
+			.collect();
+		// `c` looks for `#x` anywhere, and `d` for its own `x`.
+		assert_eq!(uses, ["c.nml", "d.nml"]);
 		assert_eq!(index.users("a", "y").unwrap(), [d]);
 		assert_eq!(index.users("b", "x").unwrap(), [c]);
 		assert_eq!(index.users("a", "").unwrap(), [c]);
