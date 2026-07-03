@@ -11,6 +11,7 @@ repository.workspace = true
 nml-diagnostics.workspace = true
 nml-build.workspace = true
 nml-lang.workspace = true
+nml-document.workspace = true
 nml-grammar.workspace = true
 nml-source.workspace = true
 nml-workspace.workspace = true

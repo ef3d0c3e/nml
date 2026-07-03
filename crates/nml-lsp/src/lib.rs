@@ -2,6 +2,7 @@
 
 mod convert;
 mod find;
+mod navigate;
 mod semantic;
 
 use std::collections::BTreeSet;
@@ -18,8 +19,14 @@ use lsp_server::Response;
 use lsp_types::DidChangeTextDocumentParams;
 use lsp_types::DidCloseTextDocumentParams;
 use lsp_types::DidOpenTextDocumentParams;
+use lsp_types::GotoDefinitionParams;
+use lsp_types::GotoDefinitionResponse;
+use lsp_types::HoverParams;
+use lsp_types::HoverProviderCapability;
 use lsp_types::InitializeParams;
+use lsp_types::OneOf;
 use lsp_types::PublishDiagnosticsParams;
+use lsp_types::ReferenceParams;
 use lsp_types::SaveOptions;
 use lsp_types::SemanticTokens;
 use lsp_types::SemanticTokensFullOptions;
@@ -38,6 +45,9 @@ use lsp_types::notification::DidOpenTextDocument;
 use lsp_types::notification::DidSaveTextDocument;
 use lsp_types::notification::Notification as _;
 use lsp_types::notification::PublishDiagnostics;
+use lsp_types::request::GotoDefinition;
+use lsp_types::request::HoverRequest;
+use lsp_types::request::References;
 use lsp_types::request::Request as _;
 use lsp_types::request::SemanticTokensFullRequest;
 use nml_build::BuildOptions;
@@ -73,6 +83,9 @@ pub fn run(connection: Connection) -> Result<()> {
 				..TextDocumentSyncOptions::default()
 			},
 		)),
+		hover_provider: Some(HoverProviderCapability::Simple(true)),
+		definition_provider: Some(OneOf::Left(true)),
+		references_provider: Some(OneOf::Left(true)),
 		semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
 			SemanticTokensOptions {
 				legend: semantic::legend(),
@@ -117,7 +130,15 @@ struct Server {
 
 /// What the server knows of an open document, from its last compilation.
 struct Analysis {
+	source: Arc<Source>,
+	/// The document's path in the workspace.
+	path: String,
+	/// Its reference key: `nml.reference_key`, or its basename.
+	key: String,
 	tree: Vec<nml_grammar::Node>,
+	exports: Vec<nml_document::Export>,
+	/// The document's grammar, if its prologue extended the base one.
+	language: Option<Arc<Language>>,
 }
 
 impl Server {
@@ -180,6 +201,27 @@ impl Server {
 					data,
 				};
 				Ok(serde_json::to_value(tokens)?)
+			}
+			HoverRequest::METHOD => {
+				let params: HoverParams = serde_json::from_value(request.params)?;
+				let position = params.text_document_position_params;
+				Ok(serde_json::to_value(self.hover(&position)?)?)
+			}
+			GotoDefinition::METHOD => {
+				let params: GotoDefinitionParams = serde_json::from_value(request.params)?;
+				let position = params.text_document_position_params;
+				let location = self.definition(&position)?;
+				Ok(serde_json::to_value(
+					location.map(GotoDefinitionResponse::Scalar),
+				)?)
+			}
+			References::METHOD => {
+				let params: ReferenceParams = serde_json::from_value(request.params)?;
+				let declaration = params.context.include_declaration;
+				Ok(serde_json::to_value(self.references(
+					&params.text_document_position,
+					declaration,
+				)?)?)
 			}
 			method => Err(format!("unsupported request `{method}`").into()),
 		}
@@ -253,11 +295,23 @@ impl Server {
 			.unwrap_or_default();
 		let resolver = WorkspaceResolver::new(root, modules).with_overlay(overlay);
 		let source = Arc::new(Source::new(url.clone(), text.clone(), 0));
-		let compiled = nml_lang::compile(&self.language, source, &path, Arc::new(resolver));
+		let compiled = nml_lang::compile(&self.language, source.clone(), &path, Arc::new(resolver));
+		let basename = path.rsplit('/').next().unwrap_or(&path);
+		let key = compiled.unit.reference_key.clone().unwrap_or_else(|| {
+			basename
+				.strip_suffix(".nml")
+				.unwrap_or(basename)
+				.to_string()
+		});
 		self.analyses.insert(
 			url.clone(),
 			Analysis {
+				source,
+				path: path.clone(),
+				key,
 				tree: compiled.tree.clone(),
+				exports: compiled.unit.exports.clone(),
+				language: compiled.language.clone(),
 			},
 		);
 

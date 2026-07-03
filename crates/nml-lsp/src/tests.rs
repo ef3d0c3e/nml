@@ -305,3 +305,178 @@ fn semantic_tokens() {
 		]
 	);
 }
+
+fn at(url: &Url, line: u32, character: u32) -> lsp_types::TextDocumentPositionParams {
+	lsp_types::TextDocumentPositionParams::new(
+		TextDocumentIdentifier::new(uri(url)),
+		position(line, character),
+	)
+}
+
+/// A workspace for navigation; `name` keeps tests that run in parallel apart.
+fn navigation_workspace(name: &str) -> Workspace {
+	Workspace::new(
+		name,
+		&[
+			(
+				"nml.toml",
+				"exclude = [\"parts/**\", \"modules/**\"]\n[[module]]\nname = \"std\"\nroot = \"modules/std\"\n",
+			),
+			(
+				"index.nml",
+				":import std.util\n# Home {#top}\nSee [[guide#install]], [[top]] and [[guide#]].\n:include parts/x\n",
+			),
+			(
+				"docs/guide.nml",
+				"# Guide\n## Install {#install}\nBack to [[index#top]].\n",
+			),
+			("other.nml", "Also [[#install]].\n"),
+			("parts/x.nml", "x\n"),
+			("modules/std/util.nml", "\n"),
+		],
+	)
+}
+
+#[test]
+fn hover_and_definition() {
+	let workspace = navigation_workspace("hover");
+	let client = Client::start(Some(&workspace.0));
+	let index = workspace.url("index.nml");
+	// The server handles messages in order: the build is done before the next request.
+	client.save(&index);
+	client.open(
+		&index,
+		&fs::read_to_string(workspace.0.join("index.nml")).unwrap(),
+	);
+	client.diagnostics();
+
+	let hover = |line, character| -> Option<lsp_types::Hover> {
+		let result = client.request(
+			HoverRequest::METHOD,
+			serde_json::to_value(lsp_types::HoverParams {
+				text_document_position_params: at(&index, line, character),
+				work_done_progress_params: Default::default(),
+			})
+			.unwrap(),
+		);
+		serde_json::from_value(result).unwrap()
+	};
+	let text = |hover: lsp_types::Hover| match hover.contents {
+		lsp_types::HoverContents::Markup(markup) => markup.value,
+		_ => unreachable!(),
+	};
+	assert_eq!(
+		text(hover(2, 8).unwrap()),
+		"**Install**\n\n`install` in `docs/guide.nml`"
+	);
+	assert_eq!(
+		text(hover(2, 26).unwrap()),
+		"**Home**\n\n`top` in `index.nml`"
+	);
+	assert_eq!(text(hover(2, 38).unwrap()), "**Guide**\n\n`docs/guide.nml`");
+	assert!(hover(1, 2).is_none());
+
+	let definition = |line, character| -> Option<lsp_types::Location> {
+		let result = client.request(
+			GotoDefinition::METHOD,
+			serde_json::to_value(lsp_types::GotoDefinitionParams {
+				text_document_position_params: at(&index, line, character),
+				work_done_progress_params: Default::default(),
+				partial_result_params: Default::default(),
+			})
+			.unwrap(),
+		);
+		serde_json::from_value(result).unwrap()
+	};
+	let place = |location: lsp_types::Location| {
+		(
+			location.uri.as_str().to_string(),
+			location.range.start,
+			location.range.end,
+		)
+	};
+	assert_eq!(
+		place(definition(2, 8).unwrap()),
+		(
+			workspace.url("docs/guide.nml").to_string(),
+			position(1, 13),
+			position(1, 20)
+		)
+	);
+	assert_eq!(
+		place(definition(2, 26).unwrap()),
+		(index.to_string(), position(1, 9), position(1, 12))
+	);
+	assert_eq!(
+		place(definition(3, 12).unwrap()),
+		(
+			workspace.url("parts/x.nml").to_string(),
+			position(0, 0),
+			position(0, 0)
+		)
+	);
+	assert_eq!(
+		place(definition(0, 12).unwrap()),
+		(
+			workspace.url("modules/std/util.nml").to_string(),
+			position(0, 0),
+			position(0, 0)
+		)
+	);
+}
+
+#[test]
+fn references() {
+	let workspace = navigation_workspace("references");
+	let client = Client::start(Some(&workspace.0));
+	let guide = workspace.url("docs/guide.nml");
+	client.save(&guide);
+	client.open(
+		&guide,
+		&fs::read_to_string(workspace.0.join("docs/guide.nml")).unwrap(),
+	);
+	client.diagnostics();
+
+	let references = |line, character, include_declaration| -> Vec<(String, u32)> {
+		let result = client.request(
+			References::METHOD,
+			serde_json::to_value(lsp_types::ReferenceParams {
+				text_document_position: at(&guide, line, character),
+				context: lsp_types::ReferenceContext {
+					include_declaration,
+				},
+				work_done_progress_params: Default::default(),
+				partial_result_params: Default::default(),
+			})
+			.unwrap(),
+		);
+		let locations: Vec<lsp_types::Location> = serde_json::from_value(result).unwrap();
+		locations
+			.into_iter()
+			.map(|l| {
+				(
+					l.uri.as_str().rsplit('/').next().unwrap().to_string(),
+					l.range.start.line,
+				)
+			})
+			.collect()
+	};
+	// On the declaration `{#install}`.
+	assert_eq!(
+		references(1, 14, true),
+		[
+			("guide.nml".to_string(), 1),
+			("index.nml".into(), 2),
+			("other.nml".into(), 0)
+		]
+	);
+	assert_eq!(
+		references(1, 14, false),
+		[("index.nml".to_string(), 2), ("other.nml".into(), 0)]
+	);
+	// On a reference to `index#top`: the uses of `top`.
+	assert_eq!(
+		references(2, 12, false),
+		[("guide.nml".to_string(), 2), ("index.nml".into(), 2)]
+	);
+}
