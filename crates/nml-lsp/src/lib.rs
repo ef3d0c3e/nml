@@ -1,6 +1,7 @@
 //! The NML language server.
 
 mod convert;
+mod find;
 mod semantic;
 
 use std::collections::BTreeSet;
