@@ -1,5 +1,6 @@
 //! The NML language server.
 
+mod actions;
 mod convert;
 mod find;
 mod navigate;
@@ -16,6 +17,8 @@ use lsp_server::Connection;
 use lsp_server::Message;
 use lsp_server::Notification;
 use lsp_server::Response;
+use lsp_types::CodeActionParams;
+use lsp_types::CodeActionProviderCapability;
 use lsp_types::DidChangeTextDocumentParams;
 use lsp_types::DidCloseTextDocumentParams;
 use lsp_types::DidOpenTextDocumentParams;
@@ -45,6 +48,7 @@ use lsp_types::notification::DidOpenTextDocument;
 use lsp_types::notification::DidSaveTextDocument;
 use lsp_types::notification::Notification as _;
 use lsp_types::notification::PublishDiagnostics;
+use lsp_types::request::CodeActionRequest;
 use lsp_types::request::GotoDefinition;
 use lsp_types::request::HoverRequest;
 use lsp_types::request::References;
@@ -83,6 +87,7 @@ pub fn run(connection: Connection) -> Result<()> {
 				..TextDocumentSyncOptions::default()
 			},
 		)),
+		code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
 		definition_provider: Some(OneOf::Left(true)),
 		references_provider: Some(OneOf::Left(true)),
@@ -137,6 +142,8 @@ struct Analysis {
 	key: String,
 	tree: Vec<nml_grammar::Node>,
 	exports: Vec<nml_document::Export>,
+	/// The diagnostics of its last compilation, for code actions.
+	diagnostics: Vec<Diagnostic>,
 	/// The document's grammar, if its prologue extended the base one.
 	language: Option<Arc<Language>>,
 }
@@ -222,6 +229,10 @@ impl Server {
 					&params.text_document_position,
 					declaration,
 				)?)?)
+			}
+			CodeActionRequest::METHOD => {
+				let params: CodeActionParams = serde_json::from_value(request.params)?;
+				Ok(serde_json::to_value(self.code_actions(&params)?)?)
 			}
 			method => Err(format!("unsupported request `{method}`").into()),
 		}
@@ -311,6 +322,7 @@ impl Server {
 				key,
 				tree: compiled.tree.clone(),
 				exports: compiled.unit.exports.clone(),
+				diagnostics: compiled.diagnostics.clone(),
 				language: compiled.language.clone(),
 			},
 		);

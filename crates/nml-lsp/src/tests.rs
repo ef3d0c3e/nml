@@ -480,3 +480,42 @@ fn references() {
 		[("guide.nml".to_string(), 2), ("index.nml".into(), 2)]
 	);
 }
+
+#[test]
+fn quick_fixes() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
+	client.open(&url, "x\n\nsome **bold\n");
+	client.diagnostics();
+	let actions = |line, character| -> Vec<lsp_types::CodeActionOrCommand> {
+		let params = lsp_types::CodeActionParams {
+			text_document: TextDocumentIdentifier::new(uri(&url)),
+			range: lsp_types::Range::new(position(line, character), position(line, character)),
+			context: Default::default(),
+			work_done_progress_params: Default::default(),
+			partial_result_params: Default::default(),
+		};
+		let result = client.request(
+			CodeActionRequest::METHOD,
+			serde_json::to_value(params).unwrap(),
+		);
+		serde_json::from_value(result).unwrap()
+	};
+	let found = actions(2, 6);
+	let [lsp_types::CodeActionOrCommand::CodeAction(action)] = found.as_slice() else {
+		panic!("{found:?}")
+	};
+	assert_eq!(action.title, "Escape the opening delimiter");
+	// `Uri` keys, as the protocol defines them: see `Server::code_actions`.
+	#[allow(clippy::mutable_key_type)]
+	let changes = action.edit.as_ref().unwrap().changes.as_ref().unwrap();
+	let edits = &changes[&uri(&url)];
+	assert_eq!(edits[0].new_text, "\\*\\*");
+	assert_eq!(
+		edits[0].range,
+		lsp_types::Range::new(position(2, 5), position(2, 7))
+	);
+
+	// Elsewhere, nothing.
+	assert!(actions(0, 0).is_empty());
+}
