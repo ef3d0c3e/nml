@@ -112,7 +112,7 @@ pub(crate) fn context(prefix: &str) -> Option<(Context<'_>, &str)> {
 		.checked_sub(1)
 		.filter(|i| prefix[*i..].starts_with(':'))?;
 	let line_start = colon == 0;
-	Some((Context::Command { line_start }, &prefix[colon..])).filter(|_| !typed.contains('.'))
+	(!typed.contains('.')).then_some((Context::Command { line_start }, &prefix[colon..]))
 }
 
 /// The commands and roles of a grammar: the openers that start with `:`.
