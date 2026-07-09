@@ -114,7 +114,7 @@ impl Server {
 	}
 
 	/// The workspace index, if a build created it.
-	fn index(&self) -> Option<Index> {
+	pub(crate) fn index(&self) -> Option<Index> {
 		let path = self.root.as_ref()?.join(&self.config.as_ref()?.database);
 		path.exists().then(|| Index::open(&path).ok()).flatten()
 	}

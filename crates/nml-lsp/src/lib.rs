@@ -1,6 +1,7 @@
 //! The NML language server.
 
 mod actions;
+mod completion;
 mod convert;
 mod find;
 mod navigate;
@@ -19,6 +20,8 @@ use lsp_server::Notification;
 use lsp_server::Response;
 use lsp_types::CodeActionParams;
 use lsp_types::CodeActionProviderCapability;
+use lsp_types::CompletionOptions;
+use lsp_types::CompletionParams;
 use lsp_types::DidChangeTextDocumentParams;
 use lsp_types::DidCloseTextDocumentParams;
 use lsp_types::DidOpenTextDocumentParams;
@@ -49,6 +52,7 @@ use lsp_types::notification::DidSaveTextDocument;
 use lsp_types::notification::Notification as _;
 use lsp_types::notification::PublishDiagnostics;
 use lsp_types::request::CodeActionRequest;
+use lsp_types::request::Completion;
 use lsp_types::request::GotoDefinition;
 use lsp_types::request::HoverRequest;
 use lsp_types::request::References;
@@ -87,6 +91,17 @@ pub fn run(connection: Connection) -> Result<()> {
 				..TextDocumentSyncOptions::default()
 			},
 		)),
+		completion_provider: Some(CompletionOptions {
+			trigger_characters: Some(vec![
+				"[".into(),
+				"#".into(),
+				":".into(),
+				".".into(),
+				",".into(),
+				"=".into(),
+			]),
+			..CompletionOptions::default()
+		}),
 		code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
 		definition_provider: Some(OneOf::Left(true)),
@@ -229,6 +244,10 @@ impl Server {
 					&params.text_document_position,
 					declaration,
 				)?)?)
+			}
+			Completion::METHOD => {
+				let params: CompletionParams = serde_json::from_value(request.params)?;
+				Ok(serde_json::to_value(self.completion(&params)?)?)
 			}
 			CodeActionRequest::METHOD => {
 				let params: CodeActionParams = serde_json::from_value(request.params)?;

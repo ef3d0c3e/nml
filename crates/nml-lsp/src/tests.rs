@@ -519,3 +519,41 @@ fn quick_fixes() {
 	// Elsewhere, nothing.
 	assert!(actions(0, 0).is_empty());
 }
+
+#[test]
+fn completion() {
+	let workspace = navigation_workspace("completion");
+	let client = Client::start(Some(&workspace.0));
+	let page = workspace.url("index.nml");
+	client.save(&page);
+	let complete = |text: &str| -> Vec<String> {
+		client.change(&page, text);
+		client.diagnostics();
+		let line = text.lines().count() as u32 - 1;
+		let character = text.lines().last().unwrap().encode_utf16().count() as u32;
+		let params = lsp_types::CompletionParams {
+			text_document_position: at(&page, line, character),
+			work_done_progress_params: Default::default(),
+			partial_result_params: Default::default(),
+			context: None,
+		};
+		let result = client.request(Completion::METHOD, serde_json::to_value(params).unwrap());
+		let items: Vec<lsp_types::CompletionItem> = serde_json::from_value(result).unwrap();
+		items.into_iter().map(|item| item.label).collect()
+	};
+	client.open(&page, "");
+	client.diagnostics();
+
+	// Unit keys, and the page's own symbols.
+	assert_eq!(
+		complete("# Home {#top}\nSee [["),
+		["top", "guide#", "index#", "other#"]
+	);
+	assert_eq!(complete("# Home {#top}\nSee [[gu"), ["guide#"]);
+	assert_eq!(complete("# Home {#top}\nSee [[guide#"), ["install"]);
+	assert_eq!(complete("# Home {#top}\nSee [[#"), ["install", "top"]);
+	// Commands at the start of a line, roles elsewhere.
+	assert_eq!(complete(":i"), [":import", ":include"]);
+	assert_eq!(complete("x :l"), [":lua"]);
+	assert_eq!(complete(":import st"), ["std.util"]);
+}
