@@ -344,6 +344,31 @@ impl Index {
 		Ok(uses)
 	}
 
+	/// Every exported symbol: (key of its unit, its name, its title if any), by unit key.
+	pub fn all_exports(&self) -> Result<Vec<(String, String, Option<String>)>> {
+		let mut statement = self.connection.prepare(
+			"SELECT units.name, exports.name, exports.properties FROM exports
+			JOIN units ON units.id = exports.unit ORDER BY units.name, exports.name",
+		)?;
+		let rows = statement.query_map([], |row| {
+			Ok((
+				row.get::<_, String>(0)?,
+				row.get::<_, String>(1)?,
+				row.get::<_, String>(2)?,
+			))
+		})?;
+		let mut exports = Vec::new();
+		for row in rows {
+			let (unit, name, properties) = row?;
+			let title = object(&properties)?
+				.get("title")
+				.and_then(Json::as_str)
+				.map(String::from);
+			exports.push((unit, name, title));
+		}
+		Ok(exports)
+	}
+
 	/// Every unit, by path.
 	pub fn units(&self) -> Result<Vec<UnitRecord>> {
 		let mut statement = self.connection.prepare(
@@ -1389,6 +1414,13 @@ mod tests {
 			.collect();
 		assert_eq!(named, [c, b]);
 		assert_eq!(index.exporters("x").unwrap(), [a, b]);
+		let all: Vec<_> = index
+			.all_exports()
+			.unwrap()
+			.into_iter()
+			.map(|(unit, name, _)| format!("{unit}#{name}"))
+			.collect();
+		assert_eq!(all, ["a#x", "a#y", "b#x"]);
 		assert_eq!(index.export(a, "y").unwrap().unwrap().name, "y");
 		assert!(index.export(a, "z").unwrap().is_none());
 
