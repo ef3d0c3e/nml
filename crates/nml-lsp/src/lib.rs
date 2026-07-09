@@ -55,6 +55,7 @@ use lsp_types::request::CodeActionRequest;
 use lsp_types::request::Completion;
 use lsp_types::request::GotoDefinition;
 use lsp_types::request::HoverRequest;
+use lsp_types::request::InlayHintRequest;
 use lsp_types::request::References;
 use lsp_types::request::Request as _;
 use lsp_types::request::SemanticTokensFullRequest;
@@ -102,6 +103,7 @@ pub fn run(connection: Connection) -> Result<()> {
 			]),
 			..CompletionOptions::default()
 		}),
+		inlay_hint_provider: Some(OneOf::Left(true)),
 		code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
 		definition_provider: Some(OneOf::Left(true)),
@@ -248,6 +250,10 @@ impl Server {
 			Completion::METHOD => {
 				let params: CompletionParams = serde_json::from_value(request.params)?;
 				Ok(serde_json::to_value(self.completion(&params)?)?)
+			}
+			InlayHintRequest::METHOD => {
+				let params: lsp_types::InlayHintParams = serde_json::from_value(request.params)?;
+				Ok(serde_json::to_value(self.inlay_hints(&params)?)?)
 			}
 			CodeActionRequest::METHOD => {
 				let params: CodeActionParams = serde_json::from_value(request.params)?;

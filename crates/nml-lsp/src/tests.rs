@@ -557,3 +557,41 @@ fn completion() {
 	assert_eq!(complete("x :l"), [":lua"]);
 	assert_eq!(complete(":import st"), ["std.util"]);
 }
+
+#[test]
+fn inlay_hints() {
+	let workspace = navigation_workspace("hints");
+	let client = Client::start(Some(&workspace.0));
+	let page = workspace.url("index.nml");
+	client.save(&page);
+	client.open(
+		&page,
+		"# Home {#top}\n[[guide#install]] [[top|cap]] [[guide#]] [[nope]]\n",
+	);
+	client.diagnostics();
+	let params = lsp_types::InlayHintParams {
+		text_document: TextDocumentIdentifier::new(uri(&page)),
+		range: lsp_types::Range::new(position(0, 0), position(9, 0)),
+		work_done_progress_params: Default::default(),
+	};
+	let result = client.request(
+		InlayHintRequest::METHOD,
+		serde_json::to_value(params).unwrap(),
+	);
+	let hints: Vec<lsp_types::InlayHint> = serde_json::from_value(result).unwrap();
+	let hints: Vec<_> = hints
+		.into_iter()
+		.map(|hint| match hint.label {
+			lsp_types::InlayHintLabel::String(label) => (hint.position, label),
+			_ => unreachable!(),
+		})
+		.collect();
+	// Captioned and unresolved references get none.
+	assert_eq!(
+		hints,
+		[
+			(position(1, 17), ": Install".to_string()),
+			(position(1, 40), ": Guide".into())
+		]
+	);
+}

@@ -282,3 +282,86 @@ impl Server {
 		Ok(locations)
 	}
 }
+
+impl Server {
+	/// Hints after each reference without a caption: the title it resolves to.
+	pub(crate) fn inlay_hints(
+		&self,
+		params: &lsp_types::InlayHintParams,
+	) -> Result<Vec<lsp_types::InlayHint>> {
+		let url = Url::parse(params.text_document.uri.as_str())?;
+		let Some(analysis) = self.analyses.get(&url) else {
+			return Ok(Vec::new());
+		};
+		let language = analysis.language.as_deref().unwrap_or(&self.language);
+		let mut matches = Vec::new();
+		references(&analysis.tree, language, &mut matches);
+		let mut hints = Vec::new();
+		for m in matches {
+			if m.capture("caption").is_some() {
+				continue;
+			}
+			let root = m.token.root();
+			if root.source().location() != &url {
+				continue;
+			}
+			let range = convert::range(&root);
+			if range.end < params.range.start || params.range.end < range.start {
+				continue;
+			}
+			let Some(target) = m
+				.capture("target")
+				.and_then(|c| SymbolRef::parse(c.token.content()))
+			else {
+				continue;
+			};
+			let label = match self.resolve(analysis, &target) {
+				Ok(Target {
+					export: Some(export),
+					..
+				}) => export.property("title").unwrap_or(&export.name).to_string(),
+				Ok(Target { unit, export: None }) => unit.title,
+				Err(_) => continue,
+			};
+			hints.push(lsp_types::InlayHint {
+				position: range.end,
+				label: lsp_types::InlayHintLabel::String(format!(": {label}")),
+				kind: None,
+				text_edits: None,
+				tooltip: None,
+				padding_left: Some(true),
+				padding_right: None,
+				data: None,
+			});
+		}
+		Ok(hints)
+	}
+}
+
+/// The matches of the `reference` rule in a tree, in order.
+fn references<'t>(
+	nodes: &'t [nml_grammar::Node],
+	language: &nml_lang::Language,
+	out: &mut Vec<&'t nml_grammar::RuleMatch>,
+) {
+	for node in nodes {
+		match node {
+			nml_grammar::Node::Paragraph { children, .. } => references(children, language, out),
+			nml_grammar::Node::Match(m) => {
+				if language
+					.rules()
+					.get(m.rule)
+					.is_some_and(|rule| rule.name == "reference")
+				{
+					out.push(m);
+				}
+				for capture in &m.captures {
+					if let nml_grammar::Value::Nodes(nodes) = &capture.value {
+						references(nodes, language, out);
+					}
+				}
+			}
+			_ => {}
+		}
+	}
+}
