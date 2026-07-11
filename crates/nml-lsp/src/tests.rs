@@ -637,3 +637,41 @@ fn conceal_and_style() {
 		]
 	);
 }
+
+#[test]
+fn lua_documents() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
+	client.open(
+		&url,
+		":lua\n```\nx = 1\nfunction f() return x end\n```\n\nA :lua`f()` and :lua`x = 2`.\n",
+	);
+	client.diagnostics();
+	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
+
+	let result = client.request(lua::CODE_RANGE, params.clone());
+	let ranges: Vec<lua::CodeRangeInfo> = serde_json::from_value(result).unwrap();
+	assert_eq!(ranges.len(), 3);
+	assert_eq!(ranges[0].range.start, position(2, 0));
+	assert_eq!(ranges[0].language, "lua");
+
+	let result = client.request(lua::LUA_DOCUMENT, params);
+	let document: lua::LuaDocument = serde_json::from_value(result).unwrap();
+	assert_eq!(
+		document.content,
+		"x = 1\nfunction f() return x end\nlocal _ = (f())\ndo x = 2 end\n"
+	);
+	let fragments: Vec<_> = document
+		.fragments
+		.iter()
+		.map(|f| (f.range.start, f.line, f.character))
+		.collect();
+	assert_eq!(
+		fragments,
+		[
+			(position(2, 0), 0, 0),
+			(position(6, 7), 2, 11),
+			(position(6, 21), 3, 3)
+		]
+	);
+}

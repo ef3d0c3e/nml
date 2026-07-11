@@ -716,6 +716,7 @@ version = "0.1.0"
 dependencies = [
  "lsp-server",
  "lsp-types",
+ "mlua",
  "nml-build",
  "nml-diagnostics",
  "nml-document",

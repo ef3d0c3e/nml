@@ -5,6 +5,7 @@ mod completion;
 mod convert;
 mod display;
 mod find;
+mod lua;
 mod navigate;
 mod semantic;
 
@@ -264,6 +265,14 @@ impl Server {
 			display::STYLE => {
 				let params = serde_json::from_value(request.params)?;
 				Ok(serde_json::to_value(self.style(params)?)?)
+			}
+			lua::CODE_RANGE => {
+				let params = serde_json::from_value(request.params)?;
+				Ok(serde_json::to_value(self.code_ranges(params)?)?)
+			}
+			lua::LUA_DOCUMENT => {
+				let params = serde_json::from_value(request.params)?;
+				Ok(serde_json::to_value(self.lua_document(params)?)?)
 			}
 			CodeActionRequest::METHOD => {
 				let params: CodeActionParams = serde_json::from_value(request.params)?;
