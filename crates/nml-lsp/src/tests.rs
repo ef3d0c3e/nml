@@ -595,3 +595,45 @@ fn inlay_hints() {
 		]
 	);
 }
+
+#[test]
+fn conceal_and_style() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
+	client.open(&url, "# Title\na **b *c*** [[x|y]]\n");
+	client.diagnostics();
+	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
+
+	let result = client.request(display::CONCEAL, params.clone());
+	let conceals: Vec<display::ConcealInfo> = serde_json::from_value(result).unwrap();
+	let ranges: Vec<_> = conceals
+		.iter()
+		.map(|c| (c.range.start.character, c.range.end.character))
+		.collect();
+	assert_eq!(
+		ranges,
+		[(2, 4), (6, 7), (8, 9), (9, 11), (12, 14), (17, 19)]
+	);
+	assert_eq!(
+		serde_json::to_value(&conceals[0]).unwrap()["concealText"],
+		serde_json::json!({ "text": "" })
+	);
+
+	let result = client.request(display::STYLE, params);
+	let styles: Vec<display::StyleInfo> = serde_json::from_value(result).unwrap();
+	let styles: Vec<_> = styles
+		.into_iter()
+		.map(|s| {
+			let display::StyleTarget::Group(group) = s.style;
+			(s.range.start.line, s.range.start.character, group)
+		})
+		.collect();
+	assert_eq!(
+		styles,
+		[
+			(0, 0, "@markup.heading".to_string()),
+			(1, 2, "@markup.strong".into()),
+			(1, 6, "@markup.italic".into())
+		]
+	);
+}

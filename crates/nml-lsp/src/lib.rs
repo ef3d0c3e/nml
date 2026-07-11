@@ -3,6 +3,7 @@
 mod actions;
 mod completion;
 mod convert;
+mod display;
 mod find;
 mod navigate;
 mod semantic;
@@ -158,6 +159,7 @@ struct Analysis {
 	/// Its reference key: `nml.reference_key`, or its basename.
 	key: String,
 	tree: Vec<nml_grammar::Node>,
+	document: nml_document::Document,
 	exports: Vec<nml_document::Export>,
 	/// The diagnostics of its last compilation, for code actions.
 	diagnostics: Vec<Diagnostic>,
@@ -255,6 +257,14 @@ impl Server {
 				let params: lsp_types::InlayHintParams = serde_json::from_value(request.params)?;
 				Ok(serde_json::to_value(self.inlay_hints(&params)?)?)
 			}
+			display::CONCEAL => {
+				let params = serde_json::from_value(request.params)?;
+				Ok(serde_json::to_value(self.conceal(params)?)?)
+			}
+			display::STYLE => {
+				let params = serde_json::from_value(request.params)?;
+				Ok(serde_json::to_value(self.style(params)?)?)
+			}
 			CodeActionRequest::METHOD => {
 				let params: CodeActionParams = serde_json::from_value(request.params)?;
 				Ok(serde_json::to_value(self.code_actions(&params)?)?)
@@ -346,6 +356,7 @@ impl Server {
 				path: path.clone(),
 				key,
 				tree: compiled.tree.clone(),
+				document: compiled.unit.document.clone(),
 				exports: compiled.unit.exports.clone(),
 				diagnostics: compiled.diagnostics.clone(),
 				language: compiled.language.clone(),
