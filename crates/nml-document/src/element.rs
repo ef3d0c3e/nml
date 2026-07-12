@@ -40,9 +40,28 @@ pub enum ElementKind {
 	Reference {
 		href: SlotId,
 	},
+	/// A list; its children are list items.
+	List(ListKind),
+	/// An item of a list; its children are blocks.
+	ListItem {
+		checkbox: Option<Checkbox>,
+	},
 }
 
 impl ElementKind {
+	/// The names of every kind, as [`name`](Self::name) gives them.
+	pub const NAMES: &[&str] = &[
+		"document",
+		"paragraph",
+		"text",
+		"style",
+		"heading",
+		"slot",
+		"reference",
+		"list",
+		"list_item",
+	];
+
 	/// The name of the kind, as element events see it (`heading`, `paragraph`, …).
 	pub fn name(&self) -> &'static str {
 		match self {
@@ -53,8 +72,28 @@ impl ElementKind {
 			ElementKind::Heading { .. } => "heading",
 			ElementKind::Slot(_) => "slot",
 			ElementKind::Reference { .. } => "reference",
+			ElementKind::List(_) => "list",
+			ElementKind::ListItem { .. } => "list_item",
 		}
 	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ListKind {
+	Bullet,
+	/// Numbered from `start`.
+	Numbered {
+		start: u64,
+	},
+}
+
+/// The state of a list item's checkbox.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Checkbox {
+	Unchecked,
+	/// Partly done: some of the item's subitems are.
+	Partial,
+	Checked,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
