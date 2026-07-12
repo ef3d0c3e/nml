@@ -112,12 +112,17 @@ impl Server {
 
 	pub(crate) fn lua_document(&self, params: LuaParams) -> Result<LuaDocument> {
 		let url = Url::parse(params.text_document.uri.as_str())?;
+		Ok(self.lua_document_of(&url))
+	}
+
+	/// The virtual Lua document of an open document.
+	pub(crate) fn lua_document_of(&self, url: &Url) -> LuaDocument {
 		let lua = mlua::Lua::new();
 		let mut document = LuaDocument {
 			content: String::new(),
 			fragments: Vec::new(),
 		};
-		for (token, role) in self.lua_fragments(&url) {
+		for (token, role) in self.lua_fragments(url) {
 			let code = token.content();
 			let (prefix, suffix) = match (role, is_expression(&lua, code)) {
 				(true, true) => ("local _ = (", ")"),
@@ -137,6 +142,112 @@ impl Server {
 				document.content.push('\n');
 			}
 		}
-		Ok(document)
+		document
+	}
+}
+
+impl Fragment {
+	/// The last line of the fragment's code: a block's code ends with its line break, so its
+	/// range ends at the start of the next line, which is not part of it.
+	fn last_line(&self) -> u32 {
+		let end = self.range.end;
+		if end.character == 0 && end.line > self.range.start.line {
+			end.line - 1
+		} else {
+			end.line
+		}
+	}
+
+	fn contains(&self, position: lsp_types::Position) -> bool {
+		self.range.start <= position
+			&& position <= self.range.end
+			&& position.line <= self.last_line()
+	}
+}
+
+impl LuaDocument {
+	/// The position in the Lua document of a position in the `.nml` document, if it is in a
+	/// fragment.
+	pub(crate) fn to_lua(&self, position: lsp_types::Position) -> Option<lsp_types::Position> {
+		let fragment = self.fragments.iter().find(|f| f.contains(position))?;
+		let line = fragment.line + (position.line - fragment.range.start.line);
+		let character = if position.line == fragment.range.start.line {
+			position.character - fragment.range.start.character + fragment.character
+		} else {
+			position.character
+		};
+		Some(lsp_types::Position::new(line, character))
+	}
+
+	/// The position in the `.nml` document of a position in the Lua document, if it is in a
+	/// fragment (not in the code added around roles).
+	pub(crate) fn to_nml(&self, position: lsp_types::Position) -> Option<lsp_types::Position> {
+		let fragment = self.fragments.iter().find(|f| {
+			let lines = f.last_line() - f.range.start.line;
+			f.line <= position.line && position.line <= f.line + lines
+		})?;
+		let line = fragment.range.start.line + (position.line - fragment.line);
+		let character = if position.line == fragment.line {
+			fragment.range.start.character + position.character.checked_sub(fragment.character)?
+		} else {
+			position.character
+		};
+		let mapped = lsp_types::Position::new(line, character);
+		fragment.contains(mapped).then_some(mapped)
+	}
+
+	pub(crate) fn range_to_nml(&self, range: Range) -> Option<Range> {
+		Some(Range::new(
+			self.to_nml(range.start)?,
+			self.to_nml(range.end)?,
+		))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use lsp_types::Position;
+
+	use super::*;
+
+	#[test]
+	fn mapping() {
+		let document = LuaDocument {
+			content: "x = 1\ny = 2\nlocal _ = (f())\n".into(),
+			fragments: vec![
+				Fragment {
+					range: Range::new(Position::new(2, 0), Position::new(4, 0)),
+					line: 0,
+					character: 0,
+				},
+				Fragment {
+					range: Range::new(Position::new(6, 7), Position::new(6, 10)),
+					line: 2,
+					character: 11,
+				},
+			],
+		};
+		assert_eq!(
+			document.to_lua(Position::new(3, 2)),
+			Some(Position::new(1, 2))
+		);
+		assert_eq!(
+			document.to_lua(Position::new(6, 8)),
+			Some(Position::new(2, 12))
+		);
+		assert_eq!(document.to_lua(Position::new(5, 0)), None);
+		// The end of a block is the start of the next line, not part of it.
+		assert_eq!(document.to_lua(Position::new(4, 0)), None);
+		assert_eq!(
+			document.to_nml(Position::new(1, 2)),
+			Some(Position::new(3, 2))
+		);
+		assert_eq!(
+			document.to_nml(Position::new(2, 12)),
+			Some(Position::new(6, 8))
+		);
+		// In the wrapper added around the role.
+		assert_eq!(document.to_nml(Position::new(2, 3)), None);
+		assert_eq!(document.to_nml(Position::new(2, 16)), None);
 	}
 }

@@ -30,6 +30,10 @@ struct Client {
 
 impl Client {
 	fn start(root: Option<&Path>) -> Self {
+		Self::start_with(root, serde_json::json!({ "luals": false }))
+	}
+
+	fn start_with(root: Option<&Path>, options: serde_json::Value) -> Self {
 		let (server, connection) = Connection::memory();
 		let server = std::thread::spawn(move || run(server).unwrap());
 		let client = Self {
@@ -44,6 +48,7 @@ impl Client {
 					name: "test".into(),
 				}]
 			}),
+			initialization_options: Some(options),
 			..InitializeParams::default()
 		};
 		client.request("initialize", serde_json::to_value(params).unwrap());
@@ -739,4 +744,87 @@ fn include_contexts() {
 	assert_eq!(published.diagnostics.len(), 1);
 	assert!(published.diagnostics[0].message.contains("not a table"));
 	assert_eq!(published.diagnostics[0].range.start, position(0, 7));
+}
+
+/// LuaLS for the proxy test: `NML_LUALS`, or where Mason installs it.
+fn luals_path() -> Option<PathBuf> {
+	if let Some(path) = std::env::var_os("NML_LUALS") {
+		return Some(path.into());
+	}
+	let home = std::env::var_os("HOME")?;
+	let path = PathBuf::from(home).join(".local/share/nvim/mason/bin/lua-language-server");
+	path.is_file().then_some(path)
+}
+
+#[test]
+fn luals_proxy() {
+	let Some(luals) = luals_path() else {
+		eprintln!("skipped: LuaLS not found (set NML_LUALS)");
+		return;
+	};
+	let workspace = Workspace::new("luals", &[("nml.toml", "")]);
+	nml_lua::write_types(&workspace.0).unwrap();
+	let client = Client::start_with(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": luals.to_string_lossy() }),
+	);
+	let page = workspace.url("a.nml");
+	let text = ":lua\n```\nfunction greet(name)\n\treturn 'hi ' .. name\nend\nundefined_global()\n```\n\nSay :lua`greet('x')` and :lua`gre`.\n";
+	client.open(&page, text);
+
+	// LuaLS's diagnostics arrive later, mapped to the document.
+	let lua_diagnostic = (0..30).find_map(|_| {
+		let published = client.diagnostics();
+		published
+			.diagnostics
+			.into_iter()
+			.find(|d| d.source.as_deref().is_some_and(|s| s.starts_with("Lua")))
+	});
+	let diagnostic = lua_diagnostic.expect("LuaLS reports the undefined global");
+	assert_eq!(diagnostic.range.start, position(5, 0));
+
+	// Hover on `greet` in the role: LuaLS knows the function from the block.
+	let result = client.request(
+		HoverRequest::METHOD,
+		serde_json::to_value(lsp_types::HoverParams {
+			text_document_position_params: at(&page, 8, 10),
+			work_done_progress_params: Default::default(),
+		})
+		.unwrap(),
+	);
+	let hover = result.to_string();
+	assert!(hover.contains("greet"), "{hover}");
+	let range: lsp_types::Range = serde_json::from_value(result["range"].clone()).unwrap();
+	assert_eq!(range.start, position(8, 9));
+
+	// Completion in the second role.
+	let result = client.request(
+		Completion::METHOD,
+		serde_json::to_value(lsp_types::CompletionParams {
+			text_document_position: at(&page, 8, 32),
+			work_done_progress_params: Default::default(),
+			partial_result_params: Default::default(),
+			context: None,
+		})
+		.unwrap(),
+	);
+	assert!(result.to_string().contains("\"greet\""), "{result}");
+
+	// Definition of `greet`: its block, in the document.
+	let result = client.request(
+		GotoDefinition::METHOD,
+		serde_json::to_value(lsp_types::GotoDefinitionParams {
+			text_document_position_params: at(&page, 8, 10),
+			work_done_progress_params: Default::default(),
+			partial_result_params: Default::default(),
+		})
+		.unwrap(),
+	);
+	let locations: Vec<lsp_types::Location> = serde_json::from_value(result).unwrap();
+	assert!(
+		locations
+			.iter()
+			.any(|l| l.uri.as_str() == page.as_str() && l.range.start.line == 2),
+		"{locations:?}"
+	);
 }

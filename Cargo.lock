@@ -714,6 +714,7 @@ dependencies = [
 name = "nml-lsp"
 version = "0.1.0"
 dependencies = [
+ "crossbeam-channel",
  "lsp-server",
  "lsp-types",
  "mlua",
@@ -722,6 +723,7 @@ dependencies = [
  "nml-document",
  "nml-grammar",
  "nml-lang",
+ "nml-lua",
  "nml-source",
  "nml-workspace",
  "serde",

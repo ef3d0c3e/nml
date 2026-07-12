@@ -6,7 +6,9 @@ mod convert;
 mod display;
 mod find;
 mod lua;
+mod luals;
 mod navigate;
+mod proxy;
 mod semantic;
 
 use std::collections::BTreeSet;
@@ -44,6 +46,7 @@ use lsp_types::SemanticTokensOptions;
 use lsp_types::SemanticTokensParams;
 use lsp_types::SemanticTokensServerCapabilities;
 use lsp_types::ServerCapabilities;
+use lsp_types::SignatureHelpOptions;
 use lsp_types::TextDocumentSyncCapability;
 use lsp_types::TextDocumentSyncKind;
 use lsp_types::TextDocumentSyncOptions;
@@ -64,6 +67,7 @@ use lsp_types::request::InlayHintRequest;
 use lsp_types::request::References;
 use lsp_types::request::Request as _;
 use lsp_types::request::SemanticTokensFullRequest;
+use lsp_types::request::SignatureHelpRequest;
 use nml_build::BuildOptions;
 use nml_build::WorkspaceResolver;
 use nml_diagnostics::Diagnostic;
@@ -121,6 +125,10 @@ pub fn run(connection: Connection) -> Result<()> {
 			commands: vec![INCLUDE_CONTEXT_COMMAND.into()],
 			..ExecuteCommandOptions::default()
 		}),
+		signature_help_provider: Some(SignatureHelpOptions {
+			trigger_characters: Some(vec!["(".into(), ",".into()]),
+			..SignatureHelpOptions::default()
+		}),
 		code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
 		definition_provider: Some(OneOf::Left(true)),
@@ -136,7 +144,16 @@ pub fn run(connection: Connection) -> Result<()> {
 	};
 	let params = connection.initialize(serde_json::to_value(capabilities)?)?;
 	let params: InitializeParams = serde_json::from_value(params)?;
-	let mut server = Server::new(connection, root(&params));
+	let luals = match params
+		.initialization_options
+		.as_ref()
+		.and_then(|options| options.get("luals"))
+	{
+		Some(serde_json::Value::Bool(false)) => None,
+		Some(serde_json::Value::String(path)) => Some(PathBuf::from(path)),
+		_ => luals::find(),
+	};
+	let mut server = Server::new(connection, root(&params), luals);
 	server.run()
 }
 
@@ -167,6 +184,12 @@ struct Server {
 	analyses: HashMap<Url, Analysis>,
 	/// The includer chosen for an included file, by workspace path.
 	contexts: HashMap<String, String>,
+	luals: Option<luals::LuaLs>,
+	/// The virtual Lua document of each open document.
+	lua_documents: HashMap<Url, lua::LuaDocument>,
+	/// The diagnostics published for each document, NML's and LuaLS's.
+	nml_diagnostics: HashMap<Url, Vec<lsp_types::Diagnostic>>,
+	lua_diagnostics: HashMap<Url, Vec<lsp_types::Diagnostic>>,
 }
 
 /// What the server knows of an open document, from its last compilation.
@@ -186,8 +209,12 @@ struct Analysis {
 }
 
 impl Server {
-	fn new(connection: Connection, root: Option<PathBuf>) -> Self {
+	fn new(connection: Connection, root: Option<PathBuf>, luals: Option<PathBuf>) -> Self {
 		let root = root.and_then(|root| root.canonicalize().ok());
+		// LuaLS is optional: without it, Lua in documents gets NML's diagnostics only.
+		let luals = luals
+			.zip(root.as_deref())
+			.and_then(|(program, root)| luals::LuaLs::start(&program, root).ok());
 		let config = root.as_deref().and_then(|root| {
 			let path = root.join(CONFIG_FILE);
 			let content = std::fs::read_to_string(&path).ok()?;
@@ -204,11 +231,33 @@ impl Server {
 			built: BTreeSet::new(),
 			analyses: HashMap::new(),
 			contexts: HashMap::new(),
+			luals,
+			lua_documents: HashMap::new(),
+			nml_diagnostics: HashMap::new(),
+			lua_diagnostics: HashMap::new(),
 		}
 	}
 
 	fn run(&mut self) -> Result<()> {
-		while let Ok(message) = self.connection.receiver.recv() {
+		loop {
+			let lua = match &self.luals {
+				Some(luals) => luals.receiver.clone(),
+				None => crossbeam_channel::never(),
+			};
+			let message = crossbeam_channel::select! {
+				recv(self.connection.receiver) -> message => match message {
+					Ok(message) => message,
+					Err(_) => return Ok(()),
+				},
+				recv(lua) -> message => {
+					match message {
+						Ok(message) => self.lua_message(message)?,
+						// LuaLS stopped: go on without it.
+						Err(_) => self.luals = None,
+					}
+					continue;
+				}
+			};
 			match message {
 				Message::Request(request) => {
 					if self.connection.handle_shutdown(&request)? {
@@ -229,11 +278,14 @@ impl Server {
 				Message::Response(_) => {}
 			}
 		}
-		Ok(())
 	}
 
 	fn request(&mut self, request: lsp_server::Request) -> Result<serde_json::Value> {
+		if let Some(result) = self.forward(&request.method, &request.params)? {
+			return Ok(result);
+		}
 		match request.method.as_str() {
+			SignatureHelpRequest::METHOD => Ok(serde_json::Value::Null),
 			SemanticTokensFullRequest::METHOD => {
 				let params: SemanticTokensParams = serde_json::from_value(request.params)?;
 				let url = Url::parse(params.text_document.uri.as_str())?;
@@ -353,6 +405,11 @@ impl Server {
 				let url = Url::parse(params.text_document.uri.as_str())?;
 				self.buffers.remove(&url);
 				self.analyses.remove(&url);
+				self.lua_documents.remove(&url);
+				self.lua_diagnostics.remove(&url);
+				if let Some(luals) = &mut self.luals {
+					luals.close(&url)?;
+				}
 			}
 			DidSaveTextDocument::METHOD => self.build()?,
 			_ => {}
@@ -441,6 +498,13 @@ impl Server {
 			},
 		);
 
+		// The Lua of the document, for LuaLS.
+		let lua = self.lua_document_of(url);
+		if let Some(luals) = &mut self.luals {
+			luals.sync(url, &lua.content)?;
+		}
+		self.lua_documents.insert(url.clone(), lua);
+
 		// Diagnostics located in other files (an included file) are reported with them.
 		let diagnostics = compiled
 			.diagnostics
@@ -448,6 +512,14 @@ impl Server {
 			.filter(|diagnostic| convert::file(diagnostic) == *url)
 			.map(|diagnostic| convert::diagnostic(diagnostic, &self.localizer))
 			.collect();
+		self.nml_diagnostics.insert(url.clone(), diagnostics);
+		self.publish_document(url)
+	}
+
+	/// Publishes the diagnostics of a document: NML's, and LuaLS's for its Lua.
+	fn publish_document(&self, url: &Url) -> Result<()> {
+		let mut diagnostics = self.nml_diagnostics.get(url).cloned().unwrap_or_default();
+		diagnostics.extend(self.lua_diagnostics.get(url).cloned().unwrap_or_default());
 		self.publish(url, diagnostics)
 	}
 
@@ -489,14 +561,17 @@ impl Server {
 				.push(diagnostic);
 		}
 		let previous = std::mem::take(&mut self.built);
+		// LuaLS's diagnostics of open documents are kept.
+		let lua = |url: &Url| self.lua_diagnostics.get(url).cloned().unwrap_or_default();
 		for url in previous.difference(&by_file.keys().cloned().collect()) {
-			self.publish(url, Vec::new())?;
+			self.publish(url, lua(url))?;
 		}
 		for (url, diagnostics) in by_file {
-			let diagnostics = diagnostics
+			let mut diagnostics: Vec<_> = diagnostics
 				.into_iter()
 				.map(|diagnostic| convert::diagnostic(diagnostic, &self.localizer))
 				.collect();
+			diagnostics.extend(lua(&url));
 			self.publish(&url, diagnostics)?;
 			self.built.insert(url);
 		}

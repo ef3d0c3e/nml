@@ -15,11 +15,15 @@ nml-document.workspace = true
 nml-grammar.workspace = true
 nml-source.workspace = true
 nml-workspace.workspace = true
+crossbeam-channel.workspace = true
 lsp-server.workspace = true
 lsp-types.workspace = true
 mlua.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+nml-lua.workspace = true
 
 [lints]
 workspace = true
