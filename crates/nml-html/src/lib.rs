@@ -10,3 +10,6 @@ pub use template::compile;
 pub use template::escape;
 pub use writer::Resolved;
 pub use writer::write;
+
+#[cfg(test)]
+mod tests;

@@ -1,6 +1,8 @@
+use nml_document::Checkbox;
 use nml_document::Document;
 use nml_document::ElementId;
 use nml_document::ElementKind;
+use nml_document::ListKind;
 use nml_document::OutputContext;
 use nml_document::Slot;
 use nml_document::SlotId;
@@ -97,6 +99,12 @@ impl Output {
 
 	/// An opening tag with the element's id and classes.
 	fn open(&mut self, document: &Document, id: ElementId, tag: &str) {
+		self.open_with(document, id, tag, "");
+	}
+
+	/// An opening tag with the element's id and classes, then `extra`, raw attributes that
+	/// start with a blank.
+	fn open_with(&mut self, document: &Document, id: ElementId, tag: &str, extra: &str) {
 		let attributes = &document.get(id).attributes;
 		self.raw("<");
 		self.raw(tag);
@@ -110,6 +118,7 @@ impl Output {
 			self.attribute(&attributes.classes.join(" "));
 			self.raw("\"");
 		}
+		self.raw(extra);
 		self.raw(">");
 	}
 
@@ -119,6 +128,33 @@ impl Output {
 		self.raw("</");
 		self.raw(tag);
 		self.raw(">");
+	}
+
+	/// A list item. An item with a single paragraph is tight: the paragraph's content goes
+	/// in the item without `<p>`.
+	fn list_item(&mut self, document: &Document, id: ElementId, checkbox: Option<Checkbox>) {
+		self.open(document, id, "li");
+		match checkbox {
+			Some(Checkbox::Unchecked) => self.raw("<input type=\"checkbox\" disabled> "),
+			Some(Checkbox::Partial) => {
+				self.raw("<input type=\"checkbox\" disabled aria-checked=\"mixed\"> ")
+			}
+			Some(Checkbox::Checked) => self.raw("<input type=\"checkbox\" disabled checked> "),
+			None => {}
+		}
+		let children = document.children(id);
+		let paragraphs = document
+			.children(id)
+			.filter(|(_, child)| child.kind == ElementKind::Paragraph)
+			.count();
+		for (child, element) in children {
+			if paragraphs == 1 && element.kind == ElementKind::Paragraph {
+				self.children(document, child);
+			} else {
+				self.element(document, child);
+			}
+		}
+		self.raw("</li>\n");
 	}
 
 	/// Records the position of a slot's value.
@@ -168,6 +204,23 @@ impl Output {
 				self.children(document, id);
 				self.raw("</a>");
 			}
+			ElementKind::List(kind) => {
+				let tag = match kind {
+					ListKind::Bullet => "ul",
+					ListKind::Numbered { .. } => "ol",
+				};
+				let start = match kind {
+					ListKind::Numbered { start } if *start != 1 => format!(" start=\"{start}\""),
+					_ => String::new(),
+				};
+				self.open_with(document, id, tag, &start);
+				self.raw("\n");
+				self.children(document, id);
+				self.raw("</");
+				self.raw(tag);
+				self.raw(">\n");
+			}
+			ElementKind::ListItem { checkbox } => self.list_item(document, id, *checkbox),
 			kind => unimplemented!("HTML for `{}`", kind.name()),
 		}
 	}

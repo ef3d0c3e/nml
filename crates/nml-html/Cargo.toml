@@ -13,6 +13,7 @@ nml-document.workspace = true
 nml-render.workspace = true
 
 [dev-dependencies]
+nml-lang.workspace = true
 nml-source.workspace = true
 
 [lints]
