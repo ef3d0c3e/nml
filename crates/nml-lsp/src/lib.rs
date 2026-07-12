@@ -27,6 +27,8 @@ use lsp_types::CompletionParams;
 use lsp_types::DidChangeTextDocumentParams;
 use lsp_types::DidCloseTextDocumentParams;
 use lsp_types::DidOpenTextDocumentParams;
+use lsp_types::ExecuteCommandOptions;
+use lsp_types::ExecuteCommandParams;
 use lsp_types::GotoDefinitionParams;
 use lsp_types::GotoDefinitionResponse;
 use lsp_types::HoverParams;
@@ -55,6 +57,7 @@ use lsp_types::notification::Notification as _;
 use lsp_types::notification::PublishDiagnostics;
 use lsp_types::request::CodeActionRequest;
 use lsp_types::request::Completion;
+use lsp_types::request::ExecuteCommand;
 use lsp_types::request::GotoDefinition;
 use lsp_types::request::HoverRequest;
 use lsp_types::request::InlayHintRequest;
@@ -65,11 +68,19 @@ use nml_build::BuildOptions;
 use nml_build::WorkspaceResolver;
 use nml_diagnostics::Diagnostic;
 use nml_diagnostics::Localizer;
+use nml_document::Dependency;
 use nml_lang::Language;
 use nml_source::Source;
 use nml_source::Url;
 use nml_workspace::CONFIG_FILE;
 use nml_workspace::Config;
+
+/// Analyses an included file in another includer: arguments are the file's URI and the
+/// includer's workspace path.
+const INCLUDE_CONTEXT_COMMAND: &str = "nml.includeContext";
+
+/// The includers of a file: `{ current, candidates }`.
+const INCLUDE_CONTEXTS: &str = "nml/includeContexts";
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -106,6 +117,10 @@ pub fn run(connection: Connection) -> Result<()> {
 			..CompletionOptions::default()
 		}),
 		inlay_hint_provider: Some(OneOf::Left(true)),
+		execute_command_provider: Some(ExecuteCommandOptions {
+			commands: vec![INCLUDE_CONTEXT_COMMAND.into()],
+			..ExecuteCommandOptions::default()
+		}),
 		code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
 		definition_provider: Some(OneOf::Left(true)),
@@ -150,6 +165,8 @@ struct Server {
 	built: BTreeSet<Url>,
 	/// The last analysis of each open document.
 	analyses: HashMap<Url, Analysis>,
+	/// The includer chosen for an included file, by workspace path.
+	contexts: HashMap<String, String>,
 }
 
 /// What the server knows of an open document, from its last compilation.
@@ -186,6 +203,7 @@ impl Server {
 			buffers: HashMap::new(),
 			built: BTreeSet::new(),
 			analyses: HashMap::new(),
+			contexts: HashMap::new(),
 		}
 	}
 
@@ -274,6 +292,34 @@ impl Server {
 				let params = serde_json::from_value(request.params)?;
 				Ok(serde_json::to_value(self.lua_document(params)?)?)
 			}
+			INCLUDE_CONTEXTS => {
+				let params: lua::LuaParams = serde_json::from_value(request.params)?;
+				let url = Url::parse(params.text_document.uri.as_str())?;
+				let path = self.workspace_path(&url).unwrap_or_default();
+				Ok(serde_json::json!({
+					"current": self.include_context(&path),
+					"candidates": self.includers(&path),
+				}))
+			}
+			ExecuteCommand::METHOD => {
+				let params: ExecuteCommandParams = serde_json::from_value(request.params)?;
+				if params.command != INCLUDE_CONTEXT_COMMAND {
+					return Err(format!("unknown command `{}`", params.command).into());
+				}
+				let [file, includer] = params.arguments.as_slice() else {
+					return Err(
+						"`nml.includeContext` takes a document URI and an includer path".into(),
+					);
+				};
+				let (Some(file), Some(includer)) = (file.as_str(), includer.as_str()) else {
+					return Err("`nml.includeContext` takes two strings".into());
+				};
+				let url = Url::parse(file)?;
+				let path = self.workspace_path(&url).unwrap_or_default();
+				self.contexts.insert(path, includer.to_string());
+				self.diagnose(&url)?;
+				Ok(serde_json::Value::Null)
+			}
 			CodeActionRequest::METHOD => {
 				let params: CodeActionParams = serde_json::from_value(request.params)?;
 				Ok(serde_json::to_value(self.code_actions(&params)?)?)
@@ -350,7 +396,30 @@ impl Server {
 			.unwrap_or_default();
 		let resolver = WorkspaceResolver::new(root, modules).with_overlay(overlay);
 		let source = Arc::new(Source::new(url.clone(), text.clone(), 0));
-		let compiled = nml_lang::compile(&self.language, source.clone(), &path, Arc::new(resolver));
+		let mut compiled = nml_lang::compile(
+			&self.language,
+			source.clone(),
+			&path,
+			Arc::new(resolver.clone()),
+		);
+
+		// An included file is analysed as part of an includer: it sees its grammar and
+		// context, and its diagnostics are those of that includer, in this file.
+		if let Some(includer) = self.include_context(&path)
+			&& let Some(includer_source) = self.file(&includer)
+		{
+			let context = nml_lang::compile(
+				&self.language,
+				includer_source,
+				&includer,
+				Arc::new(resolver),
+			);
+			if let Some(language) = &context.language {
+				compiled.tree = nml_grammar::parse(language.rules(), source.clone()).nodes;
+				compiled.language = Some(language.clone());
+			}
+			compiled.diagnostics = context.diagnostics;
+		}
 		let basename = path.rsplit('/').next().unwrap_or(&path);
 		let key = compiled.unit.reference_key.clone().unwrap_or_else(|| {
 			basename
@@ -380,6 +449,25 @@ impl Server {
 			.map(|diagnostic| convert::diagnostic(diagnostic, &self.localizer))
 			.collect();
 		self.publish(url, diagnostics)
+	}
+
+	/// The files that include the file at `path`, from the index.
+	fn includers(&self, path: &str) -> Vec<String> {
+		self.index()
+			.and_then(|index| index.dependents(&Dependency::Include(path.into())).ok())
+			.unwrap_or_default()
+	}
+
+	/// The includer a file is analysed in: the one chosen for it, or the first that includes
+	/// it. Pages, and files that nothing includes, are analysed on their own.
+	fn include_context(&self, path: &str) -> Option<String> {
+		if self.config.as_ref()?.is_page(std::path::Path::new(path)) {
+			return None;
+		}
+		match self.contexts.get(path) {
+			Some(chosen) => Some(chosen.clone()),
+			None => self.includers(path).into_iter().next(),
+		}
 	}
 
 	/// Runs the build stages without writing outputs, and publishes the diagnostics of every

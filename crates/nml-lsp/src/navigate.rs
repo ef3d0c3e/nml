@@ -120,7 +120,7 @@ impl Server {
 	}
 
 	/// The source of a workspace file: its open buffer, or the disk.
-	fn file(&self, path: &str) -> Option<Arc<Source>> {
+	pub(crate) fn file(&self, path: &str) -> Option<Arc<Source>> {
 		let absolute = self.root.as_ref()?.join(path);
 		let url = Url::from_file_path(&absolute).ok()?;
 		let content = match self.buffers.get(&url) {

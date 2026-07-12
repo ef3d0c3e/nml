@@ -24,6 +24,8 @@ use super::*;
 struct Client {
 	connection: Connection,
 	server: Option<JoinHandle<()>>,
+	/// Notifications received while waiting for a response.
+	pending: std::cell::RefCell<std::collections::VecDeque<Message>>,
 }
 
 impl Client {
@@ -33,6 +35,7 @@ impl Client {
 		let client = Self {
 			connection,
 			server: Some(server),
+			pending: Default::default(),
 		};
 		let params = InitializeParams {
 			workspace_folders: root.map(|root| {
@@ -57,6 +60,9 @@ impl Client {
 				Message::Response(response) if response.id == id => {
 					return response.response_result.expect("the request succeeds");
 				}
+				Message::Notification(notification) => {
+					self.pending.borrow_mut().push_back(notification.into());
+				}
 				_ => {}
 			}
 		}
@@ -77,7 +83,9 @@ impl Client {
 	/// The next diagnostics the server publishes.
 	fn diagnostics(&self) -> PublishDiagnosticsParams {
 		loop {
-			if let Message::Notification(notification) = self.receive()
+			let message = self.pending.borrow_mut().pop_front();
+			let message = message.unwrap_or_else(|| self.receive());
+			if let Message::Notification(notification) = message
 				&& notification.method == PublishDiagnostics::METHOD
 			{
 				return serde_json::from_value(notification.params).unwrap();
@@ -674,4 +682,61 @@ fn lua_documents() {
 			(position(6, 21), 3, 3)
 		]
 	);
+}
+
+#[test]
+fn include_contexts() {
+	let workspace = Workspace::new(
+		"contexts",
+		&[
+			("nml.toml", "exclude = [\"parts/**\"]\n"),
+			(
+				"a.nml",
+				":lua\n```\nfunction helper() return 'A' end\n```\n\n:include parts/x\n",
+			),
+			(
+				"b.nml",
+				":lua\n```\nfunction helper() return 'B' end\n```\n\n:include parts/x\n",
+			),
+			("parts/x.nml", "Value: :lua`helper()`\n"),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let part = workspace.url("parts/x.nml");
+	client.save(&part);
+	client.diagnostics();
+
+	// In the first includer's context, `helper` exists.
+	client.open(&part, "Value: :lua`helper()`\n");
+	assert!(client.diagnostics().diagnostics.is_empty());
+	let result = client.request(
+		INCLUDE_CONTEXTS,
+		serde_json::json!({ "textDocument": { "uri": part.as_str() } }),
+	);
+	assert_eq!(
+		result,
+		serde_json::json!({ "current": "a.nml", "candidates": ["a.nml", "b.nml"] })
+	);
+
+	// `b` is edited, not saved, and chosen as the context: its helper now fails here.
+	let b = workspace.url("b.nml");
+	client.open(
+		&b,
+		":lua\n```\nfunction helper() return {} end\n```\n\n:include parts/x\n",
+	);
+	client.diagnostics();
+	let params = lsp_types::ExecuteCommandParams {
+		command: INCLUDE_CONTEXT_COMMAND.into(),
+		arguments: vec![part.as_str().into(), "b.nml".into()],
+		work_done_progress_params: Default::default(),
+	};
+	client.request(
+		ExecuteCommand::METHOD,
+		serde_json::to_value(params).unwrap(),
+	);
+	let published = client.diagnostics();
+	assert_eq!(published.uri.as_str(), part.as_str());
+	assert_eq!(published.diagnostics.len(), 1);
+	assert!(published.diagnostics[0].message.contains("not a table"));
+	assert_eq!(published.diagnostics[0].range.start, position(0, 7));
 }
