@@ -123,7 +123,12 @@ pub(crate) fn commands(rules: &RuleSet, line_start: bool) -> Vec<Candidate> {
 		if block && !line_start {
 			continue;
 		}
-		if let Some(opener) = rule.opener().filter(|opener| opener.starts_with(':')) {
+		let opener = rule.opener();
+		if let Some(opener) = opener
+			.as_ref()
+			.and_then(|o| o.literal())
+			.filter(|o| o.starts_with(':'))
+		{
 			openers.insert((opener.trim_end().to_string(), rule.name.clone()));
 		}
 	}
@@ -146,7 +151,10 @@ pub(crate) fn schema<'r>(rules: &'r RuleSet, opener: &str) -> Option<&'r OptionS
 	}
 	rules
 		.iter()
-		.find(|(_, rule)| rule.opener().is_some_and(|o| o.trim_end() == opener))
+		.find(|(_, rule)| {
+			rule.opener()
+				.is_some_and(|o| o.literal().is_some_and(|o| o.trim_end() == opener))
+		})
 		.and_then(|(_, rule)| find(&rule.atoms))
 }
 

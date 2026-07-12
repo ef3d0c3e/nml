@@ -703,8 +703,10 @@ impl Parser<'_> {
 	) -> Result<(usize, Value), Error> {
 		self.check_nesting(context, start)?;
 		let end = context.end;
-		let line_start = self.text[..start].rfind('\n').map_or(0, |i| i + 1);
-		let indent = start - line_start;
+		// A list item's lines are indented to the end of its marker, its opener.
+		let marker = context.opener.end;
+		let line_start = self.text[..marker].rfind('\n').map_or(0, |i| i + 1);
+		let indent = marker - line_start;
 
 		let mut pieces = Vec::new();
 		let mut pos = start;
@@ -1677,6 +1679,25 @@ pub(crate) mod tests {
 					Atom::capture("body", Atom::Container(Prefix::Indent)),
 				],
 			),
+			Rule::new(
+				"numbered",
+				vec![
+					Atom::LineStart,
+					Atom::capture(
+						"number",
+						Atom::Number {
+							signed: false,
+							decimal: false,
+						},
+					),
+					lit(". "),
+					Atom::optional(vec![Atom::capture(
+						"check",
+						Atom::or([vec![lit("[ ] ")], vec![lit("[x] ")]]),
+					)]),
+					Atom::capture("body", Atom::Container(Prefix::Indent)),
+				],
+			),
 		] {
 			rules.add(rule).unwrap();
 		}
@@ -1716,6 +1737,16 @@ pub(crate) mod tests {
 		let diagnostics = check_containers(
 			"- a\n  b\n\n  - c\n\n    d\n- e\n\nf",
 			r#"item(body=[P["a\nb"] item(body=[P["c"] P["d"]])]) item(body=[P["e"]]) P["f"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
+	fn numbered_containers_indent_to_the_marker() {
+		// The body is indented to the end of `10. `, not past the checkbox.
+		let diagnostics = check_containers(
+			"10. [x] a\n    b\n9. c\n2024 was\n1.5",
+			r#"numbered(number=10 check="[x] " body=[P["a\nb"]]) numbered(number=9 body=[P["c"]]) P["2024 was\n1.5"]"#,
 		);
 		assert_diagnostics!(diagnostics, []);
 	}

@@ -72,21 +72,64 @@ impl Rule {
 		out
 	}
 
-	/// The opener: the text the rule is dispatched on. For a `Run`, its shortest run.
-	pub fn opener(&self) -> Option<String> {
-		let first = match self.table() {
-			Table::Block => self.atoms.get(1),
-			Table::Inline => self.atoms.first(),
+	/// The opener: what the rule is dispatched on. For a `Run`, its shortest run. An unsigned
+	/// integer `Number` followed by a literal opens with digits, then the literal (`1. `).
+	pub fn opener(&self) -> Option<Opener> {
+		let skip = match self.table() {
+			Table::Block => 1,
+			Table::Inline => 0,
 		};
-		let mut atom = first?;
-		while let Atom::Capture { atom: inner, .. } = atom {
-			atom = inner;
+		let mut atoms = self.atoms.iter().skip(skip).map(|mut atom| {
+			while let Atom::Capture { atom: inner, .. } = atom {
+				atom = inner;
+			}
+			atom
+		});
+		let text = match atoms.next()? {
+			Atom::Literal(text) if !text.is_empty() => text.clone(),
+			Atom::Run { char, min } if *min > 0 => char.to_string().repeat(*min),
+			Atom::Number {
+				signed: false,
+				decimal: false,
+			} => match atoms.next()? {
+				Atom::Literal(text) if !text.is_empty() => {
+					return Some(Opener {
+						digits: true,
+						text: text.clone(),
+					});
+				}
+				_ => return None,
+			},
+			_ => return None,
+		};
+		Some(Opener {
+			digits: false,
+			text,
+		})
+	}
+}
+
+/// What a rule is dispatched on: a text, possibly after a run of digits.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Opener {
+	/// Whether the opener starts with one or more ASCII digits.
+	pub digits: bool,
+	pub text: String,
+}
+
+impl Opener {
+	/// The opener as plain text, unless it starts with digits.
+	pub fn literal(&self) -> Option<&str> {
+		(!self.digits).then_some(self.text.as_str())
+	}
+}
+
+impl fmt::Display for Opener {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		if self.digits {
+			f.write_str("<digits>")?;
 		}
-		match atom {
-			Atom::Literal(text) if !text.is_empty() => Some(text.clone()),
-			Atom::Run { char, min } if *min > 0 => Some(char.to_string().repeat(*min)),
-			_ => None,
-		}
+		f.write_str(&self.text)
 	}
 }
 
@@ -234,7 +277,7 @@ impl RuleSet {
 			{
 				return Err(error(RuleErrorKind::ConflictingOpener {
 					other: other.name.clone(),
-					opener: opener.clone(),
+					opener: opener.to_string(),
 				}));
 			}
 		}
@@ -495,11 +538,17 @@ mod tests {
 			],
 		);
 		assert_eq!(heading.table(), Table::Block);
-		assert_eq!(heading.opener().as_deref(), Some("# "));
+		assert_eq!(
+			heading.opener().map(|o| o.to_string()).as_deref(),
+			Some("# ")
+		);
 		assert_eq!(bold().table(), Table::Inline);
-		assert_eq!(bold().opener().as_deref(), Some("**"));
+		assert_eq!(
+			bold().opener().map(|o| o.to_string()).as_deref(),
+			Some("**")
+		);
 		let code = Rule::new("code", vec![Atom::capture("fence", Atom::run('`', 2))]);
-		assert_eq!(code.opener().as_deref(), Some("``"));
+		assert_eq!(code.opener().map(|o| o.to_string()).as_deref(), Some("``"));
 	}
 
 	#[test]

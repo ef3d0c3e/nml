@@ -59,8 +59,9 @@ pub enum Prefix {
 	/// Lines that start with this text. A line that is the prefix without its trailing
 	/// blanks (`>` for `> `) is an empty line of the container.
 	Literal(String),
-	/// Lines indented by the width of the first line up to the container (a list item's
-	/// marker). Blank lines are part of the container when an indented line follows them.
+	/// Lines indented by the width of the first line up to the end of the rule's opener (a
+	/// list item's marker), even if the container starts further on the line (after a
+	/// checkbox). Blank lines are part of the container when an indented line follows them.
 	Indent,
 }
 

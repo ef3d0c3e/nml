@@ -1,4 +1,5 @@
 use crate::RuleId;
+use crate::rule::Opener;
 
 /// The rule openers of one table, for longest-match dispatch.
 #[derive(Debug, Clone)]
@@ -8,8 +9,16 @@ pub(crate) struct Trie {
 
 #[derive(Debug, Clone, Default)]
 struct Node {
-	children: Vec<(char, usize)>,
+	children: Vec<(Key, usize)>,
 	rule: Option<RuleId>,
+}
+
+/// An edge of the trie.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Key {
+	Char(char),
+	/// One or more ASCII digits.
+	Digits,
 }
 
 impl Default for Trie {
@@ -21,15 +30,20 @@ impl Default for Trie {
 }
 
 impl Trie {
-	pub(crate) fn insert(&mut self, opener: &str, rule: RuleId) {
+	pub(crate) fn insert(&mut self, opener: &Opener, rule: RuleId) {
+		let keys = opener
+			.digits
+			.then_some(Key::Digits)
+			.into_iter()
+			.chain(opener.text.chars().map(Key::Char));
 		let mut node = 0;
-		for c in opener.chars() {
-			node = match self.nodes[node].children.iter().find(|(k, _)| *k == c) {
+		for key in keys {
+			node = match self.nodes[node].children.iter().find(|(k, _)| *k == key) {
 				Some((_, child)) => *child,
 				None => {
 					self.nodes.push(Node::default());
 					let child = self.nodes.len() - 1;
-					self.nodes[node].children.push((c, child));
+					self.nodes[node].children.push((key, child));
 					child
 				}
 			};
@@ -45,29 +59,50 @@ impl Trie {
 	/// also be followed by a blank, a line break, the end, or `[`: at the start of a line,
 	/// `` :lua`x` `` is a role in a paragraph, not the `:lua` command.
 	pub(crate) fn longest(&self, text: &str, command: bool) -> Option<(RuleId, usize)> {
-		let mut node = 0;
 		let mut best = None;
-		let mut chars = text.char_indices().peekable();
-		while let Some((offset, c)) = chars.next() {
-			let Some((_, child)) = self.nodes[node].children.iter().find(|(k, _)| *k == c) else {
-				break;
+		self.walk(0, text, 0, command, &mut best);
+		best
+	}
+
+	/// Follows the edges of `node` that match `text` at `offset`, keeping the longest opener.
+	fn walk(
+		&self,
+		node: usize,
+		text: &str,
+		offset: usize,
+		command: bool,
+		best: &mut Option<(RuleId, usize)>,
+	) {
+		let rest = &text[offset..];
+		for (key, child) in &self.nodes[node].children {
+			let (len, last) = match key {
+				Key::Char(c) if rest.starts_with(*c) => (c.len_utf8(), *c),
+				Key::Digits => {
+					let len =
+						rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+					if len == 0 {
+						continue;
+					}
+					(len, '0')
+				}
+				_ => continue,
 			};
-			node = *child;
-			if let Some(rule) = self.nodes[node].rule {
-				let at_boundary = !is_word_char(c)
-					|| chars.peek().is_none_or(|(_, next)| {
+			let end = offset + len;
+			if let Some(rule) = self.nodes[*child].rule {
+				let at_boundary = !is_word_char(last)
+					|| text[end..].chars().next().is_none_or(|next| {
 						if command {
-							next.is_whitespace() || *next == '['
+							next.is_whitespace() || next == '['
 						} else {
-							!is_word_char(*next)
+							!is_word_char(next)
 						}
 					});
-				if at_boundary {
-					best = Some((rule, offset + c.len_utf8()));
+				if at_boundary && best.is_none_or(|(_, longest)| end > longest) {
+					*best = Some((rule, end));
 				}
 			}
+			self.walk(*child, text, end, command, best);
 		}
-		best
 	}
 }
 
@@ -86,14 +121,39 @@ pub(crate) fn is_word_char(c: char) -> bool {
 mod tests {
 	use super::*;
 
+	fn text(text: &str) -> Opener {
+		Opener {
+			digits: false,
+			text: text.into(),
+		}
+	}
+
+	#[test]
+	fn digit_openers() {
+		let mut trie = Trie::default();
+		let digits = Opener {
+			digits: true,
+			text: ". ".into(),
+		};
+		trie.insert(&digits, RuleId(0));
+		trie.insert(&text("1"), RuleId(1));
+
+		assert_eq!(trie.longest("1. a", true), Some((RuleId(0), 3)));
+		assert_eq!(trie.longest("42. a", true), Some((RuleId(0), 4)));
+		assert_eq!(trie.longest("1 x", true), Some((RuleId(1), 1)));
+		assert_eq!(trie.longest("1.5", true), None);
+		assert_eq!(trie.longest(". a", true), None);
+		assert_eq!(trie.longest("2024 was", true), None);
+	}
+
 	#[test]
 	fn longest_match() {
 		let mut trie = Trie::default();
-		trie.insert("*", RuleId(0));
-		trie.insert("**", RuleId(1));
-		trie.insert("[", RuleId(2));
-		trie.insert("[[", RuleId(3));
-		trie.insert("[!x", RuleId(4));
+		trie.insert(&text("*"), RuleId(0));
+		trie.insert(&text("**"), RuleId(1));
+		trie.insert(&text("["), RuleId(2));
+		trie.insert(&text("[["), RuleId(3));
+		trie.insert(&text("[!x"), RuleId(4));
 
 		assert_eq!(trie.longest_inline("*a"), Some((RuleId(0), 1)));
 		assert_eq!(trie.longest_inline("**a"), Some((RuleId(1), 2)));
@@ -108,9 +168,9 @@ mod tests {
 	#[test]
 	fn word_openers_end_at_word_boundaries() {
 		let mut trie = Trie::default();
-		trie.insert(":lua", RuleId(0));
-		trie.insert(":luax", RuleId(1));
-		trie.insert(":", RuleId(2));
+		trie.insert(&text(":lua"), RuleId(0));
+		trie.insert(&text(":luax"), RuleId(1));
+		trie.insert(&text(":"), RuleId(2));
 
 		assert_eq!(trie.longest_inline(":lua`x`"), Some((RuleId(0), 4)));
 		assert_eq!(trie.longest_inline(":lua"), Some((RuleId(0), 4)));
@@ -123,8 +183,8 @@ mod tests {
 	#[test]
 	fn commands_end_with_a_blank_or_options() {
 		let mut trie = Trie::default();
-		trie.insert(":lua", RuleId(0));
-		trie.insert("#", RuleId(1));
+		trie.insert(&text(":lua"), RuleId(0));
+		trie.insert(&text("#"), RuleId(1));
 		for (text, expected) in [
 			(":lua", Some((RuleId(0), 4))),
 			(":lua\n", Some((RuleId(0), 4))),
