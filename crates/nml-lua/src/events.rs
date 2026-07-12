@@ -5,21 +5,14 @@ use mlua::Lua;
 use nml_diagnostics::Diagnostic;
 use nml_document::Draft;
 use nml_document::ElementKind;
+use nml_document::ListKind;
 
 use crate::api;
 use crate::error::Chunks;
 use crate::userdata;
 
 /// The element kinds listeners can ask for.
-const KINDS: &[&str] = &[
-	"document",
-	"paragraph",
-	"text",
-	"style",
-	"heading",
-	"slot",
-	"reference",
-];
+const KINDS: &[&str] = ElementKind::NAMES;
 
 /// The listeners of a unit, kept in its Lua state.
 #[derive(Default)]
@@ -99,6 +92,15 @@ pub(crate) struct ElementData {
 	/// A style's name: `bold`, `italic`, …
 	#[lua(readonly)]
 	style: Option<String>,
+	/// Whether a list is numbered.
+	#[lua(readonly)]
+	numbered: Option<bool>,
+	/// A numbered list's first number.
+	#[lua(readonly)]
+	start: Option<i64>,
+	/// A list item's checkbox: `unchecked`, `partial` or `checked`.
+	#[lua(readonly)]
+	checkbox: Option<String>,
 }
 
 fn call(lua: &Lua, draft: Draft<'_>, listeners: &[Function]) -> mlua::Result<()> {
@@ -107,6 +109,19 @@ fn call(lua: &Lua, draft: Draft<'_>, listeners: &[Function]) -> mlua::Result<()>
 		ElementKind::Style(style) => (None, Some(format!("{style:?}").to_lowercase())),
 		_ => (None, None),
 	};
+	let (numbered, start) = match draft.kind {
+		ElementKind::List(ListKind::Bullet) => (Some(false), None),
+		ElementKind::List(ListKind::Numbered { start }) => {
+			(Some(true), Some(i64::try_from(*start).unwrap_or(i64::MAX)))
+		}
+		_ => (None, None),
+	};
+	let checkbox = match draft.kind {
+		ElementKind::ListItem {
+			checkbox: Some(checkbox),
+		} => Some(format!("{checkbox:?}").to_lowercase()),
+		_ => None,
+	};
 	let element = lua.create_userdata(ElementData {
 		kind: draft.kind.name().into(),
 		text: draft.text(),
@@ -114,6 +129,9 @@ fn call(lua: &Lua, draft: Draft<'_>, listeners: &[Function]) -> mlua::Result<()>
 		classes: draft.attributes.classes.clone(),
 		level,
 		style,
+		numbered,
+		start,
+		checkbox,
 	})?;
 	for listener in listeners {
 		listener.call::<()>(&element)?;
@@ -165,6 +183,32 @@ Count: :lua`#headings`, :lua`table.concat(headings, ", ")`.
 	}
 
 	#[test]
+	fn lists() {
+		let compiled = compile(
+			r#":lua
+```
+seen = {}
+nml.on("list", function(l) table.insert(seen, tostring(l.numbered) .. ":" .. tostring(l.start)) end)
+nml.on("list_item", function(i) table.insert(seen, tostring(i.checkbox)) end)
+```
+
+- [x] a
+- b
+
+4. c
+
+:lua`table.concat(seen, " ")`
+"#,
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let body = html(&compiled);
+		assert!(
+			body.contains("<p>checked nil false:nil nil true:4</p>"),
+			"{body}"
+		);
+	}
+
+	#[test]
 	fn listener_errors() {
 		let compiled =
 			compile(":lua\n```\nnml.on('heading', function(h)\n\terror('no')\nend)\n```\n\n# A\n");
@@ -212,6 +256,9 @@ Count: :lua`#headings`, :lua`table.concat(headings, ", ")`.
 ---@field classes string[] The HTML classes. Assign a new list to change them.
 ---@field level integer? (read-only) A heading's level.
 ---@field style string? (read-only) A style's name: `bold`, `italic`, …
+---@field numbered boolean? (read-only) Whether a list is numbered.
+---@field start integer? (read-only) A numbered list's first number.
+---@field checkbox string? (read-only) A list item's checkbox: `unchecked`, `partial` or `checked`.
 "
 			),
 			"{declarations}"

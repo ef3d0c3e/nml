@@ -696,6 +696,7 @@ version = "0.1.0"
 dependencies = [
  "nml-diagnostics",
  "nml-document",
+ "nml-lang",
  "nml-render",
  "nml-source",
 ]
