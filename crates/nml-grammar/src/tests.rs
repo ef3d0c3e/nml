@@ -210,7 +210,7 @@ mod generated {
 						}
 					}
 				}
-				Node::Text(_) | Node::Escape(_) => {}
+				Node::Text(_) | Node::Escape(_) | Node::Comment(_) => {}
 			}
 		}
 		assert_eq!(pos, range.end, "the nodes end early in {text:?}");

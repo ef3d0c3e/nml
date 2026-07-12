@@ -94,6 +94,18 @@ fn collect(nodes: &[Node], file: &Url, out: &mut Vec<(usize, usize, u32, std::sy
 					}
 				}
 			}
+			Node::Comment(token) => {
+				let root = token.root();
+				if root.source().location() == file {
+					let kind = TYPES.iter().position(|t| *t == SemanticTokenType::COMMENT);
+					out.push((
+						root.start(),
+						root.end(),
+						kind.unwrap() as u32,
+						root.source().clone(),
+					));
+				}
+			}
 			Node::Text(_) | Node::Escape(_) => {}
 		}
 	}

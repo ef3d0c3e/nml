@@ -252,6 +252,16 @@ impl Parser<'_> {
 		(rest.len() >= 2 && rest[0] == b'\\' && rest[1].is_ascii_punctuation()).then_some(2)
 	}
 
+	/// The length of a comment at `pos`: `::` at the start of a line or after a blank, up to
+	/// the end of the line. `foo::bar` is no comment.
+	fn comment(&self, pos: usize, end: usize) -> Option<usize> {
+		if !self.text[pos..end].starts_with("::") {
+			return None;
+		}
+		let after_blank = self.text[..pos].ends_with([' ', '\t']);
+		(self.is_line_start(pos) || after_blank).then(|| self.line_end(pos, end) - pos)
+	}
+
 	/// The frames of the current phase, innermost first: inline frames inside inline
 	/// content, block frames between blocks.
 	fn phase_frames(&self, inline: bool) -> Vec<(usize, &Frame)> {
@@ -350,6 +360,11 @@ impl Parser<'_> {
 				pos = self.next_line(pos, end);
 				continue;
 			}
+			if let Some(len) = self.comment(pos, end) {
+				nodes.push(Node::Comment(self.token(pos..pos + len)));
+				pos = self.next_line(pos, end);
+				continue;
+			}
 			let rule = match self.next(Table::Block, pos, end) {
 				Ok(rule) => rule,
 				Err(frame) => return (nodes, pos, Stop::Frame(frame)),
@@ -414,6 +429,20 @@ impl Parser<'_> {
 				}
 				nodes.push(Node::Escape(self.token(pos..pos + len)));
 				pos += len;
+				text_start = pos;
+				continue;
+			}
+			if let Some(len) = self.comment(pos, end) {
+				if text_start < pos {
+					nodes.push(Node::Text(self.token(text_start..pos)));
+				}
+				nodes.push(Node::Comment(self.token(pos..pos + len)));
+				// A comment that fills its line takes the line break with it.
+				let line_start = self.is_line_start(pos);
+				pos += len;
+				if line_start && pos < end {
+					pos = self.next_line(pos, end);
+				}
 				text_start = pos;
 				continue;
 			}
@@ -1071,6 +1100,7 @@ pub(crate) mod tests {
 			out.push(match node {
 				Node::Text(token) => format!("{:?}", token.content()),
 				Node::Escape(token) => format!("E({})", &token.content()[1..]),
+				Node::Comment(token) => format!("C({})", token.content()),
 				Node::Paragraph { children, .. } => format!("P[{}]", show(rules, children)),
 				Node::Match(m) => {
 					let captures: Vec<_> = m
@@ -1289,6 +1319,24 @@ pub(crate) mod tests {
 			"## Title\ntext\n# Next\n:set x = -1.5\n:set y = \"a b\"\n",
 			r###"heading(deeper="#" title="Title") P["text"] heading(deeper="" title="Next") set(name="x" number=-1.5) set(name="y" string="a b")"###,
 		);
+		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
+	fn comments() {
+		// After a blank or at the start of a line; `a::b` is text.
+		let diagnostics = check(
+			"a::b c :: note `x`\n:: whole line\nd\tdone\t::x\n\n:: alone\n\ne \\:: f",
+			r#"P["a::b c " C(:: note `x`) "\n" C(:: whole line) "d\tdone\t" C(::x)] C(:: alone) P["e " E(:) ": f"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+
+		// A comment ends unclosed constructs.
+		let diagnostics = check("*a :: b*", r#"P[italic!(body=["a " C(:: b*)])]"#);
+		assert_diagnostics!(diagnostics, [1001 @ 0..1]);
+
+		// Verbatim text has no comments.
+		let diagnostics = check("`a :: b`", r#"P[code(fence="`" code="a :: b")]"#);
 		assert_diagnostics!(diagnostics, []);
 	}
 

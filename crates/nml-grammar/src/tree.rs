@@ -12,6 +12,8 @@ pub enum Node {
 	Text(Token),
 	/// `\` and an ASCII punctuation character, which stands for that character.
 	Escape(Token),
+	/// `::` and the rest of its line, at the start of a line or after a blank.
+	Comment(Token),
 	/// Inline content between blank lines that no block rule matched.
 	Paragraph { token: Token, children: Vec<Node> },
 	/// A match of a rule.
@@ -21,7 +23,7 @@ pub enum Node {
 impl Node {
 	pub fn token(&self) -> &Token {
 		match self {
-			Node::Text(token) | Node::Escape(token) => token,
+			Node::Text(token) | Node::Escape(token) | Node::Comment(token) => token,
 			Node::Paragraph { token, .. } => token,
 			Node::Match(m) => &m.token,
 		}

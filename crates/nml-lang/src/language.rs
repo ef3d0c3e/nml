@@ -365,6 +365,7 @@ impl Lower<'_, '_> {
 						}
 					}
 				}
+				Node::Comment(_) => {}
 				Node::Paragraph { token, children } => {
 					self.flush(text.take());
 					self.builder.open(ElementKind::Paragraph, token.clone());
@@ -478,6 +479,7 @@ fn collect_text(nodes: &[Node], out: &mut String) {
 		match node {
 			Node::Text(token) => out.push_str(token.content()),
 			Node::Escape(token) => out.push_str(&token.content()[1..]),
+			Node::Comment(_) => {}
 			Node::Paragraph { children, .. } => collect_text(children, out),
 			Node::Match(m) => {
 				for capture in &m.captures {
