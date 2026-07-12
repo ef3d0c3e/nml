@@ -40,6 +40,12 @@ pub enum ElementKind {
 	Reference {
 		href: SlotId,
 	},
+	/// Inline code, verbatim.
+	Code(String),
+	/// A link to a URL; its children are the text.
+	Link {
+		url: String,
+	},
 	/// A list; its children are list items.
 	List(ListKind),
 	/// An item of a list; its children are blocks.
@@ -58,6 +64,8 @@ impl ElementKind {
 		"heading",
 		"slot",
 		"reference",
+		"code",
+		"link",
 		"list",
 		"list_item",
 	];
@@ -72,6 +80,8 @@ impl ElementKind {
 			ElementKind::Heading { .. } => "heading",
 			ElementKind::Slot(_) => "slot",
 			ElementKind::Reference { .. } => "reference",
+			ElementKind::Code(_) => "code",
+			ElementKind::Link { .. } => "link",
 			ElementKind::List(_) => "list",
 			ElementKind::ListItem { .. } => "list_item",
 		}
