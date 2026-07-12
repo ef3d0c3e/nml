@@ -29,6 +29,12 @@ use crate::Resolver;
 /// Lowers a match of its rule into document elements.
 pub type Handler = Arc<dyn Fn(&mut Lower<'_, '_>, &RuleMatch) + Send + Sync>;
 
+/// Lowers a run of consecutive matches of grouped rules with the same group key.
+pub type GroupHandler = Arc<dyn Fn(&mut Lower<'_, '_>, &[&RuleMatch]) + Send + Sync>;
+
+/// The group key of a match: consecutive matches with the same key are lowered together.
+pub type GroupKey = Arc<dyn Fn(&RuleMatch) -> String + Send + Sync>;
+
 /// Called for every module a unit imports, once it is resolved.
 pub type ImportHook = Arc<dyn Fn(&mut Lower<'_, '_>, &Import) + Send + Sync>;
 
@@ -51,6 +57,8 @@ pub struct Import {
 pub struct Language {
 	rules: RuleSet,
 	handlers: HashMap<RuleId, Handler>,
+	/// Rules whose consecutive matches are lowered together, such as list items.
+	groups: HashMap<RuleId, (GroupKey, GroupHandler)>,
 	/// Rules allowed in the prologue: they do not end it.
 	prologue: HashSet<RuleId>,
 	import_hooks: Vec<ImportHook>,
@@ -70,6 +78,7 @@ impl Language {
 		Self {
 			rules: RuleSet::new(),
 			handlers: HashMap::new(),
+			groups: HashMap::new(),
 			prologue: HashSet::new(),
 			import_hooks: Vec::new(),
 		}
@@ -83,6 +92,22 @@ impl Language {
 	) -> Result<RuleId, RuleError> {
 		let id = self.rules.add(rule)?;
 		self.handlers.insert(id, Arc::new(handler));
+		Ok(id)
+	}
+
+	/// Adds a rule whose consecutive matches are lowered together when `key` gives them the
+	/// same key, like the items of a list. Matches of different grouped rules join a run if
+	/// their keys are equal; the handler of the run's first rule lowers it.
+	pub fn add_grouped(
+		&mut self,
+		rule: Rule,
+		key: impl Fn(&RuleMatch) -> String + Send + Sync + 'static,
+		handler: impl Fn(&mut Lower<'_, '_>, &[&RuleMatch]) + Send + Sync + 'static,
+	) -> Result<RuleId, RuleError> {
+		let handler: GroupHandler = Arc::new(handler);
+		let single = handler.clone();
+		let id = self.add(rule, move |lower, m| single(lower, &[m]))?;
+		self.groups.insert(id, (Arc::new(key), handler));
 		Ok(id)
 	}
 
@@ -178,9 +203,10 @@ pub fn compile(
 				continue;
 			}
 		}
-		lower.nodes(std::slice::from_ref(&nodes[index]));
-		tree.push(nodes[index].clone());
-		index += 1;
+		let len = lower.run_len(&nodes[index..]);
+		lower.nodes(&nodes[index..index + len]);
+		tree.extend_from_slice(&nodes[index..index + len]);
+		index += len;
 	}
 	// Finishers may add more finishers.
 	while !lower.finishers.is_empty() {
@@ -290,10 +316,34 @@ impl Lower<'_, '_> {
 		matches!(node, Node::Match(m) if self.language().prologue.contains(&m.rule))
 	}
 
-	/// Lowers nodes into the open element. Adjacent text and escapes become one text element.
+	/// Lowers nodes into the open element. Adjacent text and escapes become one text element,
+	/// and consecutive matches of grouped rules are lowered together.
 	pub fn nodes(&mut self, nodes: &[Node]) {
 		let mut text: Option<(Token, String)> = None;
-		for node in nodes {
+		let mut index = 0;
+		while index < nodes.len() {
+			let node = &nodes[index];
+			index += 1;
+			if let Node::Match(m) = node
+				&& m.complete
+				&& let Some((_, handler)) = self.language().groups.get(&m.rule).cloned()
+			{
+				if self.builder.depth() == 1 && !self.is_prologue_node(node) {
+					self.prologue = false;
+				}
+				self.flush(text.take());
+				let len = self.run_len(&nodes[index - 1..]);
+				let run: Vec<&RuleMatch> = nodes[index - 1..index - 1 + len]
+					.iter()
+					.map(|node| match node {
+						Node::Match(m) => m,
+						_ => unreachable!("runs are made of matches"),
+					})
+					.collect();
+				index += len - 1;
+				handler(self, &run);
+				continue;
+			}
 			// A block at the top of the unit ends the prologue, unless its rule is allowed in it.
 			if self.builder.depth() == 1 && !self.is_prologue_node(node) {
 				self.prologue = false;
@@ -339,6 +389,23 @@ impl Lower<'_, '_> {
 			}
 		}
 		self.flush(text);
+	}
+
+	/// How many of the nodes, from the first, are lowered together: the run of matches of
+	/// grouped rules with the first one's group key, or just the first node.
+	fn run_len(&self, nodes: &[Node]) -> usize {
+		let groups = &self.language().groups;
+		let key = |node: &Node| match node {
+			Node::Match(m) if m.complete => groups.get(&m.rule).map(|(key, _)| key(m)),
+			_ => None,
+		};
+		let Some(group) = nodes.first().and_then(key) else {
+			return 1.min(nodes.len());
+		};
+		1 + nodes[1..]
+			.iter()
+			.take_while(|node| key(node).as_ref() == Some(&group))
+			.count()
 	}
 
 	/// Lowers the nodes of a capture, if it holds any.
