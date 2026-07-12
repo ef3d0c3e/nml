@@ -54,7 +54,7 @@ impl Trie {
 	/// The rule with the longest opener at the start of `text`, and the opener's length in
 	/// bytes.
 	///
-	/// An opener that ends with a word character (`:lua`) only matches where the word ends, so
+	/// An opener that ends with a letter or digit (`:lua`) only matches where the word ends, so
 	/// it does not match the start of `:luax`. For commands (`command` is set), the word must
 	/// also be followed by a blank, a line break, the end, or `[`: at the start of a line,
 	/// `` :lua`x` `` is a role in a paragraph, not the `:lua` command.
@@ -89,7 +89,7 @@ impl Trie {
 			};
 			let end = offset + len;
 			if let Some(rule) = self.nodes[*child].rule {
-				let at_boundary = !is_word_char(last)
+				let at_boundary = !last.is_alphanumeric()
 					|| text[end..].chars().next().is_none_or(|next| {
 						if command {
 							next.is_whitespace() || next == '['
@@ -178,6 +178,10 @@ mod tests {
 		assert_eq!(trie.longest_inline(":luay"), Some((RuleId(2), 1)));
 		assert_eq!(trie.longest_inline(":lua_"), Some((RuleId(2), 1)));
 		assert_eq!(trie.longest_inline(":luaé"), Some((RuleId(2), 1)));
+
+		// `_` is a word character, but an opener ending with it is punctuation, like `*`.
+		trie.insert(&text("__"), RuleId(3));
+		assert_eq!(trie.longest_inline("__u"), Some((RuleId(3), 2)));
 	}
 
 	#[test]
