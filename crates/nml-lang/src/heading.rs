@@ -15,8 +15,22 @@ use crate::language::plain_text;
 /// The deepest heading level, as in HTML.
 const MAX_LEVEL: usize = 6;
 
-/// `# Title`, … `###### Title`, with an optional ` {#ref}` that exports the heading.
+/// `# Title`, … `###### Title`, with optional attributes in braces: `{#ref}` exports the
+/// heading under `ref`, and `.class` adds a class (`.unnumbered`, `.unlisted`, or any HTML
+/// class): `# Title {#ref .unlisted}`.
 pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
+	let attribute = |open: &str| {
+		Atom::or([
+			vec![
+				Atom::literal(format!("{open}#")),
+				Atom::capture("ref", Atom::Word).with_class("variable"),
+			],
+			vec![
+				Atom::literal(format!("{open}.")),
+				Atom::capture("class", Atom::Word).with_class("type"),
+			],
+		])
+	};
 	let rule = Rule::new(
 		"heading",
 		vec![
@@ -25,8 +39,8 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::literal(" "),
 			Atom::capture("title", Atom::InlineContent),
 			Atom::optional(vec![
-				Atom::literal(" {#"),
-				Atom::capture("ref", Atom::Word).with_class("variable"),
+				attribute(" {"),
+				Atom::repeat(vec![attribute(" ")], 0, None),
 				Atom::literal("}"),
 			]),
 			Atom::LineEnd,
@@ -44,10 +58,26 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			lower.diagnostics.push(Diagnostic::new(kind, message));
 			level = MAX_LEVEL;
 		}
-		let reference = m.capture("ref").map(|capture| capture.token.clone());
+		let mut references = m.captures("ref").map(|capture| capture.token.clone());
+		let reference = references.next();
+		for second in references {
+			let kind = DiagnosticKind::SecondReferenceName {
+				name: second.content().into(),
+			};
+			let first = DiagnosticMessage::fluent(reference.clone().unwrap(), "first");
+			let diagnostic = Diagnostic::new(kind, DiagnosticMessage::new(second)).with(first);
+			lower.diagnostics.push(diagnostic);
+		}
+		let mut classes: Vec<String> = Vec::new();
+		for class in m.captures("class") {
+			let class = class.token.content();
+			if !classes.iter().any(|c| c == class) {
+				classes.push(class.into());
+			}
+		}
 		let attributes = Attributes {
 			id: reference.as_ref().map(|r| r.content().to_string()),
-			classes: Vec::new(),
+			classes,
 		};
 
 		let heading = ElementKind::Heading { level: level as u8 };
@@ -89,6 +119,29 @@ mod tests {
 		let (file, range) = export.declared.clone().unwrap();
 		assert_eq!(file, "page.nml");
 		assert_eq!(&compiled.unit.document.source().content()[range], "builds");
+	}
+
+	#[test]
+	fn attributes() {
+		let compiled = check(
+			"# A {.unnumbered .unlisted}\n## B {#b .x .unlisted .x}\n### C {.y #c}\n# D {x}",
+			r#"document[h1["A"] h2#b["B"] h3#c["C"] h1["D {x}"]]"#,
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let document = &compiled.unit.document;
+		let classes: Vec<_> = document
+			.children(document.root())
+			.map(|(_, heading)| heading.attributes.classes.join(" "))
+			.collect();
+		assert_eq!(classes, ["unnumbered unlisted", "x unlisted", "y", ""]);
+		assert_eq!(compiled.unit.exports.len(), 2);
+
+		let compiled = compile_text("# A {#a #b}");
+		assert_diagnostics!(compiled.diagnostics, [2011 @ 9..10]);
+		let compiled = compile_text("# A {#a .}");
+		assert_diagnostics!(compiled.diagnostics, [1003]);
+		let compiled = compile_text("# A {#a}x");
+		assert_diagnostics!(compiled.diagnostics, [1003]);
 	}
 
 	#[test]

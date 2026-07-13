@@ -3,6 +3,7 @@
 mod heading;
 mod import;
 mod include;
+mod inline;
 mod language;
 mod list;
 mod reference;
@@ -37,6 +38,7 @@ impl Language {
 		heading::add(&mut language).expect("built-in rules are valid");
 		list::add(&mut language).expect("built-in rules are valid");
 		reference::add(&mut language).expect("built-in rules are valid");
+		inline::add(&mut language).expect("built-in rules are valid");
 		variable::add(&mut language).expect("built-in rules are valid");
 		import::add(&mut language).expect("built-in rules are valid");
 		include::add(&mut language).expect("built-in rules are valid");
@@ -118,6 +120,26 @@ pub(crate) mod tests {
 	#[test]
 	fn bold_italic() {
 		let compiled = check("***x***", r#"document[paragraph[Bold[Italic["x"]]]]"#);
+		assert!(compiled.diagnostics.is_empty());
+	}
+
+	#[test]
+	fn styles() {
+		let compiled = check(
+			"__u__ ==h== ~~s~~ __a ==b ~~c~~==__",
+			r#"document[paragraph[Underline["u"] " " Highlight["h"] " " Strikethrough["s"] " " Underline["a " Highlight["b " Strikethrough["c"]]]]]"#,
+		);
+		assert!(compiled.diagnostics.is_empty());
+		// Single characters are text.
+		check("a_b = c~d", r#"document[paragraph["a_b = c~d"]]"#);
+	}
+
+	#[test]
+	fn comments() {
+		let compiled = check(
+			":: a comment\nSome text :: and a note\n:: more\non two lines, std::fs.\n\n:: alone",
+			r#"document[paragraph["Some text " "\n" "on two lines, std::fs."]]"#,
+		);
 		assert!(compiled.diagnostics.is_empty());
 	}
 

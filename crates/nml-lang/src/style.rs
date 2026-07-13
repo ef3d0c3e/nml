@@ -6,9 +6,15 @@ use nml_grammar::RuleError;
 
 use crate::Language;
 
-/// `**bold**` and `*italic*`.
+/// `**bold**`, `*italic*`, `__underline__`, `==highlight==` and `~~strikethrough~~`.
 pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
-	for (name, marker, style) in [("bold", "**", Style::Bold), ("italic", "*", Style::Italic)] {
+	for (name, marker, style) in [
+		("bold", "**", Style::Bold),
+		("italic", "*", Style::Italic),
+		("underline", "__", Style::Underline),
+		("highlight", "==", Style::Highlight),
+		("strikethrough", "~~", Style::Strikethrough),
+	] {
 		let rule = Rule::new(
 			name,
 			vec![

@@ -153,8 +153,8 @@ mod tests {
 	#[test]
 	fn checkboxes() {
 		let compiled = check(
-			"- [ ] a\n- [-] b\n  more\n- [x] c\n- [X] d\n- [y] e\n- [link]",
-			r#"document[list[list_item[paragraph["a"]] list_item[paragraph["b\nmore"]] list_item[paragraph["c"]] list_item[paragraph["d"]] list_item[paragraph["[y] e"]] list_item[paragraph["[link]"]]]]"#,
+			"- [ ] a\n- [-] b\n  more\n- [x] c\n- [X] d\n- \\[y] e\n- [link](x)",
+			r#"document[list[list_item[paragraph["a"]] list_item[paragraph["b\nmore"]] list_item[paragraph["c"]] list_item[paragraph["d"]] list_item[paragraph["[y] e"]] list_item[paragraph[link["link"]]]]]"#,
 		);
 		assert_diagnostics!(compiled.diagnostics, []);
 		let document = &compiled.unit.document;
