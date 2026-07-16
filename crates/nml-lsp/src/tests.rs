@@ -613,7 +613,7 @@ fn inlay_hints() {
 fn conceal_and_style() {
 	let client = Client::start(None);
 	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
-	client.open(&url, "# Title\na **b *c*** [[x|y]]\n");
+	client.open(&url, "# Title\na **b *c*** [[x|y]] `z`\n");
 	client.diagnostics();
 	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
 
@@ -625,7 +625,16 @@ fn conceal_and_style() {
 		.collect();
 	assert_eq!(
 		ranges,
-		[(2, 4), (6, 7), (8, 9), (9, 11), (12, 14), (17, 19)]
+		[
+			(2, 4),
+			(6, 7),
+			(8, 9),
+			(9, 11),
+			(12, 14),
+			(17, 19),
+			(20, 21),
+			(22, 23)
+		]
 	);
 	assert_eq!(
 		serde_json::to_value(&conceals[0]).unwrap()["concealText"],
@@ -646,7 +655,9 @@ fn conceal_and_style() {
 		[
 			(0, 0, "@markup.heading".to_string()),
 			(1, 2, "@markup.strong".into()),
-			(1, 6, "@markup.italic".into())
+			(1, 6, "@markup.italic".into()),
+			(1, 12, "@markup.link".into()),
+			(1, 20, "@markup.raw".into())
 		]
 	);
 }
