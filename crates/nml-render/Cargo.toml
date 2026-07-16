@@ -8,8 +8,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-nml-diagnostics.workspace = true
-nml-document.workspace = true
+syntect.workspace = true
 
 [lints]
 workspace = true
