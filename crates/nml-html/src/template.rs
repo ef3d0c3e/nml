@@ -204,6 +204,19 @@ impl Output {
 				self.children(document, id);
 				self.raw("</a>");
 			}
+			ElementKind::Code(code) => {
+				self.open(document, id, "code");
+				self.text(code);
+				self.raw("</code>");
+			}
+			ElementKind::Link { url } => {
+				let mut href = String::from(" href=\"");
+				escape(&mut href, url, true);
+				href.push('"');
+				self.open_with(document, id, "a", &href);
+				self.children(document, id);
+				self.raw("</a>");
+			}
 			ElementKind::List(kind) => {
 				let tag = match kind {
 					ListKind::Bullet => "ul",

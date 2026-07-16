@@ -56,3 +56,17 @@ fn checkboxes() {
 		</ul>\n"
 	);
 }
+
+#[test]
+fn inline_elements() {
+	assert_eq!(
+		body("__u__ ==h== ~~s~~ `a<b` [x **y**](a.html?q=1&r=\"2\")"),
+		"<p><u>u</u> <mark>h</mark> <s>s</s> <code>a&lt;b</code> \
+		<a href=\"a.html?q=1&amp;r=&quot;2&quot;\">x <strong>y</strong></a></p>\n"
+	);
+	assert_eq!(
+		body("# A {#a .unlisted .x}"),
+		"<h1 id=\"a\" class=\"unlisted x\">A</h1>\n"
+	);
+	assert_eq!(body("a :: b\n:: c\nd"), "<p>a \nd</p>\n");
+}
