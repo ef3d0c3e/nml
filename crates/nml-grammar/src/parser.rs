@@ -1341,6 +1341,25 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn optional_parts_do_not_delimit_themselves() {
+		// An optional part matches once: its first atom (`" "`) does not end the content
+		// inside it.
+		let mut rules = RuleSet::new();
+		let rule = Rule::new(
+			"tag",
+			vec![
+				lit("<"),
+				Atom::optional(vec![lit(" "), Atom::capture("title", Atom::InlineContent)]),
+				lit(">"),
+			],
+		);
+		rules.add(rule).unwrap();
+		let parsed = parse(&rules, source("< a b c>"));
+		assert_diagnostics!(parsed.diagnostics, []);
+		assert_eq!(show(&rules, &parsed.nodes), r#"P[tag(title=["a b c"])]"#);
+	}
+
+	#[test]
 	fn block_rules_interrupt_paragraphs() {
 		check(
 			"text\n# Title",

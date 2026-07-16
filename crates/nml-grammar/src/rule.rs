@@ -442,7 +442,10 @@ fn compile(
 				}
 				check_branch(atoms)?;
 				let mut inner = chains.clone();
-				inner.push(vec![atoms]);
+				// Another repetition can follow, unless there is at most one.
+				if *max != Some(1) {
+					inner.push(vec![atoms]);
+				}
 				Op::Repeat {
 					ops: compile(atoms, &inner, captured)?,
 					min: *min,
