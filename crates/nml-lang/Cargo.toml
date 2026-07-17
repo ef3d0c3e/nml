@@ -12,6 +12,7 @@ nml-source.workspace = true
 nml-diagnostics.workspace = true
 nml-grammar.workspace = true
 nml-document.workspace = true
+nml-render.workspace = true
 
 [lints]
 workspace = true

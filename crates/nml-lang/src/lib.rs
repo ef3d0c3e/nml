@@ -1,5 +1,6 @@
 //! The built-in NML language: Rust rules for every core element.
 
+mod code;
 mod heading;
 mod import;
 mod include;
@@ -26,6 +27,7 @@ pub use resolve::MemoryResolver;
 pub use resolve::ResolveError;
 pub use resolve::Resolver;
 pub use resolve::output_path;
+pub use resolve::relative_output_url;
 pub use resolve::relative_url;
 pub use resolve::resolve_file;
 pub use resolve::resolve_path;
@@ -37,6 +39,7 @@ impl Language {
 		style::add(&mut language).expect("built-in rules are valid");
 		heading::add(&mut language).expect("built-in rules are valid");
 		list::add(&mut language).expect("built-in rules are valid");
+		code::add(&mut language).expect("built-in rules are valid");
 		reference::add(&mut language).expect("built-in rules are valid");
 		inline::add(&mut language).expect("built-in rules are valid");
 		variable::add(&mut language).expect("built-in rules are valid");

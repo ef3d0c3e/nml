@@ -73,9 +73,13 @@ pub fn output_path(path: &str) -> String {
 
 /// The URL of the page of unit `to`, relative to the page of unit `from`.
 pub fn relative_url(from: &str, to: &str) -> String {
+	relative_output_url(from, &output_path(to))
+}
+
+/// The URL of `to`, a path in the output directory, relative to the page of unit `from`.
+pub fn relative_output_url(from: &str, to: &str) -> String {
 	let from: Vec<&str> = from.split('/').collect();
-	let to_path = output_path(to);
-	let to: Vec<&str> = to_path.split('/').collect();
+	let to: Vec<&str> = to.split('/').collect();
 	let from_dirs = &from[..from.len() - 1];
 	let common = from_dirs
 		.iter()
