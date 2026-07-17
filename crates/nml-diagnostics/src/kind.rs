@@ -70,6 +70,8 @@ pub enum DiagnosticKind {
 	DuplicateReference { name: String },
 	#[diag(id = 2011, message = "diagnostic-second-reference-name")]
 	SecondReferenceName { name: String },
+	#[diag(id = 2012, message = "diagnostic-unknown-code-language", severity = warning)]
+	UnknownCodeLanguage { language: String },
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]
@@ -108,6 +110,8 @@ pub enum DiagnosticKind {
 	InvalidModuleName { name: String },
 	#[diag(id = 3005, message = "diagnostic-duplicate-module")]
 	DuplicateModule { name: String },
+	#[diag(id = 3011, message = "diagnostic-unknown-code-theme")]
+	UnknownCodeTheme { theme: String, themes: String },
 
 	/// A Lua error, forwarded with Lua's own text.
 	#[diag(id = 4001, message = "diagnostic-lua-error")]

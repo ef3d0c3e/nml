@@ -35,6 +35,7 @@ diagnostic-duplicate-reference = `{ $name }` is already defined in this document
     .first = first defined here
 diagnostic-second-reference-name = a heading has one reference name, not `{ $name }` too
     .first = first named here
+diagnostic-unknown-code-language = `{ $language }` is not a known language: the code is not highlighted
 diagnostic-invalid-reference = `{ $target }` is not a reference: write `name`, `doc#name`, `doc#` or `#name`
 diagnostic-invalid-variable-name = `{ $name }` is not a variable name
 diagnostic-unknown-variable = `{ $name }` is not a variable of NML
@@ -57,6 +58,7 @@ diagnostic-import-cycle = importing `{ $path }` here makes it import itself
 diagnostic-config-error = invalid configuration: { $message }
 diagnostic-invalid-glob = invalid pattern `{ $pattern }`: { $message }
 diagnostic-invalid-module-name = `{ $name }` is not a valid module name: it must be a single word
+diagnostic-unknown-code-theme = `{ $theme }` is not a code theme: use one of { $themes }
 diagnostic-duplicate-module = module `{ $name }` is declared twice
     .first = first declared here
 
