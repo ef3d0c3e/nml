@@ -46,6 +46,14 @@ pub enum ElementKind {
 	Link {
 		url: String,
 	},
+	/// A block of code; its children are the title.
+	CodeBlock {
+		/// The language to highlight the code in, as written.
+		language: Option<String>,
+		code: String,
+		/// The number of the first line, if lines are numbered.
+		first_line: Option<i64>,
+	},
 	/// A list; its children are list items.
 	List(ListKind),
 	/// An item of a list; its children are blocks.
@@ -66,6 +74,7 @@ impl ElementKind {
 		"reference",
 		"code",
 		"link",
+		"code_block",
 		"list",
 		"list_item",
 	];
@@ -82,6 +91,7 @@ impl ElementKind {
 			ElementKind::Reference { .. } => "reference",
 			ElementKind::Code(_) => "code",
 			ElementKind::Link { .. } => "link",
+			ElementKind::CodeBlock { .. } => "code_block",
 			ElementKind::List(_) => "list",
 			ElementKind::ListItem { .. } => "list_item",
 		}
