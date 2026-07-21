@@ -70,3 +70,23 @@ fn inline_elements() {
 	);
 	assert_eq!(body("a :: b\n:: c\nd"), "<p>a \nd</p>\n");
 }
+
+#[test]
+fn code_blocks() {
+	assert_eq!(
+		body("```[line_offset=9] A <title>\na < b\nc\n```"),
+		"<figure class=\"code-block\">\n<figcaption>A &lt;title&gt;</figcaption>\n\
+		<div class=\"code\"><pre class=\"line-numbers\" aria-hidden=\"true\">9\n10</pre>\
+		<pre><code>a &lt; b\nc</code></pre></div>\n</figure>\n"
+	);
+	assert_eq!(
+		body("```[numbers=false]\nx\n```"),
+		"<figure class=\"code-block\">\n<div class=\"code\"><pre><code>x</code></pre></div>\n</figure>\n"
+	);
+	let html = body("```rust\nfn main() {}\n```");
+	assert!(
+		html.starts_with("<figure class=\"code-block\" data-language=\"rust\">"),
+		"{html}"
+	);
+	assert!(html.contains("<span class=\"hl-"), "{html}");
+}

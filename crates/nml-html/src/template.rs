@@ -26,6 +26,10 @@ pub struct TemplateSlot {
 	pub context: OutputContext,
 }
 
+/// The stylesheet of highlighted code, in the output directory. Pages with code blocks link
+/// to it.
+pub const CODE_STYLESHEET: &str = "nml-code.css";
+
 /// The page around a document.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PageOptions {
@@ -99,12 +103,19 @@ impl Output {
 
 	/// An opening tag with the element's id and classes.
 	fn open(&mut self, document: &Document, id: ElementId, tag: &str) {
-		self.open_with(document, id, tag, "");
+		self.open_with(document, id, tag, None, "");
 	}
 
-	/// An opening tag with the element's id and classes, then `extra`, raw attributes that
-	/// start with a blank.
-	fn open_with(&mut self, document: &Document, id: ElementId, tag: &str, extra: &str) {
+	/// An opening tag with the element's id, `class` then the element's classes, and
+	/// `extra`: raw attributes that start with a blank.
+	fn open_with(
+		&mut self,
+		document: &Document,
+		id: ElementId,
+		tag: &str,
+		class: Option<&str>,
+		extra: &str,
+	) {
 		let attributes = &document.get(id).attributes;
 		self.raw("<");
 		self.raw(tag);
@@ -113,9 +124,13 @@ impl Output {
 			self.attribute(id);
 			self.raw("\"");
 		}
-		if !attributes.classes.is_empty() {
+		let classes: Vec<&str> = class
+			.into_iter()
+			.chain(attributes.classes.iter().map(String::as_str))
+			.collect();
+		if !classes.is_empty() {
 			self.raw(" class=\"");
-			self.attribute(&attributes.classes.join(" "));
+			self.attribute(&classes.join(" "));
 			self.raw("\"");
 		}
 		self.raw(extra);
@@ -155,6 +170,43 @@ impl Output {
 			}
 		}
 		self.raw("</li>\n");
+	}
+
+	/// A code block: its title, the line numbers in a gutter, and the highlighted code.
+	fn code_block(
+		&mut self,
+		document: &Document,
+		id: ElementId,
+		language: Option<&str>,
+		code: &str,
+		first_line: Option<i64>,
+	) {
+		let mut extra = String::new();
+		if let Some(language) = language {
+			extra.push_str(" data-language=\"");
+			escape(&mut extra, language, true);
+			extra.push('"');
+		}
+		self.open_with(document, id, "figure", Some("code-block"), &extra);
+		self.raw("\n");
+		if !document.get(id).children().is_empty() {
+			self.raw("<figcaption>");
+			self.children(document, id);
+			self.raw("</figcaption>\n");
+		}
+		self.raw("<div class=\"code\">");
+		if let Some(first) = first_line {
+			let lines = code.split('\n').count() as i64;
+			self.raw("<pre class=\"line-numbers\" aria-hidden=\"true\">");
+			let numbers: Vec<String> = (0..lines)
+				.map(|line| first.saturating_add(line).to_string())
+				.collect();
+			self.raw(&numbers.join("\n"));
+			self.raw("</pre>");
+		}
+		self.raw("<pre><code>");
+		self.raw(&nml_render::highlight(code, language));
+		self.raw("</code></pre></div>\n</figure>\n");
 	}
 
 	/// Records the position of a slot's value.
@@ -213,10 +265,15 @@ impl Output {
 				let mut href = String::from(" href=\"");
 				escape(&mut href, url, true);
 				href.push('"');
-				self.open_with(document, id, "a", &href);
+				self.open_with(document, id, "a", None, &href);
 				self.children(document, id);
 				self.raw("</a>");
 			}
+			ElementKind::CodeBlock {
+				language,
+				code,
+				first_line,
+			} => self.code_block(document, id, language.as_deref(), code, *first_line),
 			ElementKind::List(kind) => {
 				let tag = match kind {
 					ListKind::Bullet => "ul",
@@ -226,7 +283,7 @@ impl Output {
 					ListKind::Numbered { start } if *start != 1 => format!(" start=\"{start}\""),
 					_ => String::new(),
 				};
-				self.open_with(document, id, tag, &start);
+				self.open_with(document, id, tag, None, &start);
 				self.raw("\n");
 				self.children(document, id);
 				self.raw("</");
