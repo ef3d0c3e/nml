@@ -33,15 +33,25 @@ pub struct Config {
 	pub modules: Vec<Module>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HtmlConfig {
 	/// The `lang` of every page.
 	pub language: Option<String>,
 	/// Stylesheet URLs, linked from every page.
-	#[serde(default)]
 	pub stylesheets: Vec<String>,
 	pub icon: Option<String>,
+	/// The theme of highlighted code, one of syntect's built-in themes.
+	pub code_theme: String,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawHtml {
+	language: Option<String>,
+	#[serde(default)]
+	stylesheets: Vec<String>,
+	icon: Option<String>,
+	code_theme: Option<Spanned<String>>,
 }
 
 /// A `[[module]]` section: `:import name.a.b` resolves to `<root>/a/b.nml`.
@@ -62,7 +72,7 @@ struct Raw {
 	output: Option<PathBuf>,
 	database: Option<PathBuf>,
 	#[serde(default)]
-	html: HtmlConfig,
+	html: RawHtml,
 	#[serde(default, rename = "module")]
 	modules: Vec<RawModule>,
 }
@@ -134,6 +144,28 @@ impl Config {
 			modules.push((module, location));
 		}
 
+		let code_theme = match raw.html.code_theme {
+			Some(theme) => {
+				let themes = nml_render::theme_names();
+				if !themes.contains(&theme.get_ref().as_str()) {
+					let kind = DiagnosticKind::UnknownCodeTheme {
+						theme: theme.get_ref().clone(),
+						themes: themes.join(", "),
+					};
+					let location = DiagnosticMessage::new(token(theme.span()));
+					diagnostics.push(Diagnostic::new(kind, location));
+				}
+				theme.into_inner()
+			}
+			None => nml_render::DEFAULT_THEME.to_string(),
+		};
+		let html = HtmlConfig {
+			language: raw.html.language,
+			stylesheets: raw.html.stylesheets,
+			icon: raw.html.icon,
+			code_theme,
+		};
+
 		if !diagnostics.is_empty() {
 			return Err(diagnostics);
 		}
@@ -144,7 +176,7 @@ impl Config {
 			exclude_set,
 			output: raw.output.unwrap_or_else(|| "public".into()),
 			database: raw.database.unwrap_or_else(|| ".nml/index.db".into()),
-			html: raw.html,
+			html,
 			modules: modules.into_iter().map(|(module, _)| module).collect(),
 		})
 	}
@@ -201,6 +233,7 @@ mod tests {
 		assert_eq!(config.output, Path::new("public"));
 		assert_eq!(config.database, Path::new(".nml/index.db"));
 		assert!(config.modules.is_empty());
+		assert_eq!(config.html.code_theme, nml_render::DEFAULT_THEME);
 		assert!(config.is_page(Path::new("a/b.nml")));
 		assert!(!config.is_page(Path::new("a/b.txt")));
 	}
@@ -218,6 +251,7 @@ database = "index.db"
 language = "en"
 stylesheets = ["style.css"]
 icon = "icon.png"
+code_theme = "InspiredGitHub"
 
 [[module]]
 name = "std"
@@ -236,6 +270,7 @@ root = "lib/nav"
 		assert_eq!(config.output, Path::new("site"));
 		assert_eq!(config.html.language.as_deref(), Some("en"));
 		assert_eq!(config.html.stylesheets, ["style.css"]);
+		assert_eq!(config.html.code_theme, "InspiredGitHub");
 		assert_eq!(
 			config.modules,
 			[
@@ -265,6 +300,9 @@ root = "lib/nav"
 		)
 		.unwrap_err();
 		assert_diagnostics!(diagnostics, [3003 @ 9..15, 3004 @ 35..40, 3005 @ 103..106]);
+
+		let diagnostics = parse("[html]\ncode_theme = \"nope\"\n").unwrap_err();
+		assert_diagnostics!(diagnostics, [3011 @ 20..26]);
 	}
 
 	#[test]
