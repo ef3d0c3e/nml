@@ -51,6 +51,8 @@ pub(crate) enum Context<'a> {
 	Command { line_start: bool },
 	/// After `:import `.
 	Module,
+	/// After the fence of a code block: its language.
+	CodeLanguage,
 	/// Inside the option list of the command `opener`: a name, or the value of `key`.
 	Option {
 		opener: &'a str,
@@ -78,11 +80,16 @@ pub(crate) fn context(prefix: &str) -> Option<(Context<'_>, &str)> {
 			});
 		}
 	}
-	if prefix.starts_with(':')
+	let fence = prefix.len() - prefix.trim_start_matches('`').len();
+	if fence >= 3 && !prefix[fence..].contains(['[', ' ']) {
+		return Some((Context::CodeLanguage, &prefix[fence..]));
+	}
+	if (prefix.starts_with(':') || fence >= 3)
 		&& let Some(open) = prefix.find('[')
 		&& !prefix[open..].contains(']')
 	{
-		let opener = &prefix[..open];
+		// A code block's options belong to its fence, whatever the language.
+		let opener = if fence >= 3 { "```" } else { &prefix[..open] };
 		let entries: Vec<_> = prefix[open + 1..].split(',').collect();
 		let (current, done) = entries.split_last().unwrap();
 		let given = done
@@ -136,6 +143,27 @@ pub(crate) fn commands(rules: &RuleSet, line_start: bool) -> Vec<Candidate> {
 		.into_iter()
 		.map(|(opener, name)| candidate(opener, Some(name), CompletionItemKind::KEYWORD))
 		.collect()
+}
+
+/// The languages of code blocks: their names, as one word in lower case, and their file
+/// extensions.
+fn code_languages() -> Vec<Candidate> {
+	let mut seen = BTreeSet::new();
+	let mut candidates = Vec::new();
+	for (name, extensions) in nml_render::languages() {
+		let word = name.to_lowercase();
+		let words = (!word.contains(' ')).then_some(word);
+		for label in words.into_iter().chain(extensions.iter().cloned()) {
+			if seen.insert(label.clone()) {
+				candidates.push(candidate(
+					label,
+					Some(name.into()),
+					CompletionItemKind::ENUM_MEMBER,
+				));
+			}
+		}
+	}
+	candidates
 }
 
 /// The option schema of the command whose opener is `opener`.
@@ -270,6 +298,7 @@ impl Server {
 				.into_iter()
 				.map(|path| candidate(path, None, CompletionItemKind::MODULE))
 				.collect(),
+			Context::CodeLanguage => code_languages(),
 			Context::Option { opener, key, given } => match schema(language.rules(), opener) {
 				Some(schema) => options(schema, key, &given),
 				None => Vec::new(),
@@ -383,6 +412,29 @@ mod tests {
 			))
 		);
 		assert_eq!(context("plain text"), None);
+		assert_eq!(context("```ru"), Some((Context::CodeLanguage, "ru")));
+		assert_eq!(context("````"), Some((Context::CodeLanguage, "")));
+		assert_eq!(context("```rust Title"), None);
+		assert_eq!(
+			context("```rust[line"),
+			Some((
+				Context::Option {
+					opener: "```",
+					key: None,
+					given: vec![]
+				},
+				"line"
+			))
+		);
+		assert_eq!(
+			code_languages()
+				.into_iter()
+				.find(|c| c.label == "rs")
+				.and_then(|c| c.detail)
+				.as_deref(),
+			Some("Rust")
+		);
+		assert!(code_languages().iter().any(|c| c.label == "rust"));
 	}
 
 	#[test]
