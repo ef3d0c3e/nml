@@ -54,6 +54,22 @@ pub enum ElementKind {
 		/// The number of the first line, if lines are numbered.
 		first_line: Option<i64>,
 	},
+	/// An image, a video or an audio file.
+	Media {
+		kind: MediaKind,
+		/// Relative to the page, or absolute.
+		url: String,
+		/// The text that stands for the medium.
+		alt: String,
+		/// A CSS width, such as `50%` or `20em`.
+		width: Option<String>,
+	},
+	/// A numbered figure: its first child is the block it shows, its second the caption.
+	Figure {
+		number: u32,
+	},
+	/// The caption of a figure; its children are the text.
+	Caption,
 	/// A list; its children are list items.
 	List(ListKind),
 	/// An item of a list; its children are blocks.
@@ -75,6 +91,9 @@ impl ElementKind {
 		"code",
 		"link",
 		"code_block",
+		"media",
+		"figure",
+		"caption",
 		"list",
 		"list_item",
 	];
@@ -92,8 +111,42 @@ impl ElementKind {
 			ElementKind::Code(_) => "code",
 			ElementKind::Link { .. } => "link",
 			ElementKind::CodeBlock { .. } => "code_block",
+			ElementKind::Media { .. } => "media",
+			ElementKind::Figure { .. } => "figure",
+			ElementKind::Caption => "caption",
 			ElementKind::List(_) => "list",
 			ElementKind::ListItem { .. } => "list_item",
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MediaKind {
+	Image,
+	Video,
+	Audio,
+}
+
+impl MediaKind {
+	/// The kind of a file, from its extension.
+	pub fn from_path(path: &str) -> Option<Self> {
+		let path = path.split(['?', '#']).next().unwrap_or(path);
+		let extension = path.rsplit_once('.')?.1.to_ascii_lowercase();
+		Some(match extension.as_str() {
+			"png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "avif" | "bmp" | "ico" => {
+				MediaKind::Image
+			}
+			"mp4" | "webm" | "mov" | "m4v" | "ogv" => MediaKind::Video,
+			"mp3" | "ogg" | "oga" | "flac" | "wav" | "m4a" | "opus" | "aac" => MediaKind::Audio,
+			_ => return None,
+		})
+	}
+
+	pub fn name(self) -> &'static str {
+		match self {
+			MediaKind::Image => "image",
+			MediaKind::Video => "video",
+			MediaKind::Audio => "audio",
 		}
 	}
 }
@@ -152,5 +205,30 @@ impl Element {
 
 	pub fn children(&self) -> &[ElementId] {
 		&self.children
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn media_kinds() {
+		for (path, kind) in [
+			("a.png", Some(MediaKind::Image)),
+			("dir.v2/A.JPG", Some(MediaKind::Image)),
+			("https://x.y/clip.webm?t=3#start", Some(MediaKind::Video)),
+			("song.flac", Some(MediaKind::Audio)),
+			("notes.txt", None),
+			("noextension", None),
+		] {
+			assert_eq!(MediaKind::from_path(path), kind, "{path}");
+		}
+	}
+
+	#[test]
+	fn names() {
+		assert_eq!(ElementKind::NAMES.len(), 15);
+		assert!(ElementKind::NAMES.contains(&ElementKind::Caption.name()));
 	}
 }

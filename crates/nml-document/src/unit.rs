@@ -230,6 +230,9 @@ pub struct Unit {
 	pub exports: Vec<Export>,
 	pub uses: Vec<Use>,
 	pub dependencies: Vec<Dependency>,
+	/// Workspace files the unit's page shows (images, videos, …), by workspace path: they
+	/// are copied to the output with it.
+	pub assets: Vec<String>,
 }
 
 #[cfg(test)]
