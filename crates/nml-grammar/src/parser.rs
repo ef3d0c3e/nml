@@ -567,6 +567,7 @@ impl Parser<'_> {
 			}
 			Op::Options(schema) => self.options(schema, pos, end),
 			Op::Container(prefix) => self.container(context, prefix, pos),
+			Op::Block => self.block(context, pos),
 			Op::Run { char, min } => match self.run(*char, pos, end) {
 				(count, len) if count >= *min => matched(len),
 				_ => Err(self.expected(op, pos, end)),
@@ -643,7 +644,7 @@ impl Parser<'_> {
 			Op::Repeat { ops, .. } => self.starts_seq(ops, pos, end, captures),
 			Op::Run { char, min } => self.run(*char, pos, end).0 >= *min,
 			Op::Options(_) => rest.starts_with('['),
-			Op::Container(_) => true,
+			Op::Container(_) | Op::Block => true,
 			Op::Same { name, run } => same(captures, name, *run)
 				.is_some_and(|close| self.close_at(&close, pos, end).is_some()),
 			Op::Text(_) | Op::RestOfLine | Op::InlineContent(_) | Op::Content(_) => true,
@@ -720,6 +721,46 @@ impl Parser<'_> {
 			Diagnostic::new(kind, DiagnosticMessage::new(location)),
 			pos,
 		))
+	}
+
+	/// One block from `start`, which must start a line: a match of a block rule, or a
+	/// paragraph. Comment lines before it are part of it.
+	fn block(&mut self, context: &Context, start: usize) -> Result<(usize, Value), Error> {
+		self.check_nesting(context, start)?;
+		let end = context.end;
+		let mut nodes = Vec::new();
+		let mut pos = start;
+		while pos < end
+			&& self.is_line_start(pos)
+			&& let Some(len) = self.comment(pos, end)
+		{
+			nodes.push(Node::Comment(self.token(pos..pos + len)));
+			pos = self.next_line(pos, end);
+		}
+		let missing = |this: &Self| Err(this.expected(&Op::Block, pos, end));
+		if pos >= end || !self.is_line_start(pos) || self.is_blank_line(pos, end) {
+			return missing(self);
+		}
+		let after = match self.next(Table::Block, pos, end) {
+			// A delimiter of an enclosing construct, such as `:end`.
+			Err(_) => return missing(self),
+			Ok(Some((rule, len))) => {
+				let m = self.rule(rule, pos..pos + len, end);
+				let after = m.token.end();
+				nodes.push(Node::Match(m));
+				after
+			}
+			Ok(None) => {
+				let (content_end, next) = self.paragraph_end(pos, end);
+				let (children, _, _) = self.inline(pos, content_end);
+				nodes.push(Node::Paragraph {
+					token: self.token(pos..content_end),
+					children,
+				});
+				next
+			}
+		};
+		Ok((after, Value::Nodes(nodes)))
 	}
 
 	/// A container from `start`: the lines that belong to it, without their prefix, are
@@ -1816,6 +1857,47 @@ pub(crate) mod tests {
 			r#"numbered(number=10 check="[x] " body=[P["a\nb"]]) numbered(number=9 body=[P["c"]]) P["2024 was\n1.5"]"#,
 		);
 		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
+	fn single_blocks() {
+		let mut rules = container_rules();
+		let figure = Rule::new(
+			"figure",
+			vec![
+				Atom::LineStart,
+				lit(":fig"),
+				Atom::LineEnd,
+				Atom::capture("body", Atom::Block),
+			],
+		);
+		rules.add(figure).unwrap();
+		let check = |text: &str, expected: &str| {
+			let parsed = parse(&rules, source(text));
+			assert_eq!(show(&rules, &parsed.nodes), expected);
+			parsed.diagnostics
+		};
+		// The block is a paragraph, up to its end.
+		let diagnostics = check(":fig\na\nb\n\nc", r#"figure(body=[P["a\nb"]]) P["c"]"#);
+		assert_diagnostics!(diagnostics, []);
+		// Or a match of a block rule, after comment lines.
+		let diagnostics = check(
+			":fig\n:: note\n- a\n  b\nc",
+			r#"figure(body=[C(:: note) item(body=[P["a\nb"]])]) P["c"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+		// Figures nest.
+		let diagnostics = check(":fig\n:fig\nx", r#"figure(body=[figure(body=[P["x"]])])"#);
+		assert_diagnostics!(diagnostics, []);
+
+		for (missing, expected) in [
+			(":fig", "figure!()"),
+			(":fig\n", "figure!()"),
+			(":fig\n\nx", r#"figure!() P["x"]"#),
+		] {
+			let diagnostics = check(missing, expected);
+			assert_diagnostics!(diagnostics, [1003]);
+		}
 	}
 
 	#[test]

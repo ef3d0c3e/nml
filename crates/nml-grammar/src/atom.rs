@@ -51,6 +51,9 @@ pub enum Atom {
 	/// The rest of the line and the following lines that carry the prefix, with the prefix
 	/// removed, parsed as blocks. It must be the last atom of a block rule.
 	Container(Prefix),
+	/// Exactly one block, starting on the next line: a match of a block rule or a paragraph,
+	/// like the block a `:figure` applies to. It must be the last atom of a block rule.
+	Block,
 }
 
 /// The line prefix of a container.
@@ -131,6 +134,7 @@ impl Atom {
 			Atom::Same(_) => "Same",
 			Atom::Options(_) => "Options",
 			Atom::Container(_) => "Container",
+			Atom::Block => "Block",
 		}
 	}
 
@@ -157,7 +161,8 @@ impl Atom {
 			| Atom::RestOfLine
 			| Atom::InlineContent
 			| Atom::Content
-			| Atom::Container(_) => false,
+			| Atom::Container(_)
+			| Atom::Block => false,
 		}
 	}
 }
@@ -199,6 +204,7 @@ pub(crate) enum Op {
 	},
 	Options(Arc<OptionSchema>),
 	Container(Prefix),
+	Block,
 }
 
 impl Op {
@@ -220,6 +226,7 @@ impl Op {
 			Op::Same { .. } => "Same",
 			Op::Options(_) => "Options",
 			Op::Container(_) => "Container",
+			Op::Block => "Block",
 		}
 	}
 }

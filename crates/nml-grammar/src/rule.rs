@@ -424,6 +424,7 @@ fn compile(
 			}
 			Atom::Options(schema) => Op::Options(schema.clone()),
 			Atom::Container(prefix) => Op::Container(prefix.clone()),
+			Atom::Block => Op::Block,
 			Atom::Same(name) => Op::Same {
 				name: name.as_str().into(),
 				run: same(captured, name)?,
@@ -457,11 +458,11 @@ fn compile(
 	Ok(ops)
 }
 
-/// A container may only be the last atom of a block rule, possibly captured.
+/// A container or a block may only be the last atom of a block rule, possibly captured.
 fn check_containers(rule: &Rule) -> Result<(), RuleErrorKind> {
 	fn contains(atom: &Atom) -> bool {
 		match atom {
-			Atom::Container(_) => true,
+			Atom::Container(_) | Atom::Block => true,
 			Atom::Capture { atom, .. } => contains(atom),
 			Atom::Or(alternatives) => alternatives.iter().flatten().any(contains),
 			Atom::Repeat { atoms, .. } => atoms.iter().any(contains),
@@ -477,7 +478,7 @@ fn check_containers(rule: &Rule) -> Result<(), RuleErrorKind> {
 	}
 	let misplaced = rest.iter().any(contains)
 		|| (contains(last)
-			&& (!matches!(last, Atom::Container(_)) || rule.table() != Table::Block));
+			&& (!matches!(last, Atom::Container(_) | Atom::Block) || rule.table() != Table::Block));
 	if misplaced {
 		Err(RuleErrorKind::MisplacedContainer)
 	} else {
@@ -846,6 +847,8 @@ mod tests {
 				lit(">"),
 				Atom::optional(vec![lit("x"), container()]),
 			],
+			vec![lit(">"), Atom::Block],
+			vec![Atom::LineStart, lit(">"), Atom::Block, Atom::LineEnd],
 		] {
 			assert_eq!(
 				kind(&mut rules, Rule::new("r", atoms)),
