@@ -72,6 +72,8 @@ pub enum DiagnosticKind {
 	SecondReferenceName { name: String },
 	#[diag(id = 2012, message = "diagnostic-unknown-code-language", severity = warning)]
 	UnknownCodeLanguage { language: String },
+	#[diag(id = 2013, message = "diagnostic-unknown-media-type")]
+	UnknownMediaType { url: String },
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]
