@@ -296,7 +296,22 @@ impl Builder {
 		for path in std::mem::take(&mut self.to_link) {
 			self.link(&path)?;
 		}
-		Ok(())
+		self.write_code_stylesheet()
+	}
+
+	/// Writes the stylesheet of highlighted code, if it changed.
+	fn write_code_stylesheet(&self) -> Result<(), BuildError> {
+		if !self.write {
+			return Ok(());
+		}
+		// The theme was checked with the configuration.
+		let css = nml_render::stylesheet(&self.config.html.code_theme).unwrap_or_default();
+		let path = self.output.join(nml_html::CODE_STYLESHEET);
+		if fs::read_to_string(&path).is_ok_and(|current| current == css) {
+			return Ok(());
+		}
+		fs::create_dir_all(&self.output).map_err(|e| BuildError::Io(self.output.clone(), e))?;
+		fs::write(&path, css).map_err(|e| BuildError::Io(path, e))
 	}
 
 	fn remove(&mut self, path: &str) -> Result<(), BuildError> {
@@ -362,10 +377,20 @@ impl Builder {
 		let name = unit.reference_key.as_deref().unwrap_or(basename);
 		let title = title(document).unwrap_or_else(|| basename.to_string());
 		let template = (file.role == Role::Page).then(|| {
+			let mut stylesheets = self.config.html.stylesheets.clone();
+			let has_code = document
+				.descendants(document.root())
+				.any(|(_, element)| matches!(element.kind, ElementKind::CodeBlock { .. }));
+			if has_code {
+				stylesheets.push(nml_lang::relative_output_url(
+					&file.path,
+					nml_html::CODE_STYLESHEET,
+				));
+			}
 			let options = PageOptions {
 				language: self.config.html.language.clone(),
 				title: title.clone(),
-				stylesheets: self.config.html.stylesheets.clone(),
+				stylesheets,
 				icon: self.config.html.icon.clone(),
 			};
 			store_template(document, &nml_html::compile(document, &options))

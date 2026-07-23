@@ -667,3 +667,27 @@ fn overlays_replace_files() {
 	assert_eq!(source.content(), "in memory\n");
 	assert_eq!(resolver.read("a.nml", "part.nml").unwrap().1, "in memory\n");
 }
+
+#[test]
+fn code_stylesheet() {
+	let workspace = Workspace::new(
+		"code-stylesheet",
+		&[
+			("nml.toml", ""),
+			("index.nml", "No code."),
+			("docs/a.nml", "```rust\nfn main() {}\n```\n"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	let link = "<link rel=\"stylesheet\" href=\"../nml-code.css\">";
+	assert!(workspace.output("docs/a.html").contains(link));
+	assert!(!workspace.output("index.html").contains("nml-code.css"));
+	let css = workspace.output("nml-code.css");
+	assert!(css.contains(".hl-"), "{css}");
+
+	// A new theme rewrites the stylesheet.
+	workspace.write("nml.toml", "[html]\ncode_theme = \"InspiredGitHub\"\n");
+	workspace.build();
+	assert_ne!(workspace.output("nml-code.css"), css);
+}
