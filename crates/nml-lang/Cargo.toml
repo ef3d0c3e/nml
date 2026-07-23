@@ -8,6 +8,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+blake3.workspace = true
 nml-source.workspace = true
 nml-diagnostics.workspace = true
 nml-grammar.workspace = true

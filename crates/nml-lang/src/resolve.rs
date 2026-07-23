@@ -25,6 +25,10 @@ pub trait Resolver: Send + Sync {
 
 	/// A module (`std.toc`): its workspace path and source.
 	fn module(&self, module: &str) -> Result<(String, Arc<Source>), ResolveError>;
+
+	/// A file a page shows, such as an image (`path` written in the file at `from`): its
+	/// workspace path and the hash of its content (BLAKE3, in hexadecimal).
+	fn asset(&self, from: &str, path: &str) -> Result<(String, String), ResolveError>;
 }
 
 /// The workspace path of `path` written in the file at `from`: relative to that file's
@@ -114,6 +118,14 @@ impl Resolver for MemoryResolver {
 		let resolved = resolve_file(from, path).ok_or_else(not_found)?;
 		let content = self.files.get(&resolved).ok_or_else(not_found)?;
 		Ok((resolved, content.clone()))
+	}
+
+	fn asset(&self, from: &str, path: &str) -> Result<(String, String), ResolveError> {
+		let (resolved, content) = self.read(from, path)?;
+		Ok((
+			resolved,
+			blake3::hash(content.as_bytes()).to_hex().to_string(),
+		))
 	}
 
 	fn module(&self, module: &str) -> Result<(String, Arc<Source>), ResolveError> {

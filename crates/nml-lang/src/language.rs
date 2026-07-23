@@ -172,6 +172,7 @@ pub fn compile(
 		exports: Vec::new(),
 		uses: Vec::new(),
 		dependencies: Vec::new(),
+		assets: Vec::new(),
 		diagnostics: Vec::new(),
 		variables: HashMap::new(),
 		prologue: true,
@@ -219,6 +220,7 @@ pub fn compile(
 		exports,
 		uses,
 		dependencies,
+		assets,
 		diagnostics: lowering_diagnostics,
 		mut variables,
 		extended,
@@ -235,6 +237,7 @@ pub fn compile(
 			exports,
 			uses,
 			dependencies,
+			assets,
 		},
 		tree,
 		language: extended,
@@ -252,6 +255,8 @@ pub struct Lower<'a, 'l> {
 	pub exports: Vec<Export>,
 	pub uses: Vec<Use>,
 	pub dependencies: Vec<Dependency>,
+	/// Workspace files the page shows, copied to the output with it.
+	pub assets: Vec<String>,
 	pub diagnostics: Vec<Diagnostic>,
 	/// Variables set with `:set`: their value and where their name is written.
 	pub variables: HashMap<String, (String, Token)>,

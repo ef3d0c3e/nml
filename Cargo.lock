@@ -783,6 +783,7 @@ dependencies = [
 name = "nml-lang"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "nml-diagnostics",
  "nml-document",
  "nml-grammar",
