@@ -3,6 +3,7 @@ use nml_document::Document;
 use nml_document::ElementId;
 use nml_document::ElementKind;
 use nml_document::ListKind;
+use nml_document::MediaKind;
 use nml_document::OutputContext;
 use nml_document::Slot;
 use nml_document::SlotId;
@@ -274,6 +275,65 @@ impl Output {
 				code,
 				first_line,
 			} => self.code_block(document, id, language.as_deref(), code, *first_line),
+			ElementKind::Media {
+				kind,
+				url,
+				alt,
+				width,
+			} => {
+				let mut extra = String::from(" src=\"");
+				escape(&mut extra, url, true);
+				extra.push('"');
+				if *kind == MediaKind::Image {
+					extra.push_str(" alt=\"");
+					escape(&mut extra, alt, true);
+					extra.push('"');
+				} else {
+					extra.push_str(" controls");
+				}
+				if let Some(width) = width {
+					extra.push_str(" style=\"width: ");
+					escape(&mut extra, width, true);
+					extra.push('"');
+				}
+				let tag = match kind {
+					MediaKind::Image => "img",
+					MediaKind::Video => "video",
+					MediaKind::Audio => "audio",
+				};
+				self.open_with(document, id, tag, None, &extra);
+				if *kind != MediaKind::Image {
+					// Shown where the medium cannot be played.
+					self.text(alt);
+					self.raw("</");
+					self.raw(tag);
+					self.raw(">");
+				}
+			}
+			ElementKind::Figure { number } => {
+				self.open_with(document, id, "figure", None, "");
+				self.raw("\n");
+				for (child, element) in document.children(id) {
+					match &element.kind {
+						// A paragraph that holds the figure's media is not a paragraph of text.
+						ElementKind::Paragraph => {
+							self.children(document, child);
+							self.raw("\n");
+						}
+						ElementKind::Caption => {
+							self.open(document, child, "figcaption");
+							self.raw(&format!(
+								"<span class=\"figure-number\">Figure {number}:</span> "
+							));
+							self.children(document, child);
+							self.raw("</figcaption>\n");
+						}
+						_ => self.element(document, child),
+					}
+				}
+				self.raw("</figure>\n");
+			}
+			ElementKind::Caption => self.wrap(document, id, "figcaption"),
 			ElementKind::List(kind) => {
 				let tag = match kind {
 					ListKind::Bullet => "ul",

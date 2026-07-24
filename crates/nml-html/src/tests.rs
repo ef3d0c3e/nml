@@ -12,12 +12,22 @@ use crate::compile;
 
 /// The body of the page compiled from `text`, which must have no errors.
 fn body(text: &str) -> String {
-	let source = Source::new(Url::parse("file:///page.nml").unwrap(), text.into(), 0);
+	body_with(text, &[])
+}
+
+/// The body of the page `docs/page.nml` compiled from `text`, with other files of the
+/// workspace.
+fn body_with(text: &str, files: &[(&str, &str)]) -> String {
+	let source = Source::new(Url::parse("file:///docs/page.nml").unwrap(), text.into(), 0);
+	let mut resolver = MemoryResolver::default();
+	for (path, content) in files {
+		resolver.files.insert(path.to_string(), content.to_string());
+	}
 	let compiled = nml_lang::compile(
 		&Language::builtin(),
 		Arc::new(source),
-		"page.nml",
-		Arc::new(MemoryResolver::default()),
+		"docs/page.nml",
+		Arc::new(resolver),
 	);
 	assert!(
 		compiled.diagnostics.is_empty(),
@@ -89,4 +99,31 @@ fn code_blocks() {
 		"{html}"
 	);
 	assert!(html.contains("<span class=\"hl-"), "{html}");
+}
+
+#[test]
+fn media() {
+	assert_eq!(
+		body_with(
+			"![A \"flower\"](../img/a.png)[width=50%] ![Clip](c.webm) ![](https://x.y/s.mp3)",
+			&[("img/a.png", ""), ("docs/c.webm", "")]
+		),
+		"<p><img src=\"../img/a.png\" alt=\"A &quot;flower&quot;\" style=\"width: 50%\"> \
+		<video src=\"c.webm\" controls>Clip</video> \
+		<audio src=\"https://x.y/s.mp3\" controls></audio></p>\n"
+	);
+}
+
+#[test]
+fn figures() {
+	assert_eq!(
+		body_with(":figure #f A *flower*\n![](a.png)", &[("docs/a.png", "")]),
+		"<figure id=\"f\">\n<img src=\"a.png\" alt=\"\">\n\
+		<figcaption><span class=\"figure-number\">Figure 1:</span> A <em>flower</em></figcaption>\n\
+		</figure>\n"
+	);
+	assert_eq!(
+		body(":figure\n- a"),
+		"<figure>\n<ul>\n<li>a</li>\n</ul>\n</figure>\n"
+	);
 }
