@@ -127,3 +127,12 @@ fn figures() {
 		"<figure>\n<ul>\n<li>a</li>\n</ul>\n</figure>\n"
 	);
 }
+
+#[test]
+fn raw_output() {
+	assert_eq!(
+		body("a :raw`<br>` b\n:raw\n```\n<hr class=\"x\">\n```"),
+		"<p>a <br> b</p>\n<hr class=\"x\">\n"
+	);
+	assert_eq!(body("# A :raw`<sup>2</sup>`"), "<h1>A <sup>2</sup></h1>\n");
+}

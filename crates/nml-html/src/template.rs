@@ -334,6 +334,12 @@ impl Output {
 				self.raw("</figure>\n");
 			}
 			ElementKind::Caption => self.wrap(document, id, "figcaption"),
+			ElementKind::Raw { content, block } => {
+				self.raw(content);
+				if *block {
+					self.raw("\n");
+				}
+			}
 			ElementKind::List(kind) => {
 				let tag = match kind {
 					ListKind::Bullet => "ul",
