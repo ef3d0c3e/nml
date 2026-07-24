@@ -70,6 +70,12 @@ pub enum ElementKind {
 	},
 	/// The caption of a figure; its children are the text.
 	Caption,
+	/// Output written as is, without escaping (HTML for the HTML backend).
+	Raw {
+		content: String,
+		/// Whether it is a block, rather than inline content.
+		block: bool,
+	},
 	/// A list; its children are list items.
 	List(ListKind),
 	/// An item of a list; its children are blocks.
@@ -94,6 +100,7 @@ impl ElementKind {
 		"media",
 		"figure",
 		"caption",
+		"raw",
 		"list",
 		"list_item",
 	];
@@ -114,6 +121,7 @@ impl ElementKind {
 			ElementKind::Media { .. } => "media",
 			ElementKind::Figure { .. } => "figure",
 			ElementKind::Caption => "caption",
+			ElementKind::Raw { .. } => "raw",
 			ElementKind::List(_) => "list",
 			ElementKind::ListItem { .. } => "list_item",
 		}
@@ -228,7 +236,7 @@ mod tests {
 
 	#[test]
 	fn names() {
-		assert_eq!(ElementKind::NAMES.len(), 15);
+		assert_eq!(ElementKind::NAMES.len(), 16);
 		assert!(ElementKind::NAMES.contains(&ElementKind::Caption.name()));
 	}
 }
