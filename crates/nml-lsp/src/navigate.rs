@@ -196,7 +196,15 @@ impl Server {
 				export: Some(export),
 			}) => {
 				let title = export.property("title").unwrap_or(&export.name);
-				format!("**{title}**\n\n`{}` in `{}`", export.name, unit.path)
+				let mut value = format!("**{title}**\n\n`{}` in `{}`", export.name, unit.path);
+				// A figure's medium, which editors can show.
+				if let Some(media) = export.property("media")
+					&& let Some(root) = &self.root
+					&& let Ok(url) = Url::from_file_path(root.join(media))
+				{
+					value.push_str(&format!("\n\n![{title}]({url})"));
+				}
+				value
 			}
 			Ok(Target { unit, export: None }) => format!("**{}**\n\n`{}`", unit.title, unit.path),
 			Err(error) => {

@@ -351,6 +351,42 @@ fn navigation_workspace(name: &str) -> Workspace {
 }
 
 #[test]
+fn hover_shows_figures() {
+	let workspace = Workspace::new(
+		"hover-figures",
+		&[
+			("nml.toml", ""),
+			("a.nml", ":figure #f Flower\n![](f.png)\n\nSee [[f]].\n"),
+			("f.png", "png"),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let a = workspace.url("a.nml");
+	client.save(&a);
+	client.open(&a, &fs::read_to_string(workspace.0.join("a.nml")).unwrap());
+	client.diagnostics();
+	let result = client.request(
+		HoverRequest::METHOD,
+		serde_json::to_value(lsp_types::HoverParams {
+			text_document_position_params: at(&a, 3, 6),
+			work_done_progress_params: Default::default(),
+		})
+		.unwrap(),
+	);
+	let hover: lsp_types::Hover = serde_json::from_value(result).unwrap();
+	let lsp_types::HoverContents::Markup(markup) = hover.contents else {
+		unreachable!()
+	};
+	assert_eq!(
+		markup.value,
+		format!(
+			"**Flower**\n\n`f` in `a.nml`\n\n![Flower]({})",
+			workspace.url("f.png")
+		)
+	);
+}
+
+#[test]
 fn hover_and_definition() {
 	let workspace = navigation_workspace("hover");
 	let client = Client::start(Some(&workspace.0));
