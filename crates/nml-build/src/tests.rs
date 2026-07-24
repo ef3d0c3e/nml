@@ -691,3 +691,34 @@ fn code_stylesheet() {
 	workspace.build();
 	assert_ne!(workspace.output("nml-code.css"), css);
 }
+
+#[test]
+fn assets_are_copied() {
+	let workspace = Workspace::new(
+		"assets",
+		&[
+			("nml.toml", ""),
+			("docs/a.nml", ":figure #f Flower\n![](../img/flower.png)\n"),
+			("img/flower.png", "v1"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(
+		workspace
+			.output("docs/a.html")
+			.contains("<img src=\"../img/flower.png\" alt=\"\">")
+	);
+	assert_eq!(workspace.output("img/flower.png"), "v1");
+
+	// A new version of the file is copied: the page depends on it.
+	workspace.write("img/flower.png", "version 2");
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["docs/a.nml"]);
+	assert_eq!(workspace.output("img/flower.png"), "version 2");
+
+	// A missing file is an error.
+	workspace.remove("img/flower.png");
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3008]);
+}

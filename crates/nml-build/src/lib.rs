@@ -299,6 +299,29 @@ impl Builder {
 		self.write_code_stylesheet()
 	}
 
+	/// Copies a file a page shows to the same path in the output directory, unless the copy
+	/// is up to date: as large as the file, and not older.
+	fn copy_asset(&self, path: &str) -> Result<(), BuildError> {
+		if !self.write {
+			return Ok(());
+		}
+		let from = self.root.join(path);
+		let to = self.output.join(path);
+		let metadata = fs::metadata(&from).map_err(|e| BuildError::Io(from.clone(), e))?;
+		if let Ok(copy) = fs::metadata(&to)
+			&& copy.len() == metadata.len()
+			&& let (Ok(copied), Ok(modified)) = (copy.modified(), metadata.modified())
+			&& copied >= modified
+		{
+			return Ok(());
+		}
+		if let Some(parent) = to.parent() {
+			fs::create_dir_all(parent).map_err(|e| BuildError::Io(parent.into(), e))?;
+		}
+		fs::copy(&from, &to).map_err(|e| BuildError::Io(from, e))?;
+		Ok(())
+	}
+
 	/// Writes the stylesheet of highlighted code, if it changed.
 	fn write_code_stylesheet(&self) -> Result<(), BuildError> {
 		if !self.write {
@@ -371,6 +394,11 @@ impl Builder {
 		}
 
 		let unit = compiled.unit;
+		if file.role == Role::Page {
+			for asset in &unit.assets {
+				self.copy_asset(asset)?;
+			}
+		}
 		let document = &unit.document;
 		let basename = file.path.rsplit('/').next().unwrap();
 		let basename = basename.strip_suffix(".nml").unwrap_or(basename);
@@ -600,6 +628,20 @@ impl WorkspaceResolver {
 }
 
 impl Resolver for WorkspaceResolver {
+	fn asset(&self, from: &str, path: &str) -> Result<(String, String), ResolveError> {
+		let not_found = |path: &str| ResolveError::NotFound { path: path.into() };
+		let resolved = resolve_file(from, path).ok_or_else(|| not_found(path))?;
+		let hash = match self.overlay.get(&resolved) {
+			Some(content) => nml_workspace::hash(content.as_bytes()),
+			None => {
+				let bytes =
+					fs::read(self.root.join(&resolved)).map_err(|_| not_found(&resolved))?;
+				nml_workspace::hash(&bytes)
+			}
+		};
+		Ok((resolved, hex(&hash)))
+	}
+
 	fn read(&self, from: &str, path: &str) -> Result<(String, String), ResolveError> {
 		let not_found = |path: &str| ResolveError::NotFound { path: path.into() };
 		let resolved = resolve_file(from, path).ok_or_else(|| not_found(path))?;
