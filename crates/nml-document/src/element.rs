@@ -70,6 +70,17 @@ pub enum ElementKind {
 	},
 	/// The caption of a figure; its children are the text.
 	Caption,
+	/// A quotation; its children are blocks.
+	Quote {
+		author: Option<String>,
+		/// The title of the quoted work.
+		cite: Option<String>,
+		/// Where the quotation comes from.
+		url: Option<String>,
+	},
+	/// A callout (an admonition); its children are an optional [`Caption`](Self::Caption),
+	/// the title, then blocks.
+	Callout(CalloutKind),
 	/// Output written as is, without escaping (HTML for the HTML backend).
 	Raw {
 		content: String,
@@ -100,6 +111,8 @@ impl ElementKind {
 		"media",
 		"figure",
 		"caption",
+		"quote",
+		"callout",
 		"raw",
 		"list",
 		"list_item",
@@ -121,6 +134,8 @@ impl ElementKind {
 			ElementKind::Media { .. } => "media",
 			ElementKind::Figure { .. } => "figure",
 			ElementKind::Caption => "caption",
+			ElementKind::Quote { .. } => "quote",
+			ElementKind::Callout(_) => "callout",
 			ElementKind::Raw { .. } => "raw",
 			ElementKind::List(_) => "list",
 			ElementKind::ListItem { .. } => "list_item",
@@ -156,6 +171,45 @@ impl MediaKind {
 			MediaKind::Video => "video",
 			MediaKind::Audio => "audio",
 		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CalloutKind {
+	Note,
+	Tip,
+	Important,
+	Warning,
+	Caution,
+	Todo,
+}
+
+impl CalloutKind {
+	pub const ALL: [CalloutKind; 6] = [
+		CalloutKind::Note,
+		CalloutKind::Tip,
+		CalloutKind::Important,
+		CalloutKind::Warning,
+		CalloutKind::Caution,
+		CalloutKind::Todo,
+	];
+
+	pub fn name(self) -> &'static str {
+		match self {
+			CalloutKind::Note => "note",
+			CalloutKind::Tip => "tip",
+			CalloutKind::Important => "important",
+			CalloutKind::Warning => "warning",
+			CalloutKind::Caution => "caution",
+			CalloutKind::Todo => "todo",
+		}
+	}
+
+	/// The kind named `name`, in any case: `note`, `NOTE`.
+	pub fn from_name(name: &str) -> Option<Self> {
+		Self::ALL
+			.into_iter()
+			.find(|kind| kind.name().eq_ignore_ascii_case(name))
 	}
 }
 
@@ -236,7 +290,7 @@ mod tests {
 
 	#[test]
 	fn names() {
-		assert_eq!(ElementKind::NAMES.len(), 16);
+		assert_eq!(ElementKind::NAMES.len(), 18);
 		assert!(ElementKind::NAMES.contains(&ElementKind::Caption.name()));
 	}
 }
