@@ -90,19 +90,34 @@ impl fmt::Display for SymbolRef {
 pub enum SymbolKind {
 	Heading,
 	Figure,
+	Table,
 	Anchor,
 	/// An exported variable (`:export`).
 	Variable,
 }
 
 impl SymbolKind {
-	fn name(self) -> &'static str {
+	pub const ALL: [SymbolKind; 5] = [
+		SymbolKind::Heading,
+		SymbolKind::Figure,
+		SymbolKind::Table,
+		SymbolKind::Anchor,
+		SymbolKind::Variable,
+	];
+
+	/// The name of the kind, as it is stored.
+	pub fn name(self) -> &'static str {
 		match self {
 			SymbolKind::Heading => "heading",
 			SymbolKind::Figure => "figure",
+			SymbolKind::Table => "table",
 			SymbolKind::Anchor => "anchor",
 			SymbolKind::Variable => "variable",
 		}
+	}
+
+	pub fn from_name(name: &str) -> Option<Self> {
+		Self::ALL.into_iter().find(|kind| kind.name() == name)
 	}
 }
 

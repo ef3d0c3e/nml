@@ -86,6 +86,24 @@ pub enum ElementKind {
 	Layout(LayoutKind),
 	/// A part of a layout; its children are blocks.
 	LayoutPart,
+	/// A table: an optional [`Caption`](Self::Caption), then [`TableRow`](Self::TableRow)s.
+	Table {
+		/// The alignment of each column, from the separator row.
+		alignments: Vec<Alignment>,
+		/// How many rows, from the first, are header rows.
+		header_rows: usize,
+		/// The table's number, if it is a `:table` with a caption or a reference.
+		number: Option<u32>,
+	},
+	/// A row of a table; its children are cells.
+	TableRow,
+	/// A cell of a table; its children are its content.
+	TableCell {
+		/// How many columns it spans.
+		hspan: u32,
+		/// How many rows it spans.
+		vspan: u32,
+	},
 	/// Output written as is, without escaping (HTML for the HTML backend).
 	Raw {
 		content: String,
@@ -120,6 +138,9 @@ impl ElementKind {
 		"callout",
 		"layout",
 		"layout_part",
+		"table",
+		"table_row",
+		"table_cell",
 		"raw",
 		"list",
 		"list_item",
@@ -145,6 +166,9 @@ impl ElementKind {
 			ElementKind::Callout(_) => "callout",
 			ElementKind::Layout(_) => "layout",
 			ElementKind::LayoutPart => "layout_part",
+			ElementKind::Table { .. } => "table",
+			ElementKind::TableRow => "table_row",
+			ElementKind::TableCell { .. } => "table_cell",
 			ElementKind::Raw { .. } => "raw",
 			ElementKind::List(_) => "list",
 			ElementKind::ListItem { .. } => "list_item",
@@ -181,6 +205,16 @@ impl MediaKind {
 			MediaKind::Audio => "audio",
 		}
 	}
+}
+
+/// The alignment of a table column.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Alignment {
+	#[default]
+	Default,
+	Left,
+	Center,
+	Right,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -333,7 +367,7 @@ mod tests {
 
 	#[test]
 	fn names() {
-		assert_eq!(ElementKind::NAMES.len(), 20);
+		assert_eq!(ElementKind::NAMES.len(), 23);
 		assert!(ElementKind::NAMES.contains(&ElementKind::Caption.name()));
 	}
 }
