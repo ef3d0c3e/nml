@@ -232,7 +232,7 @@ pub fn compile(
 		unit: Unit {
 			reference_key: variables
 				.remove(crate::variable::REFERENCE_KEY)
-				.map(|(value, _)| value),
+				.map(|variable| variable.value.content().to_string()),
 			document: builder.finish(),
 			exports,
 			uses,
@@ -258,8 +258,9 @@ pub struct Lower<'a, 'l> {
 	/// Workspace files the page shows, copied to the output with it.
 	pub assets: Vec<String>,
 	pub diagnostics: Vec<Diagnostic>,
-	/// Variables set with `:set`: their value and where their name is written.
-	pub variables: HashMap<String, (String, Token)>,
+	/// Variables set with `:set` or `:export`, and those exported by imported modules
+	/// (`namespace.name`).
+	pub variables: HashMap<String, Variable>,
 	/// Whether the lowering is still in the prologue.
 	pub prologue: bool,
 	/// The workspace paths of the unit's file and of the files being included in it, the
@@ -273,6 +274,14 @@ pub struct Lower<'a, 'l> {
 	extensions: HashMap<TypeId, Box<dyn Any>>,
 	/// Run when the lowering ends, in the order they were added.
 	finishers: Vec<Finisher>,
+}
+
+/// A variable: where its name and its value are written.
+#[derive(Debug, Clone)]
+pub struct Variable {
+	pub name: Token,
+	/// The value as written: markup, parsed where the variable is substituted.
+	pub value: Token,
 }
 
 /// Code run when a unit's lowering ends.

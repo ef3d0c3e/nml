@@ -25,6 +25,7 @@ pub use language::Import;
 pub use language::ImportHook;
 pub use language::Language;
 pub use language::Lower;
+pub use language::Variable;
 pub use language::compile;
 pub use resolve::MemoryResolver;
 pub use resolve::ResolveError;
