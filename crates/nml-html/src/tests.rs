@@ -166,3 +166,24 @@ fn callouts() {
 		"<aside class=\"callout tip\">\n<p class=\"callout-title\">A <em>tip</em></p>\n<p>x</p>\n</aside>\n"
 	);
 }
+
+#[test]
+fn layouts() {
+	assert_eq!(
+		body(":layout split\na\n:next\nb\n:end"),
+		"<div class=\"layout split\" style=\"display: flex; gap: 1em\">\n\
+		<div class=\"part\" style=\"flex: 1\">\n<p>a</p>\n</div>\n\
+		<div class=\"part\" style=\"flex: 1\">\n<p>b</p>\n</div>\n</div>\n"
+	);
+	assert_eq!(
+		body(":layout centered\na\n:end"),
+		"<div class=\"layout centered\" style=\"text-align: center\">\n\
+		<div class=\"part\">\n<p>a</p>\n</div>\n</div>\n"
+	);
+	assert_eq!(
+		body(":layout spoiler The *answer*\n42\n:end"),
+		"<details class=\"layout spoiler\"><summary>The <em>answer</em></summary>\n\
+		<div class=\"part\">\n<p>42</p>\n</div>\n</details>\n"
+	);
+	assert!(body(":layout spoiler\n42\n:end").contains("<summary>Spoiler</summary>"));
+}

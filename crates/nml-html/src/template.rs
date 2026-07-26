@@ -2,6 +2,7 @@ use nml_document::Checkbox;
 use nml_document::Document;
 use nml_document::ElementId;
 use nml_document::ElementKind;
+use nml_document::LayoutKind;
 use nml_document::ListKind;
 use nml_document::MediaKind;
 use nml_document::OutputContext;
@@ -171,6 +172,54 @@ impl Output {
 			}
 		}
 		self.raw("</li>\n");
+	}
+
+	/// A layout. The styles that make it work are inline, so that it needs no stylesheet.
+	fn layout(&mut self, document: &Document, id: ElementId, kind: LayoutKind) {
+		let class = format!("layout {}", kind.name());
+		let mut children = document.children(id).peekable();
+		let title = children
+			.next_if(|(_, element)| element.kind == ElementKind::Caption)
+			.map(|(title, _)| title);
+		let part_style = match kind {
+			LayoutKind::Spoiler => {
+				self.open_with(document, id, "details", Some(&class), "");
+				self.raw("<summary>");
+				match title {
+					Some(title) => self.children(document, title),
+					None => self.text("Spoiler"),
+				}
+				self.raw("</summary>\n");
+				""
+			}
+			LayoutKind::Centered => {
+				self.open_with(
+					document,
+					id,
+					"div",
+					Some(&class),
+					" style=\"text-align: center\"",
+				);
+				self.raw("\n");
+				""
+			}
+			LayoutKind::Split => {
+				let style = " style=\"display: flex; gap: 1em\"";
+				self.open_with(document, id, "div", Some(&class), style);
+				self.raw("\n");
+				" style=\"flex: 1\""
+			}
+		};
+		for (part, _) in children {
+			self.open_with(document, part, "div", Some("part"), part_style);
+			self.raw("\n");
+			self.children(document, part);
+			self.raw("</div>\n");
+		}
+		self.raw(match kind {
+			LayoutKind::Spoiler => "</details>\n",
+			_ => "</div>\n",
+		});
 	}
 
 	/// A quotation, in a figure with its source if it has one.
@@ -409,6 +458,11 @@ impl Output {
 					self.element(document, child);
 				}
 				self.raw("</aside>\n");
+			}
+			ElementKind::Layout(kind) => self.layout(document, id, *kind),
+			ElementKind::LayoutPart => {
+				self.wrap(document, id, "div");
+				self.raw("\n");
 			}
 			ElementKind::Raw { content, block } => {
 				self.raw(content);
