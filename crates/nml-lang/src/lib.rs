@@ -6,6 +6,7 @@ mod import;
 mod include;
 mod inline;
 mod language;
+mod layout;
 mod list;
 mod media;
 mod quote;
@@ -47,6 +48,7 @@ impl Language {
 		media::add(&mut language).expect("built-in rules are valid");
 		raw::add(&mut language).expect("built-in rules are valid");
 		quote::add(&mut language).expect("built-in rules are valid");
+		layout::add(&mut language).expect("built-in rules are valid");
 		reference::add(&mut language).expect("built-in rules are valid");
 		inline::add(&mut language).expect("built-in rules are valid");
 		variable::add(&mut language).expect("built-in rules are valid");
