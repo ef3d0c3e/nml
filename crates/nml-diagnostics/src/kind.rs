@@ -88,6 +88,8 @@ pub enum DiagnosticKind {
 		expected: usize,
 		found: usize,
 	},
+	#[diag(id = 2019, message = "diagnostic-not-a-table")]
+	NotATable,
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]

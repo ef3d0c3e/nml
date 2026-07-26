@@ -22,6 +22,7 @@ diagnostic-duplicate-option = option `{ $name }` is given twice
 diagnostic-invalid-option-value = invalid value for `{ $name }`: expected { $expected ->
         [Text] text
         [Integer] an integer
+        [Positive] a positive integer
         [Number] a number
         [Bool] `true` or `false`
        *[other] one of { $expected }
@@ -43,6 +44,7 @@ diagnostic-layout-parts = the `{ $name }` layout has { $expected ->
     [one] one part
    *[other] { $expected } parts
 }, not { $found }
+diagnostic-not-a-table = `:table` applies to a table, which starts with `|`
 diagnostic-invalid-reference = `{ $target }` is not a reference: write `name`, `doc#name`, `doc#` or `#name`
 diagnostic-invalid-variable-name = `{ $name }` is not a variable name
 diagnostic-unknown-variable = `{ $name }` is not a variable of NML
