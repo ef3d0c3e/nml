@@ -173,6 +173,47 @@ impl Output {
 		self.raw("</li>\n");
 	}
 
+	/// A quotation, in a figure with its source if it has one.
+	fn quote(
+		&mut self,
+		document: &Document,
+		id: ElementId,
+		author: Option<&str>,
+		cite: Option<&str>,
+		url: Option<&str>,
+	) {
+		let sourced = author.is_some() || cite.is_some();
+		if sourced {
+			self.raw("<figure class=\"quote\">\n");
+		}
+		let mut extra = String::new();
+		if let Some(url) = url {
+			extra.push_str(" cite=\"");
+			escape(&mut extra, url, true);
+			extra.push('"');
+		}
+		self.open_with(document, id, "blockquote", None, &extra);
+		self.raw("\n");
+		self.children(document, id);
+		self.raw("</blockquote>\n");
+		if sourced {
+			self.raw("<figcaption>");
+			if let Some(author) = author {
+				self.raw("— ");
+				self.text(author);
+			}
+			if let Some(cite) = cite {
+				if author.is_some() {
+					self.raw(", ");
+				}
+				self.raw("<cite>");
+				self.text(cite);
+				self.raw("</cite>");
+			}
+			self.raw("</figcaption>\n</figure>\n");
+		}
+	}
+
 	/// A code block: its title, the line numbers in a gutter, and the highlighted code.
 	fn code_block(
 		&mut self,
@@ -334,6 +375,41 @@ impl Output {
 				self.raw("</figure>\n");
 			}
 			ElementKind::Caption => self.wrap(document, id, "figcaption"),
+			ElementKind::Quote { author, cite, url } => self.quote(
+				document,
+				id,
+				author.as_deref(),
+				cite.as_deref(),
+				url.as_deref(),
+			),
+			ElementKind::Callout(kind) => {
+				self.open_with(
+					document,
+					id,
+					"aside",
+					Some(&format!("callout {}", kind.name())),
+					"",
+				);
+				self.raw("\n<p class=\"callout-title\">");
+				let mut children = document.children(id).peekable();
+				match children.peek() {
+					Some((title, element)) if element.kind == ElementKind::Caption => {
+						self.children(document, *title);
+						children.next();
+					}
+					// The kind is the default title: `Note`.
+					_ => {
+						let name = kind.name();
+						self.text(&name[..1].to_uppercase());
+						self.text(&name[1..]);
+					}
+				}
+				self.raw("</p>\n");
+				for (child, _) in children {
+					self.element(document, child);
+				}
+				self.raw("</aside>\n");
+			}
 			ElementKind::Raw { content, block } => {
 				self.raw(content);
 				if *block {

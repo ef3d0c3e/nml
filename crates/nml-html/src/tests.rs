@@ -136,3 +136,33 @@ fn raw_output() {
 	);
 	assert_eq!(body("# A :raw`<sup>2</sup>`"), "<h1>A <sup>2</sup></h1>\n");
 }
+
+#[test]
+fn quotes() {
+	assert_eq!(
+		body("> a\n>\n> b"),
+		"<blockquote>\n<p>a</p>\n<p>b</p>\n</blockquote>\n"
+	);
+	assert_eq!(
+		body("> [!quote][author=Ada, cite=<Notes>, url=\"https://x.y\"]\n> x"),
+		"<figure class=\"quote\">\n<blockquote cite=\"https://x.y\">\n<p>x</p>\n</blockquote>\n\
+		<figcaption>— Ada, <cite>&lt;Notes&gt;</cite></figcaption>\n</figure>\n"
+	);
+	assert_eq!(
+		body("> [!quote][cite=Notes]\n> x"),
+		"<figure class=\"quote\">\n<blockquote>\n<p>x</p>\n</blockquote>\n\
+		<figcaption><cite>Notes</cite></figcaption>\n</figure>\n"
+	);
+}
+
+#[test]
+fn callouts() {
+	assert_eq!(
+		body("> [!warning]\n> x"),
+		"<aside class=\"callout warning\">\n<p class=\"callout-title\">Warning</p>\n<p>x</p>\n</aside>\n"
+	);
+	assert_eq!(
+		body("> [!TIP] A *tip*\n> x"),
+		"<aside class=\"callout tip\">\n<p class=\"callout-title\">A <em>tip</em></p>\n<p>x</p>\n</aside>\n"
+	);
+}
