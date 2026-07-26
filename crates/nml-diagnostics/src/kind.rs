@@ -80,6 +80,14 @@ pub enum DiagnosticKind {
 	UndefinedVariable { name: String },
 	#[diag(id = 2016, message = "diagnostic-variable-cycle")]
 	VariableCycle { name: String },
+	#[diag(id = 2017, message = "diagnostic-unknown-layout")]
+	UnknownLayout { name: String, layouts: String },
+	#[diag(id = 2018, message = "diagnostic-layout-parts")]
+	LayoutParts {
+		name: String,
+		expected: usize,
+		found: usize,
+	},
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]

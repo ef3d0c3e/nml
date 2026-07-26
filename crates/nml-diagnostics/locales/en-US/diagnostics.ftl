@@ -38,6 +38,11 @@ diagnostic-second-reference-name = a heading has one reference name, not `{ $nam
 diagnostic-unknown-code-language = `{ $language }` is not a known language: the code is not highlighted
 diagnostic-unknown-media-type = cannot tell whether `{ $url }` is an image, a video or an audio file: set its `type`
 diagnostic-unknown-callout = `{ $kind }` is not a kind of callout: use one of { $kinds }
+diagnostic-unknown-layout = `{ $name }` is not a layout: use one of { $layouts }
+diagnostic-layout-parts = the `{ $name }` layout has { $expected ->
+    [one] one part
+   *[other] { $expected } parts
+}, not { $found }
 diagnostic-invalid-reference = `{ $target }` is not a reference: write `name`, `doc#name`, `doc#` or `#name`
 diagnostic-invalid-variable-name = `{ $name }` is not a variable name
 diagnostic-unknown-variable = `{ $name }` is not a variable of NML
