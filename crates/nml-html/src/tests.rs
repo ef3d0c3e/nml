@@ -187,3 +187,19 @@ fn layouts() {
 	);
 	assert!(body(":layout spoiler\n42\n:end").contains("<summary>Spoiler</summary>"));
 }
+
+#[test]
+fn tables() {
+	assert_eq!(
+		body(":table #t Prices\n|Plan|Price|\n|:--|--:|\n|[hspan=2]Free|\n|Pro|*9*|"),
+		"<table id=\"t\">\n<caption><span class=\"table-number\">Table 1:</span> Prices</caption>\n\
+		<thead>\n<tr><th style=\"text-align: left\">Plan</th><th style=\"text-align: right\">Price</th></tr>\n</thead>\n\
+		<tbody>\n<tr><td colspan=\"2\" style=\"text-align: left\">Free</td></tr>\n\
+		<tr><td style=\"text-align: left\">Pro</td><td style=\"text-align: right\"><em>9</em></td></tr>\n</tbody>\n\
+		</table>\n"
+	);
+	assert_eq!(
+		body("|[vspan=2]a|b|\n|c|"),
+		"<table>\n<tbody>\n<tr><td rowspan=\"2\">a</td><td>b</td></tr>\n<tr><td>c</td></tr>\n</tbody>\n</table>\n"
+	);
+}

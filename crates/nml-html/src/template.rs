@@ -1,3 +1,4 @@
+use nml_document::Alignment;
 use nml_document::Checkbox;
 use nml_document::Document;
 use nml_document::ElementId;
@@ -172,6 +173,74 @@ impl Output {
 			}
 		}
 		self.raw("</li>\n");
+	}
+
+	/// A table: its caption, its header rows in `<thead>`, the others in `<tbody>`.
+	fn table(
+		&mut self,
+		document: &Document,
+		id: ElementId,
+		alignments: &[Alignment],
+		header_rows: usize,
+		number: Option<u32>,
+	) {
+		self.open(document, id, "table");
+		self.raw("\n");
+		let mut rows = Vec::new();
+		for (child, element) in document.children(id) {
+			match element.kind {
+				ElementKind::Caption => {
+					self.open(document, child, "caption");
+					if let Some(number) = number {
+						self.raw(&format!(
+							"<span class=\"table-number\">Table {number}:</span> "
+						));
+					}
+					self.children(document, child);
+					self.raw("</caption>\n");
+				}
+				_ => rows.push(child),
+			}
+		}
+		let (head, body) = rows.split_at(header_rows.min(rows.len()));
+		for (section, rows, cell) in [("thead", head, "th"), ("tbody", body, "td")] {
+			if rows.is_empty() {
+				continue;
+			}
+			self.raw(&format!("<{section}>\n"));
+			for row in rows {
+				self.open(document, *row, "tr");
+				let mut column = 0;
+				for (child, element) in document.children(*row) {
+					let ElementKind::TableCell { hspan, vspan } = element.kind else {
+						continue;
+					};
+					let mut extra = String::new();
+					if hspan > 1 {
+						extra.push_str(&format!(" colspan=\"{hspan}\""));
+					}
+					if vspan > 1 {
+						extra.push_str(&format!(" rowspan=\"{vspan}\""));
+					}
+					let align = match alignments.get(column) {
+						Some(Alignment::Left) => Some("left"),
+						Some(Alignment::Center) => Some("center"),
+						Some(Alignment::Right) => Some("right"),
+						_ => None,
+					};
+					if let Some(align) = align {
+						extra.push_str(&format!(" style=\"text-align: {align}\""));
+					}
+					self.open_with(document, child, cell, None, &extra);
+					self.children(document, child);
+					self.raw(&format!("</{cell}>"));
+					column += hspan as usize;
+				}
+				self.raw("</tr>\n");
+			}
+			self.raw(&format!("</{section}>\n"));
+		}
+		self.raw("</table>\n");
 	}
 
 	/// A layout. The styles that make it work are inline, so that it needs no stylesheet.
@@ -463,6 +532,14 @@ impl Output {
 			ElementKind::LayoutPart => {
 				self.wrap(document, id, "div");
 				self.raw("\n");
+			}
+			ElementKind::Table {
+				alignments,
+				header_rows,
+				number,
+			} => self.table(document, id, alignments, *header_rows, *number),
+			ElementKind::TableRow | ElementKind::TableCell { .. } => {
+				unreachable!("rows and cells are written with their table")
 			}
 			ElementKind::Raw { content, block } => {
 				self.raw(content);
