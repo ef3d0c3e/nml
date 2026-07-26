@@ -53,6 +53,8 @@ pub(crate) enum Context<'a> {
 	Module,
 	/// After the fence of a code block: its language.
 	CodeLanguage,
+	/// After `> [!`: the kind of a callout.
+	Callout,
 	/// Inside the option list of the command `opener`: a name, or the value of `key`.
 	Option {
 		opener: &'a str,
@@ -79,6 +81,16 @@ pub(crate) fn context(prefix: &str) -> Option<(Context<'_>, &str)> {
 				None => (Context::Reference, inside),
 			});
 		}
+	}
+	let mut quoted = prefix;
+	while let Some(rest) = quoted.strip_prefix("> ") {
+		quoted = rest;
+	}
+	if quoted.len() < prefix.len()
+		&& let Some(kind) = quoted.strip_prefix("[!")
+		&& !kind.contains(']')
+	{
+		return Some((Context::Callout, kind));
 	}
 	let fence = prefix.len() - prefix.trim_start_matches('`').len();
 	if fence >= 3 && !prefix[fence..].contains(['[', ' ']) {
@@ -299,6 +311,10 @@ impl Server {
 				.map(|path| candidate(path, None, CompletionItemKind::MODULE))
 				.collect(),
 			Context::CodeLanguage => code_languages(),
+			Context::Callout => std::iter::once("quote")
+				.chain(nml_document::CalloutKind::ALL.map(|kind| kind.name()))
+				.map(|kind| candidate(kind, None, CompletionItemKind::ENUM_MEMBER))
+				.collect(),
 			Context::Option { opener, key, given } => match schema(language.rules(), opener) {
 				Some(schema) => options(schema, key, &given),
 				None => Vec::new(),
@@ -413,6 +429,10 @@ mod tests {
 		);
 		assert_eq!(context("plain text"), None);
 		assert_eq!(context("```ru"), Some((Context::CodeLanguage, "ru")));
+		assert_eq!(context("> [!wa"), Some((Context::Callout, "wa")));
+		assert_eq!(context("> > [!"), Some((Context::Callout, "")));
+		assert_eq!(context("> [!note] x"), None);
+		assert_eq!(context("[!note"), None);
 		assert_eq!(context("````"), Some((Context::CodeLanguage, "")));
 		assert_eq!(context("```rust Title"), None);
 		assert_eq!(
