@@ -14,6 +14,7 @@ mod raw;
 mod reference;
 mod resolve;
 mod style;
+mod table;
 mod variable;
 
 pub use language::AddRuleError;
@@ -49,6 +50,7 @@ impl Language {
 		raw::add(&mut language).expect("built-in rules are valid");
 		quote::add(&mut language).expect("built-in rules are valid");
 		layout::add(&mut language).expect("built-in rules are valid");
+		table::add(&mut language).expect("built-in rules are valid");
 		reference::add(&mut language).expect("built-in rules are valid");
 		inline::add(&mut language).expect("built-in rules are valid");
 		variable::add(&mut language).expect("built-in rules are valid");
