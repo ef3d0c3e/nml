@@ -81,6 +81,11 @@ pub enum ElementKind {
 	/// A callout (an admonition); its children are an optional [`Caption`](Self::Caption),
 	/// the title, then blocks.
 	Callout(CalloutKind),
+	/// A layout of its parts: an optional [`Caption`](Self::Caption), the title, then
+	/// [`LayoutPart`](Self::LayoutPart)s.
+	Layout(LayoutKind),
+	/// A part of a layout; its children are blocks.
+	LayoutPart,
 	/// Output written as is, without escaping (HTML for the HTML backend).
 	Raw {
 		content: String,
@@ -113,6 +118,8 @@ impl ElementKind {
 		"caption",
 		"quote",
 		"callout",
+		"layout",
+		"layout_part",
 		"raw",
 		"list",
 		"list_item",
@@ -136,6 +143,8 @@ impl ElementKind {
 			ElementKind::Caption => "caption",
 			ElementKind::Quote { .. } => "quote",
 			ElementKind::Callout(_) => "callout",
+			ElementKind::Layout(_) => "layout",
+			ElementKind::LayoutPart => "layout_part",
 			ElementKind::Raw { .. } => "raw",
 			ElementKind::List(_) => "list",
 			ElementKind::ListItem { .. } => "list_item",
@@ -170,6 +179,40 @@ impl MediaKind {
 			MediaKind::Image => "image",
 			MediaKind::Video => "video",
 			MediaKind::Audio => "audio",
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LayoutKind {
+	/// One part, centered.
+	Centered,
+	/// Parts side by side.
+	Split,
+	/// One part, hidden until the reader opens it.
+	Spoiler,
+}
+
+impl LayoutKind {
+	pub const ALL: [LayoutKind; 3] = [LayoutKind::Centered, LayoutKind::Split, LayoutKind::Spoiler];
+
+	pub fn name(self) -> &'static str {
+		match self {
+			LayoutKind::Centered => "centered",
+			LayoutKind::Split => "split",
+			LayoutKind::Spoiler => "spoiler",
+		}
+	}
+
+	pub fn from_name(name: &str) -> Option<Self> {
+		Self::ALL.into_iter().find(|kind| kind.name() == name)
+	}
+
+	/// How many parts the layout has, if it is fixed.
+	pub fn parts(self) -> Option<usize> {
+		match self {
+			LayoutKind::Centered | LayoutKind::Spoiler => Some(1),
+			LayoutKind::Split => None,
 		}
 	}
 }
@@ -290,7 +333,7 @@ mod tests {
 
 	#[test]
 	fn names() {
-		assert_eq!(ElementKind::NAMES.len(), 18);
+		assert_eq!(ElementKind::NAMES.len(), 20);
 		assert!(ElementKind::NAMES.contains(&ElementKind::Caption.name()));
 	}
 }

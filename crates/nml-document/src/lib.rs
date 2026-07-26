@@ -15,6 +15,7 @@ pub use element::Checkbox;
 pub use element::Element;
 pub use element::ElementId;
 pub use element::ElementKind;
+pub use element::LayoutKind;
 pub use element::ListKind;
 pub use element::MediaKind;
 pub use element::Style;
