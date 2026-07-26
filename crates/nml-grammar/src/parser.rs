@@ -71,6 +71,23 @@ pub fn parse_from(rules: &RuleSet, source: Arc<Source>, start: usize) -> Parsed 
 	}
 }
 
+/// Parses a whole source as inline content, as in a paragraph: no block rule starts in it.
+pub fn parse_inline(rules: &RuleSet, source: Arc<Source>) -> Parsed {
+	let mut parser = Parser {
+		rules,
+		text: source.content(),
+		source: &source,
+		frames: Vec::new(),
+		depth: 0,
+		diagnostics: Vec::new(),
+	};
+	let (nodes, _, _) = parser.inline(0, parser.text.len());
+	Parsed {
+		nodes,
+		diagnostics: parser.diagnostics,
+	}
+}
+
 struct Parser<'a> {
 	rules: &'a RuleSet,
 	source: &'a Arc<Source>,
@@ -1398,6 +1415,19 @@ pub(crate) mod tests {
 		let parsed = parse(&rules, source("< a b c>"));
 		assert_diagnostics!(parsed.diagnostics, []);
 		assert_eq!(show(&rules, &parsed.nodes), r#"P[tag(title=["a b c"])]"#);
+	}
+
+	#[test]
+	fn inline_sources() {
+		let rules = rules();
+		let parsed = parse_inline(&rules, source("# *a*\n- b"));
+		assert_diagnostics!(parsed.diagnostics, []);
+		assert_eq!(
+			show(&rules, &parsed.nodes),
+			r##""# " italic(body=["a"]) "\n- b""##
+		);
+		let parsed = parse_inline(&rules, source("*a"));
+		assert_diagnostics!(parsed.diagnostics, [1001 @ 0..1]);
 	}
 
 	#[test]
