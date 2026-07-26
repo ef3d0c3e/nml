@@ -310,6 +310,7 @@ fn semantic_tokens() {
 		[
 			(0, 0, 2, "operator".into()),
 			(0, 11, 3, "variable".into()),
+			(1, 0, 2, "operator".into()),
 			// After `> é `: `é` is one UTF-16 unit.
 			(1, 4, 2, "operator".into()),
 			(1, 7, 2, "operator".into()),
