@@ -724,7 +724,7 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 		statement.execute(params![
 			id,
 			export.name,
-			symbol_kind_name(export.kind),
+			SymbolKind::name(export.kind),
 			export.element.map(ElementId::index),
 			Json::Object(properties).to_string(),
 			export.fingerprint() as i64,
@@ -799,24 +799,8 @@ fn object(text: &str) -> Result<serde_json::Map<String, Json>> {
 	}
 }
 
-fn symbol_kind_name(kind: SymbolKind) -> &'static str {
-	match kind {
-		SymbolKind::Heading => "heading",
-		SymbolKind::Figure => "figure",
-		SymbolKind::Anchor => "anchor",
-		SymbolKind::Variable => "variable",
-		_ => unreachable!("symbol kinds are listed here"),
-	}
-}
-
 fn symbol_kind(name: &str) -> Result<SymbolKind> {
-	Ok(match name {
-		"heading" => SymbolKind::Heading,
-		"figure" => SymbolKind::Figure,
-		"anchor" => SymbolKind::Anchor,
-		"variable" => SymbolKind::Variable,
-		_ => return Err(corrupt(format!("unknown symbol kind `{name}`"))),
-	})
+	SymbolKind::from_name(name).ok_or_else(|| corrupt(format!("unknown symbol kind `{name}`")))
 }
 
 fn output_context_name(context: OutputContext) -> &'static str {
