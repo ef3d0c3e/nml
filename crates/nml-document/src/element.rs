@@ -104,6 +104,8 @@ pub enum ElementKind {
 		/// How many rows it spans.
 		vspan: u32,
 	},
+	/// A reference target with no content; its id is the name.
+	Anchor,
 	/// Output written as is, without escaping (HTML for the HTML backend).
 	Raw {
 		content: String,
@@ -141,6 +143,7 @@ impl ElementKind {
 		"table",
 		"table_row",
 		"table_cell",
+		"anchor",
 		"raw",
 		"list",
 		"list_item",
@@ -169,6 +172,7 @@ impl ElementKind {
 			ElementKind::Table { .. } => "table",
 			ElementKind::TableRow => "table_row",
 			ElementKind::TableCell { .. } => "table_cell",
+			ElementKind::Anchor => "anchor",
 			ElementKind::Raw { .. } => "raw",
 			ElementKind::List(_) => "list",
 			ElementKind::ListItem { .. } => "list_item",
@@ -367,7 +371,7 @@ mod tests {
 
 	#[test]
 	fn names() {
-		assert_eq!(ElementKind::NAMES.len(), 23);
+		assert_eq!(ElementKind::NAMES.len(), 24);
 		assert!(ElementKind::NAMES.contains(&ElementKind::Caption.name()));
 	}
 }
