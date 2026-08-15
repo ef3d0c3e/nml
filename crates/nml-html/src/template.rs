@@ -80,6 +80,18 @@ pub fn compile(document: &Document, options: &PageOptions) -> Template {
 	}
 }
 
+/// The HTML of a document's content alone, without the page around it. The document must
+/// have no slots left to fill.
+pub fn fragment(document: &Document) -> String {
+	let mut out = Output {
+		content: String::new(),
+		slots: Vec::new(),
+	};
+	out.element(document, document.root());
+	debug_assert!(out.slots.is_empty(), "a fragment has no slots");
+	out.content
+}
+
 struct Output {
 	content: String,
 	slots: Vec<TemplateSlot>,
@@ -374,7 +386,7 @@ impl Output {
 		let context = match document.slot(slot) {
 			Slot::Link(link) => link.context,
 			Slot::PostParse(_) | Slot::Deferred(_) => OutputContext::Markup,
-			Slot::Text(_) => OutputContext::Text,
+			Slot::Markup(_) => OutputContext::Markup,
 		};
 		self.slots.push(TemplateSlot {
 			slot,
@@ -386,6 +398,14 @@ impl Output {
 	fn element(&mut self, document: &Document, id: ElementId) {
 		match &document.get(id).kind {
 			ElementKind::Document => self.children(document, id),
+			// A paragraph of blocks only, such as the output of a script, is its blocks.
+			ElementKind::Paragraph
+				if document
+					.children(id)
+					.all(|(_, child)| child.kind.is_block()) =>
+			{
+				self.children(document, id);
+			}
 			ElementKind::Paragraph => {
 				self.wrap(document, id, "p");
 				self.raw("\n");
@@ -406,7 +426,7 @@ impl Output {
 				self.raw("\n");
 			}
 			ElementKind::Slot(slot) => match document.slot(*slot) {
-				Slot::Text(text) => self.text(text),
+				Slot::Markup(markup) => self.raw(markup),
 				_ => self.slot(document, *slot),
 			},
 			ElementKind::Reference { href } => {

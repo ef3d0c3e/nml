@@ -9,6 +9,7 @@ pub use template::Template;
 pub use template::TemplateSlot;
 pub use template::compile;
 pub use template::escape;
+pub use template::fragment;
 pub use writer::Resolved;
 pub use writer::write;
 
