@@ -149,6 +149,24 @@ impl ElementKind {
 		"list_item",
 	];
 
+	/// Whether elements of the kind are blocks, which a paragraph cannot hold. A paragraph
+	/// that holds only blocks, such as the output of a script, is not a paragraph.
+	pub fn is_block(&self) -> bool {
+		match self {
+			ElementKind::Paragraph
+			| ElementKind::Heading { .. }
+			| ElementKind::CodeBlock { .. }
+			| ElementKind::Figure { .. }
+			| ElementKind::Quote { .. }
+			| ElementKind::Callout(_)
+			| ElementKind::Layout(_)
+			| ElementKind::Table { .. }
+			| ElementKind::List(_) => true,
+			ElementKind::Raw { block, .. } => *block,
+			_ => false,
+		}
+	}
+
 	/// The name of the kind, as element events see it (`heading`, `paragraph`, …).
 	pub fn name(&self) -> &'static str {
 		match self {

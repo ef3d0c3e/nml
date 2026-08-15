@@ -107,6 +107,18 @@ impl Draft<'_> {
 		collect_text(self.written, self.children, &mut text);
 		text
 	}
+
+	/// An element below this one, which is already written.
+	pub fn get(&self, id: ElementId) -> &Element {
+		&self.written[id.0 as usize]
+	}
+
+	/// The text below an element below this one.
+	pub fn text_of(&self, id: ElementId) -> String {
+		let mut text = String::new();
+		collect_text(self.written, &self.get(id).children, &mut text);
+		text
+	}
 }
 
 /// Called with every element before it is written.
