@@ -938,7 +938,7 @@ fn encode_slot(slot: &Slot) -> Json {
 			}
 		}),
 		// Post-parse slots are filled before the unit is committed.
-		Slot::PostParse(_) | Slot::Text(_) => {
+		Slot::PostParse(_) | Slot::Markup(_) => {
 			unreachable!("post-parse slots are filled before a unit is stored")
 		}
 	}
