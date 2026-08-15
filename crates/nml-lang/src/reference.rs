@@ -12,8 +12,38 @@ use nml_grammar::Atom;
 use nml_grammar::Rule;
 use nml_grammar::RuleError;
 use nml_grammar::Value;
+use nml_source::Token;
 
 use crate::Language;
+use crate::Lower;
+
+impl Lower<'_, '_> {
+	/// Opens a reference to `target`, written at `target_token`, with its link slot. Its
+	/// caption goes inside, or its title with [`reference_title`](Self::reference_title),
+	/// then it is closed.
+	pub fn open_reference(&mut self, target: SymbolRef, target_token: Token, token: Token) {
+		self.uses.push(Use {
+			target: target.clone(),
+			token: target_token,
+		});
+		let href = self.builder.add_slot(Slot::Link(LinkSlot {
+			target,
+			property: Property::Target,
+			context: OutputContext::Attribute,
+		}));
+		self.builder.open(ElementKind::Reference { href }, token);
+	}
+
+	/// The title of the reference's target, filled at link time.
+	pub fn reference_title(&mut self, target: SymbolRef, token: Token) {
+		let slot = Slot::Link(LinkSlot {
+			target,
+			property: Property::Title,
+			context: OutputContext::Text,
+		});
+		self.builder.slot(slot, token);
+	}
+}
 
 /// `[[name]]`, `[[doc#name]]`, `[[doc#]]` and `[[#name]]`, with an optional `|caption`.
 pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
@@ -40,30 +70,10 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			lower.diagnostics.push(Diagnostic::new(kind, message));
 			return;
 		};
-		lower.uses.push(Use {
-			target: target.clone(),
-			token: target_token.clone(),
-		});
-
-		let link = |property, context| {
-			Slot::Link(LinkSlot {
-				target: target.clone(),
-				property,
-				context,
-			})
-		};
-		let href = lower
-			.builder
-			.add_slot(link(Property::Target, OutputContext::Attribute));
-		lower
-			.builder
-			.open(ElementKind::Reference { href }, m.token.clone());
+		lower.open_reference(target.clone(), target_token.clone(), m.token.clone());
 		match caption {
 			Some(Value::Nodes(nodes)) => lower.nodes(nodes),
-			_ => {
-				let title = link(Property::Title, OutputContext::Text);
-				lower.builder.slot(title, target_token);
-			}
+			_ => lower.reference_title(target, target_token),
 		}
 		lower.builder.close();
 	})?;
