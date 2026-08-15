@@ -1,5 +1,6 @@
 //! The built-in NML language: Rust rules for every core element.
 
+mod anchor;
 mod code;
 mod heading;
 mod import;
@@ -51,6 +52,7 @@ impl Language {
 		quote::add(&mut language).expect("built-in rules are valid");
 		layout::add(&mut language).expect("built-in rules are valid");
 		table::add(&mut language).expect("built-in rules are valid");
+		anchor::add(&mut language).expect("built-in rules are valid");
 		reference::add(&mut language).expect("built-in rules are valid");
 		inline::add(&mut language).expect("built-in rules are valid");
 		variable::add(&mut language).expect("built-in rules are valid");
