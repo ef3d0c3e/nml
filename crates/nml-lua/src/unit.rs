@@ -11,6 +11,7 @@ use crate::events;
 use crate::files;
 use crate::module::Modules;
 use crate::post_parse;
+use crate::variables;
 
 /// The Lua of the unit being lowered: its state, its chunks, and the errors raised where no
 /// diagnostic can be added directly (element listeners).
@@ -48,5 +49,13 @@ pub(crate) fn unit_lua<'a>(lower: &'a mut Lower<'_, '_>) -> &'a mut UnitLua {
 		});
 		lower.extension(|| unit);
 	}
+	// Scripts see the variables as they are now.
+	let lua = lower
+		.extension_mut::<UnitLua>()
+		.unwrap()
+		.runtime
+		.lua()
+		.clone();
+	variables::sync(lower, &lua);
 	lower.extension_mut().unwrap()
 }

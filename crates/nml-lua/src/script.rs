@@ -5,7 +5,6 @@ use nml_diagnostics::Diagnostic;
 use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
 use nml_document::Dependency;
-use nml_document::ElementKind;
 use nml_document::Slot;
 use nml_grammar::Atom;
 use nml_grammar::Rule;
@@ -115,11 +114,8 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 				let callback = data.borrow::<PostParse>().unwrap().0;
 				post_parse::defer(lower, callback, m.token.clone());
 			}
-			Ok(value) => match to_text(value, "a `:lua` role") {
-				Ok(Some(text)) => {
-					lower.builder.leaf(ElementKind::Text(text), m.token.clone());
-				}
-				Ok(None) => {}
+			Ok(value) => match crate::elements::nodes(value) {
+				Ok(elements) => crate::elements::lower(lower, &elements, &m.token),
 				Err(error) => {
 					let diagnostic = unit_lua(lower)
 						.chunks
@@ -153,30 +149,6 @@ fn evaluate(lower: &mut Lower<'_, '_>, code: &Token) -> mlua::Result<Value> {
 		Err(error) => return Err(error),
 	};
 	function.call(())
-}
-
-/// The text of a value shown in the document: strings and numbers, or nothing for `nil`.
-/// `what` names what shows it, for the error.
-pub(crate) fn to_text(value: Value, what: &str) -> mlua::Result<Option<String>> {
-	match value {
-		Value::Nil => Ok(None),
-		Value::String(text) => Ok(Some(text.to_str()?.to_string())),
-		Value::Integer(n) => Ok(Some(n.to_string())),
-		Value::Number(n) => Ok(Some(value_text(n))),
-		other => Err(mlua::Error::runtime(format!(
-			"{what} shows strings and numbers, not a {}",
-			other.type_name()
-		))),
-	}
-}
-
-/// A float as Lua shows it.
-fn value_text(n: f64) -> String {
-	if n.fract() == 0.0 && n.is_finite() {
-		format!("{n:.1}")
-	} else {
-		n.to_string()
-	}
 }
 
 #[cfg(test)]
@@ -226,12 +198,12 @@ mod tests {
 			"1 +"
 		);
 
-		let compiled = compile("a :lua`{}` b");
+		let compiled = compile("a :lua`{true}` b");
 		assert_diagnostics!(compiled.diagnostics, [4001]);
 		let DiagnosticKind::LuaError { message } = &compiled.diagnostics[0].kind else {
 			panic!()
 		};
-		assert!(message.contains("not a table"), "{message}");
+		assert!(message.contains("not a boolean"), "{message}");
 	}
 
 	#[test]

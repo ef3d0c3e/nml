@@ -26,15 +26,15 @@ use crate::Limits;
 use crate::Runtime;
 use crate::api;
 use crate::error::Chunks;
-use crate::script::to_text;
 
 /// The value of `nml.defer`: shown by a `:lua` role, it becomes a deferred slot.
 pub(crate) struct Defer(pub DeferredSlot);
 
 impl UserData for Defer {}
 
-/// Defers content to link time: shown by a `:lua` role, the value becomes the HTML that
-/// `module.function(args)` returns when the page is linked, possibly in a later build. The
+/// Defers content to link time: shown by a `:lua` role, the value becomes what
+/// `module.function(args)` returns (text, elements, or a list of them) when the page is
+/// linked, possibly in a later build. The
 /// function runs in a fresh Lua state with the query API (`nml.pages`), so it can list the
 /// workspace's pages; the page is relinked when they change. The module must be imported by
 /// the document, and `args` must be data: nil, booleans, numbers, strings, and tables of
@@ -213,11 +213,11 @@ impl DeferredRuntime {
 			)
 		})?;
 		let args = lua_value(lua, &slot.args).map_err(|e| lua_error(&self.chunks, e))?;
-		let value = function
+		function
 			.call::<Value>(args)
-			.and_then(|value| to_text(value, "a deferred function"))
-			.map_err(|e| lua_error(&self.chunks, e))?;
-		Ok(value.unwrap_or_default())
+			.and_then(crate::elements::nodes)
+			.and_then(|elements| crate::elements::html(&elements))
+			.map_err(|e| lua_error(&self.chunks, e))
 	}
 
 	/// Loads a module and its imports, once.
@@ -325,13 +325,18 @@ mod tests {
 	const NAV: &str = r#":lua
 ```
 function menu(args)
-	local items = {}
+	local links = {}
 	for _, page in ipairs(nml.pages()) do
-		if #items < args.limit then
-			table.insert(items, '<a href="' .. page.url .. '">' .. page.title .. '</a>')
+		if #links < args.limit then
+			table.insert(links, nml.element('link', { url = page.url, page.title }))
 		end
 	end
-	return table.concat(items, args.separator)
+	local items = {}
+	for i, link in ipairs(links) do
+		if i > 1 then table.insert(items, args.separator) end
+		table.insert(items, link)
+	end
+	return items
 end
 ```
 "#;
@@ -339,7 +344,7 @@ end
 	#[test]
 	fn deferred_slots() {
 		let compiled = compile_with(
-			":import std.nav\n\n:lua`nml.defer('std.nav', 'menu', { limit = 2, separator = ' | ' })`\n",
+			":import std.nav\n\n:lua`nml.defer('std.nav', 'menu', { limit = 2, separator = ' <|> ' })`\n",
 			&[("modules/std/nav.nml", NAV)],
 		);
 		assert_diagnostics!(compiled.diagnostics, []);
@@ -352,7 +357,7 @@ end
 			slot.args,
 			SerialValue::Map(vec![
 				("limit".into(), SerialValue::Integer(2)),
-				("separator".into(), SerialValue::String(" | ".into())),
+				("separator".into(), SerialValue::String(" <|> ".into())),
 			])
 		);
 
@@ -375,7 +380,7 @@ end
 		let at = document.get(document.root()).token.clone();
 		assert_eq!(
 			runtime.fill(slot, &at).unwrap(),
-			r#"<a href="../index.html">Home</a> | <a href="guide.html">Guide</a>"#
+			r#"<a href="../index.html">Home</a> &lt;|&gt; <a href="guide.html">Guide</a>"#
 		);
 	}
 

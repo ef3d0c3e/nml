@@ -101,6 +101,9 @@ pub(crate) struct ElementData {
 	/// A list item's checkbox: `unchecked`, `partial` or `checked`.
 	#[lua(readonly)]
 	checkbox: Option<String>,
+	/// A table's cells, row by row, as text.
+	#[lua(readonly)]
+	cells: Option<Vec<Vec<String>>>,
 }
 
 fn call(lua: &Lua, draft: Draft<'_>, listeners: &[Function]) -> mlua::Result<()> {
@@ -122,6 +125,18 @@ fn call(lua: &Lua, draft: Draft<'_>, listeners: &[Function]) -> mlua::Result<()>
 		} => Some(format!("{checkbox:?}").to_lowercase()),
 		_ => None,
 	};
+	let cells = matches!(draft.kind, ElementKind::Table { .. }).then(|| {
+		draft
+			.children()
+			.filter(|row| row.kind == ElementKind::TableRow)
+			.map(|row| {
+				row.children()
+					.iter()
+					.map(|cell| draft.text_of(*cell))
+					.collect()
+			})
+			.collect()
+	});
 	let element = lua.create_userdata(ElementData {
 		kind: draft.kind.name().into(),
 		text: draft.text(),
@@ -132,6 +147,7 @@ fn call(lua: &Lua, draft: Draft<'_>, listeners: &[Function]) -> mlua::Result<()>
 		numbered,
 		start,
 		checkbox,
+		cells,
 	})?;
 	for listener in listeners {
 		listener.call::<()>(&element)?;
@@ -209,6 +225,35 @@ nml.on("list_item", function(i) table.insert(seen, tostring(i.checkbox)) end)
 	}
 
 	#[test]
+	fn tables() {
+		let compiled = compile(
+			r#":lua
+```
+total = 0
+nml.on("table", function(t)
+	for i, row in ipairs(t.cells) do
+		if i > 1 then total = total + tonumber(row[2]) end
+	end
+end)
+```
+
+| Item | Price |
+|---|---|
+| a | 2 |
+| b | **3** |
+
+Total: :lua`nml.post_parse(function() return total end)`
+"#,
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		assert!(
+			html(&compiled).contains("<p>Total: 5</p>"),
+			"{}",
+			html(&compiled)
+		);
+	}
+
+	#[test]
 	fn listener_errors() {
 		let compiled =
 			compile(":lua\n```\nnml.on('heading', function(h)\n\terror('no')\nend)\n```\n\n# A\n");
@@ -259,6 +304,7 @@ nml.on("list_item", function(i) table.insert(seen, tostring(i.checkbox)) end)
 ---@field numbered boolean? (read-only) Whether a list is numbered.
 ---@field start integer? (read-only) A numbered list's first number.
 ---@field checkbox string? (read-only) A list item's checkbox: `unchecked`, `partial` or `checked`.
+---@field cells string[][]? (read-only) A table's cells, row by row, as text.
 "
 			),
 			"{declarations}"

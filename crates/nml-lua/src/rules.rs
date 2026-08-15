@@ -352,6 +352,35 @@ fn call(
 			})?,
 		)?;
 		out.raw_set(
+			"add",
+			scope.create_function(|_, (_, value): (Value, Value)| {
+				let elements = crate::elements::nodes(value)?;
+				crate::elements::lower(*borrow()?, &elements, token);
+				Ok(())
+			})?,
+		)?;
+		out.raw_set(
+			"element",
+			scope.create_function(
+				|lua, (_, kind, spec, body): (Value, String, Option<Table>, Option<Function>)| {
+					let spec = match spec {
+						Some(spec) => spec,
+						None => lua.create_table()?,
+					};
+					let element = crate::elements::build(&kind, &spec)?;
+					let Some(body) = body else {
+						crate::elements::lower(*borrow()?, &[element], token);
+						return Ok(());
+					};
+					// The body writes after the element's children, inside it.
+					crate::elements::open(*borrow()?, &element, token);
+					let result = body.call::<()>(());
+					borrow()?.builder.close();
+					result
+				},
+			)?,
+		)?;
+		out.raw_set(
 			"content",
 			scope.create_function(|_, (_, _, name): (Value, Value, String)| {
 				let capture = m.capture(&name).ok_or_else(|| {
@@ -403,6 +432,37 @@ nml.rule {
 			html(&compiled).contains("<p>Press <strong>Ctrl + <em>C</em></strong> (10).</p>"),
 			"{}",
 			html(&compiled)
+		);
+	}
+
+	#[test]
+	fn rules_build_elements() {
+		let compiled = compile(
+			r##":lua
+```
+nml.rule {
+	name = "kbd",
+	atoms = { ":kbd{", nml.capture("keys", nml.inline), "}" },
+	handler = function(m, out)
+		out:element("code", { code = "#", classes = { "count" } })
+		out:element("link", { url = "#keys", id = "k" }, function()
+			out:content(m, "keys")
+			out:add({ " ", nml.element("italic", { "!" }) })
+		end)
+	end,
+}
+```
+
+Press :kbd{Ctrl + **C**}.
+"##,
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let html = html(&compiled);
+		assert!(
+			html.contains(
+				"<p>Press <code class=\"count\">#</code><a id=\"k\" href=\"#keys\">Ctrl + <strong>C</strong> <em>!</em></a>.</p>"
+			),
+			"{html}"
 		);
 	}
 

@@ -68,6 +68,7 @@ pub struct LuaField {
 pub const CLASSES: &[LuaClass] = &[
 	crate::events::ElementData::LUA_CLASS,
 	crate::rules::LuaAtom::LUA_CLASS,
+	crate::elements::NODE_CLASS,
 ];
 
 /// Every function of the `nml` table.
@@ -75,7 +76,9 @@ pub const API: &[ApiFunction] = &[
 	crate::events::ON,
 	crate::post_parse::POST_PARSE,
 	crate::files::READ,
+	crate::variables::VARIABLE,
 	crate::deferred::DEFER,
+	crate::elements::ELEMENT,
 	crate::deferred::PAGES,
 	crate::rules::RULE,
 	crate::rules::CAPTURE,

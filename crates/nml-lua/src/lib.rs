@@ -5,6 +5,7 @@ extern crate self as nml_lua;
 
 mod api;
 mod deferred;
+mod elements;
 mod error;
 mod events;
 mod files;
@@ -14,6 +15,7 @@ mod rules;
 mod runtime;
 mod script;
 mod unit;
+mod variables;
 
 pub use api::API;
 pub use api::ApiFunction;

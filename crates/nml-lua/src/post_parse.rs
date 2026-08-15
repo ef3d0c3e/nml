@@ -9,7 +9,6 @@ use nml_lang::Lower;
 use nml_source::Token;
 
 use crate::api;
-use crate::script::to_text;
 use crate::unit::unit_lua;
 
 /// The value of `nml.post_parse`: shown by a `:lua` role, it becomes a post-parse slot.
@@ -26,12 +25,13 @@ struct Callbacks(Vec<Function>);
 pub(crate) struct Pending(Vec<(SlotId, u32, Token)>);
 
 /// Defers content until the document is parsed: shown by a `:lua` role, the value becomes
-/// the text `callback` returns once the whole document is parsed, in the same Lua state.
+/// what `callback` returns (text, elements, or a list of them) once the whole document is
+/// parsed, in the same Lua state.
 /// A table of contents placed before its headings is the typical use.
 #[api(returns = "userdata")]
 fn post_parse(
 	lua: &Lua,
-	#[lua(type = "fun(): string|number|nil")] callback: Function,
+	#[lua(type = "fun(): any")] callback: Function,
 ) -> mlua::Result<AnyUserData> {
 	if lua.app_data_ref::<Callbacks>().is_none() {
 		lua.set_app_data(Callbacks::default());
@@ -56,17 +56,16 @@ pub(crate) fn fill(lower: &mut Lower<'_, '_>) {
 	for (slot, callback, token) in pending {
 		let lua = unit_lua(lower).runtime.lua().clone();
 		let function = lua.app_data_ref::<Callbacks>().unwrap().0[callback as usize].clone();
-		let text = function
+		let markup = function
 			.call(())
-			.and_then(|value| to_text(value, "a post-parse callback"));
-		match text {
-			Ok(text) => lower
-				.builder
-				.fill_slot(slot, Slot::Text(text.unwrap_or_default())),
+			.and_then(crate::elements::nodes)
+			.and_then(|elements| crate::elements::html(&elements));
+		match markup {
+			Ok(markup) => lower.builder.fill_slot(slot, Slot::Markup(markup)),
 			Err(error) => {
 				let diagnostic = unit_lua(lower).chunks.borrow().diagnostic(&error, token);
 				lower.diagnostics.push(diagnostic);
-				lower.builder.fill_slot(slot, Slot::Text(String::new()));
+				lower.builder.fill_slot(slot, Slot::Markup(String::new()));
 			}
 		}
 	}
@@ -115,7 +114,7 @@ Count: :lua`nml.post_parse(function() return #headings end)`
 			compiled.diagnostics[0].primary().location.root().content(),
 			"nml.post_parse(function() error('late') end)"
 		);
-		let compiled = compile(":lua`nml.post_parse(function() return {} end)`\n");
+		let compiled = compile(":lua`nml.post_parse(function() return true end)`\n");
 		assert_diagnostics!(compiled.diagnostics, [4001]);
 	}
 
@@ -123,5 +122,23 @@ Count: :lua`nml.post_parse(function() return #headings end)`
 	fn escaped_as_text() {
 		let compiled = compile(":lua`nml.post_parse(function() return '<b>' end)`\n");
 		assert!(html(&compiled).contains("<p>&lt;b&gt;</p>"));
+	}
+
+	#[test]
+	fn elements() {
+		let compiled = compile(
+			":lua`nml.post_parse(function() return nml.element('list', { 'a', nml.element('raw', { content = '<br>' }) }) end)`\n",
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let html = html(&compiled);
+		assert!(
+			html.contains("<ul>\n<li>a</li>\n<li><br></li>\n</ul>\n"),
+			"{html}"
+		);
+		// References need the link stage, which post-parse output skips.
+		let compiled = compile(
+			":lua`nml.post_parse(function() return nml.element('reference', { target = 'x' }) end)`\n",
+		);
+		assert_diagnostics!(compiled.diagnostics, [4001]);
 	}
 }
