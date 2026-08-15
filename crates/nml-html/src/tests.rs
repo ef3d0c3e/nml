@@ -203,3 +203,11 @@ fn tables() {
 		"<table>\n<tbody>\n<tr><td rowspan=\"2\">a</td><td>b</td></tr>\n<tr><td>c</td></tr>\n</tbody>\n</table>\n"
 	);
 }
+
+#[test]
+fn anchors() {
+	assert_eq!(
+		body("a\n:anchor x\nb"),
+		"<p>a</p>\n<span id=\"x\"></span>\n<p>b</p>\n"
+	);
+}

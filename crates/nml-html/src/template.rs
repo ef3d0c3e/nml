@@ -541,6 +541,10 @@ impl Output {
 			ElementKind::TableRow | ElementKind::TableCell { .. } => {
 				unreachable!("rows and cells are written with their table")
 			}
+			ElementKind::Anchor => {
+				self.wrap(document, id, "span");
+				self.raw("\n");
+			}
 			ElementKind::Raw { content, block } => {
 				self.raw(content);
 				if *block {
