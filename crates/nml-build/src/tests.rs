@@ -577,11 +577,13 @@ fn navigation_from_deferred_slots() {
 	let nav = r#":lua
 ```
 function menu()
-	local items = {}
-	for _, page in ipairs(nml.pages()) do
-		table.insert(items, '<a href="' .. page.url .. '">' .. page.title .. '</a>')
+	local items = { nml.element('raw', { content = '<nav>' }) }
+	for i, page in ipairs(nml.pages()) do
+		if i > 1 then table.insert(items, ' ') end
+		table.insert(items, nml.element('link', { url = page.url, page.title }))
 	end
-	return '<nav>' .. table.concat(items, ' ') .. '</nav>'
+	table.insert(items, nml.element('raw', { content = '</nav>' }))
+	return items
 end
 ```
 "#;
