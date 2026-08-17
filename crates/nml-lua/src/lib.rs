@@ -14,6 +14,8 @@ mod post_parse;
 mod rules;
 mod runtime;
 mod script;
+#[cfg(test)]
+mod std_modules;
 mod unit;
 mod variables;
 
@@ -32,6 +34,13 @@ pub use nml_lua_macros::userdata;
 pub use runtime::Limits;
 pub use runtime::Runtime;
 pub use script::add;
+
+/// The modules that come with NML, as `std.<name>`, unless the workspace declares a module
+/// named `std`: their name and source.
+pub const STD: &[(&str, &str)] = &[
+	("toc", include_str!("../std/toc.nml")),
+	("nav", include_str!("../std/nav.nml")),
+];
 
 #[cfg(test)]
 pub(crate) mod tests {
@@ -60,6 +69,10 @@ pub(crate) mod tests {
 			resolver.files.insert(path.to_string(), content.to_string());
 		}
 		resolver.modules.insert("std".into(), "modules/std".into());
+		for (name, content) in crate::STD {
+			let path = format!("modules/std/{name}.nml");
+			resolver.files.entry(path).or_insert(content.to_string());
+		}
 		nml_lang::compile(&language, Arc::new(source), "page.nml", Arc::new(resolver))
 	}
 

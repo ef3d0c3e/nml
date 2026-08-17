@@ -135,6 +135,8 @@ pub struct PageInfo {
 	/// The reference key.
 	pub name: String,
 	pub title: String,
+	/// The variables the page exports, by name, with their values as written.
+	pub variables: Vec<(String, String)>,
 }
 
 /// What a deferred function can query: the workspace's pages, seen from the page being
@@ -145,8 +147,12 @@ struct QueryContext {
 }
 
 /// The pages of the workspace, for deferred functions: a list of `{ path, name, title,
-/// url }`, where `url` is relative to the page being linked. Only available at link time.
-#[api(returns = "{ path: string, name: string, title: string, url: string }[]")]
+/// url, current, variables }`. `url` is relative to the page being linked, `current` tells
+/// whether it is that page, and `variables` holds the variables the page exports
+/// (`:export`), as written. Only available at link time.
+#[api(
+	returns = "{ path: string, name: string, title: string, url: string, current: boolean, variables: table<string, string> }[]"
+)]
 fn pages(lua: &Lua) -> mlua::Result<Table> {
 	let context = lua.app_data_ref::<QueryContext>().ok_or_else(|| {
 		mlua::Error::runtime("`nml.pages` is only available in deferred functions, at link time")
@@ -158,6 +164,12 @@ fn pages(lua: &Lua) -> mlua::Result<Table> {
 		entry.raw_set("name", page.name.as_str())?;
 		entry.raw_set("title", page.title.as_str())?;
 		entry.raw_set("url", relative_url(&context.current, &page.path))?;
+		entry.raw_set("current", page.path == context.current)?;
+		let variables = lua.create_table()?;
+		for (name, value) in &page.variables {
+			variables.raw_set(name.as_str(), value.as_str())?;
+		}
+		entry.raw_set("variables", variables)?;
 		list.raw_push(entry)?;
 	}
 	Ok(list)
@@ -370,6 +382,7 @@ end
 			path: path.into(),
 			name: path.into(),
 			title: title.into(),
+			variables: Vec::new(),
 		};
 		let pages = Arc::new(vec![
 			page("index.nml", "Home"),

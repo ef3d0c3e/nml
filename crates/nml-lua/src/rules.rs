@@ -354,9 +354,7 @@ fn call(
 		out.raw_set(
 			"add",
 			scope.create_function(|_, (_, value): (Value, Value)| {
-				let elements = crate::elements::nodes(value)?;
-				crate::elements::lower(*borrow()?, &elements, token);
-				Ok(())
+				crate::script::show(*borrow()?, value, token)
 			})?,
 		)?;
 		out.raw_set(

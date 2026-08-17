@@ -1,0 +1,62 @@
+:: The navigation menu: `:nav` lists the workspace's pages when the page is linked, so it
+:: follows pages as they are added, removed or renamed. A page sets where it appears with
+:: exported variables: `nav.category` (pages without one come first), `nav.order` (a
+:: number; then by title) and `nav.title` (instead of its title). The current page's item
+:: has the class `current`.
+
+:lua
+```
+function menu()
+	local groups, names = {}, {}
+	for _, page in ipairs(nml.pages()) do
+		local category = page.variables["nav.category"] or ""
+		if not groups[category] then
+			groups[category] = {}
+			table.insert(names, category)
+		end
+		table.insert(groups[category], page)
+	end
+	table.sort(names)
+	local function order(page)
+		return tonumber(page.variables["nav.order"]) or math.huge
+	end
+	local items = {}
+	for _, name in ipairs(names) do
+		local pages = groups[name]
+		table.sort(pages, function(a, b)
+			if order(a) ~= order(b) then return order(a) < order(b) end
+			return a.title < b.title
+		end)
+		local links = {}
+		for _, page in ipairs(pages) do
+			local title = page.variables["nav.title"] or page.title
+			table.insert(links, nml.element("list_item", {
+				classes = page.current and { "current" } or nil,
+				nml.element("link", { url = page.url, title }),
+			}))
+		end
+		if name == "" then
+			for _, link in ipairs(links) do table.insert(items, link) end
+		else
+			table.insert(items, nml.element("list_item", {
+				classes = { "category" },
+				name,
+				nml.element("list", links),
+			}))
+		end
+	end
+	return {
+		nml.element("raw", { content = '<nav class="nav">', block = true }),
+		nml.element("list", items),
+		nml.element("raw", { content = "</nav>", block = true }),
+	}
+end
+
+nml.rule {
+	name = "nav",
+	atoms = { nml.line_start, nml.capture("command", ":nav", "keyword"), nml.line_end },
+	handler = function(m, out)
+		out:add(nml.defer("std.nav", "menu"))
+	end,
+}
+```

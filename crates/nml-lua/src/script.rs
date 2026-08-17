@@ -96,43 +96,43 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 		let code = m.capture("code").unwrap().token.clone();
 		let evaluated = evaluate(lower, &code);
 		crate::rules::register(lower, &m.token);
-		match evaluated {
-			Ok(Value::UserData(data)) if data.is::<Defer>() => {
-				let slot = data.borrow::<Defer>().unwrap().0.clone();
-				let imported = Dependency::Import(slot.module.clone());
-				if lower.dependencies.contains(&imported) {
-					lower.builder.slot(Slot::Deferred(slot), m.token.clone());
-				} else {
-					let kind = DiagnosticKind::DeferredModuleNotImported {
-						module: slot.module,
-					};
-					let message = DiagnosticMessage::new(m.token.clone());
-					lower.diagnostics.push(Diagnostic::new(kind, message));
-				}
-			}
-			Ok(Value::UserData(data)) if data.is::<PostParse>() => {
-				let callback = data.borrow::<PostParse>().unwrap().0;
-				post_parse::defer(lower, callback, m.token.clone());
-			}
-			Ok(value) => match crate::elements::nodes(value) {
-				Ok(elements) => crate::elements::lower(lower, &elements, &m.token),
-				Err(error) => {
-					let diagnostic = unit_lua(lower)
-						.chunks
-						.borrow()
-						.diagnostic(&error, m.token.clone());
-					lower.diagnostics.push(diagnostic);
-				}
-			},
-			Err(error) => {
-				let diagnostic = unit_lua(lower)
-					.chunks
-					.borrow()
-					.diagnostic(&error, m.token.clone());
-				lower.diagnostics.push(diagnostic);
-			}
+		if let Err(error) = evaluated.and_then(|value| show(lower, value, &m.token)) {
+			let diagnostic = unit_lua(lower)
+				.chunks
+				.borrow()
+				.diagnostic(&error, m.token.clone());
+			lower.diagnostics.push(diagnostic);
 		}
 	})?;
+	Ok(())
+}
+
+/// Writes what a script shows at `token`: text, elements, or lists of them; the value of
+/// `nml.post_parse` or `nml.defer` becomes a slot.
+pub(crate) fn show(lower: &mut Lower<'_, '_>, value: Value, token: &Token) -> mlua::Result<()> {
+	match value {
+		Value::UserData(data) if data.is::<Defer>() => {
+			let slot = data.borrow::<Defer>()?.0.clone();
+			let imported = Dependency::Import(slot.module.clone());
+			if lower.dependencies.contains(&imported) {
+				lower.builder.slot(Slot::Deferred(slot), token.clone());
+			} else {
+				let kind = DiagnosticKind::DeferredModuleNotImported {
+					module: slot.module,
+				};
+				let message = DiagnosticMessage::new(token.clone());
+				lower.diagnostics.push(Diagnostic::new(kind, message));
+			}
+		}
+		Value::UserData(data) if data.is::<PostParse>() => {
+			let callback = data.borrow::<PostParse>()?.0;
+			post_parse::defer(lower, callback, token.clone());
+		}
+		value => {
+			let elements = crate::elements::nodes(value)?;
+			crate::elements::lower(lower, &elements, token);
+		}
+	}
 	Ok(())
 }
 

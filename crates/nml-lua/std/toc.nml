@@ -1,0 +1,86 @@
+:: The table of contents: `:toc [Title]` lists the document's headings, nested by level,
+:: once the document is parsed. Headings with the class `unlisted` are left out, and those
+:: with `unnumbered` get the class `unnumbered`. Headings without a reference name get an id.
+
+:lua
+```
+local entries = {}
+local used = {}
+
+local function has_class(heading, name)
+	for _, class in ipairs(heading.classes) do
+		if class == name then return true end
+	end
+	return false
+end
+
+-- An id made from a heading's text, unique in the document.
+local function slug(text)
+	local base = text:lower():gsub("[^%w]+", "-"):gsub("^%-+", ""):gsub("%-+$", "")
+	if base == "" then base = "section" end
+	local id, n = base, 1
+	while used[id] do
+		n = n + 1
+		id = base .. "-" .. n
+	end
+	return id
+end
+
+nml.on("heading", function(heading)
+	if heading.id then used[heading.id] = true end
+	if has_class(heading, "unlisted") then return end
+	if not heading.id then
+		heading.id = slug(heading.text)
+		used[heading.id] = true
+	end
+	table.insert(entries, {
+		level = heading.level,
+		text = heading.text,
+		id = heading.id,
+		numbered = not has_class(heading, "unnumbered"),
+	})
+end)
+
+-- The entries as nested lists, by level.
+local function build(title)
+	local root = { level = 0, children = {} }
+	local stack = { root }
+	for _, entry in ipairs(entries) do
+		while stack[#stack].level >= entry.level do table.remove(stack) end
+		local node = { level = entry.level, entry = entry, children = {} }
+		table.insert(stack[#stack].children, node)
+		table.insert(stack, node)
+	end
+	local function list(nodes)
+		local items = {}
+		for _, node in ipairs(nodes) do
+			local item = { nml.element("link", { url = "#" .. node.entry.id, node.entry.text }) }
+			if #node.children > 0 then table.insert(item, list(node.children)) end
+			local classes = (not node.entry.numbered) and { "unnumbered" } or nil
+			table.insert(items, nml.element("list_item", { classes = classes, item }))
+		end
+		return nml.element("list", { numbered = true, items })
+	end
+	local out = { nml.element("raw", { content = '<nav class="toc">', block = true }) }
+	if title then
+		table.insert(out, nml.element("paragraph", { classes = { "toc-title" }, title }))
+	end
+	if #root.children > 0 then table.insert(out, list(root.children)) end
+	table.insert(out, nml.element("raw", { content = "</nav>", block = true }))
+	return out
+end
+
+nml.rule {
+	name = "toc",
+	atoms = {
+		nml.line_start,
+		nml.capture("command", ":toc", "keyword"),
+		nml.optional({ " ", nml.capture("title", nml.rest_of_line) }),
+		nml.line_end,
+	},
+	handler = function(m, out)
+		local title = m.captures.title
+		out:add(nml.post_parse(function() return build(title) end))
+	end,
+}
+```
