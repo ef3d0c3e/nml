@@ -21,8 +21,10 @@ use nml_diagnostics::DiagnosticSeverity;
 use nml_document::Dependency;
 use nml_document::Document;
 use nml_document::ElementKind;
+use nml_document::Export;
 use nml_document::Slot;
 use nml_document::SlotId;
+use nml_document::SymbolKind;
 use nml_document::Use;
 use nml_html::PageOptions;
 use nml_html::Resolved;
@@ -427,9 +429,13 @@ impl Builder {
 
 		let old = self.index.unit(&file.path)?;
 		let old_exports = match &old {
-			Some(old) if old.name != name => self.index.exports(old.id)?,
-			_ => Vec::new(),
+			Some(old) => self.index.exports(old.id)?,
+			None => Vec::new(),
 		};
+		// Deferred functions see the variables pages export.
+		if file.role == Role::Page && variables(&old_exports) != variables(&unit.exports) {
+			self.pages_changed = true;
+		}
 		let (_, changes) = self.index.commit(&StoredUnit {
 			path: &file.path,
 			name,
@@ -458,6 +464,11 @@ impl Builder {
 			}
 		}
 		let was_page = old.as_ref().is_some_and(|old| old.role == Role::Page);
+		let old_exports = if old.as_ref().is_some_and(|old| old.name != name) {
+			old_exports
+		} else {
+			Vec::new()
+		};
 		if let Some(old) = old.filter(|old| old.name != name) {
 			self.affected.insert((old.name.clone(), String::new()));
 			for export in old_exports {
@@ -496,17 +507,18 @@ impl Builder {
 		let pages = match &self.pages {
 			Some(pages) => pages.clone(),
 			None => {
-				let pages: Vec<_> = self
-					.index
-					.units()?
-					.into_iter()
-					.filter(|unit| unit.role == Role::Page)
-					.map(|unit| PageInfo {
-						path: unit.path,
-						name: unit.name,
-						title: unit.title,
-					})
-					.collect();
+				let mut pages = Vec::new();
+				for unit in self.index.units()? {
+					if unit.role == Role::Page {
+						let variables = variables(&self.index.exports(unit.id)?);
+						pages.push(PageInfo {
+							path: unit.path,
+							name: unit.name,
+							title: unit.title,
+							variables,
+						});
+					}
+				}
 				self.pages.insert(Arc::new(pages)).clone()
 			}
 		};
@@ -665,11 +677,20 @@ impl Resolver for WorkspaceResolver {
 
 	fn module(&self, module: &str) -> Result<(String, Arc<Source>), ResolveError> {
 		let (name, rest) = module.split_once('.').unwrap_or((module, ""));
-		let root = self
-			.modules
-			.iter()
-			.find(|m| m.name == name)
-			.ok_or_else(|| ResolveError::UnknownModule { name: name.into() })?;
+		let Some(root) = self.modules.iter().find(|m| m.name == name) else {
+			// The modules that come with NML, unless the workspace has its own `std`.
+			if name == STD_MODULE {
+				let path = format!("{STD_MODULE}/{rest}.nml");
+				return match nml_lua::STD.iter().find(|(module, _)| *module == rest) {
+					Some((_, content)) => {
+						let url = Url::parse(&format!("nml:///{path}")).unwrap();
+						Ok((path, Arc::new(Source::new(url, content.to_string(), 0))))
+					}
+					None => Err(ResolveError::NotFound { path }),
+				};
+			}
+			return Err(ResolveError::UnknownModule { name: name.into() });
+		};
 		let root: Vec<_> = root
 			.root
 			.components()
@@ -687,6 +708,21 @@ impl Resolver for WorkspaceResolver {
 			_ => Err(ResolveError::NotFound { path }),
 		}
 	}
+}
+
+/// The name of the modules that come with NML.
+const STD_MODULE: &str = "std";
+
+/// The exported variables of a unit, with their values as written.
+fn variables(exports: &[Export]) -> Vec<(String, String)> {
+	exports
+		.iter()
+		.filter(|export| export.kind == SymbolKind::Variable)
+		.map(|export| {
+			let value = export.property("value").unwrap_or_default();
+			(export.name.clone(), value.to_string())
+		})
+		.collect()
 }
 
 /// Bytes in lowercase hexadecimal.

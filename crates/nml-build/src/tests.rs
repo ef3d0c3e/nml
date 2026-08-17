@@ -724,3 +724,50 @@ fn assets_are_copied() {
 	let report = workspace.build();
 	assert_diagnostics!(report.diagnostics, [3008]);
 }
+
+#[test]
+fn std_modules() {
+	let workspace = Workspace::new(
+		"std",
+		&[
+			("nml.toml", ""),
+			(
+				"index.nml",
+				":import std.nav\n:export nav.order = 1\n\n# Home\n:nav\n",
+			),
+			("docs/guide.nml", ":export nav.category = Docs\n# Guide\n"),
+			(
+				"docs/faq.nml",
+				":export nav.category = Docs\n:export nav.order = 1\n# FAQ\n",
+			),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	let menu = "<nav class=\"nav\">\n<ul>\n\
+		<li class=\"current\"><a href=\"index.html\">Home</a></li>\n\
+		<li class=\"category\">Docs<ul>\n\
+		<li><a href=\"docs/faq.html\">FAQ</a></li>\n\
+		<li><a href=\"docs/guide.html\">Guide</a></li>\n\
+		</ul>\n</li>\n</ul>\n</nav>\n";
+	assert!(
+		workspace.output("index.html").contains(menu),
+		"{}",
+		workspace.output("index.html")
+	);
+
+	// A page's navigation variables are part of what menus show.
+	workspace.write("docs/guide.nml", ":export nav.category = Guides\n# Guide\n");
+	let report = workspace.build();
+	assert_eq!(report.written, ["docs/guide.nml", "index.nml"]);
+	assert!(
+		workspace
+			.output("index.html")
+			.contains("<li class=\"category\">Guides<ul>")
+	);
+
+	// An unknown module of `std`.
+	workspace.write("index.nml", ":import std.nope\n");
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3008]);
+}
