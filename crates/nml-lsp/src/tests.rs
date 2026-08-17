@@ -609,6 +609,25 @@ fn completion() {
 }
 
 #[test]
+fn std_module_completion() {
+	let workspace = Workspace::new("std-completion", &[("nml.toml", ""), ("a.nml", "")]);
+	let client = Client::start(Some(&workspace.0));
+	let page = workspace.url("a.nml");
+	client.open(&page, ":import std.");
+	client.diagnostics();
+	let params = lsp_types::CompletionParams {
+		text_document_position: at(&page, 0, 12),
+		work_done_progress_params: Default::default(),
+		partial_result_params: Default::default(),
+		context: None,
+	};
+	let result = client.request(Completion::METHOD, serde_json::to_value(params).unwrap());
+	let items: Vec<lsp_types::CompletionItem> = serde_json::from_value(result).unwrap();
+	let labels: Vec<_> = items.into_iter().map(|item| item.label).collect();
+	assert_eq!(labels, ["std.nav", "std.toc"]);
+}
+
+#[test]
 fn inlay_hints() {
 	let workspace = navigation_workspace("hints");
 	let client = Client::start(Some(&workspace.0));

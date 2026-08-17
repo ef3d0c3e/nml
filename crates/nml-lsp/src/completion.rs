@@ -371,6 +371,10 @@ impl Server {
 				}
 			}
 		}
+		// The modules that come with NML, unless the workspace has its own `std`.
+		if !config.modules.iter().any(|module| module.name == "std") {
+			paths.extend(nml_lua::STD.iter().map(|(name, _)| format!("std.{name}")));
+		}
 		paths.sort();
 		paths
 	}
