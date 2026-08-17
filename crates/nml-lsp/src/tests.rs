@@ -775,7 +775,7 @@ fn include_contexts() {
 	let b = workspace.url("b.nml");
 	client.open(
 		&b,
-		":lua\n```\nfunction helper() return {} end\n```\n\n:include parts/x\n",
+		":lua\n```\nfunction helper() return true end\n```\n\n:include parts/x\n",
 	);
 	client.diagnostics();
 	let params = lsp_types::ExecuteCommandParams {
@@ -790,7 +790,7 @@ fn include_contexts() {
 	let published = client.diagnostics();
 	assert_eq!(published.uri.as_str(), part.as_str());
 	assert_eq!(published.diagnostics.len(), 1);
-	assert!(published.diagnostics[0].message.contains("not a table"));
+	assert!(published.diagnostics[0].message.contains("not a boolean"));
 	assert_eq!(published.diagnostics[0].range.start, position(0, 7));
 }
 
