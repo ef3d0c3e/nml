@@ -104,6 +104,13 @@ pub enum ElementKind {
 		/// How many rows it spans.
 		vspan: u32,
 	},
+	/// Source rendered by an external program into an image: math, LaTeX, Graphviz, Typst.
+	Rendered {
+		kind: RenderKind,
+		source: String,
+		/// Whether it is a block (displayed math), rather than inline content.
+		block: bool,
+	},
 	/// A reference target with no content; its id is the name.
 	Anchor,
 	/// Output written as is, without escaping (HTML for the HTML backend).
@@ -143,6 +150,7 @@ impl ElementKind {
 		"table",
 		"table_row",
 		"table_cell",
+		"rendered",
 		"anchor",
 		"raw",
 		"list",
@@ -162,7 +170,7 @@ impl ElementKind {
 			| ElementKind::Layout(_)
 			| ElementKind::Table { .. }
 			| ElementKind::List(_) => true,
-			ElementKind::Raw { block, .. } => *block,
+			ElementKind::Raw { block, .. } | ElementKind::Rendered { block, .. } => *block,
 			_ => false,
 		}
 	}
@@ -190,6 +198,7 @@ impl ElementKind {
 			ElementKind::Table { .. } => "table",
 			ElementKind::TableRow => "table_row",
 			ElementKind::TableCell { .. } => "table_cell",
+			ElementKind::Rendered { .. } => "rendered",
 			ElementKind::Anchor => "anchor",
 			ElementKind::Raw { .. } => "raw",
 			ElementKind::List(_) => "list",
@@ -225,6 +234,33 @@ impl MediaKind {
 			MediaKind::Image => "image",
 			MediaKind::Video => "video",
 			MediaKind::Audio => "audio",
+		}
+	}
+}
+
+/// What renders a [`Rendered`](ElementKind::Rendered) element, and its settings.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum RenderKind {
+	/// LaTeX math.
+	Math,
+	/// A LaTeX document body, in a LaTeX environment of the configuration.
+	Tex {
+		environment: String,
+	},
+	/// Graphviz, with a layout engine.
+	Graph {
+		layout: String,
+	},
+	Typst,
+}
+
+impl RenderKind {
+	pub fn name(&self) -> &'static str {
+		match self {
+			RenderKind::Math => "math",
+			RenderKind::Tex { .. } => "tex",
+			RenderKind::Graph { .. } => "graph",
+			RenderKind::Typst => "typst",
 		}
 	}
 }
@@ -389,7 +425,7 @@ mod tests {
 
 	#[test]
 	fn names() {
-		assert_eq!(ElementKind::NAMES.len(), 24);
+		assert_eq!(ElementKind::NAMES.len(), 25);
 		assert!(ElementKind::NAMES.contains(&ElementKind::Caption.name()));
 	}
 }

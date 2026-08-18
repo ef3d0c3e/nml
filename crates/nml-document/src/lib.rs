@@ -19,6 +19,7 @@ pub use element::ElementKind;
 pub use element::LayoutKind;
 pub use element::ListKind;
 pub use element::MediaKind;
+pub use element::RenderKind;
 pub use element::Style;
 pub use slot::DeferredSlot;
 pub use slot::LinkSlot;
