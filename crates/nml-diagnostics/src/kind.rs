@@ -90,6 +90,8 @@ pub enum DiagnosticKind {
 	},
 	#[diag(id = 2019, message = "diagnostic-not-a-table")]
 	NotATable,
+	#[diag(id = 2020, message = "diagnostic-fence-language")]
+	FenceLanguage { language: String, expected: String },
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]
@@ -128,6 +130,9 @@ pub enum DiagnosticKind {
 	InvalidModuleName { name: String },
 	#[diag(id = 3005, message = "diagnostic-duplicate-module")]
 	DuplicateModule { name: String },
+	/// An external renderer failed: the message is its own, untranslated.
+	#[diag(id = 3012, message = "diagnostic-render-error")]
+	RenderError { message: String },
 	#[diag(id = 3011, message = "diagnostic-unknown-code-theme")]
 	UnknownCodeTheme { theme: String, themes: String },
 
