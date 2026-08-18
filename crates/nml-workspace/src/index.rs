@@ -21,7 +21,7 @@ use rusqlite::params;
 use serde_json::Value as Json;
 
 /// The version of the schema below. A database with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 5;
+pub const SCHEMA_VERSION: i64 = 6;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value ANY) STRICT;
@@ -80,6 +80,12 @@ CREATE TABLE slots (
 	slot TEXT NOT NULL
 ) STRICT;
 CREATE INDEX slots_by_unit ON slots(unit);
+CREATE TABLE renders (key TEXT PRIMARY KEY, output TEXT NOT NULL) STRICT;
+CREATE TABLE unit_renders (
+	unit INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+	key TEXT NOT NULL
+) STRICT;
+CREATE INDEX unit_renders_by_unit ON unit_renders(unit);
 ";
 
 /// An error of the database. Since the database can always be rebuilt from the sources,
@@ -583,6 +589,47 @@ impl Index {
 			dependencies.push(dependency(&kind, &value)?);
 		}
 		Ok(dependencies)
+	}
+
+	/// The output of an external renderer, by the key of what it rendered.
+	pub fn render(&self, key: &str) -> Result<Option<String>> {
+		Ok(self
+			.connection
+			.query_row("SELECT output FROM renders WHERE key = ?1", [key], |row| {
+				row.get(0)
+			})
+			.optional()?)
+	}
+
+	/// Keeps the output of an external renderer.
+	pub fn store_render(&self, key: &str, output: &str) -> Result<()> {
+		self.connection.execute(
+			"INSERT OR REPLACE INTO renders (key, output) VALUES (?1, ?2)",
+			[key, output],
+		)?;
+		Ok(())
+	}
+
+	/// Records the renders a unit uses, replacing those it used before.
+	pub fn set_unit_renders(&mut self, unit: i64, keys: &[String]) -> Result<()> {
+		let tx = self.connection.transaction()?;
+		tx.execute("DELETE FROM unit_renders WHERE unit = ?1", [unit])?;
+		for key in keys {
+			tx.execute(
+				"INSERT INTO unit_renders (unit, key) VALUES (?1, ?2)",
+				rusqlite::params![unit, key],
+			)?;
+		}
+		tx.commit()?;
+		Ok(())
+	}
+
+	/// Deletes the renders no unit uses, and returns how many.
+	pub fn prune_renders(&self) -> Result<usize> {
+		Ok(self.connection.execute(
+			"DELETE FROM renders WHERE key NOT IN (SELECT key FROM unit_renders)",
+			[],
+		)?)
 	}
 
 	pub fn template(&self, unit: i64) -> Result<Option<StoredTemplate>> {
@@ -1150,6 +1197,32 @@ mod tests {
 			})
 			.unwrap()
 			.0
+	}
+
+	#[test]
+	fn renders() {
+		let mut index = Index::open_in_memory().unwrap();
+		let a = commit(&mut index, "a.nml", 1);
+		let b = commit(&mut index, "b.nml", 1);
+		index.store_render("k1", "<svg>1</svg>").unwrap();
+		index.store_render("k2", "<svg>2</svg>").unwrap();
+		index.store_render("k3", "<svg>3</svg>").unwrap();
+		index
+			.set_unit_renders(a, &["k1".into(), "k2".into()])
+			.unwrap();
+		index.set_unit_renders(b, &["k2".into()]).unwrap();
+		assert_eq!(index.prune_renders().unwrap(), 1);
+		assert_eq!(index.render("k1").unwrap().as_deref(), Some("<svg>1</svg>"));
+		assert_eq!(index.render("k3").unwrap(), None);
+
+		// What a unit no longer uses, or a removed unit used, goes.
+		index.set_unit_renders(a, &["k2".into()]).unwrap();
+		assert_eq!(index.prune_renders().unwrap(), 1);
+		index.remove("b.nml").unwrap();
+		assert_eq!(index.prune_renders().unwrap(), 0);
+		index.remove("a.nml").unwrap();
+		assert_eq!(index.prune_renders().unwrap(), 1);
+		assert_eq!(index.render("k2").unwrap(), None);
 	}
 
 	#[test]

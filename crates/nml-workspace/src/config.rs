@@ -30,6 +30,8 @@ pub struct Config {
 	/// The workspace database, relative to the workspace root.
 	pub database: PathBuf,
 	pub html: HtmlConfig,
+	/// The external renderers: their programs and LaTeX environments.
+	pub render: nml_render::Renderers,
 	pub modules: Vec<Module>,
 }
 
@@ -42,6 +44,26 @@ pub struct HtmlConfig {
 	pub icon: Option<String>,
 	/// The theme of highlighted code, one of syntect's built-in themes.
 	pub code_theme: String,
+}
+
+/// The `[render]` section: the programs, and `[render.tex.<name>]` LaTeX environments.
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawRender {
+	latex: Option<String>,
+	dvisvgm: Option<String>,
+	dot: Option<String>,
+	typst: Option<String>,
+	#[serde(default)]
+	tex: std::collections::BTreeMap<String, RawTexEnvironment>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTexEnvironment {
+	#[serde(default)]
+	preamble: String,
+	font_size: Option<u32>,
 }
 
 #[derive(Default, Deserialize)]
@@ -73,6 +95,8 @@ struct Raw {
 	database: Option<PathBuf>,
 	#[serde(default)]
 	html: RawHtml,
+	#[serde(default)]
+	render: RawRender,
 	#[serde(default, rename = "module")]
 	modules: Vec<RawModule>,
 }
@@ -166,6 +190,26 @@ impl Config {
 			code_theme,
 		};
 
+		let defaults = nml_render::Renderers::default();
+		let render = nml_render::Renderers {
+			latex: raw.render.latex.unwrap_or(defaults.latex),
+			dvisvgm: raw.render.dvisvgm.unwrap_or(defaults.dvisvgm),
+			dot: raw.render.dot.unwrap_or(defaults.dot),
+			typst: raw.render.typst.unwrap_or(defaults.typst),
+			tex_environments: raw
+				.render
+				.tex
+				.into_iter()
+				.map(|(name, env)| {
+					let env = nml_render::TexEnvironment {
+						preamble: env.preamble,
+						font_size: env.font_size,
+					};
+					(name, env)
+				})
+				.collect(),
+		};
+
 		if !diagnostics.is_empty() {
 			return Err(diagnostics);
 		}
@@ -177,6 +221,7 @@ impl Config {
 			output: raw.output.unwrap_or_else(|| "public".into()),
 			database: raw.database.unwrap_or_else(|| ".nml/index.db".into()),
 			html,
+			render,
 			modules: modules.into_iter().map(|(module, _)| module).collect(),
 		})
 	}
@@ -253,6 +298,13 @@ stylesheets = ["style.css"]
 icon = "icon.png"
 code_theme = "InspiredGitHub"
 
+[render]
+dot = "/opt/bin/dot"
+
+[render.tex.tikz]
+preamble = "\\usepackage{tikz}"
+font_size = 11
+
 [[module]]
 name = "std"
 root = "modules/std"
@@ -271,6 +323,18 @@ root = "lib/nav"
 		assert_eq!(config.html.language.as_deref(), Some("en"));
 		assert_eq!(config.html.stylesheets, ["style.css"]);
 		assert_eq!(config.html.code_theme, "InspiredGitHub");
+		assert_eq!(config.render.dot, "/opt/bin/dot");
+		assert_eq!(config.render.latex, "latex");
+		assert_eq!(
+			config.render.tex_environments,
+			[(
+				"tikz".to_string(),
+				nml_render::TexEnvironment {
+					preamble: "\\usepackage{tikz}".into(),
+					font_size: Some(11)
+				}
+			)]
+		);
 		assert_eq!(
 			config.modules,
 			[
