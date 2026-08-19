@@ -13,6 +13,7 @@ mod media;
 mod quote;
 mod raw;
 mod reference;
+mod render;
 mod resolve;
 mod style;
 mod table;
@@ -53,6 +54,7 @@ impl Language {
 		layout::add(&mut language).expect("built-in rules are valid");
 		table::add(&mut language).expect("built-in rules are valid");
 		anchor::add(&mut language).expect("built-in rules are valid");
+		render::add(&mut language).expect("built-in rules are valid");
 		reference::add(&mut language).expect("built-in rules are valid");
 		inline::add(&mut language).expect("built-in rules are valid");
 		variable::add(&mut language).expect("built-in rules are valid");
