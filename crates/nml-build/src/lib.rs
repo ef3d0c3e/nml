@@ -20,8 +20,10 @@ use nml_diagnostics::DiagnosticMessage;
 use nml_diagnostics::DiagnosticSeverity;
 use nml_document::Dependency;
 use nml_document::Document;
+use nml_document::ElementId;
 use nml_document::ElementKind;
 use nml_document::Export;
+use nml_document::RenderKind;
 use nml_document::Slot;
 use nml_document::SlotId;
 use nml_document::SymbolKind;
@@ -37,6 +39,9 @@ use nml_lang::resolve_file;
 use nml_lang::resolve_path;
 use nml_lua::DeferredRuntime;
 use nml_lua::PageInfo;
+use nml_render::Job;
+use nml_render::RenderError;
+use nml_render::scope_ids;
 use nml_source::Source;
 use nml_source::Token;
 use nml_source::Url;
@@ -298,7 +303,87 @@ impl Builder {
 		for path in std::mem::take(&mut self.to_link) {
 			self.link(&path)?;
 		}
+		// Renders no unit uses any more, since a unit changed or went away.
+		self.index.prune_renders()?;
 		self.write_code_stylesheet()
+	}
+
+	/// Renders the document's math, graphs and the like with external programs: their SVG
+	/// by element, and the cache keys they use. Outputs are cached in the index by what they
+	/// render; the others render in parallel. Failures are added to `diagnostics`.
+	fn render(
+		&self,
+		document: &Document,
+		diagnostics: &mut Vec<Diagnostic>,
+	) -> Result<(HashMap<ElementId, String>, Vec<String>), BuildError> {
+		let renderers = &self.config.render;
+		let mut rendered = HashMap::new();
+		let mut keys = Vec::new();
+		let mut missing = Vec::new();
+		for (id, element) in document.descendants(document.root()) {
+			let ElementKind::Rendered {
+				kind,
+				source,
+				block,
+			} = &element.kind
+			else {
+				continue;
+			};
+			let job = match kind {
+				RenderKind::Math => Job::Math {
+					source: source.clone(),
+					display: *block,
+				},
+				RenderKind::Tex { environment } => Job::Tex {
+					source: source.clone(),
+					environment: environment.clone(),
+				},
+				RenderKind::Graph { layout } => Job::Graph {
+					source: source.clone(),
+					layout: layout.clone(),
+				},
+				_ => Job::Typst {
+					source: source.clone(),
+				},
+			};
+			let environment = match renderers.environment_key(&job) {
+				Ok(environment) => environment,
+				Err(error) => {
+					diagnostics.push(render_error(&error, &element.token));
+					continue;
+				}
+			};
+			let key = hex(&nml_workspace::hash(
+				format!("{}\0{environment}\0{source}", kind.name()).as_bytes(),
+			));
+			keys.push(key.clone());
+			match self.index.render(&key)? {
+				Some(svg) => {
+					rendered.insert(id, svg);
+				}
+				None => missing.push((id, key, job, element.token.clone())),
+			}
+		}
+		let results: Vec<_> = missing
+			.into_par_iter()
+			.map(|(id, key, job, token)| {
+				// Ids in an SVG are scoped by its key, so that several can share a page.
+				let svg = renderers.render(&job).map(|svg| scope_ids(&svg, &key[..8]));
+				(id, key, svg, token)
+			})
+			.collect();
+		for (id, key, svg, token) in results {
+			match svg {
+				Ok(svg) => {
+					self.index.store_render(&key, &svg)?;
+					rendered.insert(id, svg);
+				}
+				Err(error) => diagnostics.push(render_error(&error, &token)),
+			}
+		}
+		keys.sort();
+		keys.dedup();
+		Ok((rendered, keys))
 	}
 
 	/// Copies a file a page shows to the same path in the output directory, unless the copy
@@ -388,6 +473,13 @@ impl Builder {
 	) -> Result<(), BuildError> {
 		self.sources.insert(file.path.clone(), source);
 		self.report.parsed.push(file.path.clone());
+		let mut compiled = compiled;
+		let (rendered, render_keys) =
+			if file.role == Role::Page && !has_errors(&compiled.diagnostics) {
+				self.render(&compiled.unit.document, &mut compiled.diagnostics)?
+			} else {
+				(HashMap::new(), Vec::new())
+			};
 		let failed = has_errors(&compiled.diagnostics);
 		self.report.diagnostics.extend(compiled.diagnostics);
 		if failed {
@@ -422,6 +514,7 @@ impl Builder {
 				title: title.clone(),
 				stylesheets,
 				icon: self.config.html.icon.clone(),
+				rendered,
 			};
 			store_template(document, &nml_html::compile(document, &options))
 		});
@@ -436,7 +529,7 @@ impl Builder {
 		if file.role == Role::Page && variables(&old_exports) != variables(&unit.exports) {
 			self.pages_changed = true;
 		}
-		let (_, changes) = self.index.commit(&StoredUnit {
+		let (id, changes) = self.index.commit(&StoredUnit {
 			path: &file.path,
 			name,
 			title: &title,
@@ -447,6 +540,7 @@ impl Builder {
 			dependencies: &unit.dependencies,
 			template: template.as_ref(),
 		})?;
+		self.index.set_unit_renders(id, &render_keys)?;
 		for change in changes {
 			self.affected.insert((name.to_string(), change.name));
 		}
@@ -708,6 +802,14 @@ impl Resolver for WorkspaceResolver {
 			_ => Err(ResolveError::NotFound { path }),
 		}
 	}
+}
+
+/// The diagnostic of a renderer that failed on the element at `token`.
+fn render_error(error: &RenderError, token: &Token) -> Diagnostic {
+	let kind = DiagnosticKind::RenderError {
+		message: error.to_string(),
+	};
+	Diagnostic::new(kind, DiagnosticMessage::new(token.clone()))
 }
 
 /// The name of the modules that come with NML.

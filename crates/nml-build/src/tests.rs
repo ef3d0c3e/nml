@@ -771,3 +771,74 @@ fn std_modules() {
 	let report = workspace.build();
 	assert_diagnostics!(report.diagnostics, [3008]);
 }
+
+#[test]
+fn rendered_graphs() {
+	if std::process::Command::new("dot")
+		.arg("-V")
+		.output()
+		.is_err()
+	{
+		eprintln!("skipped: no `dot`");
+		return;
+	}
+	let workspace = Workspace::new(
+		"render-graph",
+		&[
+			("nml.toml", ""),
+			(
+				"a.nml",
+				":figure #g Stages\n:graph[layout=dot]\n```dot\ndigraph { scan -> parse }\n```\n",
+			),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	let page = workspace.output("a.html");
+	assert!(
+		page.contains(
+			"<div class=\"rendered graph\" role=\"img\" aria-label=\"digraph { scan -&gt; parse }\"><svg"
+		),
+		"{page}"
+	);
+	assert!(page.contains("<figcaption><span class=\"figure-number\">Figure 1:</span> Stages"));
+
+	// The SVG comes from the cache when the page changes elsewhere.
+	workspace.write(
+		"a.nml",
+		"Intro.\n\n:figure #g Stages\n:graph[layout=dot]\n```dot\ndigraph { scan -> parse }\n```\n",
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(workspace.output("a.html").contains("<svg"));
+
+	// A graph that does not render is an error of the page.
+	workspace.write("a.nml", ":graph\n```\ndigraph { a -> }\n```\n");
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3012 @ 0..32]);
+	assert_eq!(report.failed, ["a.nml"]);
+}
+
+#[test]
+fn missing_renderers() {
+	let workspace = Workspace::new(
+		"render-missing",
+		&[
+			("nml.toml", "[render]\nlatex = \"nml-no-such-latex\"\n"),
+			("a.nml", "Math: $x$.\n"),
+			("b.nml", ":tex[env=nope]\n```\nx\n```\n"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3012 @ 6..9, 3012 @ 0..25]);
+	let message = format!("{:?}", report.diagnostics[0].kind);
+	assert!(
+		message.contains("cannot run `nml-no-such-latex`"),
+		"{message}"
+	);
+	let message = format!("{:?}", report.diagnostics[1].kind);
+	assert!(
+		message.contains("`nope` is not a LaTeX environment"),
+		"{message}"
+	);
+}
