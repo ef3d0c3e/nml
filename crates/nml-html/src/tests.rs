@@ -211,3 +211,29 @@ fn anchors() {
 		"<p>a</p>\n<span id=\"x\"></span>\n<p>b</p>\n"
 	);
 }
+
+#[test]
+fn rendered() {
+	assert_eq!(
+		body("a $x<1$ b\n\n:graph\n```\ngraph {}\n```"),
+		"<p>a <span class=\"rendered math\" role=\"img\" aria-label=\"x&lt;1\"><code>x&lt;1</code></span> b</p>\n\
+		<div class=\"rendered graph\" role=\"img\" aria-label=\"graph {}\"><code>graph {}</code></div>\n"
+	);
+
+	let source = Source::new(Url::parse("file:///a.nml").unwrap(), "$x$".into(), 0);
+	let compiled = nml_lang::compile(
+		&Language::builtin(),
+		Arc::new(source),
+		"a.nml",
+		Arc::new(MemoryResolver::default()),
+	);
+	let document = &compiled.unit.document;
+	let (id, _) = document
+		.descendants(document.root())
+		.find(|(_, element)| matches!(element.kind, nml_document::ElementKind::Rendered { .. }))
+		.unwrap();
+	let mut options = PageOptions::default();
+	options.rendered.insert(id, "<svg/>".into());
+	let page = compile(document, &options).content;
+	assert!(page.contains("aria-label=\"x\"><svg/></span>"), "{page}");
+}

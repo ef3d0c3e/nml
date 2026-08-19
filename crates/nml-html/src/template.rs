@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use nml_document::Alignment;
 use nml_document::Checkbox;
 use nml_document::Document;
@@ -42,6 +44,9 @@ pub struct PageOptions {
 	/// Stylesheet URLs.
 	pub stylesheets: Vec<String>,
 	pub icon: Option<String>,
+	/// The SVG of the document's rendered elements (math, graphs, …). An element without
+	/// one shows its source.
+	pub rendered: HashMap<ElementId, String>,
 }
 
 /// Compiles a document into a full HTML page.
@@ -49,6 +54,7 @@ pub fn compile(document: &Document, options: &PageOptions) -> Template {
 	let mut out = Output {
 		content: String::new(),
 		slots: Vec::new(),
+		rendered: &options.rendered,
 	};
 	out.raw("<!DOCTYPE html>\n<html");
 	if let Some(language) = &options.language {
@@ -83,21 +89,24 @@ pub fn compile(document: &Document, options: &PageOptions) -> Template {
 /// The HTML of a document's content alone, without the page around it. The document must
 /// have no slots left to fill.
 pub fn fragment(document: &Document) -> String {
+	let rendered = HashMap::new();
 	let mut out = Output {
 		content: String::new(),
 		slots: Vec::new(),
+		rendered: &rendered,
 	};
 	out.element(document, document.root());
 	debug_assert!(out.slots.is_empty(), "a fragment has no slots");
 	out.content
 }
 
-struct Output {
+struct Output<'a> {
 	content: String,
 	slots: Vec<TemplateSlot>,
+	rendered: &'a HashMap<ElementId, String>,
 }
 
-impl Output {
+impl Output<'_> {
 	fn raw(&mut self, text: &str) {
 		self.content.push_str(text);
 	}
@@ -561,6 +570,30 @@ impl Output {
 			ElementKind::TableRow | ElementKind::TableCell { .. } => {
 				unreachable!("rows and cells are written with their table")
 			}
+			ElementKind::Rendered {
+				kind,
+				source,
+				block,
+			} => {
+				let tag = if *block { "div" } else { "span" };
+				let mut extra = String::from(" role=\"img\" aria-label=\"");
+				escape(&mut extra, source, true);
+				extra.push('"');
+				let class = format!("rendered {}", kind.name());
+				self.open_with(document, id, tag, Some(&class), &extra);
+				match self.rendered.get(&id) {
+					Some(svg) => self.raw(svg),
+					None => {
+						self.raw("<code>");
+						self.text(source);
+						self.raw("</code>");
+					}
+				}
+				self.raw(&format!("</{tag}>"));
+				if *block {
+					self.raw("\n");
+				}
+			}
 			ElementKind::Anchor => {
 				self.wrap(document, id, "span");
 				self.raw("\n");
@@ -658,6 +691,7 @@ mod tests {
 			title: "A & B".into(),
 			stylesheets: vec!["style.css".into()],
 			icon: None,
+			..PageOptions::default()
 		};
 		let template = compile(&document, &options);
 		let body = "<body>\n<h2 id=\"a&quot;b\" class=\"x y\">1 &lt; 2 &amp; \"3\"</h2>\n\
