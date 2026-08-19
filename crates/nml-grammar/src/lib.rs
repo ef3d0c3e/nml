@@ -23,6 +23,7 @@ pub use parser::parse;
 pub use parser::parse_from;
 pub use parser::parse_inline;
 pub use rule::Opener;
+pub use rule::OpenerClass;
 pub use rule::Rule;
 pub use rule::RuleError;
 pub use rule::RuleErrorKind;

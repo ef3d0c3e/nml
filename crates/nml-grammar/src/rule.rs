@@ -20,6 +20,10 @@ pub struct Rule {
 	/// The name of a rule this one replaces. Without it, a rule with the same opener as
 	/// another is an error.
 	pub replaces: Option<String>,
+	/// How many atoms, from the first, must match for the rule to apply at its opener. If
+	/// they do not, the opener is no syntax there: a block rule leaves a paragraph. Without a
+	/// guard (0), the opener always applies, and a rule that fails is an error.
+	pub guard: usize,
 }
 
 impl Rule {
@@ -28,7 +32,14 @@ impl Rule {
 			name: name.into(),
 			atoms,
 			replaces: None,
+			guard: 0,
 		}
+	}
+
+	/// Sets the guard: see [`Rule::guard`].
+	pub fn guarded(mut self, atoms: usize) -> Self {
+		self.guard = atoms;
+		self
 	}
 
 	pub fn replacing(mut self, name: impl Into<String>) -> Self {
@@ -73,7 +84,8 @@ impl Rule {
 	}
 
 	/// The opener: what the rule is dispatched on. For a `Run`, its shortest run. An unsigned
-	/// integer `Number` followed by a literal opens with digits, then the literal (`1. `).
+	/// integer `Number` or `Blanks`, followed by a literal, opens with digits or blanks, then
+	/// the literal (`1. `, ` *`).
 	pub fn opener(&self) -> Option<Opener> {
 		let skip = match self.table() {
 			Table::Block => 1,
@@ -85,49 +97,66 @@ impl Rule {
 			}
 			atom
 		});
-		let text = match atoms.next()? {
-			Atom::Literal(text) if !text.is_empty() => text.clone(),
-			Atom::Run { char, min } if *min > 0 => char.to_string().repeat(*min),
+		let first = atoms.next()?;
+		let class = match first {
 			Atom::Number {
 				signed: false,
 				decimal: false,
-			} => match atoms.next()? {
-				Atom::Literal(text) if !text.is_empty() => {
-					return Some(Opener {
-						digits: true,
-						text: text.clone(),
-					});
-				}
+			} => Some(OpenerClass::Digits),
+			Atom::Blanks => Some(OpenerClass::Blanks),
+			_ => None,
+		};
+		let text = match (class, first) {
+			(Some(_), _) => match atoms.next()? {
+				Atom::Literal(text) if !text.is_empty() => text.clone(),
 				_ => return None,
 			},
+			(None, Atom::Literal(text)) if !text.is_empty() => text.clone(),
+			(None, Atom::Run { char, min }) if *min > 0 => char.to_string().repeat(*min),
 			_ => return None,
 		};
-		Some(Opener {
-			digits: false,
-			text,
-		})
+		Some(Opener { class, text })
 	}
 }
 
-/// What a rule is dispatched on: a text, possibly after a run of digits.
+/// What a rule is dispatched on: a text, possibly after a run of characters of a class.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Opener {
-	/// Whether the opener starts with one or more ASCII digits.
-	pub digits: bool,
+	pub class: Option<OpenerClass>,
 	pub text: String,
 }
 
+/// Characters an opener can start with, one or more of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OpenerClass {
+	/// ASCII digits.
+	Digits,
+	/// Spaces and tabs.
+	Blanks,
+}
+
+impl OpenerClass {
+	pub(crate) fn contains(self, c: char) -> bool {
+		match self {
+			OpenerClass::Digits => c.is_ascii_digit(),
+			OpenerClass::Blanks => c == ' ' || c == '\t',
+		}
+	}
+}
+
 impl Opener {
-	/// The opener as plain text, unless it starts with digits.
+	/// The opener as plain text, unless it starts with a class of characters.
 	pub fn literal(&self) -> Option<&str> {
-		(!self.digits).then_some(self.text.as_str())
+		self.class.is_none().then_some(self.text.as_str())
 	}
 }
 
 impl fmt::Display for Opener {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		if self.digits {
-			f.write_str("<digits>")?;
+		match self.class {
+			Some(OpenerClass::Digits) => f.write_str("<digits>")?,
+			Some(OpenerClass::Blanks) => f.write_str("<blanks>")?,
+			None => {}
 		}
 		f.write_str(&self.text)
 	}
@@ -180,6 +209,8 @@ pub enum RuleErrorKind {
 	EmptyRun,
 	/// A `Container` that is not the last atom of a block rule.
 	MisplacedContainer,
+	/// A guard longer than the rule.
+	InvalidGuard,
 }
 
 impl fmt::Display for RuleError {
@@ -215,6 +246,7 @@ impl fmt::Display for RuleError {
 				)
 			}
 			RuleErrorKind::EmptyRun => write!(f, "a `Run` must have a `min` of at least 1"),
+			RuleErrorKind::InvalidGuard => write!(f, "the guard is longer than the rule"),
 			RuleErrorKind::MisplacedContainer => {
 				write!(f, "a `Container` must be the last atom of a block rule")
 			}
@@ -282,6 +314,9 @@ impl RuleSet {
 			}
 		}
 		check_containers(&rule).map_err(error)?;
+		if rule.guard > rule.atoms.len() {
+			return Err(error(RuleErrorKind::InvalidGuard));
+		}
 		let ops = compile(&rule.atoms, &[Vec::new()], &mut Vec::new()).map_err(error)?;
 
 		if let Some(replaced) = replaced {
@@ -425,6 +460,7 @@ fn compile(
 			Atom::Options(schema) => Op::Options(schema.clone()),
 			Atom::Container(prefix) => Op::Container(prefix.clone()),
 			Atom::Block => Op::Block,
+			Atom::Blanks => Op::Blanks,
 			Atom::Same(name) => Op::Same {
 				name: name.as_str().into(),
 				run: same(captured, name)?,
@@ -830,6 +866,16 @@ mod tests {
 		);
 		rules
 			.add(fence(vec![Atom::Text, Atom::same("fence")]))
+			.unwrap();
+	}
+
+	#[test]
+	fn guards_fit_their_rule() {
+		let mut rules = RuleSet::new();
+		let rule = Rule::new("r", vec![lit("<"), lit(">")]).guarded(3);
+		assert_eq!(kind(&mut rules, rule), RuleErrorKind::InvalidGuard);
+		rules
+			.add(Rule::new("r", vec![lit("<"), lit(">")]).guarded(2))
 			.unwrap();
 	}
 

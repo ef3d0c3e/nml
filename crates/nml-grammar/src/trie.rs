@@ -1,5 +1,6 @@
 use crate::RuleId;
 use crate::rule::Opener;
+use crate::rule::OpenerClass;
 
 /// The rule openers of one table, for longest-match dispatch.
 #[derive(Debug, Clone)]
@@ -17,8 +18,8 @@ struct Node {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Key {
 	Char(char),
-	/// One or more ASCII digits.
-	Digits,
+	/// One or more characters of a class.
+	Class(OpenerClass),
 }
 
 impl Default for Trie {
@@ -32,8 +33,8 @@ impl Default for Trie {
 impl Trie {
 	pub(crate) fn insert(&mut self, opener: &Opener, rule: RuleId) {
 		let keys = opener
-			.digits
-			.then_some(Key::Digits)
+			.class
+			.map(Key::Class)
 			.into_iter()
 			.chain(opener.text.chars().map(Key::Char));
 		let mut node = 0;
@@ -77,13 +78,13 @@ impl Trie {
 		for (key, child) in &self.nodes[node].children {
 			let (len, last) = match key {
 				Key::Char(c) if rest.starts_with(*c) => (c.len_utf8(), *c),
-				Key::Digits => {
-					let len =
-						rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+				Key::Class(class) => {
+					let len = rest.len() - rest.trim_start_matches(|c| class.contains(c)).len();
 					if len == 0 {
 						continue;
 					}
-					(len, '0')
+					// A class ends no word: the literal after it decides.
+					(len, ' ')
 				}
 				_ => continue,
 			};
@@ -123,16 +124,16 @@ mod tests {
 
 	fn text(text: &str) -> Opener {
 		Opener {
-			digits: false,
+			class: None,
 			text: text.into(),
 		}
 	}
 
 	#[test]
-	fn digit_openers() {
+	fn class_openers() {
 		let mut trie = Trie::default();
 		let digits = Opener {
-			digits: true,
+			class: Some(OpenerClass::Digits),
 			text: ". ".into(),
 		};
 		trie.insert(&digits, RuleId(0));
@@ -144,6 +145,18 @@ mod tests {
 		assert_eq!(trie.longest("1.5", true), None);
 		assert_eq!(trie.longest(". a", true), None);
 		assert_eq!(trie.longest("2024 was", true), None);
+
+		let mut trie = Trie::default();
+		let blanks = |text: &str| Opener {
+			class: Some(OpenerClass::Blanks),
+			text: text.into(),
+		};
+		trie.insert(&blanks("*"), RuleId(0));
+		trie.insert(&blanks("-"), RuleId(1));
+		assert_eq!(trie.longest(" * a", true), Some((RuleId(0), 2)));
+		assert_eq!(trie.longest(" \t -- a", true), Some((RuleId(1), 4)));
+		assert_eq!(trie.longest("* a", true), None);
+		assert_eq!(trie.longest("   a", true), None);
 	}
 
 	#[test]

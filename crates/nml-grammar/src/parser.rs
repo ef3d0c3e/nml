@@ -382,7 +382,7 @@ impl Parser<'_> {
 				pos = self.next_line(pos, end);
 				continue;
 			}
-			let rule = match self.next(Table::Block, pos, end) {
+			let rule = match self.next_block(pos, end) {
 				Ok(rule) => rule,
 				Err(frame) => return (nodes, pos, Stop::Frame(frame)),
 			};
@@ -420,13 +420,13 @@ impl Parser<'_> {
 	/// The end of the paragraph's content and the start of the line after it. A paragraph
 	/// ends before a blank line, a line where a block rule starts, or a delimiter of a block
 	/// frame.
-	fn paragraph_end(&self, mut pos: usize, end: usize) -> (usize, usize) {
+	fn paragraph_end(&mut self, mut pos: usize, end: usize) -> (usize, usize) {
 		loop {
 			let content_end = self.line_end(pos, end);
 			let next = self.next_line(pos, end);
 			if next >= end
 				|| self.is_blank_line(next, end)
-				|| !matches!(self.next(Table::Block, next, end), Ok(None))
+				|| !matches!(self.next_block(next, end), Ok(None))
 			{
 				return (content_end, next);
 			}
@@ -486,6 +486,30 @@ impl Parser<'_> {
 			nodes.push(Node::Text(self.token(text_start..pos)));
 		}
 		(nodes, pos, stop)
+	}
+
+	/// The block rule to dispatch at `pos`, the start of a line, or the frame that a
+	/// delimiter there closes. A rule whose guard does not match there is no rule.
+	fn next_block(&mut self, pos: usize, end: usize) -> Result<Option<(RuleId, usize)>, usize> {
+		let next = self.next(Table::Block, pos, end)?;
+		Ok(next.filter(|(rule, len)| self.guard_matches(*rule, pos..pos + len, end)))
+	}
+
+	/// Whether the guard of a rule matches at `opener`, which leaves no trace.
+	fn guard_matches(&mut self, rule: RuleId, opener: Range<usize>, end: usize) -> bool {
+		let guard = self.rules.get(rule).unwrap().guard;
+		if guard == 0 {
+			return true;
+		}
+		let start = opener.start;
+		let context = Context { rule, opener, end };
+		let diagnostics = self.diagnostics.len();
+		let frames = self.frames.len();
+		let ops = &self.rules.ops(rule)[..guard];
+		let matched = self.seq(&context, ops, start, &mut Vec::new()).is_ok();
+		self.diagnostics.truncate(diagnostics);
+		self.frames.truncate(frames);
+		matched
 	}
 
 	/// Matches a rule whose opener covers `opener`. A rule that fails is reported, and its
@@ -571,6 +595,10 @@ impl Parser<'_> {
 				0 => Err(self.expected(op, pos, end)),
 				len => matched(len),
 			},
+			Op::Blanks => match blanks(rest) {
+				0 => Err(self.expected(op, pos, end)),
+				len => matched(len),
+			},
 			Op::RestOfLine => Ok((self.line_end(pos, end), Value::Span)),
 			Op::Text(delimiters) => self.text_until(context, &resolve(delimiters, captures), pos),
 			Op::InlineContent(delimiters) => {
@@ -653,6 +681,7 @@ impl Parser<'_> {
 			Op::LineStart => self.is_line_start(pos),
 			Op::LineEnd => self.line_break(pos, end).is_some(),
 			Op::Word => word(rest) > 0,
+			Op::Blanks => blanks(rest) > 0,
 			Op::Number { signed, decimal } => number(rest, *signed, *decimal).is_some(),
 			Op::Capture { op, .. } => self.starts(op, pos, end, captures),
 			Op::Or(alternatives) => alternatives
@@ -758,7 +787,7 @@ impl Parser<'_> {
 		if pos >= end || !self.is_line_start(pos) || self.is_blank_line(pos, end) {
 			return missing(self);
 		}
-		let after = match self.next(Table::Block, pos, end) {
+		let after = match self.next_block(pos, end) {
 			// A delimiter of an enclosing construct, such as `:end`.
 			Err(_) => return missing(self),
 			Ok(Some((rule, len))) => {
@@ -805,8 +834,14 @@ impl Parser<'_> {
 		let mut pending = Vec::new();
 		while pos < end {
 			let next = self.next_line(pos, end);
-			let line = &self.text[pos..self.line_end(pos, end)];
+			let text = self.text;
+			let line = &text[pos..self.line_end(pos, end)];
+			let continues = *prefix == Prefix::Blanks
+				&& line.starts_with([' ', '\t'])
+				&& !self.is_blank_line(pos, end)
+				&& matches!(self.next_block(pos, end), Ok(None));
 			let content = match prefix {
+				Prefix::Blanks if continues => pos + blanks(line)..next,
 				Prefix::Literal(prefix) if line.starts_with(prefix.as_str()) => {
 					pos + prefix.len()..next
 				}
@@ -1094,6 +1129,11 @@ impl Parser<'_> {
 }
 
 /// The length of the word at the start of `text`, or 0.
+/// The length of the spaces and tabs at the start of `text`.
+fn blanks(text: &str) -> usize {
+	text.len() - text.trim_start_matches([' ', '\t']).len()
+}
+
 fn word(text: &str) -> usize {
 	let mut chars = text.char_indices();
 	match chars.next() {
@@ -1928,6 +1968,44 @@ pub(crate) mod tests {
 			let diagnostics = check(missing, expected);
 			assert_diagnostics!(diagnostics, [1003]);
 		}
+	}
+
+	#[test]
+	fn guarded_entries_with_continuations() {
+		let mut rules = rules();
+		let markers = || Atom::or([vec![lit("*")], vec![lit("-")]]);
+		let entry = Rule::new(
+			"entry",
+			vec![
+				Atom::LineStart,
+				Atom::Blanks,
+				Atom::capture("first", lit("*")),
+				Atom::capture("more", Atom::repeat(vec![markers()], 0, None)),
+				Atom::Blanks,
+				Atom::capture("body", Atom::Container(Prefix::Blanks)),
+			],
+		)
+		.guarded(5);
+		rules.add(entry).unwrap();
+		let check = |text: &str, expected: &str| {
+			let parsed = parse(&rules, source(text));
+			assert_eq!(show(&rules, &parsed.nodes), expected);
+			parsed.diagnostics
+		};
+		// Continuation lines start with a blank; the next entry or a blank line ends one.
+		let diagnostics = check(
+			" * a\n   b\n\t*- c\n d\n\ne",
+			r#"entry(first="*" more="" body=[P["a\nb"]]) entry(first="*" more="-" body=[P["c\nd"]]) P["e"]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+		// Where the guard does not match, the opener is text: no blank after the markers.
+		let diagnostics = check(
+			" *word* and\n *x",
+			r#"P[" " italic(body=["word"]) " and\n " italic!(body=["x"])]"#,
+		);
+		assert_diagnostics!(diagnostics, [1001]);
+		let diagnostics = check("a\n *b*", r#"P["a\n " italic(body=["b"])]"#);
+		assert_diagnostics!(diagnostics, []);
 	}
 
 	#[test]

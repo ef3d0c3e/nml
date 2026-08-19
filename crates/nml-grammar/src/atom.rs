@@ -26,6 +26,8 @@ pub enum Atom {
 	Number { signed: bool, decimal: bool },
 	/// An identifier: a letter or `_`, then letters, digits, `_` and `-`.
 	Word,
+	/// One or more spaces or tabs.
+	Blanks,
 	/// Verbatim text up to the delimiter that follows.
 	Text,
 	/// Verbatim text up to the end of the line, without the line break.
@@ -66,6 +68,9 @@ pub enum Prefix {
 	/// list item's marker), even if the container starts further on the line (after a
 	/// checkbox). Blank lines are part of the container when an indented line follows them.
 	Indent,
+	/// Lines that start with a space or a tab, without their leading blanks, up to a blank
+	/// line or a line where a block rule starts (the next entry of a list).
+	Blanks,
 }
 
 impl Atom {
@@ -125,6 +130,7 @@ impl Atom {
 			Atom::Repeat { .. } => "Repeat",
 			Atom::Number { .. } => "Number",
 			Atom::Word => "Word",
+			Atom::Blanks => "Blanks",
 			Atom::Text => "Text",
 			Atom::RestOfLine => "RestOfLine",
 			Atom::InlineContent => "InlineContent",
@@ -147,6 +153,7 @@ impl Atom {
 			| Atom::LineEnd
 			| Atom::Number { .. }
 			| Atom::Word
+			| Atom::Blanks
 			| Atom::Run { .. }
 			| Atom::Same(_)
 			| Atom::Options(_) => true,
@@ -184,6 +191,7 @@ pub(crate) enum Op {
 		decimal: bool,
 	},
 	Word,
+	Blanks,
 	Text(Vec<DelimiterPattern>),
 	RestOfLine,
 	InlineContent(Vec<DelimiterPattern>),
@@ -217,6 +225,7 @@ impl Op {
 			Op::Repeat { .. } => "Repeat",
 			Op::Number { .. } => "Number",
 			Op::Word => "Word",
+			Op::Blanks => "Blanks",
 			Op::Text(_) => "Text",
 			Op::RestOfLine => "RestOfLine",
 			Op::InlineContent(_) => "InlineContent",
