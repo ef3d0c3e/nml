@@ -43,22 +43,29 @@ fn body_with(text: &str, files: &[(&str, &str)]) -> String {
 #[test]
 fn lists() {
 	assert_eq!(
-		body("- a\n- *b*\n\ntext"),
+		body(" * a\n * *b*\n\ntext"),
 		"<ul>\n<li>a</li>\n<li><em>b</em></li>\n</ul>\n<p>text</p>\n"
 	);
-	assert_eq!(body("1. a\n2. b"), "<ol>\n<li>a</li>\n<li>b</li>\n</ol>\n");
-	assert_eq!(body("3. a"), "<ol start=\"3\">\n<li>a</li>\n</ol>\n");
-	// An item with several paragraphs keeps them; a nested list follows the text.
+	assert_eq!(body(" - a\n - b"), "<ol>\n<li>a</li>\n<li>b</li>\n</ol>\n");
 	assert_eq!(
-		body("- a\n\n  b\n- c\n  - d"),
-		"<ul>\n<li><p>a</p>\n<p>b</p>\n</li>\n<li>c<ul>\n<li>d</li>\n</ul>\n</li>\n</ul>\n"
+		body(" -[offset=3, bullet=a] a\n - b\n -[offset=9] c"),
+		"<ol start=\"3\" type=\"a\">\n<li>a</li>\n<li>b</li>\n<li value=\"9\">c</li>\n</ol>\n"
+	);
+	assert_eq!(
+		body(" *[bullet=square] a"),
+		"<ul style=\"list-style-type: square\">\n<li>a</li>\n</ul>\n"
+	);
+	// Nested lists go in the item before them.
+	assert_eq!(
+		body(" * a\n *- b\n * c"),
+		"<ul>\n<li>a<ol>\n<li>b</li>\n</ol>\n</li>\n<li>c</li>\n</ul>\n"
 	);
 }
 
 #[test]
 fn checkboxes() {
 	assert_eq!(
-		body("- [ ] a\n- [-] b\n- [x] c"),
+		body(" * [ ] a\n * [-] b\n * [x] c"),
 		"<ul>\n\
 		<li><input type=\"checkbox\" disabled> a</li>\n\
 		<li><input type=\"checkbox\" disabled aria-checked=\"mixed\"> b</li>\n\
@@ -123,7 +130,7 @@ fn figures() {
 		</figure>\n"
 	);
 	assert_eq!(
-		body(":figure\n- a"),
+		body(":figure\n * a"),
 		"<figure>\n<ul>\n<li>a</li>\n</ul>\n</figure>\n"
 	);
 }

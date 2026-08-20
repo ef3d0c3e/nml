@@ -171,8 +171,17 @@ impl Output<'_> {
 
 	/// A list item. An item with a single paragraph is tight: the paragraph's content goes
 	/// in the item without `<p>`.
-	fn list_item(&mut self, document: &Document, id: ElementId, checkbox: Option<Checkbox>) {
-		self.open(document, id, "li");
+	fn list_item(
+		&mut self,
+		document: &Document,
+		id: ElementId,
+		checkbox: Option<Checkbox>,
+		value: Option<u64>,
+	) {
+		let value = value
+			.map(|value| format!(" value=\"{value}\""))
+			.unwrap_or_default();
+		self.open_with(document, id, "li", None, &value);
 		match checkbox {
 			Some(Checkbox::Unchecked) => self.raw("<input type=\"checkbox\" disabled> "),
 			Some(Checkbox::Partial) => {
@@ -605,22 +614,33 @@ impl Output<'_> {
 				}
 			}
 			ElementKind::List(kind) => {
-				let tag = match kind {
-					ListKind::Bullet => "ul",
-					ListKind::Numbered { .. } => "ol",
+				let (tag, extra) = match kind {
+					ListKind::Bullet { style } => {
+						let style = style
+							.map(|style| format!(" style=\"list-style-type: {}\"", style.name()));
+						("ul", style.unwrap_or_default())
+					}
+					ListKind::Numbered { start, style } => {
+						let mut extra = String::new();
+						if *start != 1 {
+							extra.push_str(&format!(" start=\"{start}\""));
+						}
+						if let Some(style) = style {
+							extra.push_str(&format!(" type=\"{}\"", style.name()));
+						}
+						("ol", extra)
+					}
 				};
-				let start = match kind {
-					ListKind::Numbered { start } if *start != 1 => format!(" start=\"{start}\""),
-					_ => String::new(),
-				};
-				self.open_with(document, id, tag, None, &start);
+				self.open_with(document, id, tag, None, &extra);
 				self.raw("\n");
 				self.children(document, id);
 				self.raw("</");
 				self.raw(tag);
 				self.raw(">\n");
 			}
-			ElementKind::ListItem { checkbox } => self.list_item(document, id, *checkbox),
+			ElementKind::ListItem { checkbox, value } => {
+				self.list_item(document, id, *checkbox, *value)
+			}
 			kind => unimplemented!("HTML for `{}`", kind.name()),
 		}
 	}
