@@ -124,6 +124,8 @@ pub enum ElementKind {
 	/// An item of a list; its children are blocks.
 	ListItem {
 		checkbox: Option<Checkbox>,
+		/// The item's number, where a numbered list's count changes.
+		value: Option<u64>,
 	},
 }
 
@@ -350,11 +352,79 @@ impl CalloutKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ListKind {
-	Bullet,
+	Bullet {
+		style: Option<BulletStyle>,
+	},
 	/// Numbered from `start`.
 	Numbered {
 		start: u64,
+		style: Option<NumberStyle>,
 	},
+}
+
+/// The bullet of an unnumbered list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BulletStyle {
+	Disc,
+	Circle,
+	Square,
+	None,
+}
+
+impl BulletStyle {
+	pub const ALL: [BulletStyle; 4] = [
+		BulletStyle::Disc,
+		BulletStyle::Circle,
+		BulletStyle::Square,
+		BulletStyle::None,
+	];
+
+	pub fn name(self) -> &'static str {
+		match self {
+			BulletStyle::Disc => "disc",
+			BulletStyle::Circle => "circle",
+			BulletStyle::Square => "square",
+			BulletStyle::None => "none",
+		}
+	}
+
+	pub fn from_name(name: &str) -> Option<Self> {
+		Self::ALL.into_iter().find(|style| style.name() == name)
+	}
+}
+
+/// How a numbered list counts: `1`, `a`, `A`, `i` or `I`, as HTML names them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NumberStyle {
+	Decimal,
+	LowerAlpha,
+	UpperAlpha,
+	LowerRoman,
+	UpperRoman,
+}
+
+impl NumberStyle {
+	pub const ALL: [NumberStyle; 5] = [
+		NumberStyle::Decimal,
+		NumberStyle::LowerAlpha,
+		NumberStyle::UpperAlpha,
+		NumberStyle::LowerRoman,
+		NumberStyle::UpperRoman,
+	];
+
+	pub fn name(self) -> &'static str {
+		match self {
+			NumberStyle::Decimal => "1",
+			NumberStyle::LowerAlpha => "a",
+			NumberStyle::UpperAlpha => "A",
+			NumberStyle::LowerRoman => "i",
+			NumberStyle::UpperRoman => "I",
+		}
+	}
+
+	pub fn from_name(name: &str) -> Option<Self> {
+		Self::ALL.into_iter().find(|style| style.name() == name)
+	}
 }
 
 /// The state of a list item's checkbox.
