@@ -1,190 +1,377 @@
+use std::sync::Arc;
+
+use nml_diagnostics::Diagnostic;
+use nml_diagnostics::DiagnosticKind;
+use nml_diagnostics::DiagnosticMessage;
+use nml_document::BulletStyle;
 use nml_document::Checkbox;
 use nml_document::ElementKind;
 use nml_document::ListKind;
+use nml_document::NumberStyle;
 use nml_grammar::Atom;
+use nml_grammar::OptionKind;
+use nml_grammar::OptionSchema;
+use nml_grammar::OptionSpec;
+use nml_grammar::OptionValue;
+use nml_grammar::Options;
 use nml_grammar::Prefix;
 use nml_grammar::Rule;
 use nml_grammar::RuleError;
 use nml_grammar::RuleMatch;
-use nml_source::Token;
+use nml_grammar::Value;
 
 use crate::Language;
 use crate::Lower;
 
-/// Bullet items `- text` and numbered items `1. text`, with an optional checkbox (`[ ]`,
-/// `[-]`, `[x]`). An item's next lines are indented to the end of its marker. Consecutive
-/// items of the same kind form a list; a numbered list starts at its first item's number.
+/// List entries: a line that starts with blanks, then markers, `*` for an unnumbered list
+/// and `-` for a numbered one, then blanks and the entry. The run of markers is the depth:
+/// ` ** b` is in a list inside the list of ` * a`, and ` *- c` in a numbered list inside it.
+///
+/// Options come right after the markers: `offset` sets the number of the entry (or the
+/// start of a list it opens) and `bullet` the style of a list it opens. A checkbox follows,
+/// after a blank: `[ ]`, `[-]` or `[x]`. The next lines that start with a blank, up to the
+/// next entry, continue the entry.
 pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
-	let checkbox = || {
-		let states = ["[ ] ", "[-] ", "[x] ", "[X] "].map(|state| vec![Atom::literal(state)]);
-		Atom::optional(vec![
-			Atom::capture("checkbox", Atom::or(states)).with_class("keyword"),
-		])
-	};
-	let body = || Atom::capture("body", Atom::Container(Prefix::Indent));
-	let bullet = Rule::new(
-		"bullet_item",
-		vec![
-			Atom::LineStart,
-			Atom::capture("marker", Atom::literal("- ")).with_class("operator"),
-			checkbox(),
-			body(),
-		],
-	);
-	let numbered = Rule::new(
-		"numbered_item",
-		vec![
-			Atom::LineStart,
-			Atom::capture(
-				"number",
-				Atom::Number {
-					signed: false,
-					decimal: false,
-				},
-			)
-			.with_class("operator"),
-			Atom::capture("marker", Atom::literal(". ")).with_class("operator"),
-			checkbox(),
-			body(),
-		],
-	);
-	language.add_grouped(bullet, |_| "bullet".into(), list)?;
-	language.add_grouped(numbered, |_| "numbered".into(), list)?;
+	let schema = Arc::new(OptionSchema::new([
+		OptionSpec::new("offset", OptionKind::Integer)
+			.with_default(OptionValue::Integer(1))
+			.with_doc("The number of the entry, or the first number of the list it starts."),
+		OptionSpec::new("bullet", OptionKind::Text)
+			.with_default(OptionValue::Text(String::new()))
+			.with_doc(
+				"The style of the list the entry starts: `1`, `a`, `A`, `i` or `I` for a \
+				numbered list, `disc`, `circle`, `square` or `none` otherwise.",
+			),
+	]));
+	for (name, marker) in [("bullet_entry", "*"), ("numbered_entry", "-")] {
+		let markers = || Atom::or([vec![Atom::literal("*")], vec![Atom::literal("-")]]);
+		let checkboxes =
+			[" [ ]", " []", " [-]", " [x]", " [X]"].map(|checkbox| vec![Atom::literal(checkbox)]);
+		let rule = Rule::new(
+			name,
+			vec![
+				Atom::LineStart,
+				Atom::Blanks,
+				Atom::capture("marker", Atom::literal(marker)).with_class("operator"),
+				Atom::capture("markers", Atom::repeat(vec![markers()], 0, None))
+					.with_class("operator"),
+				Atom::optional(vec![Atom::capture(
+					"options",
+					Atom::Options(schema.clone()),
+				)]),
+				Atom::optional(vec![
+					Atom::capture("checkbox", Atom::or(checkboxes)).with_class("keyword"),
+				]),
+				Atom::Blanks,
+				Atom::capture("body", Atom::Container(Prefix::Blanks)),
+			],
+		)
+		// Without a blank after its markers, ` *word*` is no entry.
+		.guarded(7);
+		language.add_grouped(rule, |_| "list".into(), list)?;
+	}
 	Ok(())
 }
 
-/// Lowers consecutive items of one kind into a list.
-fn list(lower: &mut Lower<'_, '_>, items: &[&RuleMatch]) {
-	let first = &items[0].token;
-	let last = &items[items.len() - 1].token;
-	let token = Token::new(first.source().clone(), first.start()..last.end());
-	let kind = match items[0].capture("number") {
-		// Too many digits for a start number: count from the largest one.
-		Some(number) => ListKind::Numbered {
-			start: number.token.content().parse().unwrap_or(u64::MAX),
-		},
-		None => ListKind::Bullet,
-	};
-	lower.builder.open(ElementKind::List(kind), token);
-	for item in items {
+/// A list open while its entries are lowered.
+struct Level {
+	numbered: bool,
+	/// Whether an item of the list is open: deeper lists go in it.
+	item_open: bool,
+}
+
+/// Lowers consecutive entries into nested lists.
+fn list(lower: &mut Lower<'_, '_>, entries: &[&RuleMatch]) {
+	let mut stack: Vec<Level> = Vec::new();
+	for entry in entries {
+		let markers = format!(
+			"{}{}",
+			entry.capture("marker").unwrap().token.content(),
+			entry.capture("markers").unwrap().token.content()
+		);
+		let kinds: Vec<bool> = markers.chars().map(|c| c == '-').collect();
+		let options = match entry.capture("options").map(|capture| &capture.value) {
+			Some(Value::Options(options)) => Some(options),
+			_ => None,
+		};
+		let offset = given(options, "offset").and_then(|value| match value {
+			OptionValue::Integer(offset) => u64::try_from(*offset).ok(),
+			_ => None,
+		});
 		let checkbox =
-			item.capture("checkbox")
-				.map(|checkbox| match &checkbox.token.content()[1..2] {
-					" " => Checkbox::Unchecked,
-					"-" => Checkbox::Partial,
-					_ => Checkbox::Checked,
+			entry
+				.capture("checkbox")
+				.map(|checkbox| match checkbox.token.content().trim() {
+					"[-]" => Checkbox::Partial,
+					"[x]" | "[X]" => Checkbox::Checked,
+					_ => Checkbox::Unchecked,
 				});
-		lower
-			.builder
-			.open(ElementKind::ListItem { checkbox }, item.token.clone());
-		lower.capture(item, "body");
+
+		// The lists the entry shares with the open ones.
+		let common = stack
+			.iter()
+			.zip(&kinds)
+			.take_while(|(level, numbered)| level.numbered == **numbered)
+			.count();
+		while stack.len() > common {
+			close(lower, stack.pop().unwrap());
+		}
+
+		let mut value = None;
+		if stack.len() == kinds.len() {
+			// An entry of the innermost open list.
+			let level = stack.last_mut().unwrap();
+			if level.item_open {
+				lower.builder.close();
+			}
+			if level.numbered {
+				value = offset;
+			}
+		} else {
+			for depth in stack.len()..kinds.len() {
+				let numbered = kinds[depth];
+				let last = depth + 1 == kinds.len();
+				let kind = match last {
+					true => list_kind(lower, numbered, options, offset),
+					false => list_kind(lower, numbered, None, None),
+				};
+				lower
+					.builder
+					.open(ElementKind::List(kind), entry.token.clone());
+				// A list deeper than the one after it, ` ** a` first, gets an empty item.
+				if !last {
+					let item = ElementKind::ListItem {
+						checkbox: None,
+						value: None,
+					};
+					lower.builder.open(item, entry.token.clone());
+				}
+				stack.push(Level {
+					numbered,
+					item_open: !last,
+				});
+			}
+		}
+		let item = ElementKind::ListItem { checkbox, value };
+		lower.builder.open(item, entry.token.clone());
+		stack.last_mut().unwrap().item_open = true;
+		lower.capture(entry, "body");
+	}
+	while let Some(level) = stack.pop() {
+		close(lower, level);
+	}
+}
+
+fn close(lower: &mut Lower<'_, '_>, level: Level) {
+	if level.item_open {
 		lower.builder.close();
 	}
 	lower.builder.close();
 }
 
+/// An option written in the list, not its default.
+fn given<'a>(options: Option<&'a Options>, name: &str) -> Option<&'a OptionValue> {
+	let options = options?;
+	options
+		.entries
+		.iter()
+		.any(|entry| entry.key.content() == name)
+		.then(|| options.get(name))
+		.flatten()
+}
+
+/// The kind of a list an entry opens, with the entry's options.
+fn list_kind(
+	lower: &mut Lower<'_, '_>,
+	numbered: bool,
+	options: Option<&Options>,
+	offset: Option<u64>,
+) -> ListKind {
+	let bullet = match given(options, "bullet") {
+		Some(OptionValue::Text(bullet)) => Some(bullet.as_str()),
+		_ => None,
+	};
+	let invalid = |lower: &mut Lower<'_, '_>, expected: Vec<&str>| {
+		let entry = options
+			.unwrap()
+			.entries
+			.iter()
+			.find(|entry| entry.key.content() == "bullet")
+			.unwrap();
+		let location = entry
+			.value_token
+			.clone()
+			.unwrap_or_else(|| entry.key.clone());
+		let kind = DiagnosticKind::InvalidOptionValue {
+			name: "bullet".into(),
+			expected: expected.join(", "),
+		};
+		lower
+			.diagnostics
+			.push(Diagnostic::new(kind, DiagnosticMessage::new(location)));
+	};
+	if numbered {
+		let style = bullet.and_then(|bullet| {
+			let style = NumberStyle::from_name(bullet);
+			if style.is_none() {
+				invalid(lower, NumberStyle::ALL.iter().map(|s| s.name()).collect());
+			}
+			style
+		});
+		ListKind::Numbered {
+			start: offset.unwrap_or(1),
+			style,
+		}
+	} else {
+		let style = bullet.and_then(|bullet| {
+			let style = BulletStyle::from_name(bullet);
+			if style.is_none() {
+				invalid(lower, BulletStyle::ALL.iter().map(|s| s.name()).collect());
+			}
+			style
+		});
+		ListKind::Bullet { style }
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use nml_diagnostics::assert_diagnostics;
+	use nml_document::BulletStyle;
 	use nml_document::Checkbox;
 	use nml_document::ElementKind;
 	use nml_document::ListKind;
+	use nml_document::NumberStyle;
 
 	use crate::tests::check;
+	use crate::tests::compile_text;
 
-	#[test]
-	fn bullet_lists() {
-		let compiled = check(
-			"- a\n- **b**\n  c\n\n- d\n\ntext",
-			r#"document[list[list_item[paragraph["a"]] list_item[paragraph[Bold["b"] "\nc"]] list_item[paragraph["d"]]] paragraph["text"]]"#,
-		);
-		assert_diagnostics!(compiled.diagnostics, []);
-	}
-
-	#[test]
-	fn numbered_lists_start_at_their_first_number() {
-		let compiled = check(
-			"3. a\n1. b\n10. c\n    d",
-			r#"document[list[list_item[paragraph["a"]] list_item[paragraph["b"]] list_item[paragraph["c\nd"]]]]"#,
-		);
+	/// The kinds of the lists and items, in document order.
+	fn kinds(text: &str) -> Vec<ElementKind> {
+		let compiled = compile_text(text);
 		assert_diagnostics!(compiled.diagnostics, []);
 		let document = &compiled.unit.document;
-		let list = document.get(document.root()).children()[0];
-		assert_eq!(
-			document.get(list).kind,
-			ElementKind::List(ListKind::Numbered { start: 3 })
-		);
+		document
+			.descendants(document.root())
+			.filter(|(_, element)| {
+				matches!(
+					element.kind,
+					ElementKind::List(_) | ElementKind::ListItem { .. }
+				)
+			})
+			.map(|(_, element)| element.kind.clone())
+			.collect()
+	}
 
-		// More digits than a start number holds.
-		let compiled = check(
-			"99999999999999999999999. a",
-			r#"document[list[list_item[paragraph["a"]]]]"#,
-		);
-		let document = &compiled.unit.document;
-		let list = document.get(document.root()).children()[0];
-		assert_eq!(
-			document.get(list).kind,
-			ElementKind::List(ListKind::Numbered { start: u64::MAX })
-		);
+	fn bullets() -> ElementKind {
+		ElementKind::List(ListKind::Bullet { style: None })
+	}
+
+	fn numbered(start: u64) -> ElementKind {
+		ElementKind::List(ListKind::Numbered { start, style: None })
+	}
+
+	fn item(checkbox: Option<Checkbox>, value: Option<u64>) -> ElementKind {
+		ElementKind::ListItem { checkbox, value }
 	}
 
 	#[test]
-	fn kinds_do_not_mix() {
-		check(
-			"- a\n1. b\n- c",
-			r#"document[list[list_item[paragraph["a"]]] list[list_item[paragraph["b"]]] list[list_item[paragraph["c"]]]]"#,
-		);
-		// Anything between items ends the list.
-		check(
-			"- a\n\nb\n\n- c",
-			r#"document[list[list_item[paragraph["a"]]] paragraph["b"] list[list_item[paragraph["c"]]]]"#,
-		);
-	}
-
-	#[test]
-	fn nested_lists() {
+	fn lists() {
 		let compiled = check(
-			"- a\n  1. b\n  2. c\n     - d\n- e",
-			r#"document[list[list_item[paragraph["a"] list[list_item[paragraph["b"]] list_item[paragraph["c"] list[list_item[paragraph["d"]]]]]] list_item[paragraph["e"]]]]"#,
+			" * a\n * **b**\n   more\n\n * c\n\ntext",
+			r#"document[list[list_item[paragraph["a"]] list_item[paragraph[Bold["b"] "\nmore"]] list_item[paragraph["c"]]] paragraph["text"]]"#,
 		);
 		assert_diagnostics!(compiled.diagnostics, []);
+		assert_eq!(
+			kinds("\t- a\n  - b"),
+			[numbered(1), item(None, None), item(None, None)]
+		);
+	}
+
+	#[test]
+	fn nesting_by_markers() {
+		check(
+			" * a\n ** b\n *- c\n *- d\n * e",
+			r#"document[list[list_item[paragraph["a"] list[list_item[paragraph["b"]]] list[list_item[paragraph["c"]] list_item[paragraph["d"]]]] list_item[paragraph["e"]]]]"#,
+		);
+		// A deeper first entry opens the lists above it with an empty item.
+		check(
+			" -* a\n - b",
+			r#"document[list[list_item[list[list_item[paragraph["a"]]]] list_item[paragraph["b"]]]]"#,
+		);
+		// Another kind at the top starts another list.
+		check(
+			" * a\n - b",
+			r#"document[list[list_item[paragraph["a"]]] list[list_item[paragraph["b"]]]]"#,
+		);
+	}
+
+	#[test]
+	fn entries_need_leading_and_trailing_blanks() {
+		check(
+			"a\n -5 degrees, \\*b",
+			r#"document[paragraph["a\n -5 degrees, *b"]]"#,
+		);
+		let compiled = compile_text("* a\n - b");
+		assert_diagnostics!(compiled.diagnostics, [1001]);
+	}
+
+	#[test]
+	fn options() {
+		assert_eq!(
+			kinds(" -[offset=3] a\n - b\n -[offset=10] c"),
+			[
+				numbered(3),
+				item(None, None),
+				item(None, None),
+				item(None, Some(10))
+			]
+		);
+		assert_eq!(
+			kinds(" -[bullet=i] a\n *[bullet=square] b\n ** c"),
+			[
+				ElementKind::List(ListKind::Numbered {
+					start: 1,
+					style: Some(NumberStyle::LowerRoman)
+				}),
+				item(None, None),
+				ElementKind::List(ListKind::Bullet {
+					style: Some(BulletStyle::Square)
+				}),
+				item(None, None),
+				bullets(),
+				item(None, None),
+			]
+		);
+		let compiled = compile_text(" -[bullet=square] a");
+		assert_diagnostics!(compiled.diagnostics, [1007 @ 10..16]);
+		let compiled = compile_text(" *[bullet=I] a");
+		assert_diagnostics!(compiled.diagnostics, [1007 @ 10..11]);
+		let compiled = compile_text(" *[nope=1] a");
+		assert_diagnostics!(compiled.diagnostics, [1005]);
 	}
 
 	#[test]
 	fn checkboxes() {
-		let compiled = check(
-			"- [ ] a\n- [-] b\n  more\n- [x] c\n- [X] d\n- \\[y] e\n- [link](x)",
-			r#"document[list[list_item[paragraph["a"]] list_item[paragraph["b\nmore"]] list_item[paragraph["c"]] list_item[paragraph["d"]] list_item[paragraph["[y] e"]] list_item[paragraph[link["link"]]]]]"#,
-		);
-		assert_diagnostics!(compiled.diagnostics, []);
-		let document = &compiled.unit.document;
-		let list = document.get(document.root()).children()[0];
-		let states: Vec<_> = document
-			.children(list)
-			.map(|(_, item)| match item.kind {
-				ElementKind::ListItem { checkbox } => checkbox,
-				_ => unreachable!(),
-			})
-			.collect();
 		assert_eq!(
-			states,
+			kinds(" * [ ] a\n * [] b\n * [-] c\n *[offset=2] [x] d\n * [X] e\n * \\[y] f"),
 			[
-				Some(Checkbox::Unchecked),
-				Some(Checkbox::Partial),
-				Some(Checkbox::Checked),
-				Some(Checkbox::Checked),
-				None,
-				None
+				bullets(),
+				item(Some(Checkbox::Unchecked), None),
+				item(Some(Checkbox::Unchecked), None),
+				item(Some(Checkbox::Partial), None),
+				item(Some(Checkbox::Checked), None),
+				item(Some(Checkbox::Checked), None),
+				item(None, None),
 			]
 		);
 	}
 
 	#[test]
-	fn markers_need_a_space() {
-		let compiled = check(
-			"-a\n2024 was\n1.5",
-			r#"document[paragraph["-a\n2024 was\n1.5"]]"#,
+	fn entries_hold_blocks() {
+		check(
+			" * a\n   ```\n   code\n   ```\n * b",
+			r#"document[list[list_item[paragraph["a"] code_block[]] list_item[paragraph["b"]]]]"#,
 		);
-		assert_diagnostics!(compiled.diagnostics, []);
 	}
 }

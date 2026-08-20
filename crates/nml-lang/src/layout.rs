@@ -105,7 +105,7 @@ mod tests {
 	#[test]
 	fn layouts() {
 		let compiled = check(
-			":layout split\nThe source…\n:next\n- …and\n- the result.\n:end\nafter",
+			":layout split\nThe source…\n:next\n * …and\n * the result.\n:end\nafter",
 			r#"document[layout[layout_part[paragraph["The source…"]] layout_part[list[list_item[paragraph["…and"]] list_item[paragraph["the result."]]]]] paragraph["after"]]"#,
 		);
 		assert_diagnostics!(compiled.diagnostics, []);

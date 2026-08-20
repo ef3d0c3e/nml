@@ -139,7 +139,7 @@ mod tests {
 	#[test]
 	fn quotes() {
 		check(
-			"> a\n> **b**\n>\n> - c\n\n> d\nafter",
+			"> a\n> **b**\n>\n>  * c\n\n> d\nafter",
 			r#"document[quote[paragraph["a\n" Bold["b"]] list[list_item[paragraph["c"]]]] quote[paragraph["d"]] paragraph["after"]]"#,
 		);
 		check(
