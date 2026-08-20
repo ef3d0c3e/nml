@@ -10,6 +10,7 @@ use mlua::UserData;
 use mlua::UserDataFields;
 use mlua::Value;
 use nml_document::Attributes;
+use nml_document::BulletStyle;
 use nml_document::CalloutKind;
 use nml_document::Checkbox;
 use nml_document::DocumentBuilder;
@@ -17,6 +18,7 @@ use nml_document::ElementKind;
 use nml_document::LayoutKind;
 use nml_document::ListKind;
 use nml_document::MediaKind;
+use nml_document::NumberStyle;
 use nml_document::Style;
 use nml_document::SymbolRef;
 use nml_lang::Lower;
@@ -78,8 +80,8 @@ const KINDS: &[(&str, &str)] = &[
 	("code", "code"),
 	("code_block", "code, language, line_offset, numbers"),
 	("media", "url, type, alt, width"),
-	("list", "numbered, start"),
-	("list_item", "checkbox"),
+	("list", "numbered, start, bullet"),
+	("list_item", "checkbox, value"),
 	("quote", "author, cite, url"),
 	("callout", "type, title"),
 	("layout", "type, title"),
@@ -98,8 +100,8 @@ const KINDS: &[(&str, &str)] = &[
 /// | `code` | `code` |
 /// | `code_block` | `code`, `language`, `line_offset`, `numbers`; children are the title |
 /// | `media` | `url`, `type` (`image`, `video`, `audio`), `alt`, `width` |
-/// | `list` | `numbered`, `start`; children that are not items become items |
-/// | `list_item` | `checkbox` (`unchecked`, `partial`, `checked`) |
+/// | `list` | `numbered`, `start`, `bullet` (`1`, `a`, `A`, `i`, `I` if numbered; `disc`, `circle`, `square`, `none` if not); children that are not items become items |
+/// | `list_item` | `checkbox` (`unchecked`, `partial`, `checked`), `value` (its number) |
 /// | `quote` | `author`, `cite`, `url` |
 /// | `callout` | `type` (`note`, `tip`, …), `title` |
 /// | `layout` | `type` (`centered`, `split`, `spoiler`), `title`; each child is a part |
@@ -181,17 +183,43 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 			})
 		}
 		"list" => {
+			let bullet = text("bullet")?;
+			let unknown = |bullet: &str, styles: Vec<&str>| {
+				mlua::Error::runtime(format!(
+					"`{bullet}` is not a bullet of this list: use one of {}",
+					styles.join(", ")
+				))
+			};
 			let kind = match spec.get::<Option<bool>>("numbered")?.unwrap_or(false) {
 				true => ListKind::Numbered {
 					start: spec.get::<Option<u64>>("start")?.unwrap_or(1),
+					style: match bullet {
+						Some(bullet) => Some(NumberStyle::from_name(&bullet).ok_or_else(|| {
+							unknown(&bullet, NumberStyle::ALL.iter().map(|s| s.name()).collect())
+						})?),
+						None => None,
+					},
 				},
-				false => ListKind::Bullet,
+				false => ListKind::Bullet {
+					style: match bullet {
+						Some(bullet) => Some(BulletStyle::from_name(&bullet).ok_or_else(|| {
+							unknown(&bullet, BulletStyle::ALL.iter().map(|s| s.name()).collect())
+						})?),
+						None => None,
+					},
+				},
 			};
 			children = children
 				.into_iter()
 				.map(|child| match child.content {
 					Content::Element(ElementKind::ListItem { .. }) => child,
-					_ => wrap(ElementKind::ListItem { checkbox: None }, child),
+					_ => {
+						let item = ElementKind::ListItem {
+							checkbox: None,
+							value: None,
+						};
+						wrap(item, child)
+					}
 				})
 				.collect();
 			Content::Element(ElementKind::List(kind))
@@ -208,7 +236,10 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 					)));
 				}
 			};
-			Content::Element(ElementKind::ListItem { checkbox })
+			Content::Element(ElementKind::ListItem {
+				checkbox,
+				value: spec.get::<Option<u64>>("value")?,
+			})
 		}
 		"quote" => Content::Element(ElementKind::Quote {
 			author: text("author")?,

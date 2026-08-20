@@ -113,8 +113,8 @@ fn call(lua: &Lua, draft: Draft<'_>, listeners: &[Function]) -> mlua::Result<()>
 		_ => (None, None),
 	};
 	let (numbered, start) = match draft.kind {
-		ElementKind::List(ListKind::Bullet) => (Some(false), None),
-		ElementKind::List(ListKind::Numbered { start }) => {
+		ElementKind::List(ListKind::Bullet { .. }) => (Some(false), None),
+		ElementKind::List(ListKind::Numbered { start, .. }) => {
 			(Some(true), Some(i64::try_from(*start).unwrap_or(i64::MAX)))
 		}
 		_ => (None, None),
@@ -122,6 +122,7 @@ fn call(lua: &Lua, draft: Draft<'_>, listeners: &[Function]) -> mlua::Result<()>
 	let checkbox = match draft.kind {
 		ElementKind::ListItem {
 			checkbox: Some(checkbox),
+			..
 		} => Some(format!("{checkbox:?}").to_lowercase()),
 		_ => None,
 	};
@@ -208,10 +209,10 @@ nml.on("list", function(l) table.insert(seen, tostring(l.numbered) .. ":" .. tos
 nml.on("list_item", function(i) table.insert(seen, tostring(i.checkbox)) end)
 ```
 
-- [x] a
-- b
+ * [x] a
+ * b
 
-4. c
+ -[offset=4] c
 
 :lua`table.concat(seen, " ")`
 "#,
