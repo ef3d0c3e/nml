@@ -241,6 +241,9 @@ pub struct Unit {
 	/// The unit's reference key, if the document sets one (`nml.reference_key`). By
 	/// default, it is the file's basename.
 	pub reference_key: Option<String>,
+	/// Where the unit's page is written in the output directory, if the document sets it
+	/// (`nml.output`): the variable's value. By default, it is the file's path with `.html`.
+	pub output: Option<Token>,
 	pub document: Document,
 	pub exports: Vec<Export>,
 	pub uses: Vec<Use>,
