@@ -16,7 +16,7 @@ use nml_document::SerialValue;
 use nml_grammar::Node;
 use nml_lang::Language;
 use nml_lang::Resolver;
-use nml_lang::relative_url;
+use nml_lang::relative_output_url;
 use nml_source::Source;
 use nml_source::Token;
 use nml_source::Url;
@@ -135,6 +135,8 @@ pub struct PageInfo {
 	/// The reference key.
 	pub name: String,
 	pub title: String,
+	/// Where the page is written, relative to the output directory.
+	pub output: String,
 	/// The variables the page exports, by name, with their values as written.
 	pub variables: Vec<(String, String)>,
 }
@@ -158,12 +160,18 @@ fn pages(lua: &Lua) -> mlua::Result<Table> {
 		mlua::Error::runtime("`nml.pages` is only available in deferred functions, at link time")
 	})?;
 	let list = lua.create_table()?;
+	let current = context
+		.pages
+		.iter()
+		.find(|page| page.path == context.current)
+		.map(|page| page.output.clone())
+		.unwrap_or_else(|| nml_lang::output_path(&context.current));
 	for page in context.pages.iter() {
 		let entry = lua.create_table()?;
 		entry.raw_set("path", page.path.as_str())?;
 		entry.raw_set("name", page.name.as_str())?;
 		entry.raw_set("title", page.title.as_str())?;
-		entry.raw_set("url", relative_url(&context.current, &page.path))?;
+		entry.raw_set("url", relative_output_url(&current, &page.output))?;
 		entry.raw_set("current", page.path == context.current)?;
 		let variables = lua.create_table()?;
 		for (name, value) in &page.variables {
@@ -378,22 +386,24 @@ end
 			.files
 			.insert("modules/std/nav.nml".into(), NAV.into());
 		resolver.modules.insert("std".into(), "modules/std".into());
-		let page = |path: &str, title: &str| PageInfo {
+		let page = |path: &str, title: &str, output: &str| PageInfo {
 			path: path.into(),
 			name: path.into(),
 			title: title.into(),
+			output: output.into(),
 			variables: Vec::new(),
 		};
+		// URLs go from the page's output to the others', wherever their sources are.
 		let pages = Arc::new(vec![
-			page("index.nml", "Home"),
-			page("docs/guide.nml", "Guide"),
-			page("docs/faq.nml", "FAQ"),
+			page("index.nml", "Home", "index.html"),
+			page("docs/guide.nml", "Guide", "guide/index.html"),
+			page("docs/faq.nml", "FAQ", "docs/faq.html"),
 		]);
 		let mut runtime = DeferredRuntime::new(Arc::new(resolver), pages, "docs/faq.nml".into());
 		let at = document.get(document.root()).token.clone();
 		assert_eq!(
 			runtime.fill(slot, &at).unwrap(),
-			r#"<a href="../index.html">Home</a> &lt;|&gt; <a href="guide.html">Guide</a>"#
+			r#"<a href="../index.html">Home</a> &lt;|&gt; <a href="../guide/index.html">Guide</a>"#
 		);
 	}
 
