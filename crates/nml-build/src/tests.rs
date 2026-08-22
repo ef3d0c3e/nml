@@ -371,6 +371,9 @@ fn dependents_are_invalidated_transitively() {
 				uses: &[],
 				dependencies,
 				template: None,
+				output: "a.html",
+				output_range: None,
+				assets: &[],
 			})
 			.unwrap();
 	};
@@ -709,20 +712,218 @@ fn assets_are_copied() {
 	assert!(
 		workspace
 			.output("docs/a.html")
-			.contains("<img src=\"../img/flower.png\" alt=\"\">")
+			.contains("<img src=\"../assets/img/flower.png\" alt=\"\">")
 	);
-	assert_eq!(workspace.output("img/flower.png"), "v1");
+	assert_eq!(workspace.output("assets/img/flower.png"), "v1");
+	assert!(!workspace.0.join("public/img").exists());
 
 	// A new version of the file is copied: the page depends on it.
 	workspace.write("img/flower.png", "version 2");
 	let report = workspace.build();
 	assert_eq!(report.parsed, ["docs/a.nml"]);
-	assert_eq!(workspace.output("img/flower.png"), "version 2");
+	assert_eq!(workspace.output("assets/img/flower.png"), "version 2");
+
+	// A copy that went away is copied again, though no page changed.
+	fs::remove_dir_all(workspace.0.join("public/assets")).unwrap();
+	let report = workspace.build();
+	assert!(report.parsed.is_empty());
+	assert_eq!(workspace.output("assets/img/flower.png"), "version 2");
 
 	// A missing file is an error.
 	workspace.remove("img/flower.png");
 	let report = workspace.build();
 	assert_diagnostics!(report.diagnostics, [3008]);
+}
+
+#[test]
+fn unused_assets_are_deleted() {
+	let workspace = Workspace::new(
+		"unused-assets",
+		&[
+			("nml.toml", "exclude = [\"lib.nml\"]\n"),
+			("a.nml", "![](img/a.png) ![](img/shared.png)"),
+			("b.nml", "![](img/shared.png)"),
+			("lib.nml", "![](img/lib.png)"),
+			("img/a.png", "a"),
+			("img/shared.png", "shared"),
+			("img/lib.png", "lib"),
+		],
+	);
+	assert_diagnostics!(workspace.build().diagnostics, []);
+	let assets = workspace.0.join("public/assets");
+	assert!(assets.join("img/a.png").exists());
+	assert!(assets.join("img/shared.png").exists());
+	// Only pages are written, and only their media copied.
+	assert!(!assets.join("img/lib.png").exists());
+
+	// Files of the assets directory no page shows are deleted, with empty directories.
+	workspace.write("public/assets/old/x.png", "old");
+	workspace.write("a.nml", "![](img/shared.png)");
+	assert_diagnostics!(workspace.build().diagnostics, []);
+	assert!(!assets.join("img/a.png").exists());
+	assert!(!assets.join("old").exists());
+	assert!(assets.join("img/shared.png").exists());
+
+	// The last page that shows a file.
+	workspace.remove("a.nml");
+	workspace.remove("b.nml");
+	workspace.build();
+	assert!(!assets.join("img").exists());
+}
+
+#[test]
+fn output_paths() {
+	let workspace = Workspace::new(
+		"output-paths",
+		&[
+			("nml.toml", ""),
+			(
+				"docs/install.nml",
+				":set nml.output = guide/setup/index.html\n\n# Install {#install}\n\n![](../img/a.png)\n\n```rust\nfn main() {}\n```\n",
+			),
+			("index.nml", "See [[install#install]] and [[install#]]."),
+			("img/a.png", "a"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(!workspace.0.join("public/docs").exists());
+	let page = workspace.output("guide/setup/index.html");
+	// URLs in the page are relative to where it is written.
+	assert!(
+		page.contains("<img src=\"../../assets/img/a.png\""),
+		"{page}"
+	);
+	assert!(page.contains("href=\"../../nml-code.css\""), "{page}");
+	let index = workspace.output("index.html");
+	assert!(
+		index.contains("href=\"guide/setup/index.html#install\""),
+		"{index}"
+	);
+	assert!(index.contains("href=\"guide/setup/index.html\""), "{index}");
+
+	// Moving the page deletes its old output, with the directories it leaves empty, and
+	// relinks the pages that refer to it.
+	workspace.write(
+		"docs/install.nml",
+		":set nml.output = install.html\n\n# Install {#install}\n",
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(report.written, ["docs/install.nml", "index.nml"]);
+	assert!(!workspace.0.join("public/guide").exists());
+	assert!(
+		workspace
+			.output("index.html")
+			.contains("href=\"install.html#install\"")
+	);
+
+	// Without the variable, the page is written at its path.
+	workspace.write("docs/install.nml", "# Install {#install}\n");
+	let report = workspace.build();
+	assert_eq!(report.written, ["docs/install.nml", "index.nml"]);
+	assert!(!workspace.0.join("public/install.html").exists());
+	assert!(workspace.0.join("public/docs/install.html").exists());
+	assert!(
+		workspace
+			.output("index.html")
+			.contains("href=\"docs/install.html#install\"")
+	);
+}
+
+#[test]
+fn invalid_output_paths() {
+	for value in ["../x.html", "/x.html", "x", "assets/x.html", "a//b.html"] {
+		let workspace = Workspace::new(
+			"invalid-output",
+			&[
+				("nml.toml", ""),
+				("a.nml", &format!(":set nml.output = {value}\n\nA")),
+			],
+		);
+		let report = workspace.build();
+		let end = 18 + value.len();
+		assert_diagnostics!(report.diagnostics, [2021 @ 18..end]);
+		assert_eq!(report.failed, ["a.nml"], "{value}");
+	}
+}
+
+#[test]
+fn output_conflicts() {
+	let workspace = Workspace::new(
+		"output-conflicts",
+		&[
+			("nml.toml", ""),
+			("a.nml", "A"),
+			("b.nml", ":set nml.output = a.html\n\nB"),
+			("c.nml", "C"),
+		],
+	);
+	let report = workspace.build();
+	// Neither page is written; the error is at `nml.output` where it is set.
+	let messages: Vec<_> = report
+		.diagnostics
+		.iter()
+		.map(|d| {
+			let primary = d.primary();
+			(
+				d.kind.clone(),
+				primary
+					.location
+					.source()
+					.location()
+					.path()
+					.rsplit('/')
+					.next()
+					.unwrap()
+					.to_string(),
+				primary.location.range(),
+			)
+		})
+		.collect();
+	assert_eq!(
+		messages,
+		[
+			(
+				DiagnosticKind::OutputConflict {
+					output: "a.html".into(),
+					other: "b.nml".into(),
+				},
+				"a.nml".into(),
+				0..0
+			),
+			(
+				DiagnosticKind::OutputConflict {
+					output: "a.html".into(),
+					other: "a.nml".into(),
+				},
+				"b.nml".into(),
+				18..24
+			),
+		]
+	);
+	assert!(report.has_errors());
+	assert_eq!(report.written, ["c.nml"]);
+	assert!(!workspace.0.join("public/a.html").exists());
+
+	// Reported at each build until it is fixed.
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3013, 3013]);
+	assert!(report.written.is_empty());
+
+	// Then both pages are written, though only one changed.
+	workspace.write("b.nml", ":set nml.output = b.html\n\nB");
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(report.written, ["a.nml", "b.nml"]);
+	assert!(body(&workspace.output("a.html")).contains('A'));
+	assert!(body(&workspace.output("b.html")).contains('B'));
+
+	// A page written where another page's default output is.
+	workspace.write("x/y.nml", "Y");
+	workspace.write("z.nml", ":set nml.output = x/y.html\n\nZ");
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3013, 3013]);
 }
 
 #[test]

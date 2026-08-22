@@ -3,7 +3,7 @@ use nml_document::LinkSlot;
 use nml_document::Property;
 use nml_document::Scope;
 use nml_document::SymbolRef;
-use nml_lang::relative_url;
+use nml_lang::relative_output_url;
 use nml_workspace::Index;
 use nml_workspace::IndexError;
 use nml_workspace::Role;
@@ -99,7 +99,7 @@ impl Linker<'_> {
 				let mut url = if target.unit.id == self.unit.id && target.export.is_some() {
 					String::new()
 				} else {
-					relative_url(&self.unit.path, &target.unit.path)
+					relative_output_url(&self.unit.output, &target.unit.output)
 				};
 				if let Some(export) = &target.export {
 					url.push('#');

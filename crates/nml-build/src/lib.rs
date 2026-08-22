@@ -34,6 +34,7 @@ use nml_lang::Compiled;
 use nml_lang::Language;
 use nml_lang::ResolveError;
 use nml_lang::Resolver;
+use nml_lang::asset_output_path;
 use nml_lang::output_path;
 use nml_lang::resolve_file;
 use nml_lang::resolve_path;
@@ -300,12 +301,51 @@ impl Builder {
 				}
 			}
 		}
+		let conflicts = self.output_conflicts()?;
 		for path in std::mem::take(&mut self.to_link) {
-			self.link(&path)?;
+			if !conflicts.contains(&path) {
+				self.link(&path)?;
+			}
 		}
 		// Renders no unit uses any more, since a unit changed or went away.
 		self.index.prune_renders()?;
+		self.sync_assets()?;
 		self.write_code_stylesheet()
+	}
+
+	/// Reports the pages written to the same output file, which are not written: an error
+	/// in each, at its `nml.output` if it sets one. They are relinked once the conflict is
+	/// gone.
+	fn output_conflicts(&mut self) -> Result<BTreeSet<String>, BuildError> {
+		let mut by_output: HashMap<String, Vec<nml_workspace::UnitRecord>> = HashMap::new();
+		for unit in self.index.units()? {
+			if unit.role == Role::Page {
+				by_output.entry(unit.output.clone()).or_default().push(unit);
+			}
+		}
+		let mut conflicts = BTreeSet::new();
+		let mut groups: Vec<_> = by_output.into_values().filter(|g| g.len() > 1).collect();
+		groups.sort_by(|a, b| a[0].path.cmp(&b[0].path));
+		for group in groups {
+			for unit in &group {
+				let other = group.iter().find(|other| other.id != unit.id).unwrap();
+				let source = match self.sources.get(&unit.path) {
+					Some(source) => source.clone(),
+					None => read(&self.root.join(&unit.path))?,
+				};
+				let kind = DiagnosticKind::OutputConflict {
+					output: unit.output.clone(),
+					other: other.path.clone(),
+				};
+				let token = Token::new(source, unit.output_range.clone().unwrap_or(0..0));
+				self.report
+					.diagnostics
+					.push(Diagnostic::new(kind, DiagnosticMessage::new(token)));
+				self.index.set_link_errors(&unit.path, true)?;
+				conflicts.insert(unit.path.clone());
+			}
+		}
+		Ok(conflicts)
 	}
 
 	/// Renders the document's math, graphs and the like with external programs: their SVG
@@ -386,26 +426,39 @@ impl Builder {
 		Ok((rendered, keys))
 	}
 
-	/// Copies a file a page shows to the same path in the output directory, unless the copy
-	/// is up to date: as large as the file, and not older.
-	fn copy_asset(&self, path: &str) -> Result<(), BuildError> {
+	/// Copies the files pages show to the assets directory of the output, unless a copy is
+	/// up to date (as large as the file, and not older), and deletes the copies no page
+	/// shows any more. The assets directory belongs to the build: other files in it are
+	/// deleted too.
+	fn sync_assets(&self) -> Result<(), BuildError> {
 		if !self.write {
 			return Ok(());
 		}
-		let from = self.root.join(path);
-		let to = self.output.join(path);
-		let metadata = fs::metadata(&from).map_err(|e| BuildError::Io(from.clone(), e))?;
-		if let Ok(copy) = fs::metadata(&to)
-			&& copy.len() == metadata.len()
-			&& let (Ok(copied), Ok(modified)) = (copy.modified(), metadata.modified())
-			&& copied >= modified
-		{
-			return Ok(());
+		let assets = self.index.assets()?;
+		for path in &assets {
+			let from = self.root.join(path);
+			let to = self.output.join(asset_output_path(path));
+			// A file that went away fails the parse of the pages that show it.
+			let Ok(metadata) = fs::metadata(&from) else {
+				continue;
+			};
+			if let Ok(copy) = fs::metadata(&to)
+				&& copy.len() == metadata.len()
+				&& let (Ok(copied), Ok(modified)) = (copy.modified(), metadata.modified())
+				&& copied >= modified
+			{
+				continue;
+			}
+			if let Some(parent) = to.parent() {
+				fs::create_dir_all(parent).map_err(|e| BuildError::Io(parent.into(), e))?;
+			}
+			fs::copy(&from, &to).map_err(|e| BuildError::Io(from, e))?;
 		}
-		if let Some(parent) = to.parent() {
-			fs::create_dir_all(parent).map_err(|e| BuildError::Io(parent.into(), e))?;
-		}
-		fs::copy(&from, &to).map_err(|e| BuildError::Io(from, e))?;
+		let kept: BTreeSet<PathBuf> = assets
+			.iter()
+			.map(|path| self.output.join(asset_output_path(path)))
+			.collect();
+		prune(&self.output.join(nml_lang::ASSETS_DIR), &kept)?;
 		Ok(())
 	}
 
@@ -434,19 +487,19 @@ impl Builder {
 		self.affected.insert((unit.name, String::new()));
 		if unit.role == Role::Page {
 			self.pages_changed = true;
-			self.delete_output(path)?;
+			self.delete_output(path, &unit.output)?;
 		}
 		Ok(())
 	}
 
-	/// Deletes the output of a page that is gone or no longer a page, and the directories
-	/// it leaves empty. Only pages the index knows are deleted: other files in the output
-	/// directory are left alone.
-	fn delete_output(&mut self, path: &str) -> Result<(), BuildError> {
+	/// Deletes `output`, the output of the page at `path` that is gone, no longer a page, or
+	/// written elsewhere now, and the directories it leaves empty. Only pages the index
+	/// knows are deleted: other files in the output directory are left alone.
+	fn delete_output(&mut self, path: &str, output: &str) -> Result<(), BuildError> {
 		if !self.write {
 			return Ok(());
 		}
-		let target = self.output.join(output_path(path));
+		let target = self.output.join(output);
 		match fs::remove_file(&target) {
 			Ok(()) => {}
 			Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
@@ -488,11 +541,16 @@ impl Builder {
 		}
 
 		let unit = compiled.unit;
-		if file.role == Role::Page {
-			for asset in &unit.assets {
-				self.copy_asset(asset)?;
-			}
-		}
+		let output = match &unit.output {
+			Some(token) => token.content().to_string(),
+			None => output_path(&file.path),
+		};
+		// Where the file sets it; not if an included file does.
+		let output_range = unit
+			.output
+			.as_ref()
+			.filter(|token| self.sources[&file.path].location() == token.source().location())
+			.map(Token::range);
 		let document = &unit.document;
 		let basename = file.path.rsplit('/').next().unwrap();
 		let basename = basename.strip_suffix(".nml").unwrap_or(basename);
@@ -505,7 +563,7 @@ impl Builder {
 				.any(|(_, element)| matches!(element.kind, ElementKind::CodeBlock { .. }));
 			if has_code {
 				stylesheets.push(nml_lang::relative_output_url(
-					&file.path,
+					&output,
 					nml_html::CODE_STYLESHEET,
 				));
 			}
@@ -539,6 +597,13 @@ impl Builder {
 			uses: &uses,
 			dependencies: &unit.dependencies,
 			template: template.as_ref(),
+			output: &output,
+			output_range,
+			assets: if file.role == Role::Page {
+				&unit.assets
+			} else {
+				&[]
+			},
 		})?;
 		self.index.set_unit_renders(id, &render_keys)?;
 		for change in changes {
@@ -546,9 +611,9 @@ impl Builder {
 		}
 		// What dependents see of the unit itself: its key, title and role. If they changed,
 		// every reference to the unit may resolve differently.
-		let identity_changed = old
-			.as_ref()
-			.is_none_or(|old| old.name != name || old.title != title || old.role != file.role);
+		let identity_changed = old.as_ref().is_none_or(|old| {
+			old.name != name || old.title != title || old.role != file.role || old.output != output
+		});
 		if identity_changed {
 			self.pages_changed = true;
 			self.affected.insert((name.to_string(), String::new()));
@@ -557,7 +622,12 @@ impl Builder {
 					.insert((name.to_string(), export.name.clone()));
 			}
 		}
-		let was_page = old.as_ref().is_some_and(|old| old.role == Role::Page);
+		// The page's previous output, if it is not written there any more.
+		let old_output = old
+			.as_ref()
+			.filter(|old| old.role == Role::Page)
+			.filter(|old| file.role != Role::Page || old.output != output)
+			.map(|old| old.output.clone());
 		let old_exports = if old.as_ref().is_some_and(|old| old.name != name) {
 			old_exports
 		} else {
@@ -569,10 +639,11 @@ impl Builder {
 				self.affected.insert((old.name.clone(), export.name));
 			}
 		}
+		if let Some(old_output) = old_output {
+			self.delete_output(&file.path, &old_output)?;
+		}
 		if file.role == Role::Page {
 			self.to_link.insert(file.path.clone());
-		} else if was_page {
-			self.delete_output(&file.path)?;
 		}
 		Ok(())
 	}
@@ -585,7 +656,7 @@ impl Builder {
 			Some(source) => source.clone(),
 			None => read(&self.root.join(path))?,
 		};
-		let target = self.output.join(output_path(path));
+		let target = self.output.join(&unit.output);
 		let io_error = |e| BuildError::Io(target.clone(), e);
 		let mut file: Box<dyn io::Write> = if self.write {
 			if let Some(parent) = target.parent() {
@@ -609,6 +680,7 @@ impl Builder {
 							path: unit.path,
 							name: unit.name,
 							title: unit.title,
+							output: unit.output,
 							variables,
 						});
 					}
@@ -868,6 +940,30 @@ fn title(document: &Document) -> Option<String> {
 		.descendants(document.root())
 		.find(|(_, element)| matches!(element.kind, ElementKind::Heading { .. }))
 		.map(|(id, _)| document.text(id))
+}
+
+/// Deletes the files under `dir` that are not in `kept`, and the directories left empty.
+fn prune(dir: &Path, kept: &BTreeSet<PathBuf>) -> Result<(), BuildError> {
+	let entries = match fs::read_dir(dir) {
+		Ok(entries) => entries,
+		Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+		Err(e) => return Err(BuildError::Io(dir.into(), e)),
+	};
+	for entry in entries {
+		let entry = entry.map_err(|e| BuildError::Io(dir.into(), e))?;
+		let path = entry.path();
+		let file_type = entry
+			.file_type()
+			.map_err(|e| BuildError::Io(path.clone(), e))?;
+		if file_type.is_dir() {
+			prune(&path, kept)?;
+			// Fails when the directory is not empty.
+			let _ = fs::remove_dir(&path);
+		} else if !kept.contains(&path) {
+			fs::remove_file(&path).map_err(|e| BuildError::Io(path, e))?;
+		}
+	}
+	Ok(())
 }
 
 fn store_use(stored: &Use) -> StoredUse {
