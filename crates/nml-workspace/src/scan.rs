@@ -250,6 +250,9 @@ mod tests {
 					uses: &[],
 					dependencies: &[],
 					template: None,
+					output: "a.html",
+					output_range: None,
+					assets: &[],
 				})
 				.unwrap();
 		}

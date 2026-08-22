@@ -21,7 +21,7 @@ use rusqlite::params;
 use serde_json::Value as Json;
 
 /// The version of the schema below. A database with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 6;
+pub const SCHEMA_VERSION: i64 = 7;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value ANY) STRICT;
@@ -34,6 +34,9 @@ CREATE TABLE units (
 	mtime INTEGER NOT NULL,
 	size INTEGER NOT NULL,
 	hash BLOB NOT NULL,
+	output TEXT NOT NULL,
+	output_start INTEGER,
+	output_end INTEGER,
 	link_errors INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 CREATE INDEX units_by_name ON units(name);
@@ -86,6 +89,11 @@ CREATE TABLE unit_renders (
 	key TEXT NOT NULL
 ) STRICT;
 CREATE INDEX unit_renders_by_unit ON unit_renders(unit);
+CREATE TABLE assets (
+	unit INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+	path TEXT NOT NULL
+) STRICT;
+CREATE INDEX assets_by_unit ON assets(unit);
 ";
 
 /// An error of the database. Since the database can always be rebuilt from the sources,
@@ -137,6 +145,11 @@ pub struct UnitRecord {
 	pub title: String,
 	pub role: Role,
 	pub state: FileState,
+	/// Where its page is written, relative to the output directory. Libraries have one too,
+	/// though nothing is written there.
+	pub output: String,
+	/// Where the unit's file sets the output (`nml.output`), if it does.
+	pub output_range: Option<Range<usize>>,
 }
 
 /// A use, as stored: the source is the unit's file.
@@ -178,6 +191,12 @@ pub struct StoredUnit<'a> {
 	pub dependencies: &'a [Dependency],
 	/// Only pages have one.
 	pub template: Option<&'a StoredTemplate>,
+	/// See [`UnitRecord::output`].
+	pub output: &'a str,
+	/// See [`UnitRecord::output_range`].
+	pub output_range: Option<Range<usize>>,
+	/// Workspace files the page shows, copied to the output.
+	pub assets: &'a [String],
 }
 
 /// A symbol whose visible state changed, for the link stage.
@@ -274,7 +293,8 @@ impl Index {
 		Ok(self
 			.connection
 			.query_row(
-				"SELECT id, path, name, title, role, mtime, size, hash FROM units WHERE path = ?1",
+				"SELECT id, path, name, title, role, mtime, size, hash, output, output_start, output_end
+				FROM units WHERE path = ?1",
 				[path],
 				unit_record,
 			)
@@ -285,7 +305,8 @@ impl Index {
 		Ok(self
 			.connection
 			.query_row(
-				"SELECT id, path, name, title, role, mtime, size, hash FROM units WHERE id = ?1",
+				"SELECT id, path, name, title, role, mtime, size, hash, output, output_start, output_end
+				FROM units WHERE id = ?1",
 				[id],
 				unit_record,
 			)
@@ -295,7 +316,8 @@ impl Index {
 	/// The units with this reference key: more than one makes references to it ambiguous.
 	pub fn units_named(&self, name: &str) -> Result<Vec<UnitRecord>> {
 		let mut statement = self.connection.prepare(
-			"SELECT id, path, name, title, role, mtime, size, hash FROM units
+			"SELECT id, path, name, title, role, mtime, size, hash, output, output_start, output_end
+				FROM units
 			WHERE name = ?1 ORDER BY path",
 		)?;
 		let units = statement
@@ -378,7 +400,8 @@ impl Index {
 	/// Every unit, by path.
 	pub fn units(&self) -> Result<Vec<UnitRecord>> {
 		let mut statement = self.connection.prepare(
-			"SELECT id, path, name, title, role, mtime, size, hash FROM units ORDER BY path",
+			"SELECT id, path, name, title, role, mtime, size, hash, output, output_start, output_end
+				FROM units ORDER BY path",
 		)?;
 		let units = statement
 			.query_map([], unit_record)?
@@ -610,6 +633,17 @@ impl Index {
 		Ok(())
 	}
 
+	/// Every workspace file a page shows, once, by path.
+	pub fn assets(&self) -> Result<Vec<String>> {
+		let mut statement = self
+			.connection
+			.prepare("SELECT DISTINCT path FROM assets ORDER BY path")?;
+		let assets = statement
+			.query_map([], |row| row.get(0))?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(assets)
+	}
+
 	/// Records the renders a unit uses, replacing those it used before.
 	pub fn set_unit_renders(&mut self, unit: i64, keys: &[String]) -> Result<()> {
 		let tx = self.connection.transaction()?;
@@ -691,6 +725,14 @@ fn unit_record(row: &rusqlite::Row) -> rusqlite::Result<UnitRecord> {
 			size: row.get::<_, i64>(6)? as u64,
 			hash: row.get(7)?,
 		},
+		output: row.get(8)?,
+		output_range: match (
+			row.get::<_, Option<i64>>(9)?,
+			row.get::<_, Option<i64>>(10)?,
+		) {
+			(Some(start), Some(end)) => Some(start as usize..end as usize),
+			_ => None,
+		},
 	})
 }
 
@@ -743,8 +785,9 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 	// Deleting the row also deletes everything stored for it.
 	tx.execute("DELETE FROM units WHERE path = ?1", [unit.path])?;
 	tx.execute(
-		"INSERT INTO units (path, name, title, role, mtime, size, hash)
-		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+		"INSERT INTO units (path, name, title, role, mtime, size, hash, output, output_start,
+		output_end)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
 		params![
 			unit.path,
 			unit.name,
@@ -752,10 +795,18 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 			role,
 			state.mtime,
 			state.size as i64,
-			state.hash
+			state.hash,
+			unit.output,
+			unit.output_range.as_ref().map(|range| range.start as i64),
+			unit.output_range.as_ref().map(|range| range.end as i64),
 		],
 	)?;
 	let id = tx.last_insert_rowid();
+
+	let mut statement = tx.prepare("INSERT INTO assets (unit, path) VALUES (?1, ?2)")?;
+	for asset in unit.assets {
+		statement.execute(params![id, asset])?;
+	}
 
 	let mut statement = tx.prepare(
 		"INSERT INTO exports (unit, name, kind, element, properties, fingerprint,
@@ -1194,9 +1245,50 @@ mod tests {
 				uses: &uses,
 				dependencies: &dependencies,
 				template: Some(&template),
+				output: "a.html",
+				output_range: None,
+				assets: &[],
 			})
 			.unwrap()
 			.0
+	}
+
+	#[test]
+	fn outputs_and_assets() {
+		let mut index = Index::open_in_memory().unwrap();
+		let assets = ["img/a.png".to_string(), "img/b.png".to_string()];
+		let unit = |path, output, output_range, assets| StoredUnit {
+			path,
+			name: path,
+			title: path,
+			role: Role::Page,
+			state: state(1),
+			exports: &[],
+			uses: &[],
+			dependencies: &[],
+			template: None,
+			output,
+			output_range,
+			assets,
+		};
+		index
+			.commit(&unit("a.nml", "guide/a.html", Some(18..30), &assets))
+			.unwrap();
+		index
+			.commit(&unit("b.nml", "b.html", None, &assets[1..]))
+			.unwrap();
+		let a = index.unit("a.nml").unwrap().unwrap();
+		assert_eq!(a.output, "guide/a.html");
+		assert_eq!(a.output_range, Some(18..30));
+		let b = index.unit("b.nml").unwrap().unwrap();
+		assert_eq!((b.output.as_str(), b.output_range), ("b.html", None));
+		assert_eq!(index.assets().unwrap(), assets);
+
+		// A new commit replaces them; a removed unit takes its own away.
+		index.commit(&unit("a.nml", "a.html", None, &[])).unwrap();
+		assert_eq!(index.assets().unwrap(), ["img/b.png"]);
+		index.remove("b.nml").unwrap();
+		assert!(index.assets().unwrap().is_empty());
 	}
 
 	#[test]
@@ -1298,6 +1390,9 @@ mod tests {
 				uses: &[],
 				dependencies: &[],
 				template: None,
+				output: "a.html",
+				output_range: None,
+				assets: &[],
 			})
 			.unwrap();
 		assert!(index.exports(library).unwrap().is_empty());
@@ -1355,6 +1450,9 @@ mod tests {
 				uses: &[],
 				dependencies: &[],
 				template: None,
+				output: "a.html",
+				output_range: None,
+				assets: &[],
 			})
 			.unwrap()
 			.1
@@ -1438,6 +1536,9 @@ mod tests {
 					uses: &uses,
 					dependencies: &[],
 					template: None,
+					output: "a.html",
+					output_range: None,
+					assets: &[],
 				})
 				.unwrap()
 				.0
