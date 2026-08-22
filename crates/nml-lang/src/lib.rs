@@ -31,12 +31,14 @@ pub use language::Language;
 pub use language::Lower;
 pub use language::Variable;
 pub use language::compile;
+pub use resolve::ASSETS_DIR;
 pub use resolve::MemoryResolver;
 pub use resolve::ResolveError;
 pub use resolve::Resolver;
+pub use resolve::asset_output_path;
+pub use resolve::is_output_path;
 pub use resolve::output_path;
 pub use resolve::relative_output_url;
-pub use resolve::relative_url;
 pub use resolve::resolve_file;
 pub use resolve::resolve_path;
 

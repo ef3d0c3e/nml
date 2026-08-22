@@ -233,6 +233,9 @@ pub fn compile(
 			reference_key: variables
 				.remove(crate::variable::REFERENCE_KEY)
 				.map(|variable| variable.value.content().to_string()),
+			output: variables
+				.remove(crate::variable::OUTPUT)
+				.map(|variable| variable.value),
 			document: builder.finish(),
 			exports,
 			uses,
@@ -447,6 +450,15 @@ impl Lower<'_, '_> {
 	/// Runs `finisher` when the lowering ends, after every node is lowered.
 	pub fn on_finish(&mut self, finisher: impl FnOnce(&mut Lower<'_, '_>) + 'static) {
 		self.finishers.push(Box::new(finisher));
+	}
+
+	/// Where the unit's page is written in the output directory: `nml.output`, set in the
+	/// prologue, or the file's path with `.html`. URLs written in the page are relative to it.
+	pub fn output_path(&self) -> String {
+		match self.variables.get(crate::variable::OUTPUT) {
+			Some(variable) => variable.value.content().to_string(),
+			None => crate::output_path(&self.files[0]),
+		}
 	}
 
 	/// Records a parse-time dependency, once.

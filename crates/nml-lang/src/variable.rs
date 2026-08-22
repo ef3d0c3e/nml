@@ -19,12 +19,16 @@ use crate::Language;
 use crate::Lower;
 use crate::Variable;
 use crate::language::plain_text;
+use crate::resolve::is_output_path;
 
 /// The variable that sets a unit's reference key.
 pub(crate) const REFERENCE_KEY: &str = "nml.reference_key";
 
+/// The variable that sets where a unit's page is written in the output directory.
+pub(crate) const OUTPUT: &str = "nml.output";
+
 /// The variables NML itself reads; other `nml.` names are errors.
-const BUILTIN: &[&str] = &[REFERENCE_KEY];
+const BUILTIN: &[&str] = &[REFERENCE_KEY, OUTPUT];
 
 /// `:set name = value` and `:export name = value`, and `%name%`, which stands for the value
 /// of a variable, parsed as inline markup where it is substituted.
@@ -109,6 +113,15 @@ fn set(lower: &mut Lower<'_, '_>, m: &RuleMatch, export: bool) {
 			.push(Diagnostic::new(kind, DiagnosticMessage::new(value)));
 		return;
 	}
+	if text == OUTPUT && !is_output_path(value.content()) {
+		let kind = DiagnosticKind::InvalidOutputPath {
+			path: value.content().into(),
+		};
+		lower
+			.diagnostics
+			.push(Diagnostic::new(kind, DiagnosticMessage::new(value)));
+		return;
+	}
 	if export {
 		let parsed = nml_grammar::parse_inline(lower.language().rules(), value_source(&value));
 		let export = Export::new(text, SymbolKind::Variable, None)
@@ -179,6 +192,16 @@ mod tests {
 	use crate::tests::check;
 	use crate::tests::compile_text;
 	use crate::tests::compile_with;
+
+	#[test]
+	fn output() {
+		let compiled = compile_text(":set nml.output = guide/index.html\n\n# A");
+		assert_diagnostics!(compiled.diagnostics, []);
+		let output = compiled.unit.output.unwrap();
+		assert_eq!(output.content(), "guide/index.html");
+		assert_eq!(output.range(), 18..34);
+		assert_eq!(compile_text("# A").unit.output, None);
+	}
 
 	#[test]
 	fn reference_key() {
@@ -270,6 +293,9 @@ mod tests {
 			(":set a..b = y", vec![(2004, 5..9)]),
 			(":set nml.reference_key = a b", vec![(2007, 25..28)]),
 			(":set nml.reference_key = a#b", vec![(2007, 25..28)]),
+			(":set nml.output = ../a.html", vec![(2021, 18..27)]),
+			(":set nml.output = a.md", vec![(2021, 18..22)]),
+			(":export nml.output = a.html", vec![(2005, 8..18)]),
 			(":set x = 1\n:set x = 2", vec![(2006, 16..17)]),
 		] {
 			let compiled = compile_text(text);

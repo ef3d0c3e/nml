@@ -21,6 +21,7 @@ use nml_grammar::Value;
 use crate::Language;
 use crate::Lower;
 use crate::language::plain_text;
+use crate::resolve::asset_output_path;
 use crate::resolve::relative_output_url;
 
 /// Media `![alt](path)[options]` and figures `:figure #ref Caption`, which apply to the
@@ -121,8 +122,7 @@ fn lower_media(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 		let from = lower.files.last().unwrap().clone();
 		match lower.resolver.asset(&from, written) {
 			Ok((path, hash)) => {
-				let page = lower.files[0].clone();
-				let url = relative_output_url(&page, &path);
+				let url = relative_output_url(&lower.output_path(), &asset_output_path(&path));
 				lower.depend(Dependency::File {
 					path: path.clone(),
 					hash,
@@ -212,6 +212,10 @@ mod tests {
 	fn media(text: &str, files: &[(&str, &str)]) -> Vec<ElementKind> {
 		let compiled = compile_with(text, files);
 		assert_diagnostics!(compiled.diagnostics, []);
+		media_of(&compiled)
+	}
+
+	fn media_of(compiled: &crate::Compiled) -> Vec<ElementKind> {
 		let document = &compiled.unit.document;
 		document
 			.descendants(document.root())
@@ -238,9 +242,9 @@ mod tests {
 				&files
 			),
 			[
-				medium(MediaKind::Image, "a.png", "A flower", None),
-				medium(MediaKind::Video, "clip.webm", "", Some("50%")),
-				medium(MediaKind::Audio, "s.mp3", "x", None),
+				medium(MediaKind::Image, "assets/a.png", "A flower", None),
+				medium(MediaKind::Video, "assets/clip.webm", "", Some("50%")),
+				medium(MediaKind::Audio, "assets/s.mp3", "x", None),
 			]
 		);
 		assert_eq!(
@@ -284,7 +288,23 @@ mod tests {
 				_ => None,
 			})
 			.collect();
-		assert_eq!(urls, ["img/a.png", "img/b.png", "img/a.png"]);
+		// Copied under `assets/`, relative to where the page is written.
+		assert_eq!(
+			urls,
+			["assets/img/a.png", "assets/img/b.png", "assets/img/a.png"]
+		);
+
+		let compiled = compile_with(
+			":set nml.output = guide/x/index.html
+
+![](img/a.png)",
+			&[("img/a.png", "png")],
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		assert_eq!(
+			media_of(&compiled),
+			[medium(MediaKind::Image, "../../assets/img/a.png", "", None)]
+		);
 	}
 
 	#[test]

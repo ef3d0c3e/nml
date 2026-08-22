@@ -75,12 +75,32 @@ pub fn output_path(path: &str) -> String {
 	}
 }
 
-/// The URL of the page of unit `to`, relative to the page of unit `from`.
-pub fn relative_url(from: &str, to: &str) -> String {
-	relative_output_url(from, &output_path(to))
+/// The directory of the output where the files pages show are copied.
+pub const ASSETS_DIR: &str = "assets";
+
+/// Where a workspace file a page shows is copied in the output: under [`ASSETS_DIR`], at
+/// its workspace path.
+pub fn asset_output_path(path: &str) -> String {
+	format!("{ASSETS_DIR}/{path}")
 }
 
-/// The URL of `to`, a path in the output directory, relative to the page of unit `from`.
+/// Whether `path` can be where a page is written (`nml.output`): a relative path in the
+/// output directory, ending with `.html`, and outside [`ASSETS_DIR`].
+pub fn is_output_path(path: &str) -> bool {
+	let parts: Vec<&str> = path.split('/').collect();
+	path.ends_with(".html")
+		&& path.len() > ".html".len()
+		&& parts.first() != Some(&ASSETS_DIR)
+		&& parts.iter().all(|part| {
+			!matches!(*part, "" | "." | "..")
+				&& !part
+					.chars()
+					.any(|c| c == '\\' || c == ':' || c.is_control())
+		})
+}
+
+/// The URL of `to`, a path in the output directory, relative to `from`, another path in
+/// the output directory.
 pub fn relative_output_url(from: &str, to: &str) -> String {
 	let from: Vec<&str> = from.split('/').collect();
 	let to: Vec<&str> = to.split('/').collect();
@@ -169,18 +189,47 @@ mod tests {
 			);
 		}
 	}
+
 	#[test]
 	fn relative_urls() {
 		for (from, to, url) in [
-			("a.nml", "b.nml", "b.html"),
-			("a.nml", "a.nml", "a.html"),
-			("docs/a.nml", "b.nml", "../b.html"),
-			("a.nml", "docs/b.nml", "docs/b.html"),
-			("docs/x/a.nml", "docs/y/b.nml", "../y/b.html"),
-			("docs/x/a.nml", "docs/x/b.nml", "b.html"),
-			("x/y/a.nml", "z.nml", "../../z.html"),
+			("a.html", "b.html", "b.html"),
+			("a.html", "a.html", "a.html"),
+			("docs/a.html", "b.html", "../b.html"),
+			("a.html", "docs/b.html", "docs/b.html"),
+			("docs/x/a.html", "docs/y/b.html", "../y/b.html"),
+			("docs/x/a.html", "docs/x/b.html", "b.html"),
+			("x/y/a.html", "z.html", "../../z.html"),
+			(
+				"docs/a.html",
+				"assets/docs/img/a.png",
+				"../assets/docs/img/a.png",
+			),
 		] {
-			assert_eq!(relative_url(from, to), url, "from {from} to {to}");
+			assert_eq!(relative_output_url(from, to), url, "from {from} to {to}");
+		}
+	}
+
+	#[test]
+	fn output_paths() {
+		for (path, valid) in [
+			("a.html", true),
+			("guide/install.html", true),
+			("assets.html", true),
+			("x/assets/a.html", true),
+			(".html", false),
+			("a", false),
+			("a.htm", false),
+			("/a.html", false),
+			("a//b.html", false),
+			("./a.html", false),
+			("../a.html", false),
+			("x/../a.html", false),
+			("assets/a.html", false),
+			("a\\b.html", false),
+			("c:a.html", false),
+		] {
+			assert_eq!(is_output_path(path), valid, "{path}");
 		}
 	}
 }
