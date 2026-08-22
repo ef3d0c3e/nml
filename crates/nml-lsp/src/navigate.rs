@@ -164,6 +164,8 @@ impl Server {
 					size: 0,
 					hash: Vec::new(),
 				},
+				output: nml_lang::output_path(&analysis.path),
+				output_range: None,
 			});
 		if target.scope == Scope::Local {
 			// The buffer may not be saved: its own symbols come from its analysis.
