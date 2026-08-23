@@ -34,7 +34,6 @@ use nml_lang::Compiled;
 use nml_lang::Language;
 use nml_lang::ResolveError;
 use nml_lang::Resolver;
-use nml_lang::asset_output_path;
 use nml_lang::output_path;
 use nml_lang::resolve_file;
 use nml_lang::resolve_path;
@@ -426,37 +425,33 @@ impl Builder {
 		Ok((rendered, keys))
 	}
 
-	/// Copies the files pages show to the assets directory of the output, unless a copy is
-	/// up to date (as large as the file, and not older), and deletes the copies no page
-	/// shows any more. The assets directory belongs to the build: other files in it are
-	/// deleted too.
+	/// Copies the files pages show to the assets directory of the output, unless the copy
+	/// exists (it is named by the file's content), and deletes the copies no page shows any
+	/// more. The assets directory belongs to the build: other files in it are deleted too.
 	fn sync_assets(&self) -> Result<(), BuildError> {
 		if !self.write {
 			return Ok(());
 		}
 		let assets = self.index.assets()?;
-		for path in &assets {
-			let from = self.root.join(path);
-			let to = self.output.join(asset_output_path(path));
+		for asset in &assets {
+			let from = self.root.join(&asset.path);
+			let to = self.output.join(&asset.output);
 			// A file that went away fails the parse of the pages that show it.
-			let Ok(metadata) = fs::metadata(&from) else {
-				continue;
-			};
-			if let Ok(copy) = fs::metadata(&to)
-				&& copy.len() == metadata.len()
-				&& let (Ok(copied), Ok(modified)) = (copy.modified(), metadata.modified())
-				&& copied >= modified
-			{
+			if to.exists() || !from.exists() {
 				continue;
 			}
 			if let Some(parent) = to.parent() {
 				fs::create_dir_all(parent).map_err(|e| BuildError::Io(parent.into(), e))?;
 			}
-			fs::copy(&from, &to).map_err(|e| BuildError::Io(from, e))?;
+			// Copied under another name first: an interrupted copy is not taken for the file.
+			let mut partial = to.clone().into_os_string();
+			partial.push(".partial");
+			fs::copy(&from, &partial).map_err(|e| BuildError::Io(from, e))?;
+			fs::rename(&partial, &to).map_err(|e| BuildError::Io(to.clone(), e))?;
 		}
 		let kept: BTreeSet<PathBuf> = assets
 			.iter()
-			.map(|path| self.output.join(asset_output_path(path)))
+			.map(|asset| self.output.join(&asset.output))
 			.collect();
 		prune(&self.output.join(nml_lang::ASSETS_DIR), &kept)?;
 		Ok(())

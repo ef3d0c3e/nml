@@ -697,6 +697,11 @@ fn code_stylesheet() {
 	assert_ne!(workspace.output("nml-code.css"), css);
 }
 
+/// Where the workspace file `path` with this content is copied, in the output directory.
+fn copy_of(path: &str, content: &str) -> String {
+	nml_lang::asset_output_path(path, &hex(&nml_workspace::hash(content.as_bytes())))
+}
+
 #[test]
 fn assets_are_copied() {
 	let workspace = Workspace::new(
@@ -709,25 +714,35 @@ fn assets_are_copied() {
 	);
 	let report = workspace.build();
 	assert_diagnostics!(report.diagnostics, []);
+	let v1 = copy_of("img/flower.png", "v1");
+	assert!(v1.starts_with("assets/") && v1.ends_with(".png"), "{v1}");
 	assert!(
 		workspace
 			.output("docs/a.html")
-			.contains("<img src=\"../assets/img/flower.png\" alt=\"\">")
+			.contains(&format!("<img src=\"../{v1}\" alt=\"\">"))
 	);
-	assert_eq!(workspace.output("assets/img/flower.png"), "v1");
+	assert_eq!(workspace.output(&v1), "v1");
 	assert!(!workspace.0.join("public/img").exists());
 
-	// A new version of the file is copied: the page depends on it.
+	// A new version of the file gets a new name, and the old copy goes.
 	workspace.write("img/flower.png", "version 2");
 	let report = workspace.build();
 	assert_eq!(report.parsed, ["docs/a.nml"]);
-	assert_eq!(workspace.output("assets/img/flower.png"), "version 2");
+	let v2 = copy_of("img/flower.png", "version 2");
+	assert_ne!(v1, v2);
+	assert!(
+		workspace
+			.output("docs/a.html")
+			.contains(&format!("<img src=\"../{v2}\""))
+	);
+	assert_eq!(workspace.output(&v2), "version 2");
+	assert!(!workspace.0.join("public").join(&v1).exists());
 
 	// A copy that went away is copied again, though no page changed.
 	fs::remove_dir_all(workspace.0.join("public/assets")).unwrap();
 	let report = workspace.build();
 	assert!(report.parsed.is_empty());
-	assert_eq!(workspace.output("assets/img/flower.png"), "version 2");
+	assert_eq!(workspace.output(&v2), "version 2");
 
 	// A missing file is an error.
 	workspace.remove("img/flower.png");
@@ -742,33 +757,46 @@ fn unused_assets_are_deleted() {
 		&[
 			("nml.toml", "exclude = [\"lib.nml\"]\n"),
 			("a.nml", "![](img/a.png) ![](img/shared.png)"),
-			("b.nml", "![](img/shared.png)"),
+			("b.nml", "![](img/shared.png) ![](other/same.png)"),
 			("lib.nml", "![](img/lib.png)"),
 			("img/a.png", "a"),
 			("img/shared.png", "shared"),
+			("other/same.png", "shared"),
 			("img/lib.png", "lib"),
 		],
 	);
 	assert_diagnostics!(workspace.build().diagnostics, []);
-	let assets = workspace.0.join("public/assets");
-	assert!(assets.join("img/a.png").exists());
-	assert!(assets.join("img/shared.png").exists());
+	let output = workspace.0.join("public");
+	let (a, shared) = (
+		copy_of("img/a.png", "a"),
+		copy_of("img/shared.png", "shared"),
+	);
+	// Files with the same content share a copy.
+	assert_eq!(shared, copy_of("other/same.png", "shared"));
+	assert!(output.join(&a).exists());
+	assert!(output.join(&shared).exists());
 	// Only pages are written, and only their media copied.
-	assert!(!assets.join("img/lib.png").exists());
+	assert!(!output.join(copy_of("img/lib.png", "lib")).exists());
+	assert_eq!(fs::read_dir(output.join("assets")).unwrap().count(), 2);
 
-	// Files of the assets directory no page shows are deleted, with empty directories.
+	// Files of the assets directory no page shows are deleted, with directories.
 	workspace.write("public/assets/old/x.png", "old");
 	workspace.write("a.nml", "![](img/shared.png)");
 	assert_diagnostics!(workspace.build().diagnostics, []);
-	assert!(!assets.join("img/a.png").exists());
-	assert!(!assets.join("old").exists());
-	assert!(assets.join("img/shared.png").exists());
+	assert!(!output.join(&a).exists());
+	assert!(!output.join("assets/old").exists());
+	assert!(output.join(&shared).exists());
+
+	// Still shown by the other file with that content.
+	workspace.remove("a.nml");
+	workspace.write("b.nml", "![](other/same.png)");
+	assert_diagnostics!(workspace.build().diagnostics, []);
+	assert!(output.join(&shared).exists());
 
 	// The last page that shows a file.
-	workspace.remove("a.nml");
 	workspace.remove("b.nml");
 	workspace.build();
-	assert!(!assets.join("img").exists());
+	assert_eq!(fs::read_dir(output.join("assets")).unwrap().count(), 0);
 }
 
 #[test]
@@ -790,10 +818,8 @@ fn output_paths() {
 	assert!(!workspace.0.join("public/docs").exists());
 	let page = workspace.output("guide/setup/index.html");
 	// URLs in the page are relative to where it is written.
-	assert!(
-		page.contains("<img src=\"../../assets/img/a.png\""),
-		"{page}"
-	);
+	let image = format!("<img src=\"../../{}\"", copy_of("img/a.png", "a"));
+	assert!(page.contains(&image), "{page}");
 	assert!(page.contains("href=\"../../nml-code.css\""), "{page}");
 	let index = workspace.output("index.html");
 	assert!(
