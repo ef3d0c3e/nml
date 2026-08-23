@@ -138,6 +138,12 @@ pub enum DiagnosticKind {
 	/// Two pages are written to the same file of the output; `other` is the other page.
 	#[diag(id = 3013, message = "diagnostic-output-conflict")]
 	OutputConflict { output: String, other: String },
+	/// A file of the static directory would be written where the build writes its own
+	/// files.
+	#[diag(id = 3014, message = "diagnostic-reserved-static-file")]
+	ReservedStaticFile { path: String },
+	#[diag(id = 3015, message = "diagnostic-missing-static-directory")]
+	MissingStaticDirectory { path: String },
 	#[diag(id = 3011, message = "diagnostic-unknown-code-theme")]
 	UnknownCodeTheme { theme: String, themes: String },
 
