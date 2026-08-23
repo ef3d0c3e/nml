@@ -858,6 +858,37 @@ fn output_paths() {
 }
 
 #[test]
+fn configured_urls_are_relative_to_each_page() {
+	let workspace = Workspace::new(
+		"configured-urls",
+		&[
+			(
+				"nml.toml",
+				"[html]\nstylesheets = [\"style.css\", \"/root.css\", \"https://cdn.example/a.css\"]\nicon = \"img/icon.png\"\n",
+			),
+			("index.nml", "a"),
+			("docs/guide.nml", "b"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	let head = |page: &str| {
+		let page = workspace.output(page);
+		page[page.find("<link").unwrap()..page.find("</head>").unwrap()].to_string()
+	};
+	let links = |prefix: &str| {
+		format!(
+			"<link rel=\"stylesheet\" href=\"{prefix}style.css\">\n\
+			<link rel=\"stylesheet\" href=\"/root.css\">\n\
+			<link rel=\"stylesheet\" href=\"https://cdn.example/a.css\">\n\
+			<link rel=\"icon\" href=\"{prefix}img/icon.png\">\n"
+		)
+	};
+	assert_eq!(head("index.html"), links(""));
+	assert_eq!(head("docs/guide.html"), links("../"));
+}
+
+#[test]
 fn invalid_output_paths() {
 	for value in ["../x.html", "/x.html", "x", "assets/x.html", "a//b.html"] {
 		let workspace = Workspace::new(

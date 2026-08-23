@@ -552,7 +552,9 @@ impl Builder {
 		let name = unit.reference_key.as_deref().unwrap_or(basename);
 		let title = title(document).unwrap_or_else(|| basename.to_string());
 		let template = (file.role == Role::Page).then(|| {
-			let mut stylesheets = self.config.html.stylesheets.clone();
+			let mut stylesheets: Vec<_> = (self.config.html.stylesheets.iter())
+				.map(|url| site_url(&output, url))
+				.collect();
 			let has_code = document
 				.descendants(document.root())
 				.any(|(_, element)| matches!(element.kind, ElementKind::CodeBlock { .. }));
@@ -566,7 +568,7 @@ impl Builder {
 				language: self.config.html.language.clone(),
 				title: title.clone(),
 				stylesheets,
-				icon: self.config.html.icon.clone(),
+				icon: (self.config.html.icon.as_ref()).map(|url| site_url(&output, url)),
 				rendered,
 			};
 			store_template(document, &nml_html::compile(document, &options))
@@ -901,6 +903,23 @@ fn hex(bytes: &[u8]) -> String {
 
 /// The key of the configuration's hash in the index: a new configuration invalidates every
 /// unit.
+/// The URL of a configured stylesheet or icon in a page written at `output`. A relative URL
+/// is relative to the output directory, so that it works from every page; an absolute one,
+/// or one with a scheme, is kept.
+fn site_url(output: &str, url: &str) -> String {
+	let scheme = url.split_once(':').is_some_and(|(scheme, _)| {
+		scheme.starts_with(|c: char| c.is_ascii_alphabetic())
+			&& scheme
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c))
+	});
+	if scheme || url.starts_with('/') {
+		url.to_string()
+	} else {
+		nml_lang::relative_output_url(output, url)
+	}
+}
+
 const CONFIG_HASH: &str = "config_hash";
 
 /// Adds to `invalid` the units that depend, transitively, on the units at the `seeds`
