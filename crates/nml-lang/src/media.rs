@@ -3,6 +3,7 @@ use std::sync::Arc;
 use nml_diagnostics::Diagnostic;
 use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
+use nml_document::Asset;
 use nml_document::Attributes;
 use nml_document::Dependency;
 use nml_document::ElementKind;
@@ -122,13 +123,14 @@ fn lower_media(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 		let from = lower.files.last().unwrap().clone();
 		match lower.resolver.asset(&from, written) {
 			Ok((path, hash)) => {
-				let url = relative_output_url(&lower.output_path(), &asset_output_path(&path));
-				lower.depend(Dependency::File {
+				let asset = Asset {
+					output: asset_output_path(&path, &hash),
 					path: path.clone(),
-					hash,
-				});
-				if !lower.assets.contains(&path) {
-					lower.assets.push(path);
+				};
+				let url = relative_output_url(&lower.output_path(), &asset.output);
+				lower.depend(Dependency::File { path, hash });
+				if !lower.assets.contains(&asset) {
+					lower.assets.push(asset);
 				}
 				url
 			}
@@ -173,7 +175,7 @@ fn lower_figure(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 		.open_with(ElementKind::Figure { number }, m.token.clone(), attributes);
 	let assets = lower.assets.len();
 	lower.capture(m, "body");
-	let medium = lower.assets.get(assets).cloned();
+	let medium = lower.assets.get(assets).map(|asset| asset.path.clone());
 	let caption = m.capture("caption");
 	if let Some(caption) = caption {
 		lower
@@ -203,10 +205,12 @@ fn lower_figure(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 #[cfg(test)]
 mod tests {
 	use nml_diagnostics::assert_diagnostics;
+	use nml_document::Asset;
 	use nml_document::Dependency;
 	use nml_document::ElementKind;
 	use nml_document::MediaKind;
 
+	use crate::resolve::asset_output_path;
 	use crate::tests::compile_with;
 
 	fn media(text: &str, files: &[(&str, &str)]) -> Vec<ElementKind> {
@@ -242,9 +246,14 @@ mod tests {
 				&files
 			),
 			[
-				medium(MediaKind::Image, "assets/a.png", "A flower", None),
-				medium(MediaKind::Video, "assets/clip.webm", "", Some("50%")),
-				medium(MediaKind::Audio, "assets/s.mp3", "x", None),
+				medium(MediaKind::Image, &copy("a.png", "png"), "A flower", None),
+				medium(
+					MediaKind::Video,
+					&copy("clip.webm", "webm"),
+					"",
+					Some("50%")
+				),
+				medium(MediaKind::Audio, &copy("s.mp3", "mp3"), "x", None),
 			]
 		);
 		assert_eq!(
@@ -262,48 +271,71 @@ mod tests {
 		);
 	}
 
+	/// Where the file `path` with this content is copied.
+	fn copy(path: &str, content: &str) -> String {
+		asset_output_path(path, blake3::hash(content.as_bytes()).to_hex().as_str())
+	}
+
 	#[test]
 	fn workspace_files_are_assets() {
-		// Relative to the page, wherever the media is written.
+		// Wherever the media is written, the file is resolved from there, and copied under
+		// `assets/` by its content: `c.png` has the same content as `a.png`.
 		let compiled = compile_with(
 			"![](img/a.png)\n:include parts/p\n",
 			&[
-				("img/a.png", "png"),
-				("parts/p.nml", "![](../img/b.png) ![](/img/a.png)"),
-				("img/b.png", "png"),
+				("img/a.png", "a"),
+				(
+					"parts/p.nml",
+					"![](../img/b.png) ![](/img/a.png) ![](../img/c.png)",
+				),
+				("img/b.png", "b"),
+				("img/c.png", "a"),
 			],
 		);
 		assert_diagnostics!(compiled.diagnostics, []);
-		assert_eq!(compiled.unit.assets, ["img/a.png", "img/b.png"]);
-		let hash = blake3::hash(b"png").to_hex().to_string();
+		let (a, b) = (copy("img/a.png", "a"), copy("img/b.png", "b"));
+		assert!(a.starts_with("assets/") && a.ends_with(".png"), "{a}");
+		assert_eq!(a.len(), "assets/".len() + 16 + ".png".len());
+		assert_eq!(
+			compiled.unit.assets,
+			[
+				Asset {
+					path: "img/a.png".into(),
+					output: a.clone()
+				},
+				Asset {
+					path: "img/b.png".into(),
+					output: b.clone()
+				},
+				Asset {
+					path: "img/c.png".into(),
+					output: a.clone()
+				},
+			]
+		);
+		let hash = blake3::hash(b"b").to_hex().to_string();
 		assert!(compiled.unit.dependencies.contains(&Dependency::File {
 			path: "img/b.png".into(),
 			hash
 		}));
-		let document = &compiled.unit.document;
-		let urls: Vec<_> = document
-			.descendants(document.root())
-			.filter_map(|(_, element)| match &element.kind {
-				ElementKind::Media { url, .. } => Some(url.clone()),
+		let urls: Vec<_> = media_of(&compiled)
+			.into_iter()
+			.filter_map(|kind| match kind {
+				ElementKind::Media { url, .. } => Some(url),
 				_ => None,
 			})
 			.collect();
-		// Copied under `assets/`, relative to where the page is written.
-		assert_eq!(
-			urls,
-			["assets/img/a.png", "assets/img/b.png", "assets/img/a.png"]
-		);
+		assert_eq!(urls, [a.clone(), b, a.clone(), a.clone()]);
 
+		// URLs are relative to where the page is written.
 		let compiled = compile_with(
-			":set nml.output = guide/x/index.html
-
-![](img/a.png)",
-			&[("img/a.png", "png")],
+			":set nml.output = guide/x/index.html\n\n![](img/a.png)",
+			&[("img/a.png", "a")],
 		);
 		assert_diagnostics!(compiled.diagnostics, []);
 		assert_eq!(
 			media_of(&compiled),
-			[medium(MediaKind::Image, "../../assets/img/a.png", "", None)]
+			[medium(MediaKind::Image, &format!("../../{a}"), "", None)]
 		);
 	}
 

@@ -259,7 +259,7 @@ pub struct Lower<'a, 'l> {
 	pub uses: Vec<Use>,
 	pub dependencies: Vec<Dependency>,
 	/// Workspace files the page shows, copied to the output with it.
-	pub assets: Vec<String>,
+	pub assets: Vec<nml_document::Asset>,
 	pub diagnostics: Vec<Diagnostic>,
 	/// Variables set with `:set` or `:export`, and those exported by imported modules
 	/// (`namespace.name`).

@@ -78,10 +78,17 @@ pub fn output_path(path: &str) -> String {
 /// The directory of the output where the files pages show are copied.
 pub const ASSETS_DIR: &str = "assets";
 
-/// Where a workspace file a page shows is copied in the output: under [`ASSETS_DIR`], at
-/// its workspace path.
-pub fn asset_output_path(path: &str) -> String {
-	format!("{ASSETS_DIR}/{path}")
+/// Where a workspace file a page shows is copied in the output: under [`ASSETS_DIR`],
+/// named by `hash`, the hex hash of its content, with its extension. The name stays as
+/// long as the content does, files with the same content share a copy, and a new version
+/// gets a new name, which browsers cannot have cached.
+pub fn asset_output_path(path: &str, hash: &str) -> String {
+	let name = path.rsplit('/').next().unwrap_or(path);
+	let extension = match name.rsplit_once('.') {
+		Some((stem, extension)) if !stem.is_empty() => format!(".{extension}"),
+		_ => String::new(),
+	};
+	format!("{ASSETS_DIR}/{}{extension}", &hash[..hash.len().min(16)])
 }
 
 /// Whether `path` can be where a page is written (`nml.output`): a relative path in the
@@ -200,13 +207,23 @@ mod tests {
 			("docs/x/a.html", "docs/y/b.html", "../y/b.html"),
 			("docs/x/a.html", "docs/x/b.html", "b.html"),
 			("x/y/a.html", "z.html", "../../z.html"),
-			(
-				"docs/a.html",
-				"assets/docs/img/a.png",
-				"../assets/docs/img/a.png",
-			),
+			("docs/a.html", "assets/0123.png", "../assets/0123.png"),
 		] {
 			assert_eq!(relative_output_url(from, to), url, "from {from} to {to}");
+		}
+	}
+
+	#[test]
+	fn asset_output_paths() {
+		let hash = "0123456789abcdef0123";
+		for (path, output) in [
+			("img/a.png", "assets/0123456789abcdef.png"),
+			("a.tar.gz", "assets/0123456789abcdef.gz"),
+			("img/README", "assets/0123456789abcdef"),
+			("img/.hidden", "assets/0123456789abcdef"),
+			("v.1/clip", "assets/0123456789abcdef"),
+		] {
+			assert_eq!(asset_output_path(path, hash), output, "{path}");
 		}
 	}
 
