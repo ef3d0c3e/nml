@@ -115,8 +115,8 @@ fn media() {
 			"![A \"flower\"](../img/a.png)[width=50%] ![Clip](c.webm) ![](https://x.y/s.mp3)",
 			&[("img/a.png", ""), ("docs/c.webm", "")]
 		),
-		"<p><img src=\"../assets/img/a.png\" alt=\"A &quot;flower&quot;\" style=\"width: 50%\"> \
-		<video src=\"../assets/docs/c.webm\" controls>Clip</video> \
+		"<p><img src=\"../assets/af1349b9f5f9a1a6.png\" alt=\"A &quot;flower&quot;\" style=\"width: 50%\"> \
+		<video src=\"../assets/af1349b9f5f9a1a6.webm\" controls>Clip</video> \
 		<audio src=\"https://x.y/s.mp3\" controls></audio></p>\n"
 	);
 }
@@ -125,7 +125,7 @@ fn media() {
 fn figures() {
 	assert_eq!(
 		body_with(":figure #f A *flower*\n![](a.png)", &[("docs/a.png", "")]),
-		"<figure id=\"f\">\n<img src=\"../assets/docs/a.png\" alt=\"\">\n\
+		"<figure id=\"f\">\n<img src=\"../assets/af1349b9f5f9a1a6.png\" alt=\"\">\n\
 		<figcaption><span class=\"figure-number\">Figure 1:</span> A <em>flower</em></figcaption>\n\
 		</figure>\n"
 	);
