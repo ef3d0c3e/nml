@@ -248,9 +248,18 @@ pub struct Unit {
 	pub exports: Vec<Export>,
 	pub uses: Vec<Use>,
 	pub dependencies: Vec<Dependency>,
-	/// Workspace files the unit's page shows (images, videos, …), by workspace path: they
-	/// are copied to the output with it.
-	pub assets: Vec<String>,
+	/// Workspace files the unit's page shows (images, videos, …): they are copied to the
+	/// output with it.
+	pub assets: Vec<Asset>,
+}
+
+/// A workspace file a page shows, and where its copy goes in the output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Asset {
+	/// Its workspace path.
+	pub path: String,
+	/// The path of its copy, relative to the output directory.
+	pub output: String,
 }
 
 #[cfg(test)]

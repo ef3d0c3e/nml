@@ -31,6 +31,7 @@ pub use slot::Property;
 pub use slot::SerialValue;
 pub use slot::Slot;
 pub use slot::SlotId;
+pub use unit::Asset;
 pub use unit::Dependency;
 pub use unit::Export;
 pub use unit::Scope;
