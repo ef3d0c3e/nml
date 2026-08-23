@@ -39,7 +39,8 @@ pub struct Config {
 pub struct HtmlConfig {
 	/// The `lang` of every page.
 	pub language: Option<String>,
-	/// Stylesheet URLs, linked from every page.
+	/// Stylesheet URLs, linked from every page. A relative URL is relative to the output
+	/// directory.
 	pub stylesheets: Vec<String>,
 	pub icon: Option<String>,
 	/// The theme of highlighted code, one of syntect's built-in themes.
