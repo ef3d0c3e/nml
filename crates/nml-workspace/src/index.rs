@@ -2,6 +2,7 @@ use std::fmt;
 use std::ops::Range;
 use std::path::Path;
 
+use nml_document::Asset;
 use nml_document::DeferredSlot;
 use nml_document::Dependency;
 use nml_document::ElementId;
@@ -21,7 +22,7 @@ use rusqlite::params;
 use serde_json::Value as Json;
 
 /// The version of the schema below. A database with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 8;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value ANY) STRICT;
@@ -91,7 +92,8 @@ CREATE TABLE unit_renders (
 CREATE INDEX unit_renders_by_unit ON unit_renders(unit);
 CREATE TABLE assets (
 	unit INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
-	path TEXT NOT NULL
+	path TEXT NOT NULL,
+	output TEXT NOT NULL
 ) STRICT;
 CREATE INDEX assets_by_unit ON assets(unit);
 ";
@@ -196,7 +198,7 @@ pub struct StoredUnit<'a> {
 	/// See [`UnitRecord::output_range`].
 	pub output_range: Option<Range<usize>>,
 	/// Workspace files the page shows, copied to the output.
-	pub assets: &'a [String],
+	pub assets: &'a [Asset],
 }
 
 /// A symbol whose visible state changed, for the link stage.
@@ -633,13 +635,18 @@ impl Index {
 		Ok(())
 	}
 
-	/// Every workspace file a page shows, once, by path.
-	pub fn assets(&self) -> Result<Vec<String>> {
+	/// Every copy of a workspace file the pages show, once, by output path.
+	pub fn assets(&self) -> Result<Vec<Asset>> {
 		let mut statement = self
 			.connection
-			.prepare("SELECT DISTINCT path FROM assets ORDER BY path")?;
+			.prepare("SELECT min(path), output FROM assets GROUP BY output ORDER BY output")?;
 		let assets = statement
-			.query_map([], |row| row.get(0))?
+			.query_map([], |row| {
+				Ok(Asset {
+					path: row.get(0)?,
+					output: row.get(1)?,
+				})
+			})?
 			.collect::<rusqlite::Result<_>>()?;
 		Ok(assets)
 	}
@@ -803,9 +810,10 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 	)?;
 	let id = tx.last_insert_rowid();
 
-	let mut statement = tx.prepare("INSERT INTO assets (unit, path) VALUES (?1, ?2)")?;
+	let mut statement =
+		tx.prepare("INSERT INTO assets (unit, path, output) VALUES (?1, ?2, ?3)")?;
 	for asset in unit.assets {
-		statement.execute(params![id, asset])?;
+		statement.execute(params![id, asset.path, asset.output])?;
 	}
 
 	let mut statement = tx.prepare(
@@ -1256,7 +1264,16 @@ mod tests {
 	#[test]
 	fn outputs_and_assets() {
 		let mut index = Index::open_in_memory().unwrap();
-		let assets = ["img/a.png".to_string(), "img/b.png".to_string()];
+		let asset = |path: &str, output: &str| Asset {
+			path: path.into(),
+			output: output.into(),
+		};
+		// Two files with the same content share a copy.
+		let assets = [
+			asset("img/a.png", "assets/1.png"),
+			asset("img/b.png", "assets/2.png"),
+			asset("img/c.png", "assets/2.png"),
+		];
 		let unit = |path, output, output_range, assets| StoredUnit {
 			path,
 			name: path,
@@ -1282,11 +1299,11 @@ mod tests {
 		assert_eq!(a.output_range, Some(18..30));
 		let b = index.unit("b.nml").unwrap().unwrap();
 		assert_eq!((b.output.as_str(), b.output_range), ("b.html", None));
-		assert_eq!(index.assets().unwrap(), assets);
+		assert_eq!(index.assets().unwrap(), assets[..2]);
 
 		// A new commit replaces them; a removed unit takes its own away.
 		index.commit(&unit("a.nml", "a.html", None, &[])).unwrap();
-		assert_eq!(index.assets().unwrap(), ["img/b.png"]);
+		assert_eq!(index.assets().unwrap(), assets[1..2]);
 		index.remove("b.nml").unwrap();
 		assert!(index.assets().unwrap().is_empty());
 	}
