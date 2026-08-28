@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -45,6 +46,11 @@ pub struct HtmlConfig {
 	pub icon: Option<String>,
 	/// The theme of highlighted code, one of syntect's built-in themes.
 	pub code_theme: String,
+	/// The directory, relative to the workspace root, whose files are copied as they are to
+	/// the output directory, at the same paths.
+	pub static_dir: Option<PathBuf>,
+	/// Where `static` is set in the configuration.
+	pub static_range: Range<usize>,
 }
 
 /// The `[render]` section: the programs, and `[render.tex.<name>]` LaTeX environments.
@@ -75,6 +81,8 @@ struct RawHtml {
 	stylesheets: Vec<String>,
 	icon: Option<String>,
 	code_theme: Option<Spanned<String>>,
+	#[serde(rename = "static")]
+	static_dir: Option<Spanned<PathBuf>>,
 }
 
 /// A `[[module]]` section: `:import name.a.b` resolves to `<root>/a/b.nml`.
@@ -189,6 +197,8 @@ impl Config {
 			stylesheets: raw.html.stylesheets,
 			icon: raw.html.icon,
 			code_theme,
+			static_range: (raw.html.static_dir.as_ref()).map_or(0..0, Spanned::span),
+			static_dir: raw.html.static_dir.map(Spanned::into_inner),
 		};
 
 		let defaults = nml_render::Renderers::default();
@@ -298,6 +308,7 @@ language = "en"
 stylesheets = ["style.css"]
 icon = "icon.png"
 code_theme = "InspiredGitHub"
+static = "static"
 
 [render]
 dot = "/opt/bin/dot"
@@ -324,6 +335,7 @@ root = "lib/nav"
 		assert_eq!(config.html.language.as_deref(), Some("en"));
 		assert_eq!(config.html.stylesheets, ["style.css"]);
 		assert_eq!(config.html.code_theme, "InspiredGitHub");
+		assert_eq!(config.html.static_dir.as_deref(), Some(Path::new("static")));
 		assert_eq!(config.render.dot, "/opt/bin/dot");
 		assert_eq!(config.render.latex, "latex");
 		assert_eq!(

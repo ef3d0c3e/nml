@@ -86,10 +86,11 @@ pub fn hash(content: &[u8]) -> Vec<u8> {
 /// Compares the workspace's files with the index. A file whose `(mtime, size)` match its
 /// unit is unchanged without being read; otherwise its content hash decides.
 ///
-/// The output directory, `.nml/` and hidden directories are skipped.
+/// The output directory, the static directory, `.nml/` and hidden directories are skipped.
 pub fn scan(root: &Path, config: &Config, index: &Index) -> Result<Scan, ScanError> {
 	let mut paths = Vec::new();
-	let skip = [root.join(&config.output), root.join(".nml")];
+	let mut skip = vec![root.join(&config.output), root.join(".nml")];
+	skip.extend(config.html.static_dir.as_ref().map(|dir| root.join(dir)));
 	collect(root, &skip, &mut paths)?;
 	paths.sort();
 
@@ -275,7 +276,8 @@ mod tests {
 		workspace.write(".nml/x.nml", "database dir");
 		workspace.write(".git/y.nml", "hidden");
 		workspace.write("notes.txt", "not nml");
-		let config = config("exclude = [\"lib/**\"]");
+		workspace.write("static/z.nml", "copied as it is");
+		let config = config("exclude = [\"lib/**\"]\n[html]\nstatic = \"static\"");
 		let mut index = Index::open_in_memory().unwrap();
 
 		let first = scan(root, &config, &index).unwrap();
