@@ -6,6 +6,7 @@ pub use link::LinkError;
 pub use link::Target;
 pub use link::resolve;
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fs;
@@ -179,6 +180,7 @@ pub fn build_with(root: &Path, options: BuildOptions) -> Result<BuildReport, Bui
 		Arc::new(WorkspaceResolver::new(root.clone(), config.modules.clone()));
 	let mut builder = Builder {
 		write: options.write,
+		config_source,
 		output: root.join(&config.output),
 		root,
 		config,
@@ -200,6 +202,7 @@ struct Builder {
 	/// Whether outputs are written; see [`BuildOptions::write`].
 	write: bool,
 	root: PathBuf,
+	config_source: Arc<Source>,
 	config: Config,
 	resolver: Arc<dyn Resolver>,
 	/// The pages of the workspace, for deferred functions, once every unit is committed.
@@ -300,7 +303,8 @@ impl Builder {
 				}
 			}
 		}
-		let conflicts = self.output_conflicts()?;
+		let statics = self.static_files()?;
+		let conflicts = self.output_conflicts(&statics)?;
 		for path in std::mem::take(&mut self.to_link) {
 			if !conflicts.contains(&path) {
 				self.link(&path)?;
@@ -309,13 +313,105 @@ impl Builder {
 		// Renders no unit uses any more, since a unit changed or went away.
 		self.index.prune_renders()?;
 		self.sync_assets()?;
+		self.sync_static(&statics)?;
 		self.write_code_stylesheet()
+	}
+
+	/// The files of the static directory, by output path, with their path in the
+	/// workspace. Those that would replace a file of the build are reported, and left out.
+	fn static_files(&mut self) -> Result<BTreeMap<String, String>, BuildError> {
+		let mut files = BTreeMap::new();
+		let Some(dir) = &self.config.html.static_dir else {
+			return Ok(files);
+		};
+		let location = || {
+			Token::new(
+				self.config_source.clone(),
+				self.config.html.static_range.clone(),
+			)
+		};
+		let absolute = self.root.join(dir);
+		if !absolute.is_dir() {
+			let kind = DiagnosticKind::MissingStaticDirectory {
+				path: dir.to_string_lossy().into_owned(),
+			};
+			let diagnostic = Diagnostic::new(kind, DiagnosticMessage::new(location()));
+			self.report.diagnostics.push(diagnostic);
+			return Ok(files);
+		}
+		// The static directory may hold the workspace's own: it is not copied into itself.
+		let skip = [self.output.clone(), self.root.join(".nml")];
+		let mut paths = Vec::new();
+		walk(&absolute, &skip, &mut paths)?;
+		for path in paths {
+			let slash = |path: &Path| {
+				(path.components())
+					.map(|c| c.as_os_str().to_string_lossy())
+					.collect::<Vec<_>>()
+					.join("/")
+			};
+			let output = slash(path.strip_prefix(&absolute).unwrap());
+			let source = match path.strip_prefix(&self.root) {
+				Ok(relative) => slash(relative),
+				Err(_) => path.to_string_lossy().into_owned(),
+			};
+			let reserved = output == nml_html::CODE_STYLESHEET
+				|| output.starts_with(&format!("{}/", nml_lang::ASSETS_DIR));
+			if reserved {
+				let kind = DiagnosticKind::ReservedStaticFile { path: output };
+				let diagnostic = Diagnostic::new(kind, DiagnosticMessage::new(location()));
+				self.report.diagnostics.push(diagnostic);
+				continue;
+			}
+			files.insert(output, source);
+		}
+		Ok(files)
+	}
+
+	/// Copies the static files whose copy is missing or differs, and deletes the copies of
+	/// those gone since the last build, unless a page is written there now.
+	fn sync_static(&mut self, statics: &BTreeMap<String, String>) -> Result<(), BuildError> {
+		if !self.write {
+			return Ok(());
+		}
+		for (output, source) in statics {
+			let from = self.root.join(source);
+			let to = self.output.join(output);
+			let content = fs::read(&from).map_err(|e| BuildError::Io(from.clone(), e))?;
+			if fs::read(&to).is_ok_and(|current| current == content) {
+				continue;
+			}
+			if let Some(parent) = to.parent() {
+				fs::create_dir_all(parent).map_err(|e| BuildError::Io(parent.into(), e))?;
+			}
+			let mut partial = to.clone().into_os_string();
+			partial.push(".partial");
+			fs::write(&partial, &content).map_err(|e| BuildError::Io(from, e))?;
+			fs::rename(&partial, &to).map_err(|e| BuildError::Io(to.clone(), e))?;
+		}
+		let pages: BTreeSet<String> = (self.index.units()?.into_iter())
+			.filter(|unit| unit.role == Role::Page)
+			.map(|unit| unit.output)
+			.collect();
+		let previous = self.index.meta(STATIC_FILES)?.unwrap_or_default();
+		for output in previous.lines() {
+			if !statics.contains_key(output) && !pages.contains(output) {
+				self.delete_file(output)?;
+			}
+		}
+		let current: Vec<&str> = statics.keys().map(String::as_str).collect();
+		self.index.set_meta(STATIC_FILES, &current.join("\n"))?;
+		Ok(())
 	}
 
 	/// Reports the pages written to the same output file, which are not written: an error
 	/// in each, at its `nml.output` if it sets one. They are relinked once the conflict is
 	/// gone.
-	fn output_conflicts(&mut self) -> Result<BTreeSet<String>, BuildError> {
+	/// A page written where a static file is copied conflicts with it too.
+	fn output_conflicts(
+		&mut self,
+		statics: &BTreeMap<String, String>,
+	) -> Result<BTreeSet<String>, BuildError> {
 		let mut by_output: HashMap<String, Vec<nml_workspace::UnitRecord>> = HashMap::new();
 		for unit in self.index.units()? {
 			if unit.role == Role::Page {
@@ -323,18 +419,26 @@ impl Builder {
 			}
 		}
 		let mut conflicts = BTreeSet::new();
-		let mut groups: Vec<_> = by_output.into_values().filter(|g| g.len() > 1).collect();
-		groups.sort_by(|a, b| a[0].path.cmp(&b[0].path));
-		for group in groups {
+		let mut groups: Vec<_> = (by_output.into_iter())
+			.filter_map(|(output, group)| {
+				let file = statics.get(&output);
+				(group.len() > 1 || file.is_some()).then_some((group, file))
+			})
+			.collect();
+		groups.sort_by(|a, b| a.0[0].path.cmp(&b.0[0].path));
+		for (group, file) in groups {
 			for unit in &group {
-				let other = group.iter().find(|other| other.id != unit.id).unwrap();
+				let other = match group.iter().find(|other| other.id != unit.id) {
+					Some(other) => &other.path,
+					None => file.unwrap(),
+				};
 				let source = match self.sources.get(&unit.path) {
 					Some(source) => source.clone(),
 					None => read(&self.root.join(&unit.path))?,
 				};
 				let kind = DiagnosticKind::OutputConflict {
 					output: unit.output.clone(),
-					other: other.path.clone(),
+					other: other.clone(),
 				};
 				let token = Token::new(source, unit.output_range.clone().unwrap_or(0..0));
 				self.report
@@ -491,16 +595,21 @@ impl Builder {
 	/// written elsewhere now, and the directories it leaves empty. Only pages the index
 	/// knows are deleted: other files in the output directory are left alone.
 	fn delete_output(&mut self, path: &str, output: &str) -> Result<(), BuildError> {
-		if !self.write {
-			return Ok(());
+		if self.write && self.delete_file(output)? {
+			self.report.deleted.push(path.to_string());
 		}
+		Ok(())
+	}
+
+	/// Deletes `output` from the output directory, and the directories it leaves empty.
+	/// Whether it existed.
+	fn delete_file(&self, output: &str) -> Result<bool, BuildError> {
 		let target = self.output.join(output);
 		match fs::remove_file(&target) {
 			Ok(()) => {}
-			Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+			Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
 			Err(e) => return Err(BuildError::Io(target, e)),
 		}
-		self.report.deleted.push(path.to_string());
 		let mut dir = target.parent();
 		while let Some(current) = dir.filter(|d| *d != self.output && d.starts_with(&self.output)) {
 			// Fails when the directory is not empty, which ends the walk.
@@ -509,7 +618,7 @@ impl Builder {
 			}
 			dir = current.parent();
 		}
-		Ok(())
+		Ok(true)
 	}
 
 	/// Commits a parsed unit, unless it has errors.
@@ -919,6 +1028,27 @@ fn site_url(output: &str, url: &str) -> String {
 		nml_lang::relative_output_url(output, url)
 	}
 }
+
+/// The files of `dir`, except in the `skip` directories.
+fn walk(dir: &Path, skip: &[PathBuf], files: &mut Vec<PathBuf>) -> Result<(), BuildError> {
+	let entries = fs::read_dir(dir).map_err(|e| BuildError::Io(dir.into(), e))?;
+	for entry in entries {
+		let entry = entry.map_err(|e| BuildError::Io(dir.into(), e))?;
+		let path = entry.path();
+		let file_type = entry
+			.file_type()
+			.map_err(|e| BuildError::Io(path.clone(), e))?;
+		if file_type.is_dir() && !skip.contains(&path) {
+			walk(&path, skip, files)?;
+		} else if file_type.is_file() {
+			files.push(path);
+		}
+	}
+	Ok(())
+}
+
+/// The output paths of the static files copied by the last build, one per line.
+const STATIC_FILES: &str = "static_files";
 
 const CONFIG_HASH: &str = "config_hash";
 

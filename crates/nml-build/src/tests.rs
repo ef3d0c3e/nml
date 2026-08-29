@@ -1100,3 +1100,77 @@ fn missing_renderers() {
 		"{message}"
 	);
 }
+
+#[test]
+fn static_files() {
+	let workspace = Workspace::new(
+		"static-files",
+		&[
+			("nml.toml", "[html]\nstatic = \"static\"\n"),
+			("index.nml", "A"),
+			("static/style.css", "body {}"),
+			("static/fonts/a.woff", "font"),
+			("static/.well-known/x", "x"),
+			// Copied as it is, not parsed.
+			("static/page.nml", "@@@"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(report.parsed, ["index.nml"]);
+	assert_eq!(workspace.output("style.css"), "body {}");
+	assert_eq!(workspace.output("fonts/a.woff"), "font");
+	assert_eq!(workspace.output(".well-known/x"), "x");
+	assert_eq!(workspace.output("page.nml"), "@@@");
+
+	// Changed files are copied again, removed ones deleted with the directories they
+	// leave empty. Other files of the output are left alone.
+	workspace.write("static/style.css", "p {}");
+	workspace.remove("static/fonts/a.woff");
+	workspace.write("public/mine.txt", "mine");
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(report.written.is_empty());
+	assert_eq!(workspace.output("style.css"), "p {}");
+	assert!(!workspace.0.join("public/fonts").exists());
+	assert_eq!(workspace.output("mine.txt"), "mine");
+
+	// A copy edited in the output is restored.
+	workspace.write("public/style.css", "edited");
+	workspace.build();
+	assert_eq!(workspace.output("style.css"), "p {}");
+
+	// Files where the build writes its own are not copied.
+	workspace.write("static/assets/a.png", "a");
+	workspace.write("static/nml-code.css", "code");
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3014 @ 16..24, 3014 @ 16..24]);
+	assert!(!workspace.0.join("public/assets").exists());
+	assert_ne!(workspace.output("nml-code.css"), "code");
+	workspace.remove("static/assets/a.png");
+	workspace.remove("static/nml-code.css");
+
+	// A page written where a static file is copied is not written.
+	workspace.write("static/index.html", "static");
+	let report = workspace.build();
+	assert_eq!(
+		report.diagnostics[0].kind,
+		DiagnosticKind::OutputConflict {
+			output: "index.html".into(),
+			other: "static/index.html".into(),
+		}
+	);
+	assert_diagnostics!(report.diagnostics, [3013]);
+	assert_eq!(workspace.output("index.html"), "static");
+	// Once the file is gone, the page is written in its place.
+	workspace.remove("static/index.html");
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(report.written, ["index.nml"]);
+	assert!(body(&workspace.output("index.html")).contains('A'));
+
+	// Without the static directory.
+	fs::remove_dir_all(workspace.0.join("static")).unwrap();
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3015 @ 16..24]);
+}
