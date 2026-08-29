@@ -57,6 +57,8 @@ pub(crate) struct LuaLs {
 	versions: HashMap<Url, i32>,
 	/// Notifications received while waiting for a response.
 	pending: Vec<Notification>,
+	/// The settings LuaLS is given.
+	settings: Value,
 }
 
 impl std::fmt::Debug for LuaLs {
@@ -66,8 +68,10 @@ impl std::fmt::Debug for LuaLs {
 }
 
 impl LuaLs {
-	/// Starts LuaLS for the workspace at `root` and initializes it.
+	/// Starts LuaLS for the workspace at `root` and initializes it. The declarations of the
+	/// API are written first, so that LuaLS finds them current.
 	pub fn start(program: &Path, root: &Path) -> io::Result<Self> {
+		nml_lua::write_types(root)?;
 		let mut child = Command::new(program)
 			.current_dir(root)
 			.stdin(Stdio::piped())
@@ -91,6 +95,7 @@ impl LuaLs {
 			next_id: 0,
 			versions: HashMap::new(),
 			pending: Vec::new(),
+			settings: settings(root),
 		};
 		let root_url = Url::from_directory_path(root).map_err(|()| io::ErrorKind::InvalidInput)?;
 		let params = serde_json::json!({
@@ -141,13 +146,20 @@ impl LuaLs {
 		}
 	}
 
-	/// Answers a request from LuaLS: settings are left to `.luarc.json`, and the rest needs
-	/// no answer beyond an acknowledgement.
+	/// Answers a request from LuaLS: the `Lua` settings are NML's (a `.luarc.json` takes
+	/// precedence over them), and the rest needs no answer beyond an acknowledgement.
 	pub fn answer(&mut self, request: Request) {
 		let result = match request.method.as_str() {
 			"workspace/configuration" => {
-				let items = request.params["items"].as_array().map_or(0, Vec::len);
-				Value::Array(vec![Value::Null; items])
+				let items = request.params["items"]
+					.as_array()
+					.cloned()
+					.unwrap_or_default();
+				let section = |item: &Value| match item["section"].as_str() {
+					Some("Lua") => self.settings.clone(),
+					_ => Value::Null,
+				};
+				items.iter().map(section).collect()
 			}
 			_ => Value::Null,
 		};
@@ -195,6 +207,19 @@ impl LuaLs {
 		}
 		Ok(())
 	}
+}
+
+/// The `Lua` settings of LuaLS: Lua 5.4 without what the sandbox leaves out, and the
+/// declarations of the API.
+fn settings(root: &Path) -> Value {
+	let builtin: serde_json::Map<String, Value> = (nml_lua::DISABLED_LIBRARIES.iter())
+		.map(|library| (library.to_string(), Value::from("disable")))
+		.collect();
+	serde_json::json!({
+		"runtime": { "version": "Lua 5.4", "builtin": builtin },
+		"workspace": { "library": [root.join(nml_lua::TYPES_DIR).to_string_lossy()] },
+		"diagnostics": { "globals": ["nml"] },
+	})
 }
 
 impl Drop for LuaLs {

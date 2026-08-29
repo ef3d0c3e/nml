@@ -920,7 +920,6 @@ fn luals_proxy() {
 		return;
 	};
 	let workspace = Workspace::new("luals", &[("nml.toml", "")]);
-	nml_lua::write_types(&workspace.0).unwrap();
 	let client = Client::start_with(
 		Some(&workspace.0),
 		serde_json::json!({ "luals": luals.to_string_lossy() }),
@@ -1002,7 +1001,6 @@ fn luals_sees_imported_modules() {
 			),
 		],
 	);
-	nml_lua::write_types(&workspace.0).unwrap();
 	let client = Client::start_with(
 		Some(&workspace.0),
 		serde_json::json!({ "luals": luals.to_string_lossy() }),
@@ -1073,7 +1071,6 @@ fn luals_sees_include_contexts() {
 			),
 		],
 	);
-	nml_lua::write_types(&workspace.0).unwrap();
 	let client = Client::start_with(
 		Some(&workspace.0),
 		serde_json::json!({ "luals": luals.to_string_lossy() }),
@@ -1101,4 +1098,45 @@ fn luals_sees_include_contexts() {
 		messages.iter().any(|m| m.contains("missing")),
 		"{messages:?}"
 	);
+}
+
+#[test]
+fn luals_settings_come_from_the_server() {
+	let Some(luals) = luals_path() else {
+		eprintln!("skipped: LuaLS not found (set NML_LUALS)");
+		return;
+	};
+	let workspace = Workspace::new("luals-settings", &[("nml.toml", "")]);
+	let client = Client::start_with(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": luals.to_string_lossy() }),
+	);
+	let page = workspace.url("a.nml");
+	client.open(&page, ":lua`tostring(nml.read)` :lua`tostring(io)`\n");
+	// The sandbox has no `io`.
+	let lua_diagnostics = (0..30)
+		.find_map(|_| {
+			let published = client.diagnostics();
+			let lua: Vec<_> = (published.diagnostics.into_iter())
+				.filter(|d| d.source.as_deref().is_some_and(|s| s.starts_with("Lua")))
+				.collect();
+			(!lua.is_empty()).then_some(lua)
+		})
+		.expect("LuaLS reports `io`");
+	let messages: Vec<_> = lua_diagnostics.iter().map(|d| &d.message).collect();
+	assert_eq!(messages, ["Undefined global `io`."]);
+	// The declarations are written; the workspace gets no `.luarc.json`.
+	assert!(workspace.0.join(".nml/types/nml.lua").is_file());
+	assert!(!workspace.0.join(".luarc.json").exists());
+
+	// The API is declared.
+	let result = client.request(
+		HoverRequest::METHOD,
+		serde_json::to_value(lsp_types::HoverParams {
+			text_document_position_params: at(&page, 0, 19),
+			work_done_progress_params: Default::default(),
+		})
+		.unwrap(),
+	);
+	assert!(result.to_string().contains("function nml.read"), "{result}");
 }
