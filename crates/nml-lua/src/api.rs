@@ -156,34 +156,19 @@ pub fn luacats(functions: &[ApiFunction], classes: &[LuaClass], values: &[(&str,
 /// Where the declarations go, relative to the workspace root.
 pub const TYPES_DIR: &str = ".nml/types";
 
-/// The LuaLS configuration: Lua 5.4, the declarations, and the sandbox.
-const LUARC: &str = r#"{
-	"runtime.version": "Lua 5.4",
-	"runtime.builtin": {
-		"io": "disable",
-		"os": "disable",
-		"debug": "disable",
-		"package": "disable"
-	},
-	"workspace.library": [".nml/types"],
-	"diagnostics.globals": ["nml"]
-}
-"#;
+/// The standard libraries the sandbox leaves out, for LuaLS.
+pub const DISABLED_LIBRARIES: &[&str] = &["io", "os", "debug", "package"];
 
-/// Writes the declarations of the API for LuaLS, and a `.luarc.json` unless the workspace
-/// has one.
+/// Writes the declarations of the API for LuaLS, unless they are up to date.
 pub fn write_types(root: &Path) -> io::Result<()> {
 	let dir = root.join(TYPES_DIR);
-	fs::create_dir_all(&dir)?;
-	fs::write(
-		dir.join("nml.lua"),
-		luacats(API, CLASSES, crate::rules::VALUES),
-	)?;
-	let luarc = root.join(".luarc.json");
-	if !luarc.exists() {
-		fs::write(luarc, LUARC)?;
+	let path = dir.join("nml.lua");
+	let content = luacats(API, CLASSES, crate::rules::VALUES);
+	if fs::read_to_string(&path).is_ok_and(|current| current == content) {
+		return Ok(());
 	}
-	Ok(())
+	fs::create_dir_all(&dir)?;
+	fs::write(path, content)
 }
 
 #[cfg(test)]
@@ -276,21 +261,14 @@ function nml.nothing() end
 		let _ = fs::remove_dir_all(&root);
 		fs::create_dir_all(&root).unwrap();
 		write_types(&root).unwrap();
-		assert!(
-			fs::read_to_string(root.join(".nml/types/nml.lua"))
-				.unwrap()
-				.starts_with("---@meta")
-		);
-		assert!(
-			fs::read_to_string(root.join(".luarc.json"))
-				.unwrap()
-				.contains("Lua 5.4")
-		);
+		let path = root.join(".nml/types/nml.lua");
+		assert!(fs::read_to_string(&path).unwrap().starts_with("---@meta"));
+		assert!(!root.join(".luarc.json").exists());
 
-		// An existing `.luarc.json` is the user's.
-		fs::write(root.join(".luarc.json"), "{}").unwrap();
+		// Stale declarations are replaced.
+		fs::write(&path, "old").unwrap();
 		write_types(&root).unwrap();
-		assert_eq!(fs::read_to_string(root.join(".luarc.json")).unwrap(), "{}");
+		assert!(fs::read_to_string(&path).unwrap().starts_with("---@meta"));
 		fs::remove_dir_all(root).unwrap();
 	}
 }

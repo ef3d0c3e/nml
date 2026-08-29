@@ -22,6 +22,7 @@ mod variables;
 pub use api::API;
 pub use api::ApiFunction;
 pub use api::CLASSES;
+pub use api::DISABLED_LIBRARIES;
 pub use api::LuaClass;
 pub use api::LuaField;
 pub use api::TYPES_DIR;
