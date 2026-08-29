@@ -206,6 +206,8 @@ struct Analysis {
 	diagnostics: Vec<Diagnostic>,
 	/// The document's grammar, if its prologue extended the base one.
 	language: Option<Arc<Language>>,
+	/// The names the Lua of each imported module exports, by module file.
+	module_exports: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 impl Server {
@@ -428,6 +430,22 @@ impl Server {
 		Some(parts.join("/"))
 	}
 
+	/// Finds the workspace's files and modules, with the open documents' content.
+	fn resolver(&self) -> WorkspaceResolver {
+		let overlay = self
+			.buffers
+			.iter()
+			.filter_map(|(url, text)| Some((self.workspace_path(url)?, text.clone())))
+			.collect();
+		let root = self.root.clone().unwrap_or_else(|| PathBuf::from("/"));
+		let modules = self
+			.config
+			.as_ref()
+			.map(|config| config.modules.clone())
+			.unwrap_or_default();
+		WorkspaceResolver::new(root, modules).with_overlay(overlay)
+	}
+
 	/// Compiles an open document from its buffer, with the other open documents as an
 	/// overlay, and publishes its diagnostics. The database is not written.
 	fn diagnose(&mut self, url: &Url) -> Result<()> {
@@ -440,18 +458,7 @@ impl Server {
 				.unwrap_or("document.nml")
 				.to_string()
 		});
-		let overlay = self
-			.buffers
-			.iter()
-			.filter_map(|(url, text)| Some((self.workspace_path(url)?, text.clone())))
-			.collect();
-		let root = self.root.clone().unwrap_or_else(|| PathBuf::from("/"));
-		let modules = self
-			.config
-			.as_ref()
-			.map(|config| config.modules.clone())
-			.unwrap_or_default();
-		let resolver = WorkspaceResolver::new(root, modules).with_overlay(overlay);
+		let resolver = self.resolver();
 		let source = Arc::new(Source::new(url.clone(), text.clone(), 0));
 		let mut compiled = nml_lang::compile(
 			&self.language,
@@ -495,6 +502,7 @@ impl Server {
 				exports: compiled.unit.exports.clone(),
 				diagnostics: compiled.diagnostics.clone(),
 				language: compiled.language.clone(),
+				module_exports: compiled.module_exports.clone(),
 			},
 		);
 

@@ -757,6 +757,50 @@ fn lua_documents() {
 }
 
 #[test]
+fn lua_documents_run_imported_modules() {
+	let workspace = Workspace::new(
+		"lua-modules",
+		&[
+			("nml.toml", "[[module]]\nname = \"lib\"\nroot = \"lib\"\n"),
+			(
+				"lib/util.nml",
+				":import lib.base as b\n\n:lua\n```\n--- Greets.\nfunction greet(name) return b.prefix .. name end\n```\n\nText :lua`ignored()`.\n",
+			),
+			("lib/base.nml", ":lua\n```\nprefix = 'hi '\n```\n"),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let page = workspace.url("a.nml");
+	client.open(&page, ":import lib.util\n\n:lua`util.greet('x')`\n");
+	assert!(client.diagnostics().diagnostics.is_empty());
+
+	let params = serde_json::json!({ "textDocument": { "uri": page.as_str() } });
+	let result = client.request(lua::LUA_DOCUMENT, params);
+	let document: lua::LuaDocument = serde_json::from_value(result).unwrap();
+	// The module's code, and its own imports, run where it is imported, and return its
+	// exports: LuaLS follows them to their definitions.
+	assert_eq!(
+		document.content,
+		"util = (function()\n\
+		b = (function()\n\
+		prefix = 'hi '\n\
+		return { prefix = prefix, }\n\
+		end)()\n\
+		--- Greets.\n\
+		function greet(name) return b.prefix .. name end\n\
+		return { b = b, greet = greet, }\n\
+		end)()\n\
+		local _ = (util.greet('x'))\n"
+	);
+	// Only the document's own code maps back to it.
+	let fragments: Vec<_> = (document.fragments.iter())
+		.map(|f| (f.range.start, f.line, f.character))
+		.collect();
+	assert_eq!(fragments, [(position(2, 5), 9, 11)]);
+	assert_eq!(document.to_nml(position(2, 0)), None);
+}
+
+#[test]
 fn include_contexts() {
 	let workspace = Workspace::new(
 		"contexts",
@@ -894,4 +938,71 @@ fn luals_proxy() {
 			.any(|l| l.uri.as_str() == page.as_str() && l.range.start.line == 2),
 		"{locations:?}"
 	);
+}
+
+#[test]
+fn luals_sees_imported_modules() {
+	let Some(luals) = luals_path() else {
+		eprintln!("skipped: LuaLS not found (set NML_LUALS)");
+		return;
+	};
+	let workspace = Workspace::new(
+		"luals-modules",
+		&[
+			("nml.toml", "[[module]]\nname = \"lib\"\nroot = \"lib\"\n"),
+			(
+				"lib/util.nml",
+				":lua\n```\n--- Greets someone.\n---@param name string\nfunction greet(name) return 'hi ' .. name end\n```\n",
+			),
+		],
+	);
+	nml_lua::write_types(&workspace.0).unwrap();
+	let client = Client::start_with(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": luals.to_string_lossy() }),
+	);
+	let page = workspace.url("a.nml");
+	let text = ":import lib.util\n\n:lua`util.greet('x')` :lua`util.g` :lua`missing()`\n";
+	client.open(&page, text);
+
+	// The namespace is defined; `missing` is not.
+	let lua_diagnostics = (0..30)
+		.find_map(|_| {
+			let published = client.diagnostics();
+			let lua: Vec<_> = (published.diagnostics.into_iter())
+				.filter(|d| d.source.as_deref().is_some_and(|s| s.starts_with("Lua")))
+				.collect();
+			(!lua.is_empty()).then_some(lua)
+		})
+		.expect("LuaLS reports the undefined global");
+	let messages: Vec<_> = lua_diagnostics.iter().map(|d| &d.message).collect();
+	assert!(messages.iter().all(|m| !m.contains("util")), "{messages:?}");
+	assert!(
+		messages.iter().any(|m| m.contains("missing")),
+		"{messages:?}"
+	);
+
+	// Hover on `greet`: the module's documentation.
+	let result = client.request(
+		HoverRequest::METHOD,
+		serde_json::to_value(lsp_types::HoverParams {
+			text_document_position_params: at(&page, 2, 12),
+			work_done_progress_params: Default::default(),
+		})
+		.unwrap(),
+	);
+	assert!(result.to_string().contains("Greets someone."), "{result}");
+
+	// Completion of the namespace's fields.
+	let result = client.request(
+		Completion::METHOD,
+		serde_json::to_value(lsp_types::CompletionParams {
+			text_document_position: at(&page, 2, 33),
+			work_done_progress_params: Default::default(),
+			partial_result_params: Default::default(),
+			context: None,
+		})
+		.unwrap(),
+	);
+	assert!(result.to_string().contains("\"greet\""), "{result}");
 }

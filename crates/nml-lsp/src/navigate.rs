@@ -103,16 +103,6 @@ impl Server {
 		Ok(None)
 	}
 
-	fn resolver(&self) -> nml_build::WorkspaceResolver {
-		let root = self.root.clone().unwrap_or_else(|| "/".into());
-		let modules = self
-			.config
-			.as_ref()
-			.map(|config| config.modules.clone())
-			.unwrap_or_default();
-		nml_build::WorkspaceResolver::new(root, modules)
-	}
-
 	/// The workspace index, if a build created it.
 	pub(crate) fn index(&self) -> Option<Index> {
 		let path = self.root.as_ref()?.join(&self.config.as_ref()?.database);
