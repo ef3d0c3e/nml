@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::any::TypeId;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
@@ -150,6 +151,8 @@ pub struct Compiled {
 	/// The unit's grammar, if its prologue extended the base one: the rules of `tree` are
 	/// in it.
 	pub language: Option<Arc<Language>>,
+	/// The names the Lua of each imported module exports, by module file. For editors.
+	pub module_exports: BTreeMap<String, Vec<String>>,
 	/// Parse errors and errors found while lowering. A unit with errors is not committed to
 	/// the workspace.
 	pub diagnostics: Vec<Diagnostic>,
@@ -178,6 +181,7 @@ pub fn compile(
 		prologue: true,
 		files: vec![path.to_string()],
 		imports: Vec::new(),
+		module_exports: BTreeMap::new(),
 		exported: Vec::new(),
 		extensions: HashMap::new(),
 		finishers: Vec::new(),
@@ -224,6 +228,7 @@ pub fn compile(
 		diagnostics: lowering_diagnostics,
 		mut variables,
 		extended,
+		module_exports,
 		..
 	} = lower;
 	let mut diagnostics = parse_diagnostics;
@@ -244,6 +249,7 @@ pub fn compile(
 		},
 		tree,
 		language: extended,
+		module_exports,
 		diagnostics,
 	}
 }
@@ -271,6 +277,8 @@ pub struct Lower<'a, 'l> {
 	pub files: Vec<String>,
 	/// Namespaces of the imported modules, and where they are written.
 	pub imports: Vec<(String, Token)>,
+	/// The names the Lua of each imported module exports, by module file.
+	pub module_exports: BTreeMap<String, Vec<String>>,
 	/// Exported names and where they are written.
 	exported: Vec<(String, Token)>,
 	/// State that other crates keep for the unit, by type (the Lua runtime).
