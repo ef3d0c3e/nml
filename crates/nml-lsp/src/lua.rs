@@ -60,6 +60,8 @@ enum Piece<'t> {
 	Code(&'t Token, bool),
 	/// An imported module (as written) and its namespace: its Lua runs there.
 	Import(&'t Token, String),
+	/// An included file, as written: its Lua runs there, in the same state.
+	Include(&'t Token),
 }
 
 /// The Lua of a tree, in order.
@@ -76,6 +78,9 @@ fn pieces<'t>(
 				let name = language.rules().get(m.rule).map(|rule| rule.name.as_str());
 				let in_file = m.token.root().source().location() == file;
 				match (name, m.capture("code"), m.capture("module")) {
+					(Some("include"), _, _) if in_file => {
+						out.push(Piece::Include(&m.capture("path").unwrap().token));
+					}
 					(Some("lua" | "lua-role"), Some(code), _)
 						if code.token.root().source().location() == file =>
 					{
@@ -118,52 +123,115 @@ fn is_name(name: &str) -> bool {
 		&& !KEYWORDS.contains(&name)
 }
 
-/// What the Lua of imported modules is made into, for LuaLS.
-struct Modules<'a> {
+/// Writes a virtual Lua document.
+struct Writer<'a> {
+	/// The base grammar, which modules are parsed with.
+	base: &'a nml_lang::Language,
+	/// The grammar included files are parsed with.
 	language: &'a nml_lang::Language,
 	resolver: &'a dyn Resolver,
-	/// The names each module exports, by module file.
-	exports: &'a BTreeMap<String, Vec<String>>,
-	/// The module files being written, against import cycles.
+	/// The names each imported module exports, by module file.
+	exports: BTreeMap<String, Vec<String>>,
+	/// The files being written, against cycles.
 	writing: Vec<String>,
+	/// To tell expressions from statements in roles.
+	lua: mlua::Lua,
+	document: LuaDocument,
 }
 
-impl Modules<'_> {
-	/// The Lua that stands for a module imported under `namespace`: its code, in a
-	/// function that returns its exports, which LuaLS can follow to their definitions.
-	/// `None` if the module was not loaded.
-	fn lua(&mut self, module: &str, namespace: &str) -> Option<String> {
-		let (path, source) = self.resolver.module(module).ok()?;
-		if self.writing.contains(&path) {
-			return None;
+impl Writer<'_> {
+	fn push(&mut self, code: &str) {
+		self.document.content.push_str(code);
+		if !self.document.content.ends_with('\n') {
+			self.document.content.push('\n');
 		}
-		let names = self.exports.get(&path)?;
-		let tree = nml_grammar::parse(self.language.rules(), source.clone()).nodes;
-		let mut parts = Vec::new();
-		pieces(&tree, self.language, source.location(), &mut parts);
-		self.writing.push(path);
-		let mut lua = format!("{namespace} = (function()\n");
+	}
+
+	/// Writes code, wrapped as the runtime does for roles. Code of the document itself
+	/// (`mapped`) maps back to it.
+	fn code(&mut self, token: &Token, role: bool, mapped: bool) {
+		let code = token.content();
+		let (prefix, suffix) = match (role, is_expression(&self.lua, code)) {
+			(true, true) => ("local _ = (", ")"),
+			(true, false) => ("do ", " end"),
+			(false, _) => ("", ""),
+		};
+		if mapped {
+			self.document.fragments.push(Fragment {
+				range: convert::range(token),
+				line: self.document.content.lines().count() as u32,
+				character: prefix.encode_utf16().count() as u32,
+			});
+		}
+		self.push(&format!("{prefix}{code}{suffix}"));
+	}
+
+	/// Writes the Lua of the file at `path`, in order, with what it imports and includes.
+	/// Stops at the inclusion of `stop`, if given: whether it was reached.
+	fn file(&mut self, path: &str, parts: &[Piece<'_>], mapped: bool, stop: Option<&str>) -> bool {
 		for part in parts {
-			let code = match part {
-				// Modules run their blocks only.
-				Piece::Code(code, false) => Some(code.content().to_string()),
-				Piece::Code(_, true) => None,
-				Piece::Import(module, namespace) => self.lua(module.content(), &namespace),
-			};
-			if let Some(code) = code {
-				lua.push_str(&code);
-				if !lua.ends_with('\n') {
-					lua.push('\n');
+			match part {
+				Piece::Code(token, role) => self.code(token, *role, mapped),
+				Piece::Import(module, namespace) => self.module(module.content(), namespace),
+				Piece::Include(written) => {
+					let Ok((included, source)) =
+						self.resolver.include(path, written.content().trim_end())
+					else {
+						continue;
+					};
+					if stop == Some(included.as_str()) {
+						return true;
+					}
+					if self.writing.contains(&included) {
+						continue;
+					}
+					let tree = nml_grammar::parse(self.language.rules(), source.clone()).nodes;
+					let mut parts = Vec::new();
+					pieces(&tree, self.language, source.location(), &mut parts);
+					self.writing.push(included.clone());
+					let stopped = self.file(&included, &parts, false, stop);
+					self.writing.pop();
+					if stopped {
+						return true;
+					}
 				}
 			}
 		}
-		self.writing.pop();
-		lua.push_str("return {");
-		for name in names.iter().filter(|name| is_name(name)) {
-			lua.push_str(&format!(" {name} = {name},"));
+		false
+	}
+
+	/// Writes what stands for a module imported under `namespace`: its code, in a function
+	/// that returns its exports, which LuaLS can follow to their definitions. Nothing if
+	/// the module was not loaded.
+	fn module(&mut self, module: &str, namespace: &str) {
+		let Ok((path, source)) = self.resolver.module(module) else {
+			return;
+		};
+		if self.writing.contains(&path) {
+			return;
 		}
-		lua.push_str(" }\nend)()\n");
-		Some(lua)
+		let Some(names) = self.exports.get(&path).cloned() else {
+			return;
+		};
+		let tree = nml_grammar::parse(self.base.rules(), source.clone()).nodes;
+		let mut parts = Vec::new();
+		pieces(&tree, self.base, source.location(), &mut parts);
+		self.writing.push(path);
+		self.push(&format!("{namespace} = (function()"));
+		for part in &parts {
+			match part {
+				// Modules run their blocks and imports only.
+				Piece::Code(code, false) => self.push(code.content()),
+				Piece::Import(module, namespace) => self.module(module.content(), namespace),
+				Piece::Code(_, true) | Piece::Include(_) => {}
+			}
+		}
+		self.writing.pop();
+		let fields: String = (names.iter())
+			.filter(|name| is_name(name))
+			.map(|name| format!(" {name} = {name},"))
+			.collect();
+		self.push(&format!("return {{{fields} }}\nend)()"));
 	}
 }
 
@@ -179,7 +247,7 @@ impl Server {
 		out.into_iter()
 			.filter_map(|piece| match piece {
 				Piece::Code(token, role) => Some((token.clone(), role)),
-				Piece::Import(..) => None,
+				Piece::Import(..) | Piece::Include(_) => None,
 			})
 			.collect()
 	}
@@ -201,58 +269,44 @@ impl Server {
 		Ok(self.lua_document_of(&url))
 	}
 
-	/// The virtual Lua document of an open document: its Lua, and that of the modules it
-	/// imports where it imports them. Only the document's own code maps back to it.
+	/// The virtual Lua document of an open document: its Lua, with what runs before it in
+	/// the same state. That is the Lua of its include context up to where it is included,
+	/// and that of the modules and files it imports and includes, where it does. Only the
+	/// document's own code maps back to it.
 	pub(crate) fn lua_document_of(&self, url: &Url) -> LuaDocument {
-		let mut document = LuaDocument {
+		let empty = LuaDocument {
 			content: String::new(),
 			fragments: Vec::new(),
 		};
 		let Some(analysis) = self.analyses.get(url) else {
-			return document;
+			return empty;
 		};
 		let language = analysis.language.as_deref().unwrap_or(&self.language);
+		let resolver = self.resolver();
+		let mut exports = analysis.module_exports.clone();
+		if let Some(context) = &analysis.context {
+			exports.extend(context.module_exports.clone());
+		}
+		let mut writer = Writer {
+			base: &self.language,
+			language,
+			resolver: &resolver,
+			exports,
+			writing: vec![analysis.path.clone()],
+			lua: mlua::Lua::new(),
+			document: empty,
+		};
+		if let Some(context) = &analysis.context {
+			let mut parts = Vec::new();
+			pieces(&context.tree, language, &context.url, &mut parts);
+			writer.writing.push(context.path.clone());
+			writer.file(&context.path, &parts, false, Some(&analysis.path));
+			writer.writing.pop();
+		}
 		let mut parts = Vec::new();
 		pieces(&analysis.tree, language, url, &mut parts);
-		let resolver = self.resolver();
-		let mut modules = Modules {
-			language: &self.language,
-			resolver: &resolver,
-			exports: &analysis.module_exports,
-			writing: Vec::new(),
-		};
-		let lua = mlua::Lua::new();
-		for part in parts {
-			let token = match part {
-				Piece::Code(token, role) => (token, role),
-				Piece::Import(module, namespace) => {
-					if let Some(code) = modules.lua(module.content(), &namespace) {
-						document.content.push_str(&code);
-					}
-					continue;
-				}
-			};
-			let (token, role) = token;
-			let code = token.content();
-			let (prefix, suffix) = match (role, is_expression(&lua, code)) {
-				(true, true) => ("local _ = (", ")"),
-				(true, false) => ("do ", " end"),
-				(false, _) => ("", ""),
-			};
-			let line = document.content.lines().count() as u32;
-			document.fragments.push(Fragment {
-				range: convert::range(token),
-				line,
-				character: prefix.encode_utf16().count() as u32,
-			});
-			document.content.push_str(prefix);
-			document.content.push_str(code);
-			document.content.push_str(suffix);
-			if !document.content.ends_with('\n') {
-				document.content.push('\n');
-			}
-		}
-		document
+		writer.file(&analysis.path, &parts, true, None);
+		writer.document
 	}
 }
 

@@ -801,6 +801,52 @@ fn lua_documents_run_imported_modules() {
 }
 
 #[test]
+fn lua_documents_of_included_files() {
+	let workspace = Workspace::new(
+		"lua-includes",
+		&[
+			(
+				"nml.toml",
+				"exclude = [\"parts/**\"]\n[[module]]\nname = \"lib\"\nroot = \"lib\"\n",
+			),
+			("lib/util.nml", ":lua\n```\nfunction greet() end\n```\n"),
+			(
+				"a.nml",
+				":import lib.util\n\n:lua\n```\nfunction helper() return 'A' end\n```\n\n:include parts/x\n\n:lua\n```\nafter = 1\n```\n",
+			),
+			("parts/x.nml", ":include y\n\nValue: :lua`helper()`\n"),
+			("parts/y.nml", ":lua\n```\nfrom_y = 1\n```\n"),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let part = workspace.url("parts/x.nml");
+	client.save(&part);
+	client.diagnostics();
+	client.open(&part, ":include y\n\nValue: :lua`helper()`\n");
+	assert!(client.diagnostics().diagnostics.is_empty());
+
+	let params = serde_json::json!({ "textDocument": { "uri": part.as_str() } });
+	let result = client.request(lua::LUA_DOCUMENT, params);
+	let document: lua::LuaDocument = serde_json::from_value(result).unwrap();
+	// The includer's Lua up to the inclusion, with its imports, then the file's, with what
+	// it includes.
+	assert_eq!(
+		document.content,
+		"util = (function()\n\
+		function greet() end\n\
+		return { greet = greet, }\n\
+		end)()\n\
+		function helper() return 'A' end\n\
+		from_y = 1\n\
+		local _ = (helper())\n"
+	);
+	let fragments: Vec<_> = (document.fragments.iter())
+		.map(|f| (f.range.start, f.line, f.character))
+		.collect();
+	assert_eq!(fragments, [(position(2, 12), 6, 11)]);
+}
+
+#[test]
 fn include_contexts() {
 	let workspace = Workspace::new(
 		"contexts",
@@ -1005,4 +1051,54 @@ fn luals_sees_imported_modules() {
 		.unwrap(),
 	);
 	assert!(result.to_string().contains("\"greet\""), "{result}");
+}
+
+#[test]
+fn luals_sees_include_contexts() {
+	let Some(luals) = luals_path() else {
+		eprintln!("skipped: LuaLS not found (set NML_LUALS)");
+		return;
+	};
+	let workspace = Workspace::new(
+		"luals-includes",
+		&[
+			("nml.toml", "exclude = [\"parts/**\"]\n"),
+			(
+				"a.nml",
+				":lua\n```\nfunction helper() return 'A' end\n```\n\n:include parts/x\n",
+			),
+			(
+				"parts/x.nml",
+				"Value: :lua`helper()` :lua`tostring(missing)`\n",
+			),
+		],
+	);
+	nml_lua::write_types(&workspace.0).unwrap();
+	let client = Client::start_with(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": luals.to_string_lossy() }),
+	);
+	let part = workspace.url("parts/x.nml");
+	client.save(&part);
+	client.open(&part, "Value: :lua`helper()` :lua`tostring(missing)`\n");
+
+	// `helper` is defined by the includer; `missing` is not.
+	let lua_diagnostics = (0..30)
+		.find_map(|_| {
+			let published = client.diagnostics();
+			let lua: Vec<_> = (published.diagnostics.into_iter())
+				.filter(|d| d.source.as_deref().is_some_and(|s| s.starts_with("Lua")))
+				.collect();
+			(!lua.is_empty()).then_some(lua)
+		})
+		.expect("LuaLS reports the undefined global");
+	let messages: Vec<_> = lua_diagnostics.iter().map(|d| &d.message).collect();
+	assert!(
+		messages.iter().all(|m| !m.contains("helper")),
+		"{messages:?}"
+	);
+	assert!(
+		messages.iter().any(|m| m.contains("missing")),
+		"{messages:?}"
+	);
 }

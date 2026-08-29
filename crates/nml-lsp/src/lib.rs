@@ -208,6 +208,17 @@ struct Analysis {
 	language: Option<Arc<Language>>,
 	/// The names the Lua of each imported module exports, by module file.
 	module_exports: std::collections::BTreeMap<String, Vec<String>>,
+	/// The includer it was analysed in, for an included file.
+	context: Option<IncludeContext>,
+}
+
+/// An includer an included file is analysed in.
+struct IncludeContext {
+	url: Url,
+	/// Its path in the workspace.
+	path: String,
+	tree: Vec<nml_grammar::Node>,
+	module_exports: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 impl Server {
@@ -469,12 +480,13 @@ impl Server {
 
 		// An included file is analysed as part of an includer: it sees its grammar and
 		// context, and its diagnostics are those of that includer, in this file.
+		let mut include_context = None;
 		if let Some(includer) = self.include_context(&path)
 			&& let Some(includer_source) = self.file(&includer)
 		{
 			let context = nml_lang::compile(
 				&self.language,
-				includer_source,
+				includer_source.clone(),
 				&includer,
 				Arc::new(resolver),
 			);
@@ -483,6 +495,12 @@ impl Server {
 				compiled.language = Some(language.clone());
 			}
 			compiled.diagnostics = context.diagnostics;
+			include_context = Some(IncludeContext {
+				url: includer_source.location().clone(),
+				path: includer,
+				tree: context.tree,
+				module_exports: context.module_exports,
+			});
 		}
 		let basename = path.rsplit('/').next().unwrap_or(&path);
 		let key = compiled.unit.reference_key.clone().unwrap_or_else(|| {
@@ -503,6 +521,7 @@ impl Server {
 				diagnostics: compiled.diagnostics.clone(),
 				language: compiled.language.clone(),
 				module_exports: compiled.module_exports.clone(),
+				context: include_context,
 			},
 		);
 
