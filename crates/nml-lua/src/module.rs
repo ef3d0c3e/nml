@@ -138,10 +138,16 @@ fn run(lower: &mut Lower<'_, '_>, path: &str, source: Arc<Source>, token: &Token
 
 	// The exports are what the module defined, without the fallback to the globals.
 	let exports = lua.create_table().ok()?;
+	let mut names = Vec::new();
 	for pair in env.pairs::<mlua::Value, mlua::Value>() {
 		let (key, value) = pair.ok()?;
+		if let mlua::Value::String(name) = &key {
+			names.push(name.to_string_lossy());
+		}
 		exports.raw_set(key, value).ok()?;
 	}
+	names.sort();
+	lower.module_exports.insert(path.to_string(), names);
 	Some(exports)
 }
 
@@ -169,6 +175,16 @@ mod tests {
 		let body = html(&compiled);
 		assert!(body.contains("<p>Hello, NML 2 true</p>"), "{body}");
 		assert!(!body.contains("Content is not imported"), "{body}");
+	}
+
+	#[test]
+	fn exported_names_are_recorded() {
+		let compiled = compile_with(":import std.util\n\nA\n", &[util()]);
+		assert_diagnostics!(compiled.diagnostics, []);
+		assert_eq!(
+			compiled.module_exports["modules/std/util.nml"],
+			["greet", "version"]
+		);
 	}
 
 	#[test]
