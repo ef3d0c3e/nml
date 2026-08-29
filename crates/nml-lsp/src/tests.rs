@@ -1239,3 +1239,114 @@ fn missing_luals_is_reported() {
 	let message = client.shown_message();
 	assert!(message.contains("did not start"), "{message}");
 }
+
+#[test]
+fn luals_references_renames_and_symbols() {
+	let Some(luals) = luals_path() else {
+		eprintln!("skipped: LuaLS not found (set NML_LUALS)");
+		return;
+	};
+	let workspace = Workspace::new(
+		"luals-more",
+		&[
+			("nml.toml", "[[module]]\nname = \"lib\"\nroot = \"lib\"\n"),
+			(
+				"lib/util.nml",
+				":lua\n```\nfunction greet() return 'hi' end\n```\n",
+			),
+		],
+	);
+	let client = Client::start_with(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": luals.to_string_lossy() }),
+	);
+	let page = workspace.url("a.nml");
+	let text = ":import lib.util\n\n:lua\n```\nlocal count = 1\nfunction bump() count = count + 1 end\n```\n\n:lua`bump()` :lua`bump()` :lua`util.greet()`\n";
+	client.open(&page, text);
+	client.diagnostics();
+	let starts = |result: &serde_json::Value, key: &str| -> Vec<lsp_types::Position> {
+		let mut starts: Vec<_> = (result.as_array().unwrap().iter())
+			.map(|item| serde_json::from_value(item[key]["start"].clone()).unwrap())
+			.collect();
+		starts.sort();
+		starts
+	};
+
+	// The first request waits for LuaLS to load the workspace.
+	let references = |line, character| {
+		let params = lsp_types::ReferenceParams {
+			text_document_position: at(&page, line, character),
+			work_done_progress_params: Default::default(),
+			partial_result_params: Default::default(),
+			context: lsp_types::ReferenceContext {
+				include_declaration: true,
+			},
+		};
+		client.request(References::METHOD, serde_json::to_value(params).unwrap())
+	};
+	let result = references(5, 10);
+	for location in result.as_array().unwrap() {
+		assert_eq!(location["uri"].as_str(), Some(page.as_str()));
+	}
+	assert_eq!(
+		starts(&result, "range"),
+		[position(5, 9), position(8, 5), position(8, 18)]
+	);
+
+	let params = lsp_types::DocumentHighlightParams {
+		text_document_position_params: at(&page, 4, 7),
+		work_done_progress_params: Default::default(),
+		partial_result_params: Default::default(),
+	};
+	let result = client.request(
+		DocumentHighlightRequest::METHOD,
+		serde_json::to_value(params).unwrap(),
+	);
+	assert_eq!(
+		starts(&result, "range"),
+		[position(4, 6), position(5, 16), position(5, 24)]
+	);
+
+	let rename = |line, character| {
+		let params = lsp_types::RenameParams {
+			text_document_position: at(&page, line, character),
+			new_name: "step".into(),
+			work_done_progress_params: Default::default(),
+		};
+		let request = Request::new(
+			RequestId::from(1),
+			Rename::METHOD.into(),
+			serde_json::to_value(params).unwrap(),
+		);
+		client.connection.sender.send(request.into()).unwrap();
+		let response = client
+			.next(|message| matches!(message, Message::Response(r) if r.id == RequestId::from(1)));
+		let Message::Response(response) = response else {
+			unreachable!()
+		};
+		response.response_result
+	};
+	let result = rename(5, 10).unwrap();
+	let edits = &result["changes"][page.as_str()];
+	assert_eq!(
+		starts(edits, "range"),
+		[position(5, 9), position(8, 5), position(8, 18)]
+	);
+	// `greet` is the module's: it is not renamed here alone.
+	let error = rename(8, 36).unwrap_err();
+	assert!(error.message.contains("outside"), "{}", error.message);
+
+	let params = lsp_types::DocumentSymbolParams {
+		text_document: TextDocumentIdentifier::new(uri(&page)),
+		work_done_progress_params: Default::default(),
+		partial_result_params: Default::default(),
+	};
+	let result = client.request(
+		DocumentSymbolRequest::METHOD,
+		serde_json::to_value(params).unwrap(),
+	);
+	let names: Vec<_> = (result.as_array().unwrap().iter())
+		.map(|symbol| symbol["name"].as_str().unwrap())
+		.collect();
+	assert_eq!(names, ["count", "bump"], "{result}");
+}

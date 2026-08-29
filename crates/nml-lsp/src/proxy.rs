@@ -1,5 +1,7 @@
 //! Forwarding what concerns a document's Lua to LuaLS, with positions translated both ways.
 
+use std::collections::HashMap;
+
 use lsp_server::Message;
 use lsp_server::Notification;
 use lsp_server::Request;
@@ -20,7 +22,13 @@ const FORWARDED: &[&str] = &[
 	"textDocument/completion",
 	"textDocument/definition",
 	"textDocument/signatureHelp",
+	"textDocument/references",
+	"textDocument/documentHighlight",
+	"textDocument/rename",
 ];
+
+/// The requests about a whole document, forwarded when it has Lua.
+const FORWARDED_DOCUMENT: &[&str] = &["textDocument/documentSymbol"];
 
 fn range(value: &Value) -> Option<Range> {
 	serde_json::from_value(value.clone()).ok()
@@ -50,11 +58,62 @@ pub(crate) struct Forwarded {
 	document: LuaDocument,
 }
 
-/// A result of LuaLS, mapped from the virtual document to the `.nml` document. What is not in
-/// the document's own code is dropped.
-fn map_result(forwarded: &Forwarded, mut result: Value) -> Value {
-	let (url, document) = (&forwarded.url, &forwarded.document);
-	let virtual_url = luals::virtual_url(url);
+/// The virtual documents results may be in: the one a request was made in, as it was
+/// then, and the other open documents'.
+struct Documents<'a> {
+	forwarded: &'a Forwarded,
+	open: &'a HashMap<Url, LuaDocument>,
+}
+
+impl Documents<'_> {
+	/// The `.nml` document of a virtual document, and its Lua.
+	fn get(&self, uri: &str) -> Option<(Url, &LuaDocument)> {
+		let url = luals::document_url(&Url::parse(uri).ok()?)?;
+		if url == self.forwarded.url {
+			return Some((url, &self.forwarded.document));
+		}
+		let document = self.open.get(&url)?;
+		Some((url, document))
+	}
+
+	/// Maps a location (`uri_key` and its `range_keys`) to its `.nml` document. `false` if
+	/// it is in a virtual document but not in a document's own code; locations elsewhere
+	/// (the declarations of the API) are kept as they are.
+	fn map_location(&self, location: &mut Value, uri_key: &str, range_keys: &[&str]) -> bool {
+		let Some((url, document)) = location[uri_key].as_str().and_then(|uri| self.get(uri)) else {
+			return true;
+		};
+		location[uri_key] = Value::from(url.as_str());
+		range_keys
+			.iter()
+			.all(|key| map_range(location, key, document))
+	}
+}
+
+/// Maps the ranges of document symbols to the document, recursively. Symbols outside its
+/// own code are dropped, with their children.
+fn map_symbols(symbols: &mut Vec<Value>, document: &LuaDocument) {
+	symbols.retain_mut(|symbol| {
+		if symbol.get("location").is_some() {
+			// A `SymbolInformation`: its location is in the virtual document.
+			let location = &mut symbol["location"];
+			return map_range(location, "range", document);
+		}
+		if !map_range(symbol, "range", document) || !map_range(symbol, "selectionRange", document) {
+			return false;
+		}
+		if let Some(children) = symbol.get_mut("children").and_then(Value::as_array_mut) {
+			map_symbols(children, document);
+		}
+		true
+	});
+}
+
+/// A result of LuaLS, mapped from virtual documents to `.nml` documents. What is not in a
+/// document's own code is dropped; a rename that would change other code fails.
+fn map_result(documents: &Documents<'_>, mut result: Value) -> std::result::Result<Value, String> {
+	let forwarded = documents.forwarded;
+	let document = &forwarded.document;
 	match forwarded.method.as_str() {
 		"textDocument/hover" => {
 			if result.is_object() && !map_range(&mut result, "range", document) {
@@ -84,31 +143,66 @@ fn map_result(forwarded: &Forwarded, mut result: Value) -> Value {
 				}
 			}
 		}
-		"textDocument/definition" => {
+		"textDocument/definition" | "textDocument/references" => {
 			let mut locations = match result {
 				Value::Array(locations) => locations,
 				Value::Null => Vec::new(),
 				location => vec![location],
 			};
 			locations.retain_mut(|location| {
-				let in_document = |key: &str| location[key].as_str() == Some(virtual_url.as_str());
-				if in_document("uri") {
-					location["uri"] = Value::from(url.as_str());
-					map_range(location, "range", document)
-				} else if in_document("targetUri") {
-					location["targetUri"] = Value::from(url.as_str());
-					map_range(location, "targetRange", document)
-						&& map_range(location, "targetSelectionRange", document)
+				if location.get("targetUri").is_some() {
+					documents.map_location(
+						location,
+						"targetUri",
+						&["targetRange", "targetSelectionRange"],
+					)
 				} else {
-					// Elsewhere: the declarations of the API, or other Lua.
-					true
+					documents.map_location(location, "uri", &["range"])
 				}
 			});
 			result = Value::Array(locations);
 		}
+		"textDocument/documentHighlight" => {
+			if let Some(highlights) = result.as_array_mut() {
+				highlights.retain_mut(|highlight| map_range(highlight, "range", document));
+			}
+		}
+		"textDocument/documentSymbol" => {
+			if let Some(symbols) = result.as_array_mut() {
+				map_symbols(symbols, document);
+			}
+		}
+		"textDocument/rename" => return map_rename(documents, result),
 		_ => {}
 	}
-	result
+	Ok(result)
+}
+
+/// Maps the edits of a rename. Every edit must be in a document's own code: a name defined
+/// or used elsewhere (a module, an includer) is not renamed in part.
+fn map_rename(documents: &Documents<'_>, mut result: Value) -> std::result::Result<Value, String> {
+	let refused = || "this name is also used outside the document's own Lua".to_string();
+	if result.is_null() {
+		return Ok(result);
+	}
+	if result.get("documentChanges").is_some() {
+		return Err(refused());
+	}
+	let changes = result["changes"].as_object_mut().ok_or_else(refused)?;
+	let mut mapped = serde_json::Map::new();
+	for (uri, edits) in std::mem::take(changes) {
+		let (url, document) = documents.get(&uri).ok_or_else(refused)?;
+		let mut edits = edits.as_array().cloned().unwrap_or_default();
+		if !edits
+			.iter_mut()
+			.all(|edit| map_range(edit, "range", document))
+		{
+			return Err(refused());
+		}
+		mapped.insert(url.to_string(), Value::Array(edits));
+	}
+	*changes = mapped;
+	Ok(result)
 }
 
 impl Server {
@@ -116,7 +210,8 @@ impl Server {
 	/// answers. Whether the request was forwarded.
 	pub(crate) fn forward(&mut self, request: &Request) -> Result<bool> {
 		let (method, params) = (request.method.as_str(), &request.params);
-		if !FORWARDED.contains(&method) || self.luals.is_none() {
+		let whole = FORWARDED_DOCUMENT.contains(&method);
+		if !(whole || FORWARDED.contains(&method)) || self.luals.is_none() {
 			return Ok(false);
 		}
 		let Some(url) = params["textDocument"]["uri"]
@@ -128,16 +223,22 @@ impl Server {
 		let Some(document) = self.lua_documents.get(&url) else {
 			return Ok(false);
 		};
-		let Some(position) = serde_json::from_value(params["position"].clone()).ok() else {
-			return Ok(false);
-		};
-		let Some(lua_position) = document.to_lua(position) else {
-			return Ok(false);
-		};
-		let document = document.clone();
 		let mut params = params.clone();
+		if whole {
+			if document.fragments.is_empty() {
+				return Ok(false);
+			}
+		} else {
+			let Some(position) = serde_json::from_value(params["position"].clone()).ok() else {
+				return Ok(false);
+			};
+			let Some(lua_position) = document.to_lua(position) else {
+				return Ok(false);
+			};
+			params["position"] = serde_json::to_value(lua_position)?;
+		}
+		let document = document.clone();
 		params["textDocument"]["uri"] = Value::from(luals::virtual_url(&url).as_str());
-		params["position"] = serde_json::to_value(lua_position)?;
 		let luals = self.luals.as_mut().unwrap();
 		let Ok(lua_id) = luals.request(method, params) else {
 			return Ok(false);
@@ -159,8 +260,18 @@ impl Server {
 			return Ok(());
 		};
 		let result = response.response_result.unwrap_or(Value::Null);
-		let result = map_result(&forwarded, result);
-		let response = Response::new_ok(forwarded.id, result);
+		let documents = Documents {
+			forwarded: &forwarded,
+			open: &self.lua_documents,
+		};
+		let response = match map_result(&documents, result) {
+			Ok(result) => Response::new_ok(forwarded.id, result),
+			Err(message) => Response::new_err(
+				forwarded.id,
+				lsp_server::ErrorCode::RequestFailed as i32,
+				message,
+			),
+		};
 		self.connection.sender.send(response.into())?;
 		Ok(())
 	}

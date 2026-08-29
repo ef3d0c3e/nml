@@ -60,11 +60,14 @@ use lsp_types::notification::Notification as _;
 use lsp_types::notification::PublishDiagnostics;
 use lsp_types::request::CodeActionRequest;
 use lsp_types::request::Completion;
+use lsp_types::request::DocumentHighlightRequest;
+use lsp_types::request::DocumentSymbolRequest;
 use lsp_types::request::ExecuteCommand;
 use lsp_types::request::GotoDefinition;
 use lsp_types::request::HoverRequest;
 use lsp_types::request::InlayHintRequest;
 use lsp_types::request::References;
+use lsp_types::request::Rename;
 use lsp_types::request::Request as _;
 use lsp_types::request::SemanticTokensFullRequest;
 use lsp_types::request::SignatureHelpRequest;
@@ -133,6 +136,10 @@ pub fn run(connection: Connection) -> Result<()> {
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
 		definition_provider: Some(OneOf::Left(true)),
 		references_provider: Some(OneOf::Left(true)),
+		// For Lua, from LuaLS.
+		rename_provider: Some(OneOf::Left(true)),
+		document_highlight_provider: Some(OneOf::Left(true)),
+		document_symbol_provider: Some(OneOf::Left(true)),
 		semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
 			SemanticTokensOptions {
 				legend: semantic::legend(),
@@ -347,7 +354,11 @@ impl Server {
 
 	fn request(&mut self, request: lsp_server::Request) -> Result<serde_json::Value> {
 		match request.method.as_str() {
-			SignatureHelpRequest::METHOD => Ok(serde_json::Value::Null),
+			// Only Lua has these, from LuaLS.
+			SignatureHelpRequest::METHOD
+			| Rename::METHOD
+			| DocumentHighlightRequest::METHOD
+			| DocumentSymbolRequest::METHOD => Ok(serde_json::Value::Null),
 			SemanticTokensFullRequest::METHOD => {
 				let params: SemanticTokensParams = serde_json::from_value(request.params)?;
 				let url = Url::parse(params.text_document.uri.as_str())?;
