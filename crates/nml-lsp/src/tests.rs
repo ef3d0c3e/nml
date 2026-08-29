@@ -1140,3 +1140,102 @@ fn luals_settings_come_from_the_server() {
 	);
 	assert!(result.to_string().contains("function nml.read"), "{result}");
 }
+
+/// A stand-in for LuaLS: a shell script in the workspace.
+fn fake_luals(workspace: &Workspace, script: &str) -> PathBuf {
+	use std::os::unix::fs::PermissionsExt;
+	let path = workspace.0.join("fake-luals");
+	fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
+	fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+	path
+}
+
+impl Client {
+	/// The next message for which `matches` holds, skipping the others.
+	fn next(&self, matches: impl Fn(&Message) -> bool) -> Message {
+		loop {
+			let message = self.pending.borrow_mut().pop_front();
+			let message = message.unwrap_or_else(|| self.receive());
+			if matches(&message) {
+				return message;
+			}
+		}
+	}
+
+	/// The next message the server shows the user.
+	fn shown_message(&self) -> String {
+		let message = self.next(
+			|message| matches!(message, Message::Notification(n) if n.method == "window/showMessage"),
+		);
+		let Message::Notification(notification) = message else {
+			unreachable!()
+		};
+		notification.params["message"].as_str().unwrap().to_string()
+	}
+
+	/// Sends a hover request with `id`, without waiting for its response.
+	fn send_hover(&self, id: i32, url: &Url, line: u32, character: u32) {
+		let params = lsp_types::HoverParams {
+			text_document_position_params: at(url, line, character),
+			work_done_progress_params: Default::default(),
+		};
+		let request = Request::new(
+			RequestId::from(id),
+			HoverRequest::METHOD.into(),
+			serde_json::to_value(params).unwrap(),
+		);
+		self.connection.sender.send(request.into()).unwrap();
+	}
+}
+
+#[test]
+fn luals_requests_do_not_block() {
+	let workspace = Workspace::new("luals-silent", &[("nml.toml", "")]);
+	let luals = fake_luals(&workspace, "exec sleep 60");
+	let client = Client::start_with(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": luals.to_string_lossy() }),
+	);
+	let page = workspace.url("a.nml");
+	client.open(&page, ":lua`x = 1`\n");
+	client.diagnostics();
+	// A hover in Lua waits for LuaLS, which never answers; the server goes on meanwhile.
+	client.send_hover(2, &page, 0, 6);
+	let params = serde_json::json!({ "textDocument": { "uri": page.as_str() } });
+	let result = client.request(lua::CODE_RANGE, params);
+	assert_eq!(result.as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn luals_is_restarted_once() {
+	let workspace = Workspace::new("luals-stops", &[("nml.toml", "")]);
+	let luals = fake_luals(&workspace, "sleep 1");
+	let client = Client::start_with(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": luals.to_string_lossy() }),
+	);
+	let page = workspace.url("a.nml");
+	client.open(&page, ":lua`x = 1`\n");
+	client.diagnostics();
+	// LuaLS stops before it answers: the request gets no result.
+	client.send_hover(2, &page, 0, 6);
+	let response = client
+		.next(|message| matches!(message, Message::Response(r) if r.id == RequestId::from(2)));
+	let Message::Response(response) = response else {
+		unreachable!()
+	};
+	assert_eq!(response.response_result.unwrap(), serde_json::Value::Null);
+	// It is started again once; the second time, the user is told.
+	assert!(client.shown_message().starts_with("LuaLS stopped"));
+}
+
+#[test]
+fn missing_luals_is_reported() {
+	let workspace = Workspace::new("luals-missing", &[("nml.toml", "")]);
+	let client = Client::start_with(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": "/nonexistent/lua-language-server" }),
+	);
+	let message = client.shown_message();
+	assert!(message.contains("did not start"), "{message}");
+}

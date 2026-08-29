@@ -185,6 +185,12 @@ struct Server {
 	/// The includer chosen for an included file, by workspace path.
 	contexts: HashMap<String, String>,
 	luals: Option<luals::LuaLs>,
+	/// The LuaLS program, if there is one.
+	luals_program: Option<PathBuf>,
+	/// Whether LuaLS was started again after it stopped.
+	luals_restarted: bool,
+	/// The requests forwarded to LuaLS, by the id LuaLS has for them.
+	forwarded: HashMap<lsp_server::RequestId, proxy::Forwarded>,
 	/// The virtual Lua document of each open document.
 	lua_documents: HashMap<Url, lua::LuaDocument>,
 	/// The diagnostics published for each document, NML's and LuaLS's.
@@ -224,17 +230,13 @@ struct IncludeContext {
 impl Server {
 	fn new(connection: Connection, root: Option<PathBuf>, luals: Option<PathBuf>) -> Self {
 		let root = root.and_then(|root| root.canonicalize().ok());
-		// LuaLS is optional: without it, Lua in documents gets NML's diagnostics only.
-		let luals = luals
-			.zip(root.as_deref())
-			.and_then(|(program, root)| luals::LuaLs::start(&program, root).ok());
 		let config = root.as_deref().and_then(|root| {
 			let path = root.join(CONFIG_FILE);
 			let content = std::fs::read_to_string(&path).ok()?;
 			let url = Url::from_file_path(&path).ok()?;
 			Config::parse(Arc::new(Source::new(url, content, 0))).ok()
 		});
-		Self {
+		let mut server = Self {
 			connection,
 			root,
 			config,
@@ -244,11 +246,58 @@ impl Server {
 			built: BTreeSet::new(),
 			analyses: HashMap::new(),
 			contexts: HashMap::new(),
-			luals,
+			luals: None,
+			luals_program: luals,
+			luals_restarted: false,
+			forwarded: HashMap::new(),
 			lua_documents: HashMap::new(),
 			nml_diagnostics: HashMap::new(),
 			lua_diagnostics: HashMap::new(),
+		};
+		server.start_luals();
+		server
+	}
+
+	/// Starts LuaLS, if there is one and a workspace. Without it, Lua in documents gets
+	/// NML's diagnostics only. The client is told if it fails to start.
+	fn start_luals(&mut self) {
+		let (Some(program), Some(root)) = (&self.luals_program, &self.root) else {
+			return;
+		};
+		match luals::LuaLs::start(program, root) {
+			Ok(luals) => self.luals = Some(luals),
+			Err(error) => {
+				let message = format!("LuaLS ({}) did not start: {error}", program.display());
+				self.show_message(lsp_types::MessageType::WARNING, message);
+			}
 		}
+	}
+
+	/// LuaLS stopped: the requests it had are answered with no result, and it is started
+	/// again with the open documents, once. The client is told if it stops again.
+	fn luals_stopped(&mut self) -> Result<()> {
+		self.luals = None;
+		self.drop_forwarded()?;
+		self.lua_diagnostics.clear();
+		if self.luals_restarted {
+			let message = "LuaLS stopped: Lua in documents gets NML's diagnostics only".into();
+			self.show_message(lsp_types::MessageType::WARNING, message);
+			return Ok(());
+		}
+		self.luals_restarted = true;
+		self.start_luals();
+		if let Some(luals) = &mut self.luals {
+			for (url, document) in &self.lua_documents {
+				let _ = luals.sync(url, &document.content);
+			}
+		}
+		Ok(())
+	}
+
+	fn show_message(&self, typ: lsp_types::MessageType, message: String) {
+		let params = lsp_types::ShowMessageParams { typ, message };
+		let notification = Notification::new("window/showMessage".into(), params);
+		let _ = self.connection.sender.send(notification.into());
 	}
 
 	fn run(&mut self) -> Result<()> {
@@ -265,8 +314,7 @@ impl Server {
 				recv(lua) -> message => {
 					match message {
 						Ok(message) => self.lua_message(message)?,
-						// LuaLS stopped: go on without it.
-						Err(_) => self.luals = None,
+						Err(_) => self.luals_stopped()?,
 					}
 					continue;
 				}
@@ -275,6 +323,10 @@ impl Server {
 				Message::Request(request) => {
 					if self.connection.handle_shutdown(&request)? {
 						return Ok(());
+					}
+					// Answered when LuaLS answers.
+					if self.forward(&request)? {
+						continue;
 					}
 					let id = request.id.clone();
 					let response = match self.request(request) {
@@ -294,9 +346,6 @@ impl Server {
 	}
 
 	fn request(&mut self, request: lsp_server::Request) -> Result<serde_json::Value> {
-		if let Some(result) = self.forward(&request.method, &request.params)? {
-			return Ok(result);
-		}
 		match request.method.as_str() {
 			SignatureHelpRequest::METHOD => Ok(serde_json::Value::Null),
 			SemanticTokensFullRequest::METHOD => {
@@ -420,8 +469,9 @@ impl Server {
 				self.analyses.remove(&url);
 				self.lua_documents.remove(&url);
 				self.lua_diagnostics.remove(&url);
+				// A LuaLS that stopped is noticed through its messages.
 				if let Some(luals) = &mut self.luals {
-					luals.close(&url)?;
+					let _ = luals.close(&url);
 				}
 			}
 			DidSaveTextDocument::METHOD => self.build()?,
@@ -528,7 +578,7 @@ impl Server {
 		// The Lua of the document, for LuaLS.
 		let lua = self.lua_document_of(url);
 		if let Some(luals) = &mut self.luals {
-			luals.sync(url, &lua.content)?;
+			let _ = luals.sync(url, &lua.content);
 		}
 		self.lua_documents.insert(url.clone(), lua);
 

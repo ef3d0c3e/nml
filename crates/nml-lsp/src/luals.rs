@@ -22,9 +22,6 @@ use lsp_server::Response;
 use nml_source::Url;
 use serde_json::Value;
 
-/// How long a forwarded request may take.
-const TIMEOUT: Duration = Duration::from_secs(10);
-
 /// Finds LuaLS: `NML_LUALS`, then `lua-language-server` on the `PATH`.
 pub(crate) fn find() -> Option<PathBuf> {
 	if let Some(path) = std::env::var_os("NML_LUALS") {
@@ -46,17 +43,20 @@ pub(crate) fn document_url(virtual_url: &Url) -> Option<Url> {
 	Url::parse(virtual_url.as_str().strip_suffix(".lua")?).ok()
 }
 
-/// A running LuaLS.
+/// A running LuaLS. Messages for it wait until it is initialized; requests do not wait for
+/// their response, which comes through `receiver`.
 pub(crate) struct LuaLs {
 	child: Child,
 	stdin: BufWriter<ChildStdin>,
-	/// Messages from LuaLS, read by a thread.
+	/// Messages from LuaLS, read by a thread. It disconnects when LuaLS stops.
 	pub receiver: Receiver<Message>,
 	next_id: i32,
 	/// The version of each virtual document LuaLS has, by `.nml` document.
 	versions: HashMap<Url, i32>,
-	/// Notifications received while waiting for a response.
-	pending: Vec<Notification>,
+	/// The `initialize` request, until LuaLS answers it.
+	initializing: Option<RequestId>,
+	/// Messages sent before LuaLS was initialized.
+	queue: Vec<Message>,
 	/// The settings LuaLS is given.
 	settings: Value,
 }
@@ -68,8 +68,8 @@ impl std::fmt::Debug for LuaLs {
 }
 
 impl LuaLs {
-	/// Starts LuaLS for the workspace at `root` and initializes it. The declarations of the
-	/// API are written first, so that LuaLS finds them current.
+	/// Starts LuaLS for the workspace at `root`, and asks it to initialize. The declarations
+	/// of the API are written first, so that LuaLS finds them current.
 	pub fn start(program: &Path, root: &Path) -> io::Result<Self> {
 		nml_lua::write_types(root)?;
 		let mut child = Command::new(program)
@@ -94,7 +94,8 @@ impl LuaLs {
 			receiver,
 			next_id: 0,
 			versions: HashMap::new(),
-			pending: Vec::new(),
+			initializing: None,
+			queue: Vec::new(),
 			settings: settings(root),
 		};
 		let root_url = Url::from_directory_path(root).map_err(|()| io::ErrorKind::InvalidInput)?;
@@ -112,14 +113,23 @@ impl LuaLs {
 				"workspace": { "configuration": true, "workspaceFolders": true },
 			},
 		});
-		luals
-			.request("initialize", params)
-			.ok_or(io::ErrorKind::TimedOut)?;
-		luals.notify("initialized", serde_json::json!({}))?;
+		let id = luals.next_id();
+		Message::from(Request::new(id.clone(), "initialize".into(), params))
+			.write(&mut luals.stdin)?;
+		luals.initializing = Some(id);
 		Ok(luals)
 	}
 
+	fn next_id(&mut self) -> RequestId {
+		self.next_id += 1;
+		RequestId::from(self.next_id)
+	}
+
 	fn send(&mut self, message: Message) -> io::Result<()> {
+		if self.initializing.is_some() {
+			self.queue.push(message);
+			return Ok(());
+		}
 		message.write(&mut self.stdin)
 	}
 
@@ -127,23 +137,25 @@ impl LuaLs {
 		self.send(Notification::new(method.into(), params).into())
 	}
 
-	/// Sends a request and waits for its result. Requests from LuaLS are answered and its
-	/// notifications kept meanwhile.
-	pub fn request(&mut self, method: &str, params: Value) -> Option<Value> {
-		self.next_id += 1;
-		let id = RequestId::from(self.next_id);
-		self.send(Request::new(id.clone(), method.into(), params).into())
-			.ok()?;
-		loop {
-			match self.receiver.recv_timeout(TIMEOUT).ok()? {
-				Message::Response(response) if response.id == id => {
-					return response.response_result.ok();
-				}
-				Message::Response(_) => {}
-				Message::Request(request) => self.answer(request),
-				Message::Notification(notification) => self.pending.push(notification),
-			}
+	/// Sends a request, and returns its id: its response comes through `receiver`.
+	pub fn request(&mut self, method: &str, params: Value) -> io::Result<RequestId> {
+		let id = self.next_id();
+		self.send(Request::new(id.clone(), method.into(), params).into())?;
+		Ok(id)
+	}
+
+	/// Handles the response to `initialize`: LuaLS is told it is initialized, and gets the
+	/// messages that waited. Other responses are returned.
+	pub fn initialized(&mut self, response: Response) -> io::Result<Option<Response>> {
+		if self.initializing.as_ref() != Some(&response.id) {
+			return Ok(Some(response));
 		}
+		self.initializing = None;
+		self.notify("initialized", serde_json::json!({}))?;
+		for message in std::mem::take(&mut self.queue) {
+			message.write(&mut self.stdin)?;
+		}
+		Ok(None)
 	}
 
 	/// Answers a request from LuaLS: the `Lua` settings are NML's (a `.luarc.json` takes
@@ -163,12 +175,8 @@ impl LuaLs {
 			}
 			_ => Value::Null,
 		};
-		let _ = self.send(Response::new_ok(request.id, result).into());
-	}
-
-	/// The notifications kept while waiting for responses.
-	pub fn take_pending(&mut self) -> Vec<Notification> {
-		std::mem::take(&mut self.pending)
+		// Answers go out even before LuaLS is initialized: it may ask during `initialize`.
+		let _ = Message::from(Response::new_ok(request.id, result)).write(&mut self.stdin);
 	}
 
 	/// Gives LuaLS the current virtual Lua document of a `.nml` document.
@@ -207,6 +215,23 @@ impl LuaLs {
 		}
 		Ok(())
 	}
+
+	/// Asks LuaLS to shut down and waits a moment for its answer.
+	fn shutdown(&mut self) {
+		if self.initializing.is_some() {
+			return;
+		}
+		let Ok(id) = self.request("shutdown", Value::Null) else {
+			return;
+		};
+		while let Ok(message) = self.receiver.recv_timeout(Duration::from_secs(2)) {
+			if let Message::Response(response) = message
+				&& response.id == id
+			{
+				break;
+			}
+		}
+	}
 }
 
 /// The `Lua` settings of LuaLS: Lua 5.4 without what the sandbox leaves out, and the
@@ -224,7 +249,7 @@ fn settings(root: &Path) -> Value {
 
 impl Drop for LuaLs {
 	fn drop(&mut self) {
-		let _ = self.request("shutdown", Value::Null);
+		self.shutdown();
 		let _ = self.notify("exit", Value::Null);
 		// LuaLS gets a moment to exit, then is stopped.
 		for _ in 0..20 {
