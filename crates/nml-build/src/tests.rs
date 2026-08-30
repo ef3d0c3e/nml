@@ -175,6 +175,47 @@ fn relinks_only_what_changed() {
 }
 
 #[test]
+fn relinks_when_urls_change() {
+	let workspace = Workspace::new(
+		"urls",
+		&[
+			("nml.toml", ""),
+			("a.nml", "# A\n[[#sec]]\n"),
+			("b.nml", "# B\n## S {#sec}\n"),
+			("c.nml", "# C\n"),
+		],
+	);
+	workspace.build();
+	assert!(workspace.output("a.html").contains("href=\"b.html#sec\""));
+
+	// The symbol moves to another page: `a` is relinked, not parsed.
+	workspace.write("b.nml", "# B\n");
+	workspace.write("c.nml", "# C\n## S {#sec}\n");
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["b.nml", "c.nml"]);
+	assert_eq!(report.written, ["a.nml", "b.nml", "c.nml"]);
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(workspace.output("a.html").contains("href=\"c.html#sec\""));
+
+	// Its page moves: only the URL changes, and `a` is relinked.
+	workspace.write("c.nml", ":set nml.output = x/c.html\n\n# C\n## S {#sec}\n");
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["c.nml"]);
+	assert_eq!(report.written, ["a.nml", "c.nml"]);
+	assert!(workspace.output("a.html").contains("href=\"x/c.html#sec\""));
+
+	// The using page moves: its URLs are relative to where it is written.
+	workspace.write("a.nml", ":set nml.output = y/a.html\n\n# A\n[[#sec]]\n");
+	let report = workspace.build();
+	assert_eq!(report.written, ["a.nml"]);
+	assert!(
+		workspace
+			.output("y/a.html")
+			.contains("href=\"../x/c.html#sec\"")
+	);
+}
+
+#[test]
 fn unit_identity_changes() {
 	let workspace = Workspace::new(
 		"identity",
