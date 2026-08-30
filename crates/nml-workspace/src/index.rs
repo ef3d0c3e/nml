@@ -458,22 +458,44 @@ impl Index {
 
 	/// Every file read by scripts: (unit path, file path, hash when read).
 	pub fn file_dependencies(&self) -> Result<Vec<(String, String, String)>> {
+		let dependencies = self.dependencies_of_kind("file")?;
+		Ok(dependencies
+			.into_iter()
+			.filter_map(|(unit, dependency)| match dependency {
+				Dependency::File { path, hash } => Some((unit, path, hash)),
+				_ => None,
+			})
+			.collect())
+	}
+
+	/// Every environment variable read by scripts: (unit path, variable, hash when read).
+	pub fn env_dependencies(&self) -> Result<Vec<(String, String, String)>> {
+		let dependencies = self.dependencies_of_kind("env")?;
+		Ok(dependencies
+			.into_iter()
+			.filter_map(|(unit, dependency)| match dependency {
+				Dependency::Env { name, hash } => Some((unit, name, hash)),
+				_ => None,
+			})
+			.collect())
+	}
+
+	/// The dependencies of a kind, with the path of the unit that has each.
+	fn dependencies_of_kind(&self, kind: &str) -> Result<Vec<(String, Dependency)>> {
 		let mut statement = self.connection.prepare(
 			"SELECT units.path, dependencies.value FROM dependencies
 			JOIN units ON units.id = dependencies.unit
-			WHERE dependencies.kind = 'file' ORDER BY units.path",
+			WHERE dependencies.kind = ?1 ORDER BY units.path",
 		)?;
-		let rows = statement.query_map([], |row| {
+		let rows = statement.query_map([kind], |row| {
 			Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
 		})?;
-		let mut files = Vec::new();
+		let mut dependencies = Vec::new();
 		for row in rows {
 			let (unit, value) = row?;
-			if let Dependency::File { path, hash } = dependency("file", &value)? {
-				files.push((unit, path, hash));
-			}
+			dependencies.push((unit, dependency(kind, &value)?));
 		}
-		Ok(files)
+		Ok(dependencies)
 	}
 
 	/// The paths of the units that have this parse-time dependency.
@@ -940,6 +962,11 @@ fn encode_dependency(dependency: &Dependency) -> (&'static str, String) {
 			"query",
 			serde_json::json!({ "query": query, "fingerprint": *fingerprint as i64 }).to_string(),
 		),
+		Dependency::Env { name, hash } => (
+			"env",
+			serde_json::json!({ "name": name, "hash": hash }).to_string(),
+		),
+		Dependency::Clock => ("clock", String::new()),
 		_ => unreachable!("dependency kinds are listed here"),
 	}
 }
@@ -978,6 +1005,20 @@ fn dependency(kind: &str, value: &str) -> Result<Dependency> {
 					as u64,
 			}
 		}
+		"env" => {
+			let map = object(value)?;
+			let text = |key: &str| {
+				map.get(key)
+					.and_then(Json::as_str)
+					.map(String::from)
+					.ok_or_else(|| corrupt(format!("environment dependency without `{key}`")))
+			};
+			Dependency::Env {
+				name: text("name")?,
+				hash: text("hash")?,
+			}
+		}
+		"clock" => Dependency::Clock,
 		_ => return Err(corrupt(format!("unknown dependency kind `{kind}`"))),
 	})
 }
@@ -1240,6 +1281,11 @@ mod tests {
 				query: "pages".into(),
 				fingerprint: u64::MAX - 1,
 			},
+			Dependency::Env {
+				name: "SITE".into(),
+				hash: String::new(),
+			},
+			Dependency::Clock,
 		];
 		let template = template();
 		index
@@ -1364,7 +1410,7 @@ mod tests {
 		assert_eq!(record.name, "a");
 		assert_eq!(record.title, "A");
 		let dependencies = index.dependencies(id).unwrap();
-		assert_eq!(dependencies.len(), 6);
+		assert_eq!(dependencies.len(), 8);
 		assert_eq!(
 			index.file_dependencies().unwrap(),
 			[(
@@ -1379,6 +1425,15 @@ mod tests {
 				query: "pages".into(),
 				fingerprint: u64::MAX - 1
 			}
+		);
+		assert_eq!(
+			index.env_dependencies().unwrap(),
+			[("docs/a.nml".to_string(), "SITE".to_string(), String::new())]
+		);
+		assert_eq!(dependencies[7], Dependency::Clock);
+		assert_eq!(
+			index.dependents(&Dependency::Clock).unwrap(),
+			["docs/a.nml"]
 		);
 		assert_eq!(index.template(id).unwrap(), Some(template()));
 		assert_eq!(index.units_with_deferred_slots().unwrap(), ["docs/a.nml"]);
