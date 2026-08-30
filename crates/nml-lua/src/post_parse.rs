@@ -59,7 +59,7 @@ pub(crate) fn fill(lower: &mut Lower<'_, '_>) {
 		let markup = function
 			.call(())
 			.and_then(crate::elements::nodes)
-			.and_then(|elements| crate::elements::html(&elements));
+			.and_then(|elements| crate::elements::html(&elements, Some(lower)));
 		match markup {
 			Ok(markup) => lower.builder.fill_slot(slot, Slot::Markup(markup)),
 			Err(error) => {

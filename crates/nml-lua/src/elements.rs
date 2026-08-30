@@ -9,6 +9,9 @@ use mlua::Table;
 use mlua::UserData;
 use mlua::UserDataFields;
 use mlua::Value;
+use nml_diagnostics::Diagnostic;
+use nml_diagnostics::DiagnosticKind;
+use nml_diagnostics::DiagnosticMessage;
 use nml_document::Attributes;
 use nml_document::BulletStyle;
 use nml_document::CalloutKind;
@@ -19,6 +22,7 @@ use nml_document::LayoutKind;
 use nml_document::ListKind;
 use nml_document::MediaKind;
 use nml_document::NumberStyle;
+use nml_document::Scope;
 use nml_document::Style;
 use nml_document::SymbolRef;
 use nml_lang::Lower;
@@ -41,6 +45,12 @@ enum Content {
 	Element(ElementKind),
 	/// A reference, whose link slots are made when it is written into a document.
 	Reference(SymbolRef),
+	/// A figure, numbered when it is written into a document. Its caption is written after
+	/// its body.
+	Figure {
+		reference: Option<String>,
+		caption: Vec<Element>,
+	},
 }
 
 impl UserData for Element {
@@ -49,6 +59,7 @@ impl UserData for Element {
 			Ok(match &element.content {
 				Content::Element(kind) => kind.name(),
 				Content::Reference(_) => "reference",
+				Content::Figure { .. } => "figure",
 			})
 		});
 	}
@@ -80,6 +91,7 @@ const KINDS: &[(&str, &str)] = &[
 	("code", "code"),
 	("code_block", "code, language, line_offset, numbers"),
 	("media", "url, type, alt, width"),
+	("figure", "caption, ref"),
 	("list", "numbered, start, bullet"),
 	("list_item", "checkbox, value"),
 	("quote", "author, cite, url"),
@@ -99,7 +111,8 @@ const KINDS: &[(&str, &str)] = &[
 /// | `reference` | `target` (`name`, `doc#name`, `doc#`, `#name`); children are the caption |
 /// | `code` | `code` |
 /// | `code_block` | `code`, `language`, `line_offset`, `numbers`; children are the title |
-/// | `media` | `url`, `type` (`image`, `video`, `audio`), `alt`, `width` |
+/// | `media` | `url` (a path in the workspace, copied with the page, or an external URL), `type` (`image`, `video`, `audio`), `alt`, `width` |
+/// | `figure` | `caption`, `ref` (its reference name, and its id); children are the body. Numbered with the unit's other figures |
 /// | `list` | `numbered`, `start`, `bullet` (`1`, `a`, `A`, `i`, `I` if numbered; `disc`, `circle`, `square`, `none` if not); children that are not items become items |
 /// | `list_item` | `checkbox` (`unchecked`, `partial`, `checked`), `value` (its number) |
 /// | `quote` | `author`, `cite`, `url` |
@@ -107,8 +120,9 @@ const KINDS: &[(&str, &str)] = &[
 /// | `layout` | `type` (`centered`, `split`, `spoiler`), `title`; each child is a part |
 /// | `raw` | `content` (HTML, written as is), `block` |
 ///
-/// Every kind takes `id` and `classes`. References only work where the element goes into
-/// the document as it is parsed (roles and rules), not in post-parse or deferred output.
+/// Every kind takes `id` and `classes`. References and figures only work where the element
+/// goes into the document as it is parsed (roles and rules), not in post-parse or deferred
+/// output; nor do media with paths in deferred output.
 #[api(returns = "nml.Node")]
 fn element(lua: &Lua, kind: String, spec: Option<Table>) -> mlua::Result<AnyUserData> {
 	let spec = match spec {
@@ -277,6 +291,28 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 			}
 			Content::Element(ElementKind::Layout(kind))
 		}
+		"figure" => {
+			let reference = text("ref")?;
+			if let Some(name) = &reference {
+				let valid = SymbolRef::parse(name)
+					.is_some_and(|symbol| symbol.scope == Scope::Local && symbol.name == *name);
+				if !valid {
+					return Err(mlua::Error::runtime(format!(
+						"`{name}` is not a reference name"
+					)));
+				}
+				if text("id")?.is_some() {
+					return Err(mlua::Error::runtime(
+						"a figure's `ref` is its id: it cannot have an `id` too",
+					));
+				}
+			}
+			children = paragraphs(children);
+			Content::Figure {
+				reference,
+				caption: nodes(spec.get::<Value>("caption")?)?,
+			}
+		}
 		"raw" => Content::Element(ElementKind::Raw {
 			content: required("content")?,
 			block: spec.get::<Option<bool>>("block")?.unwrap_or(false),
@@ -289,8 +325,12 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 			)));
 		}
 	};
+	let id = match &content {
+		Content::Figure { reference, .. } => reference.clone(),
+		_ => text("id")?,
+	};
 	let attributes = Attributes {
-		id: text("id")?,
+		id,
 		classes: spec
 			.get::<Option<Vec<String>>>("classes")?
 			.unwrap_or_default(),
@@ -300,6 +340,35 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 		attributes,
 		children,
 	})
+}
+
+/// Blocks, with the inline elements between them gathered into paragraphs.
+fn paragraphs(elements: Vec<Element>) -> Vec<Element> {
+	let mut blocks = Vec::new();
+	let mut inline = Vec::new();
+	let flush = |inline: &mut Vec<Element>, blocks: &mut Vec<Element>| {
+		if !inline.is_empty() {
+			blocks.push(Element {
+				children: std::mem::take(inline),
+				..leaf(ElementKind::Paragraph)
+			});
+		}
+	};
+	for element in elements {
+		let block = match &element.content {
+			Content::Element(kind) => kind.is_block(),
+			Content::Reference(_) => false,
+			Content::Figure { .. } => true,
+		};
+		if block {
+			flush(&mut inline, &mut blocks);
+			blocks.push(element);
+		} else {
+			inline.push(element);
+		}
+	}
+	flush(&mut inline, &mut blocks);
+	blocks
 }
 
 fn leaf(kind: ElementKind) -> Element {
@@ -365,35 +434,137 @@ pub(crate) fn number_text(n: f64) -> String {
 /// Writes elements into the document being lowered, at `token`.
 pub(crate) fn lower(lower: &mut Lower<'_, '_>, elements: &[Element], token: &Token) {
 	for element in elements {
-		open(lower, element, token);
-		lower.builder.close();
+		let opened = open(lower, element, token);
+		close(lower, opened, token);
 	}
 }
 
+/// What closing an element opened with [`open`] still has to do.
+pub(crate) struct Opened<'e> {
+	figure: Option<OpenFigure<'e>>,
+}
+
+struct OpenFigure<'e> {
+	number: u32,
+	reference: Option<&'e str>,
+	caption: &'e [Element],
+	/// The number of the unit's assets when the figure was opened: the first one after is
+	/// the medium it shows.
+	assets: usize,
+}
+
 /// Opens an element in the document being lowered, and writes its children. The caller
-/// closes it.
-pub(crate) fn open(lower: &mut Lower<'_, '_>, element: &Element, token: &Token) {
+/// closes it with [`close`].
+pub(crate) fn open<'e>(
+	lower: &mut Lower<'_, '_>,
+	element: &'e Element,
+	token: &Token,
+) -> Opened<'e> {
+	let mut figure = None;
 	match &element.content {
+		Content::Element(ElementKind::Media {
+			kind,
+			url,
+			alt,
+			width,
+		}) => {
+			let url = match nml_lang::media_url(lower, url) {
+				Ok(url) => url,
+				Err(_) => {
+					let kind = DiagnosticKind::FileNotFound { path: url.clone() };
+					let message = DiagnosticMessage::new(token.clone());
+					lower.diagnostics.push(Diagnostic::new(kind, message));
+					url.clone()
+				}
+			};
+			let kind = ElementKind::Media {
+				kind: *kind,
+				url,
+				alt: alt.clone(),
+				width: width.clone(),
+			};
+			lower
+				.builder
+				.open_with(kind, token.clone(), element.attributes.clone());
+		}
 		Content::Element(kind) => {
 			lower
 				.builder
 				.open_with(kind.clone(), token.clone(), element.attributes.clone());
-			self::lower(lower, &element.children, token);
 		}
 		Content::Reference(target) => {
 			lower.open_reference(target.clone(), token.clone(), token.clone());
 			if element.children.is_empty() {
 				lower.reference_title(target.clone(), token.clone());
-			} else {
-				self::lower(lower, &element.children, token);
+				return Opened { figure };
 			}
 		}
+		Content::Figure { reference, caption } => {
+			let number = nml_lang::next_figure(lower);
+			lower.builder.open_with(
+				ElementKind::Figure { number },
+				token.clone(),
+				element.attributes.clone(),
+			);
+			figure = Some(OpenFigure {
+				number,
+				reference: reference.as_deref(),
+				caption,
+				assets: lower.assets.len(),
+			});
+		}
+	}
+	self::lower(lower, &element.children, token);
+	Opened { figure }
+}
+
+/// Closes an element opened with [`open`]: a figure gets its caption, and its symbol.
+pub(crate) fn close(lower: &mut Lower<'_, '_>, opened: Opened<'_>, token: &Token) {
+	let Some(figure) = opened.figure else {
+		lower.builder.close();
+		return;
+	};
+	if !figure.caption.is_empty() {
+		lower.builder.open(ElementKind::Caption, token.clone());
+		self::lower(lower, figure.caption, token);
+		lower.builder.close();
+	}
+	let element = lower.builder.close();
+	if let Some(name) = figure.reference {
+		let medium = (lower.assets.get(figure.assets)).map(|asset| asset.path.clone());
+		let title = plain_text(figure.caption);
+		let export = nml_lang::figure_export(name, element, figure.number, title, medium);
+		lower.export(export, token.clone());
 	}
 }
 
-/// The HTML of elements, for output made after the parse (post-parse and deferred). They
-/// cannot hold references, which need the link stage.
-pub(crate) fn html(elements: &[Element]) -> mlua::Result<String> {
+/// The text of elements without markup.
+fn plain_text(elements: &[Element]) -> String {
+	fn collect(elements: &[Element], out: &mut String) {
+		for element in elements {
+			if let Content::Element(ElementKind::Text(text) | ElementKind::Code(text)) =
+				&element.content
+			{
+				out.push_str(text);
+			}
+			if let Content::Figure { caption, .. } = &element.content {
+				collect(caption, out);
+			}
+			collect(&element.children, out);
+		}
+	}
+	let mut out = String::new();
+	collect(elements, &mut out);
+	out
+}
+
+/// The HTML of elements, for output made after the parse: post-parse, with the unit being
+/// lowered, and deferred, without. It cannot hold references or figures, which need the
+/// parse, nor media with paths if there is no unit to add them to.
+pub(crate) fn html(
+	elements: &[Element],
+	mut lower: Option<&mut Lower<'_, '_>>,
+) -> mlua::Result<String> {
 	let source = Arc::new(Source::new(
 		Url::parse("virtual:///script-output").unwrap(),
 		String::new(),
@@ -403,22 +574,56 @@ pub(crate) fn html(elements: &[Element]) -> mlua::Result<String> {
 	let mut builder = DocumentBuilder::new(source);
 	fn write(
 		builder: &mut DocumentBuilder<'_>,
+		lower: &mut Option<&mut Lower<'_, '_>>,
 		elements: &[Element],
 		token: &Token,
 	) -> mlua::Result<()> {
 		for element in elements {
-			let Content::Element(kind) = &element.content else {
-				return Err(mlua::Error::runtime(
-					"a reference needs the parse: it cannot be made after it",
-				));
+			let kind = match &element.content {
+				Content::Element(ElementKind::Media {
+					kind,
+					url,
+					alt,
+					width,
+				}) => {
+					let url = match lower {
+						Some(lower) => nml_lang::media_url(lower, url).map_err(|_| {
+							mlua::Error::runtime(format!("`{url}` does not exist in the workspace"))
+						})?,
+						None if nml_lang::is_external(url) => url.clone(),
+						None => {
+							return Err(mlua::Error::runtime(format!(
+								"`{url}` is a file of the workspace, which needs the parse: \
+								 only external media can be shown at link time"
+							)));
+						}
+					};
+					ElementKind::Media {
+						kind: *kind,
+						url,
+						alt: alt.clone(),
+						width: width.clone(),
+					}
+				}
+				Content::Element(kind) => kind.clone(),
+				Content::Reference(_) => {
+					return Err(mlua::Error::runtime(
+						"a reference needs the parse: it cannot be made after it",
+					));
+				}
+				Content::Figure { .. } => {
+					return Err(mlua::Error::runtime(
+						"a figure is numbered during the parse: it cannot be made after it",
+					));
+				}
 			};
-			builder.open_with(kind.clone(), token.clone(), element.attributes.clone());
-			write(builder, &element.children, token)?;
+			builder.open_with(kind, token.clone(), element.attributes.clone());
+			write(builder, lower, &element.children, token)?;
 			builder.close();
 		}
 		Ok(())
 	}
-	write(&mut builder, elements, &token)?;
+	write(&mut builder, &mut lower, elements, &token)?;
 	Ok(nml_html::fragment(&builder.finish()))
 }
 
@@ -426,7 +631,11 @@ pub(crate) fn html(elements: &[Element]) -> mlua::Result<String> {
 mod tests {
 	use nml_diagnostics::assert_diagnostics;
 
+	use nml_document::Dependency;
+	use nml_document::ElementKind;
+
 	use crate::tests::compile;
+	use crate::tests::compile_with;
 	use crate::tests::html;
 
 	fn body(text: &str) -> String {
@@ -482,6 +691,149 @@ mod tests {
 		assert_eq!(compiled.unit.uses.len(), 1);
 		let html = html(&compiled);
 		assert!(html.contains("<p><a href=\""), "{html}");
+	}
+
+	/// Where a file of the workspace is copied.
+	fn copy_of(path: &str, content: &str) -> String {
+		let hash = blake3::hash(content.as_bytes()).to_hex().to_string();
+		nml_lang::asset_output_path(path, &hash)
+	}
+
+	#[test]
+	fn media_paths_are_assets() {
+		let compiled = compile_with(
+			":lua`nml.element('media', {url = 'img/a.png', alt = 'A'})`\n\n:lua`nml.element('media', {url = 'https://x.y/b.png'})`\n",
+			&[("img/a.png", "a")],
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let page = html(&compiled);
+		assert!(
+			page.contains(&format!(
+				"<img src=\"{}\" alt=\"A\">",
+				copy_of("img/a.png", "a")
+			)),
+			"{page}"
+		);
+		assert!(page.contains("<img src=\"https://x.y/b.png\""), "{page}");
+		assert_eq!(compiled.unit.assets.len(), 1);
+		assert_eq!(compiled.unit.assets[0].path, "img/a.png");
+		assert!(compiled.unit.dependencies.contains(&Dependency::File {
+			path: "img/a.png".into(),
+			hash: blake3::hash(b"a").to_hex().to_string(),
+		}));
+
+		// A missing file is reported at the script.
+		let compiled = compile(":lua`nml.element('media', {url = 'no.png'})`\n");
+		assert_diagnostics!(compiled.diagnostics, [3008 @ 0..44]);
+
+		// After the parse, files are still added to the page.
+		let compiled = compile_with(
+			":lua`nml.post_parse(function() return nml.element('media', {url = 'img/a.png'}) end)`\n",
+			&[("img/a.png", "a")],
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		assert!(html(&compiled).contains(&copy_of("img/a.png", "a")));
+		assert_eq!(compiled.unit.assets.len(), 1);
+		let compiled = compile(
+			":lua`nml.post_parse(function() return nml.element('media', {url = 'no.png'}) end)`\n",
+		);
+		assert_diagnostics!(compiled.diagnostics, [4001]);
+	}
+
+	#[test]
+	fn figures() {
+		let compiled = compile_with(
+			":figure #a A\n![](a.png)\n\n:lua`nml.element('figure', {ref = 'b', caption = {'B ', nml.element('code', {code = 'x'})}, nml.element('media', {url = 'b.png'})})`\n\n:figure #c C\n![](c.png)\n\n:lua`nml.element('figure', {'Text.'})`\n",
+			&[("a.png", "a"), ("b.png", "b"), ("c.png", "c")],
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let html = html(&compiled);
+		// Numbered in document order with the markup figures; the caption comes last.
+		let figure = format!(
+			"<figure id=\"b\">\n<img src=\"{}\" alt=\"\">\n<figcaption><span class=\"figure-number\">Figure 2:</span> B <code>x</code></figcaption>\n</figure>",
+			copy_of("b.png", "b")
+		);
+		assert!(html.contains(&figure), "{html}");
+		assert!(html.contains("Figure 3:</span> C"), "{html}");
+		assert!(html.contains("<figure>\nText.\n</figure>"), "{html}");
+		// Blocks stay blocks.
+		let blocks = compile(
+			":lua`nml.element('figure', {'a ', nml.element('bold', {'b'}), nml.element('code_block', {code = 'c'}), 'd'})`\n",
+		);
+		assert_diagnostics!(blocks.diagnostics, []);
+		let document = &blocks.unit.document;
+		let figure = document
+			.descendants(document.root())
+			.find(|(_, e)| matches!(e.kind, ElementKind::Figure { .. }))
+			.unwrap()
+			.0;
+		let kinds: Vec<_> = document
+			.children(figure)
+			.map(|(_, e)| e.kind.name())
+			.collect();
+		assert_eq!(kinds, ["paragraph", "code_block", "paragraph"]);
+		let exports: Vec<_> = compiled
+			.unit
+			.exports
+			.iter()
+			.map(|e| {
+				(
+					e.name.as_str(),
+					e.property("title"),
+					e.property("number"),
+					e.property("media"),
+				)
+			})
+			.collect();
+		assert_eq!(
+			exports,
+			[
+				("a", Some("A"), Some("1"), Some("a.png")),
+				("b", Some("B x"), Some("2"), Some("b.png")),
+				("c", Some("C"), Some("3"), Some("c.png")),
+			]
+		);
+		// Declared at the script.
+		assert_eq!(
+			compiled.unit.exports[1].declared,
+			Some(("page.nml".into(), 25..157))
+		);
+
+		// A figure's name is the unit's, whoever writes it.
+		let compiled =
+			compile(":figure #a A\nx\n\n:lua`nml.element('figure', {ref = 'a', 'y'})`\n");
+		assert_diagnostics!(compiled.diagnostics, [2002 @ 16..61]);
+	}
+
+	#[test]
+	fn figure_errors() {
+		for (code, message) in [
+			(
+				"nml.element('figure', {ref = 'a b'})",
+				"`a b` is not a reference name",
+			),
+			(
+				"nml.element('figure', {ref = 'doc#a'})",
+				"is not a reference name",
+			),
+			(
+				"nml.element('figure', {ref = 'a', id = 'b'})",
+				"cannot have an `id` too",
+			),
+			(
+				"nml.post_parse(function() return nml.element('figure', {'x'}) end)",
+				"a figure is numbered during the parse",
+			),
+		] {
+			let compiled = compile(&format!(":lua`{code}`"));
+			assert_diagnostics!(compiled.diagnostics, [4001]);
+			let nml_diagnostics::DiagnosticKind::LuaError { message: error } =
+				&compiled.diagnostics[0].kind
+			else {
+				unreachable!()
+			};
+			assert!(error.contains(message), "{code}: {error}");
+		}
 	}
 
 	#[test]

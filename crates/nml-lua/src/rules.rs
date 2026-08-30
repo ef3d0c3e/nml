@@ -371,9 +371,9 @@ fn call(
 						return Ok(());
 					};
 					// The body writes after the element's children, inside it.
-					crate::elements::open(*borrow()?, &element, token);
+					let opened = crate::elements::open(*borrow()?, &element, token);
 					let result = body.call::<()>(());
-					borrow()?.builder.close();
+					crate::elements::close(*borrow()?, opened, token);
 					result
 				},
 			)?,
@@ -462,6 +462,40 @@ Press :kbd{Ctrl + **C**}.
 			),
 			"{html}"
 		);
+	}
+
+	#[test]
+	fn rules_build_figures() {
+		let compiled = compile(
+			r##":lua
+```
+nml.rule {
+	name = "shot",
+	atoms = { ":shot{", nml.capture("name", nml.text), "}" },
+	handler = function(m, out)
+		out:element("figure", { ref = m.captures.name, caption = "Shot" }, function()
+			out:add(nml.element("paragraph", { "of ", m.captures.name }))
+		end)
+	end,
+}
+```
+
+:figure #first First
+x
+
+:shot{second}
+"##,
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let html = html(&compiled);
+		// The caption is written after what the body writes.
+		assert!(
+			html.contains(
+				"<figure id=\"second\">\nof second\n<figcaption><span class=\"figure-number\">Figure 2:</span> Shot</figcaption>\n</figure>"
+			),
+			"{html}"
+		);
+		assert_eq!(compiled.unit.exports[1].property("number"), Some("2"));
 	}
 
 	#[test]

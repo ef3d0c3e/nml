@@ -236,7 +236,7 @@ impl DeferredRuntime {
 		function
 			.call::<Value>(args)
 			.and_then(crate::elements::nodes)
-			.and_then(|elements| crate::elements::html(&elements))
+			.and_then(|elements| crate::elements::html(&elements, None))
 			.map_err(|e| lua_error(&self.chunks, e))
 	}
 
@@ -433,7 +433,7 @@ end
 		let mut resolver = MemoryResolver::default();
 		resolver.files.insert(
 			"modules/std/bad.nml".into(),
-			":lua\n```\nfunction f() error('late') end\nfunction env() return nml.env('HOME') end\nfunction read() return nml.read('a.nml') end\nfunction time() return nml.date().year end\n```\n".into(),
+			":lua\n```\nfunction f() error('late') end\nfunction env() return nml.env('HOME') end\nfunction read() return nml.read('a.nml') end\nfunction time() return nml.date().year end\nfunction local_media() return nml.element('media', {url = 'a.png'}) end\nfunction external_media() return nml.element('media', {url = 'https://x.y/a.png'}) end\nfunction figure() return nml.element('figure', {'x'}) end\n```\n".into(),
 		);
 		resolver.modules.insert("std".into(), "modules/std".into());
 		let mut runtime = DeferredRuntime::new(Arc::new(resolver), Arc::default(), "a.nml".into());
@@ -458,6 +458,25 @@ end
 		assert!(matches!(error.kind, DiagnosticKind::LuaError { .. }));
 		let error = runtime.fill(&slot("std.gone", "f"), &at).unwrap_err();
 		assert_eq!(error.kind.id(), 3008);
+
+		// Media in the workspace and figures need the parse.
+		for (function, message) in [
+			(
+				"local_media",
+				"only external media can be shown at link time",
+			),
+			("figure", "a figure is numbered during the parse"),
+		] {
+			let error = runtime.fill(&slot("std.bad", function), &at).unwrap_err();
+			let DiagnosticKind::LuaError { message: error } = &error.kind else {
+				panic!("{error:?}");
+			};
+			assert!(error.contains(message), "{error}");
+		}
+		let html = runtime
+			.fill(&slot("std.bad", "external_media"), &at)
+			.unwrap();
+		assert!(html.contains("<img src=\"https://x.y/a.png\""), "{html}");
 
 		// Nothing records dependencies at link time: what reads outside the document fails.
 		for (function, name) in [
