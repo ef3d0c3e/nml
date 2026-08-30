@@ -6,6 +6,7 @@ use nml_diagnostics::DiagnosticMessage;
 use nml_document::Asset;
 use nml_document::Attributes;
 use nml_document::Dependency;
+use nml_document::ElementId;
 use nml_document::ElementKind;
 use nml_document::Export;
 use nml_document::MediaKind;
@@ -21,6 +22,7 @@ use nml_grammar::Value;
 
 use crate::Language;
 use crate::Lower;
+use crate::ResolveError;
 use crate::language::plain_text;
 use crate::resolve::asset_output_path;
 use crate::resolve::relative_output_url;
@@ -80,8 +82,29 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	Ok(())
 }
 
+/// The URL of a medium written `written` in the file being lowered. An external URL is
+/// kept; a path is resolved in the workspace, its file recorded as an asset of the page and a
+/// dependency, and the URL goes from the page to the asset's copy.
+pub fn media_url(lower: &mut Lower<'_, '_>, written: &str) -> Result<String, ResolveError> {
+	if is_external(written) {
+		return Ok(written.to_string());
+	}
+	let from = lower.files.last().unwrap().clone();
+	let (path, hash) = lower.resolver.asset(&from, written)?;
+	let asset = Asset {
+		output: asset_output_path(&path, &hash),
+		path: path.clone(),
+	};
+	let url = relative_output_url(&lower.output_path(), &asset.output);
+	lower.depend(Dependency::File { path, hash });
+	if !lower.assets.contains(&asset) {
+		lower.assets.push(asset);
+	}
+	Ok(url)
+}
+
 /// Whether a URL leaves the workspace: it has a scheme (`https:`, `data:`) or a host.
-fn is_external(url: &str) -> bool {
+pub fn is_external(url: &str) -> bool {
 	url.starts_with("//")
 		|| url.split_once(':').is_some_and(|(scheme, _)| {
 			scheme
@@ -117,31 +140,15 @@ fn lower_media(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 		return;
 	};
 
-	let url = if is_external(written) {
-		written.to_string()
-	} else {
-		let from = lower.files.last().unwrap().clone();
-		match lower.resolver.asset(&from, written) {
-			Ok((path, hash)) => {
-				let asset = Asset {
-					output: asset_output_path(&path, &hash),
-					path: path.clone(),
-				};
-				let url = relative_output_url(&lower.output_path(), &asset.output);
-				lower.depend(Dependency::File { path, hash });
-				if !lower.assets.contains(&asset) {
-					lower.assets.push(asset);
-				}
-				url
-			}
-			Err(_) => {
-				let kind = DiagnosticKind::FileNotFound {
-					path: written.into(),
-				};
-				let message = DiagnosticMessage::new(url_token);
-				lower.diagnostics.push(Diagnostic::new(kind, message));
-				return;
-			}
+	let url = match media_url(lower, written) {
+		Ok(url) => url,
+		Err(_) => {
+			let kind = DiagnosticKind::FileNotFound {
+				path: written.into(),
+			};
+			let message = DiagnosticMessage::new(url_token);
+			lower.diagnostics.push(Diagnostic::new(kind, message));
+			return;
 		}
 	};
 	let alt = match m.capture("alt").map(|capture| &capture.value) {
@@ -161,10 +168,34 @@ fn lower_media(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 #[derive(Default)]
 struct Figures(u32);
 
-fn lower_figure(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
+/// Takes the next number of the unit's figures: they are numbered in the order they are
+/// written, by markup or by scripts.
+pub fn next_figure(lower: &mut Lower<'_, '_>) -> u32 {
 	let figures = lower.extension(Figures::default);
 	figures.0 += 1;
-	let number = figures.0;
+	figures.0
+}
+
+/// The symbol of a figure: its caption's text is its title, and `medium` (the first asset of
+/// its body) is shown by editors.
+pub fn figure_export(
+	name: &str,
+	element: ElementId,
+	number: u32,
+	title: String,
+	medium: Option<String>,
+) -> Export {
+	let export = Export::new(name, SymbolKind::Figure, Some(element))
+		.with("title", title)
+		.with("number", number.to_string());
+	match medium {
+		Some(medium) => export.with("media", medium),
+		None => export,
+	}
+}
+
+fn lower_figure(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
+	let number = next_figure(lower);
 	let reference = m.capture("ref").map(|capture| capture.token.clone());
 	let attributes = Attributes {
 		id: reference.as_ref().map(|r| r.content().to_string()),
@@ -191,13 +222,7 @@ fn lower_figure(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 			Some(Value::Nodes(nodes)) => plain_text(nodes),
 			_ => String::new(),
 		};
-		let mut export = Export::new(reference.content(), SymbolKind::Figure, Some(element))
-			.with("title", title)
-			.with("number", number.to_string());
-		// The medium the figure shows, for editors.
-		if let Some(medium) = medium {
-			export = export.with("media", medium);
-		}
+		let export = figure_export(reference.content(), element, number, title, medium);
 		lower.export(export, reference);
 	}
 }
