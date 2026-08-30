@@ -433,7 +433,7 @@ end
 		let mut resolver = MemoryResolver::default();
 		resolver.files.insert(
 			"modules/std/bad.nml".into(),
-			":lua\n```\nfunction f() error('late') end\n```\n".into(),
+			":lua\n```\nfunction f() error('late') end\nfunction env() return nml.env('HOME') end\nfunction read() return nml.read('a.nml') end\nfunction time() return nml.date().year end\n```\n".into(),
 		);
 		resolver.modules.insert("std".into(), "modules/std".into());
 		let mut runtime = DeferredRuntime::new(Arc::new(resolver), Arc::default(), "a.nml".into());
@@ -458,6 +458,24 @@ end
 		assert!(matches!(error.kind, DiagnosticKind::LuaError { .. }));
 		let error = runtime.fill(&slot("std.gone", "f"), &at).unwrap_err();
 		assert_eq!(error.kind.id(), 3008);
+
+		// Nothing records dependencies at link time: what reads outside the document fails.
+		for (function, name) in [
+			("env", "`nml.env`"),
+			("read", "`nml.read`"),
+			("time", "`nml.time`"),
+		] {
+			let error = runtime.fill(&slot("std.bad", function), &at).unwrap_err();
+			let DiagnosticKind::LuaError { message } = &error.kind else {
+				panic!("{error:?}");
+			};
+			assert!(
+				message.contains(&format!(
+					"{name} is only available while the document is parsed"
+				)),
+				"{message}"
+			);
+		}
 	}
 
 	#[test]

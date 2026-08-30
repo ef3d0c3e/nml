@@ -8,13 +8,19 @@ use nml_lang::Resolver;
 
 use crate::api;
 
-/// What scripts can read, kept in the unit's Lua state.
+/// What scripts read outside of their document (files, the environment, the clock), kept
+/// in the unit's Lua state. Only while the unit is parsed: nothing records a dependency at
+/// link time.
 pub(crate) struct Files {
-	resolver: Arc<dyn Resolver>,
+	pub resolver: Arc<dyn Resolver>,
 	/// The unit's file: paths are relative to it.
 	unit: String,
 	/// Files read so far, with the hash of their content.
 	read: Vec<(String, String)>,
+	/// Environment variables read so far, with the hash of their value.
+	pub env: Vec<(String, String)>,
+	/// Whether the clock was read.
+	pub clock: bool,
 }
 
 impl Files {
@@ -23,7 +29,18 @@ impl Files {
 			resolver,
 			unit,
 			read: Vec::new(),
+			env: Vec::new(),
+			clock: false,
 		}
+	}
+
+	/// The unit's tracker, or an error naming `what` outside of a parse.
+	pub fn of<'l>(lua: &'l Lua, what: &str) -> mlua::Result<mlua::AppDataRefMut<'l, Files>> {
+		lua.app_data_mut::<Files>().ok_or_else(|| {
+			mlua::Error::runtime(format!(
+				"{what} is only available while the document is parsed"
+			))
+		})
 	}
 }
 
@@ -33,9 +50,7 @@ impl Files {
 /// document is built again when the file changes.
 #[api]
 fn read(lua: &Lua, path: String) -> mlua::Result<String> {
-	let mut files = lua
-		.app_data_mut::<Files>()
-		.expect("the unit's Lua state has its files");
+	let mut files = Files::of(lua, "`nml.read`")?;
 	let (resolved, content) =
 		files
 			.resolver
@@ -52,12 +67,18 @@ fn read(lua: &Lua, path: String) -> mlua::Result<String> {
 	Ok(content)
 }
 
-/// Records the files read as dependencies of the unit. Called when the lowering ends.
+/// Records what was read as dependencies of the unit. Called when the lowering ends.
 pub(crate) fn record(lower: &mut Lower<'_, '_>) {
 	let lua = crate::unit::unit_lua(lower).runtime.lua().clone();
-	let read = std::mem::take(&mut lua.app_data_mut::<Files>().unwrap().read);
-	for (path, hash) in read {
+	let mut files = lua.app_data_mut::<Files>().unwrap();
+	for (path, hash) in std::mem::take(&mut files.read) {
 		lower.depend(Dependency::File { path, hash });
+	}
+	for (name, hash) in std::mem::take(&mut files.env) {
+		lower.depend(Dependency::Env { name, hash });
+	}
+	if std::mem::take(&mut files.clock) {
+		lower.depend(Dependency::Clock);
 	}
 }
 

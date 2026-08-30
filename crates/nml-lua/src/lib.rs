@@ -16,6 +16,7 @@ mod runtime;
 mod script;
 #[cfg(test)]
 mod std_modules;
+mod system;
 mod unit;
 mod variables;
 
@@ -61,14 +62,19 @@ pub(crate) mod tests {
 	/// Compiles `page.nml` with other files in memory, and the module `std` at
 	/// `modules/std`.
 	pub(crate) fn compile_with(text: &str, files: &[(&str, &str)]) -> Compiled {
-		let mut language = Language::builtin();
-		crate::add(&mut language).unwrap();
-		let source = Source::new(Url::parse("file:///page.nml").unwrap(), text.into(), 0);
 		let mut resolver = MemoryResolver::default();
-		resolver.files.insert("page.nml".into(), text.into());
 		for (path, content) in files {
 			resolver.files.insert(path.to_string(), content.to_string());
 		}
+		compile_with_resolver(text, resolver)
+	}
+
+	/// Compiles `page.nml` with a resolver, to which it and the module `std` are added.
+	pub(crate) fn compile_with_resolver(text: &str, mut resolver: MemoryResolver) -> Compiled {
+		let mut language = Language::builtin();
+		crate::add(&mut language).unwrap();
+		let source = Source::new(Url::parse("file:///page.nml").unwrap(), text.into(), 0);
+		resolver.files.insert("page.nml".into(), text.into());
 		resolver.modules.insert("std".into(), "modules/std".into());
 		for (name, content) in crate::STD {
 			let path = format!("modules/std/{name}.nml");
