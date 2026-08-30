@@ -233,6 +233,11 @@ pub enum Dependency {
 	File { path: String, hash: String },
 	/// A workspace query run during the parse, with a fingerprint of its result.
 	Query { query: String, fingerprint: u64 },
+	/// An environment variable read by a script, with the hash of its value when it was read
+	/// (see `nml_lang::env_hash`).
+	Env { name: String, hash: String },
+	/// The clock, read by a script: the unit is parsed again on every build.
+	Clock,
 }
 
 /// Everything a parse produces for a unit.
