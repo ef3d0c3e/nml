@@ -252,6 +252,18 @@ impl Builder {
 				invalid.insert(unit);
 			}
 		}
+		// Units whose scripts read an environment variable that changed, or the clock.
+		for (unit, name, hash) in self.index.env_dependencies()? {
+			let current = nml_lang::env_hash(self.resolver.env(&name).as_deref());
+			if current != hash && existing.contains(unit.as_str()) {
+				invalid.insert(unit);
+			}
+		}
+		for unit in self.index.dependents(&Dependency::Clock)? {
+			if existing.contains(unit.as_str()) {
+				invalid.insert(unit);
+			}
+		}
 		let seeds = invalid.iter().chain(&scan.removed).cloned().collect();
 		invalidate(&self.index, &self.config, seeds, &existing, &mut invalid)?;
 
@@ -885,6 +897,8 @@ pub struct WorkspaceResolver {
 	modules: Vec<nml_workspace::Module>,
 	/// Contents by workspace path.
 	overlay: HashMap<String, String>,
+	/// When the resolver was created: the start of the build.
+	time: i64,
 }
 
 impl WorkspaceResolver {
@@ -893,6 +907,9 @@ impl WorkspaceResolver {
 			root,
 			modules,
 			overlay: HashMap::new(),
+			time: std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.map_or(0, |elapsed| elapsed.as_secs() as i64),
 		}
 	}
 
@@ -979,6 +996,14 @@ impl Resolver for WorkspaceResolver {
 			}
 			_ => Err(ResolveError::NotFound { path }),
 		}
+	}
+
+	fn env(&self, name: &str) -> Option<String> {
+		std::env::var(name).ok()
+	}
+
+	fn time(&self) -> i64 {
+		self.time
 	}
 }
 

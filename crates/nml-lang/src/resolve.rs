@@ -29,6 +29,20 @@ pub trait Resolver: Send + Sync {
 	/// A file a page shows, such as an image (`path` written in the file at `from`): its
 	/// workspace path and the hash of its content (BLAKE3, in hexadecimal).
 	fn asset(&self, from: &str, path: &str) -> Result<(String, String), ResolveError>;
+
+	/// The value of an environment variable of the build, if it is set.
+	fn env(&self, name: &str) -> Option<String>;
+
+	/// When the build started, in seconds since the Unix epoch: the same for every unit.
+	fn time(&self) -> i64;
+}
+
+/// What a unit records of an environment variable it read: the BLAKE3 hash of its value, in
+/// hexadecimal, or nothing if it is not set. The value itself is not stored.
+pub fn env_hash(value: Option<&str>) -> String {
+	value
+		.map(|value| blake3::hash(value.as_bytes()).to_hex().to_string())
+		.unwrap_or_default()
 }
 
 /// The workspace path of `path` written in the file at `from`: relative to that file's
@@ -128,6 +142,10 @@ pub struct MemoryResolver {
 	pub files: HashMap<String, String>,
 	/// Module name to root directory.
 	pub modules: HashMap<String, String>,
+	/// The environment variables of the build.
+	pub env: HashMap<String, String>,
+	/// When the build started.
+	pub time: i64,
 }
 
 impl Resolver for MemoryResolver {
@@ -170,6 +188,14 @@ impl Resolver for MemoryResolver {
 			}
 			_ => Err(ResolveError::NotFound { path }),
 		}
+	}
+
+	fn env(&self, name: &str) -> Option<String> {
+		self.env.get(name).cloned()
+	}
+
+	fn time(&self) -> i64 {
+		self.time
 	}
 }
 

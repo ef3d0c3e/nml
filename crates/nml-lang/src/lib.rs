@@ -36,6 +36,7 @@ pub use resolve::MemoryResolver;
 pub use resolve::ResolveError;
 pub use resolve::Resolver;
 pub use resolve::asset_output_path;
+pub use resolve::env_hash;
 pub use resolve::is_output_path;
 pub use resolve::output_path;
 pub use resolve::relative_output_url;
