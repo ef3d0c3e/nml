@@ -792,6 +792,42 @@ fn assets_are_copied() {
 }
 
 #[test]
+fn figures_from_scripts() {
+	let workspace = Workspace::new(
+		"script-figures",
+		&[
+			("nml.toml", ""),
+			(
+				"docs/a.nml",
+				"# A\n\n:figure #first First\nx\n\n:lua`nml.element('figure', {ref = 'shot', caption = 'A *shot*', nml.element('media', {url = '../img/shot.png'})})`\n",
+			),
+			("b.nml", "See [[a#shot]]."),
+			("img/shot.png", "png"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	let shot = copy_of("img/shot.png", "png");
+	assert_eq!(workspace.output(&shot), "png");
+	assert!(
+		workspace
+			.output("docs/a.html")
+			.contains(&format!("<img src=\"../{shot}\" alt=\"\">"))
+	);
+	let b = body(&workspace.output("b.html")).to_string();
+	assert!(
+		b.contains("<a href=\"docs/a.html#shot\">A *shot*</a>"),
+		"{b}"
+	);
+
+	// The image changes: the page is parsed again, and its copy renamed.
+	workspace.write("img/shot.png", "png 2");
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["docs/a.nml"]);
+	assert_eq!(workspace.output(&copy_of("img/shot.png", "png 2")), "png 2");
+}
+
+#[test]
 fn unused_assets_are_deleted() {
 	let workspace = Workspace::new(
 		"unused-assets",
