@@ -4,6 +4,7 @@ mod link;
 
 pub use link::LinkError;
 pub use link::Target;
+pub use link::label;
 pub use link::resolve;
 
 use std::collections::BTreeMap;

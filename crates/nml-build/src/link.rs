@@ -2,6 +2,7 @@ use nml_document::Export;
 use nml_document::LinkSlot;
 use nml_document::Property;
 use nml_document::Scope;
+use nml_document::SymbolKind;
 use nml_document::SymbolRef;
 use nml_lang::relative_output_url;
 use nml_workspace::Index;
@@ -35,6 +36,23 @@ pub struct Target {
 /// does.
 pub fn resolve(index: &Index, unit: &UnitRecord, target: &SymbolRef) -> Result<Target, LinkError> {
 	Linker { index, unit }.resolve(target)
+}
+
+/// What a reference to `target` without a caption shows: a figure or a table by its number,
+/// anything else by its title.
+pub fn label(target: &Target) -> String {
+	let Some(export) = &target.export else {
+		return target.unit.title.clone();
+	};
+	let word = match export.kind {
+		SymbolKind::Figure => "Figure",
+		SymbolKind::Table => "Table",
+		_ => "",
+	};
+	match export.property("number") {
+		Some(number) if !word.is_empty() => format!("{word} {number}"),
+		_ => export.property("title").unwrap_or(&export.name).to_string(),
+	}
 }
 
 /// Resolves the references of one unit against the index.
@@ -112,6 +130,7 @@ impl Linker<'_> {
 				None => target.unit.title.clone(),
 			},
 			Property::Number => property("number").unwrap_or_default(),
+			Property::Label => label(&target),
 			Property::Other(name) => property(name).unwrap_or_default(),
 			_ => String::new(),
 		})

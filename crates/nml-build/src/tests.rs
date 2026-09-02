@@ -124,6 +124,43 @@ fn resolves_references() {
 }
 
 #[test]
+fn reference_labels() {
+	let workspace = Workspace::new(
+		"labels",
+		&[
+			("nml.toml", ""),
+			(
+				"a.nml",
+				"# A\n## Setup {#setup}\n:anchor here Here\n\n:figure #f1 One\nx\n\n:figure #f2 Two\ny\n\n:table #t Prices\n| a |\n",
+			),
+			(
+				"b.nml",
+				"[[a#f2]], [[a#t]], [[a#setup]], [[a#here]], [[a#]], [[a#f2|caption]].\n",
+			),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	// Figures and tables by their number, anything else by its title.
+	assert_eq!(
+		body(&workspace.output("b.html")),
+		"<p><a href=\"a.html#f2\">Figure 2</a>, <a href=\"a.html#t\">Table 1</a>, \
+		<a href=\"a.html#setup\">Setup</a>, <a href=\"a.html#here\">Here</a>, \
+		<a href=\"a.html\">A</a>, <a href=\"a.html#f2\">caption</a>.</p>\n"
+	);
+
+	// A figure added before it: the label follows, without parsing `b`.
+	workspace.write(
+		"a.nml",
+		"# A\n## Setup {#setup}\n:anchor here Here\n\n:figure #f0 Zero\nw\n\n:figure #f1 One\nx\n\n:figure #f2 Two\ny\n\n:table #t Prices\n| a |\n",
+	);
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["a.nml"]);
+	assert_eq!(report.written, ["a.nml", "b.nml"]);
+	assert!(body(&workspace.output("b.html")).contains(">Figure 3</a>"));
+}
+
+#[test]
 fn relinks_only_what_changed() {
 	let workspace = Workspace::new(
 		"relink",
@@ -816,7 +853,7 @@ fn figures_from_scripts() {
 	);
 	let b = body(&workspace.output("b.html")).to_string();
 	assert!(
-		b.contains("<a href=\"docs/a.html#shot\">A *shot*</a>"),
+		b.contains("<a href=\"docs/a.html#shot\">Figure 2</a>"),
 		"{b}"
 	);
 
