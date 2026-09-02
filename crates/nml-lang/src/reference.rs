@@ -19,7 +19,7 @@ use crate::Lower;
 
 impl Lower<'_, '_> {
 	/// Opens a reference to `target`, written at `target_token`, with its link slot. Its
-	/// caption goes inside, or its title with [`reference_title`](Self::reference_title),
+	/// caption goes inside, or its label with [`reference_label`](Self::reference_label),
 	/// then it is closed.
 	pub fn open_reference(&mut self, target: SymbolRef, target_token: Token, token: Token) {
 		self.uses.push(Use {
@@ -34,11 +34,11 @@ impl Lower<'_, '_> {
 		self.builder.open(ElementKind::Reference { href }, token);
 	}
 
-	/// The title of the reference's target, filled at link time.
-	pub fn reference_title(&mut self, target: SymbolRef, token: Token) {
+	/// The label of the reference's target (`Figure 2`, or its title), filled at link time.
+	pub fn reference_label(&mut self, target: SymbolRef, token: Token) {
 		let slot = Slot::Link(LinkSlot {
 			target,
-			property: Property::Title,
+			property: Property::Label,
 			context: OutputContext::Text,
 		});
 		self.builder.slot(slot, token);
@@ -73,7 +73,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		lower.open_reference(target.clone(), target_token.clone(), m.token.clone());
 		match caption {
 			Some(Value::Nodes(nodes)) => lower.nodes(nodes),
-			_ => lower.reference_title(target, target_token),
+			_ => lower.reference_label(target, target_token),
 		}
 		lower.builder.close();
 	})?;
@@ -113,7 +113,7 @@ mod tests {
 			]
 		);
 
-		// Each reference has a URL slot; those without a caption also show the title.
+		// Each reference has a URL slot; those without a caption also show the label.
 		let document = &compiled.unit.document;
 		let slots: Vec<_> = document
 			.slots()
@@ -128,12 +128,12 @@ mod tests {
 			slots,
 			[
 				"builds Target Attribute",
-				"builds Title Text",
+				"builds Label Text",
 				"config#pages Target Attribute",
 				"guide# Target Attribute",
-				"guide# Title Text",
+				"guide# Label Text",
 				"#faq Target Attribute",
-				"#faq Title Text",
+				"#faq Label Text",
 			]
 		);
 		let href = document

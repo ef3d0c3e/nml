@@ -495,7 +495,7 @@ pub(crate) fn open<'e>(
 		Content::Reference(target) => {
 			lower.open_reference(target.clone(), token.clone(), token.clone());
 			if element.children.is_empty() {
-				lower.reference_title(target.clone(), token.clone());
+				lower.reference_label(target.clone(), token.clone());
 				return Opened { figure };
 			}
 		}
