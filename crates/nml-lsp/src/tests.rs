@@ -635,7 +635,7 @@ fn inlay_hints() {
 	client.save(&page);
 	client.open(
 		&page,
-		"# Home {#top}\n[[guide#install]] [[top|cap]] [[guide#]] [[nope]]\n",
+		"# Home {#top}\n[[guide#install]] [[top|cap]] [[guide#]] [[nope]]\n:figure #f F\nx\n\n[[f]]\n",
 	);
 	client.diagnostics();
 	let params = lsp_types::InlayHintParams {
@@ -660,7 +660,9 @@ fn inlay_hints() {
 		hints,
 		[
 			(position(1, 17), ": Install".to_string()),
-			(position(1, 40), ": Guide".into())
+			(position(1, 40), ": Guide".into()),
+			// A figure by its label, as in the page.
+			(position(5, 5), ": Figure 1".into())
 		]
 	);
 }

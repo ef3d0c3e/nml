@@ -284,7 +284,7 @@ impl Server {
 }
 
 impl Server {
-	/// Hints after each reference without a caption: the title it resolves to.
+	/// Hints after each reference without a caption: the label it resolves to.
 	pub(crate) fn inlay_hints(
 		&self,
 		params: &lsp_types::InlayHintParams,
@@ -316,11 +316,7 @@ impl Server {
 				continue;
 			};
 			let label = match self.resolve(analysis, &target) {
-				Ok(Target {
-					export: Some(export),
-					..
-				}) => export.property("title").unwrap_or(&export.name).to_string(),
-				Ok(Target { unit, export: None }) => unit.title,
+				Ok(target) => nml_build::label(&target),
 				Err(_) => continue,
 			};
 			hints.push(lsp_types::InlayHint {
