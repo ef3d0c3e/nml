@@ -34,6 +34,9 @@ pub enum Property {
 	Title,
 	/// Its number (figures, numbered headings).
 	Number,
+	/// What a reference without a caption shows: `Figure 2` for a figure, its title for most
+	/// symbols.
+	Label,
 	/// Another exported property, by name.
 	Other(String),
 }
