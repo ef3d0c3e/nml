@@ -1066,6 +1066,7 @@ fn encode_slot(slot: &Slot) -> Json {
 				Property::Target => Json::from("target"),
 				Property::Title => Json::from("title"),
 				Property::Number => Json::from("number"),
+				Property::Label => Json::from("label"),
 				Property::Other(name) => serde_json::json!({ "other": name }),
 				_ => unreachable!("properties are listed here"),
 			};
@@ -1099,6 +1100,7 @@ fn decode_slot(text: &str) -> Result<Slot> {
 				"target" => Property::Target,
 				"title" => Property::Title,
 				"number" => Property::Number,
+				"label" => Property::Label,
 				_ => return Err(corrupt(format!("unknown property `{name}`"))),
 			},
 			Some(other) => Property::Other(
@@ -1214,7 +1216,25 @@ mod tests {
 	}
 
 	fn template() -> StoredTemplate {
-		StoredTemplate {
+		// Every property a link slot can show, in the text of the link.
+		let properties = [
+			Property::Title,
+			Property::Number,
+			Property::Label,
+			Property::Other("media".into()),
+		]
+		.into_iter()
+		.map(|property| StoredSlot {
+			position: 11,
+			context: OutputContext::Text,
+			range: 4..20,
+			slot: Slot::Link(LinkSlot {
+				target: SymbolRef::in_unit("config", "pages"),
+				property,
+				context: OutputContext::Text,
+			}),
+		});
+		let mut template = StoredTemplate {
 			content: "<a href=\"\"></a>".into(),
 			slots: vec![
 				StoredSlot {
@@ -1249,7 +1269,9 @@ mod tests {
 					}),
 				},
 			],
-		}
+		};
+		template.slots.extend(properties);
+		template
 	}
 
 	fn commit(index: &mut Index, path: &str, hash: u8) -> i64 {
