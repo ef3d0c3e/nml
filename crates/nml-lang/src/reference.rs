@@ -72,7 +72,11 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		};
 		lower.open_reference(target.clone(), target_token.clone(), m.token.clone());
 		match caption {
-			Some(Value::Nodes(nodes)) => lower.nodes(nodes),
+			Some(Value::Nodes(nodes)) => {
+				let outer = lower.placeholders.replace((target, target_token));
+				lower.nodes(nodes);
+				lower.placeholders = outer;
+			}
 			_ => lower.reference_label(target, target_token),
 		}
 		lower.builder.close();
@@ -144,6 +148,71 @@ mod tests {
 			})
 			.unwrap();
 		assert_eq!(document.slot(href), document.slots().next().unwrap().1);
+	}
+
+	#[test]
+	fn caption_placeholders() {
+		for (text, tree, properties) in [
+			(
+				"[[f|see {number}]]",
+				r#"document[paragraph[reference["see " slot[]]]]"#,
+				&["Number"][..],
+			),
+			(
+				"[[f|{label} ({title})]]",
+				r#"document[paragraph[reference[slot[] " (" slot[] ")"]]]"#,
+				&["Label", "Title"],
+			),
+			// In nested markup.
+			(
+				"[[f|*{number}*]]",
+				r#"document[paragraph[reference[Italic[slot[]]]]]"#,
+				&["Number"],
+			),
+			// Escaped, unknown, or outside a caption: text.
+			(
+				r"[[f|\{number}]]",
+				r#"document[paragraph[reference["{number}"]]]"#,
+				&[],
+			),
+			(
+				"[[f|{x} {Number} {number]]",
+				r#"document[paragraph[reference["{x} {Number} {number"]]]"#,
+				&[],
+			),
+			(
+				"{number} [[f]]",
+				r#"document[paragraph["{number} " reference[slot[]]]]"#,
+				&["Label"],
+			),
+		] {
+			let compiled = check(text, tree);
+			assert_diagnostics!(compiled.diagnostics, []);
+			let document = &compiled.unit.document;
+			let shown: Vec<_> = document
+				.slots()
+				.filter_map(|(_, slot)| match slot {
+					Slot::Link(link) if link.property != nml_document::Property::Target => {
+						assert_eq!(link.target, SymbolRef::local("f"));
+						Some(format!("{:?}", link.property))
+					}
+					_ => None,
+				})
+				.collect();
+			assert_eq!(shown, properties, "{text}");
+		}
+		// A placeholder's slot is at the reference's target, so a link error is reported once.
+		let compiled = check(
+			"[[f|{number}]]",
+			r#"document[paragraph[reference[slot[]]]]"#,
+		);
+		let document = &compiled.unit.document;
+		let ranges: Vec<_> = document
+			.descendants(document.root())
+			.filter(|(_, e)| matches!(e.kind, ElementKind::Slot(_)))
+			.map(|(_, e)| e.token.range())
+			.collect();
+		assert_eq!(ranges, vec![2..3]);
 	}
 
 	#[test]

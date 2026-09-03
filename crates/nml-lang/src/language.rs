@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
+use std::ops::Range;
 use std::sync::Arc;
 
 use nml_diagnostics::Diagnostic;
@@ -13,6 +14,11 @@ use nml_document::Dependency;
 use nml_document::DocumentBuilder;
 use nml_document::ElementKind;
 use nml_document::Export;
+use nml_document::LinkSlot;
+use nml_document::OutputContext;
+use nml_document::Property;
+use nml_document::Slot;
+use nml_document::SymbolRef;
 use nml_document::Unit;
 use nml_document::Use;
 use nml_grammar::Node;
@@ -183,6 +189,7 @@ pub fn compile(
 		imports: Vec::new(),
 		module_exports: BTreeMap::new(),
 		exported: Vec::new(),
+		placeholders: None,
 		extensions: HashMap::new(),
 		finishers: Vec::new(),
 	};
@@ -281,6 +288,9 @@ pub struct Lower<'a, 'l> {
 	pub module_exports: BTreeMap<String, Vec<String>>,
 	/// Exported names and where they are written.
 	exported: Vec<(String, Token)>,
+	/// While a reference's caption is lowered: its target, and where it is written. The
+	/// caption's `{title}`, `{number}` and `{label}` become link slots.
+	pub(crate) placeholders: Option<(SymbolRef, Token)>,
 	/// State that other crates keep for the unit, by type (the Lua runtime).
 	extensions: HashMap<TypeId, Box<dyn Any>>,
 	/// Run when the lowering ends, in the order they were added.
@@ -374,21 +384,30 @@ impl Lower<'_, '_> {
 				self.prologue = false;
 			}
 			match node {
-				Node::Text(token) | Node::Escape(token) => {
-					let content = match node {
-						Node::Escape(token) => &token.content()[1..],
-						_ => token.content(),
-					};
-					match &mut text {
-						Some((start, buffer)) if start.end() == token.start() => {
-							*start = Token::new(start.source().clone(), start.start()..token.end());
-							buffer.push_str(content);
-						}
-						_ => {
-							self.flush(text.take());
-							text = Some((token.clone(), content.to_string()));
-						}
+				Node::Text(token) if self.placeholders.is_some() => {
+					let content = token.content();
+					let mut last = 0;
+					for (range, property) in placeholders(content) {
+						let piece = token.start() + last..token.start() + range.start;
+						let piece = Token::new(token.source().clone(), piece);
+						self.push_text(&mut text, piece, &content[last..range.start]);
+						self.flush(text.take());
+						let (target, target_token) = self.placeholders.clone().unwrap();
+						let slot = Slot::Link(LinkSlot {
+							target,
+							property,
+							context: OutputContext::Text,
+						});
+						self.builder.slot(slot, target_token);
+						last = range.end;
 					}
+					let piece =
+						Token::new(token.source().clone(), token.start() + last..token.end());
+					self.push_text(&mut text, piece, &content[last..]);
+				}
+				Node::Text(token) => self.push_text(&mut text, token.clone(), token.content()),
+				Node::Escape(token) => {
+					self.push_text(&mut text, token.clone(), &token.content()[1..]);
 				}
 				Node::Comment(_) => {}
 				Node::Paragraph { token, children } => {
@@ -494,11 +513,57 @@ impl Lower<'_, '_> {
 		self.exports.push(export);
 	}
 
+	/// Adds text written at `written` to `text`, the text not written yet: it continues it if
+	/// they touch, or replaces it once it is written.
+	fn push_text(&mut self, text: &mut Option<(Token, String)>, written: Token, content: &str) {
+		if content.is_empty() {
+			return;
+		}
+		match text {
+			Some((start, buffer))
+				if start.source().location() == written.source().location()
+					&& start.end() == written.start() =>
+			{
+				*start = Token::new(start.source().clone(), start.start()..written.end());
+				buffer.push_str(content);
+			}
+			_ => {
+				self.flush(text.take());
+				*text = Some((written, content.to_string()));
+			}
+		}
+	}
+
 	fn flush(&mut self, text: Option<(Token, String)>) {
 		if let Some((token, text)) = text {
 			self.builder.leaf(ElementKind::Text(text), token);
 		}
 	}
+}
+
+/// The placeholders of a reference caption's text, `{title}`, `{number}` and `{label}`: where
+/// each is, and the property it shows.
+fn placeholders(text: &str) -> Vec<(Range<usize>, Property)> {
+	let mut found = Vec::new();
+	let mut from = 0;
+	while let Some(open) = text[from..].find('{').map(|i| from + i) {
+		let rest = &text[open..];
+		let property = [
+			("{title}", Property::Title),
+			("{number}", Property::Number),
+			("{label}", Property::Label),
+		]
+		.into_iter()
+		.find(|(name, _)| rest.starts_with(name));
+		match property {
+			Some((name, property)) => {
+				found.push((open..open + name.len(), property));
+				from = open + name.len();
+			}
+			None => from = open + 1,
+		}
+	}
+	found
 }
 
 /// The text of nodes without markup, with escapes resolved.
