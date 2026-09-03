@@ -15,6 +15,7 @@ use crate::Result;
 use crate::Server;
 use crate::lua::LuaDocument;
 use crate::luals;
+use crate::semantic;
 
 /// The requests forwarded when their position is in Lua.
 const FORWARDED: &[&str] = &[
@@ -28,7 +29,10 @@ const FORWARDED: &[&str] = &[
 ];
 
 /// The requests about a whole document, forwarded when it has Lua.
-const FORWARDED_DOCUMENT: &[&str] = &["textDocument/documentSymbol"];
+const FORWARDED_DOCUMENT: &[&str] = &["textDocument/documentSymbol", SEMANTIC_TOKENS];
+
+/// Semantic tokens: LuaLS's for the Lua, merged with NML's.
+const SEMANTIC_TOKENS: &str = "textDocument/semanticTokens/full";
 
 fn range(value: &Value) -> Option<Range> {
 	serde_json::from_value(value.clone()).ok()
@@ -56,6 +60,27 @@ pub(crate) struct Forwarded {
 	url: Url,
 	/// The virtual document the request was made in.
 	document: LuaDocument,
+	/// For semantic tokens, NML's.
+	tokens: Vec<semantic::Token>,
+}
+
+impl Forwarded {
+	/// The result if LuaLS does not answer: NML's semantic tokens, or nothing.
+	fn fallback(&self) -> Value {
+		if self.method == SEMANTIC_TOKENS {
+			semantic_tokens(self.tokens.clone())
+		} else {
+			Value::Null
+		}
+	}
+}
+
+fn semantic_tokens(tokens: Vec<semantic::Token>) -> Value {
+	let tokens = lsp_types::SemanticTokens {
+		result_id: None,
+		data: semantic::encode(&tokens),
+	};
+	serde_json::to_value(tokens).unwrap()
 }
 
 /// The virtual documents results may be in: the one a request was made in, as it was
@@ -238,6 +263,10 @@ impl Server {
 			params["position"] = serde_json::to_value(lua_position)?;
 		}
 		let document = document.clone();
+		let tokens = match (method, self.analyses.get(&url)) {
+			(SEMANTIC_TOKENS, Some(analysis)) => semantic::tokens(&analysis.tree, &url),
+			_ => Vec::new(),
+		};
 		params["textDocument"]["uri"] = Value::from(luals::virtual_url(&url).as_str());
 		let luals = self.luals.as_mut().unwrap();
 		let Ok(lua_id) = luals.request(method, params) else {
@@ -248,6 +277,7 @@ impl Server {
 			method: method.to_string(),
 			url,
 			document,
+			tokens,
 		};
 		self.forwarded.insert(lua_id, forwarded);
 		Ok(true)
@@ -259,7 +289,22 @@ impl Server {
 		let Some(forwarded) = self.forwarded.remove(&response.id) else {
 			return Ok(());
 		};
-		let result = response.response_result.unwrap_or(Value::Null);
+		let Ok(result) = response.response_result else {
+			let response = Response::new_ok(forwarded.id.clone(), forwarded.fallback());
+			self.connection.sender.send(response.into())?;
+			return Ok(());
+		};
+		if forwarded.method == SEMANTIC_TOKENS {
+			let data: Vec<u32> = serde_json::from_value(result["data"].clone()).unwrap_or_default();
+			let lua = match self.luals.as_ref().and_then(|luals| luals.legend.as_ref()) {
+				Some(legend) => semantic::lua_tokens(&data, legend, &forwarded.document),
+				None => Vec::new(),
+			};
+			let tokens = semantic::merge(forwarded.tokens, lua);
+			let response = Response::new_ok(forwarded.id, semantic_tokens(tokens));
+			self.connection.sender.send(response.into())?;
+			return Ok(());
+		}
 		let documents = Documents {
 			forwarded: &forwarded,
 			open: &self.lua_documents,
@@ -279,7 +324,7 @@ impl Server {
 	/// Answers the requests still waiting for LuaLS, which stopped, with no result.
 	pub(crate) fn drop_forwarded(&mut self) -> Result<()> {
 		for (_, forwarded) in std::mem::take(&mut self.forwarded) {
-			let response = Response::new_ok(forwarded.id, Value::Null);
+			let response = Response::new_ok(forwarded.id.clone(), forwarded.fallback());
 			self.connection.sender.send(response.into())?;
 		}
 		Ok(())

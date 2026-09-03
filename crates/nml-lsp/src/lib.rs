@@ -368,7 +368,7 @@ impl Server {
 				};
 				let tokens = SemanticTokens {
 					result_id: None,
-					data,
+					data: semantic::encode(&data),
 				};
 				Ok(serde_json::to_value(tokens)?)
 			}

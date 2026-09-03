@@ -19,6 +19,7 @@ use lsp_server::Notification;
 use lsp_server::Request;
 use lsp_server::RequestId;
 use lsp_server::Response;
+use lsp_types::SemanticTokensLegend;
 use nml_source::Url;
 use serde_json::Value;
 
@@ -59,6 +60,8 @@ pub(crate) struct LuaLs {
 	queue: Vec<Message>,
 	/// The settings LuaLS is given.
 	settings: Value,
+	/// The legend of LuaLS's semantic tokens, once it has given it.
+	pub legend: Option<SemanticTokensLegend>,
 }
 
 impl std::fmt::Debug for LuaLs {
@@ -97,6 +100,7 @@ impl LuaLs {
 			initializing: None,
 			queue: Vec::new(),
 			settings: settings(root),
+			legend: None,
 		};
 		let root_url = Url::from_directory_path(root).map_err(|()| io::ErrorKind::InvalidInput)?;
 		let params = serde_json::json!({
@@ -109,6 +113,12 @@ impl LuaLs {
 					"completion": { "completionItem": { "snippetSupport": false } },
 					"publishDiagnostics": {},
 					"signatureHelp": {},
+					"semanticTokens": {
+						"requests": { "full": true },
+						"tokenTypes": [],
+						"tokenModifiers": [],
+						"formats": ["relative"],
+					},
 				},
 				"workspace": { "configuration": true, "workspaceFolders": true },
 			},
@@ -151,6 +161,9 @@ impl LuaLs {
 			return Ok(Some(response));
 		}
 		self.initializing = None;
+		if let Ok(result) = &response.response_result {
+			self.found_legend(&result["capabilities"]);
+		}
 		self.notify("initialized", serde_json::json!({}))?;
 		for message in std::mem::take(&mut self.queue) {
 			message.write(&mut self.stdin)?;
@@ -162,6 +175,16 @@ impl LuaLs {
 	/// precedence over them), and the rest needs no answer beyond an acknowledgement.
 	pub fn answer(&mut self, request: Request) {
 		let result = match request.method.as_str() {
+			"client/registerCapability" => {
+				let registrations = request.params["registrations"]
+					.as_array()
+					.cloned()
+					.unwrap_or_default();
+				for registration in registrations {
+					self.found_legend(&registration["registerOptions"]);
+				}
+				Value::Null
+			}
 			"workspace/configuration" => {
 				let items = request.params["items"]
 					.as_array()
@@ -177,6 +200,15 @@ impl LuaLs {
 		};
 		// Answers go out even before LuaLS is initialized: it may ask during `initialize`.
 		let _ = Message::from(Response::new_ok(request.id, result)).write(&mut self.stdin);
+	}
+
+	/// Keeps the legend of semantic tokens in `options`, if it has one: a server's
+	/// capabilities, or the options of a registration.
+	fn found_legend(&mut self, options: &Value) {
+		let provider = options.get("semanticTokensProvider").unwrap_or(options);
+		if let Ok(legend) = serde_json::from_value(provider["legend"].clone()) {
+			self.legend = Some(legend);
+		}
 	}
 
 	/// Gives LuaLS the current virtual Lua document of a `.nml` document.
@@ -244,6 +276,8 @@ fn settings(root: &Path) -> Value {
 		"runtime": { "version": "Lua 5.4", "builtin": builtin },
 		"workspace": { "library": [root.join(nml_lua::TYPES_DIR).to_string_lossy()] },
 		"diagnostics": { "globals": ["nml"] },
+		// Keywords, strings and numbers too: the editor knows no Lua in a `.nml` document.
+		"semantic": { "keyword": true },
 	})
 }
 

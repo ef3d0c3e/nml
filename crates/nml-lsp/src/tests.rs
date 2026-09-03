@@ -988,6 +988,69 @@ fn luals_proxy() {
 	);
 }
 
+impl Client {
+	/// The semantic tokens of a document, decoded.
+	fn semantic_tokens(&self, url: &Url) -> Vec<(u32, u32, u32, String)> {
+		let result = self.request(
+			SemanticTokensFullRequest::METHOD,
+			serde_json::to_value(SemanticTokensParams {
+				text_document: TextDocumentIdentifier::new(uri(url)),
+				work_done_progress_params: Default::default(),
+				partial_result_params: Default::default(),
+			})
+			.unwrap(),
+		);
+		let tokens: SemanticTokens = serde_json::from_value(result).unwrap();
+		decode(&tokens.data)
+	}
+}
+
+#[test]
+fn luals_semantic_tokens() {
+	let Some(luals) = luals_path() else {
+		eprintln!("skipped: LuaLS not found (set NML_LUALS)");
+		return;
+	};
+	let workspace = Workspace::new("luals-tokens", &[("nml.toml", "")]);
+	let client = Client::start_with(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": luals.to_string_lossy() }),
+	);
+	let page = workspace.url("a.nml");
+	let text = ":lua\n```\nlocal n = 'x' -- note\nfunction greet(name) return n end\n```\n\n# Say :lua`greet(1)`\n";
+	client.open(&page, text);
+	client.diagnostics();
+	let tokens = client.semantic_tokens(&page);
+	let expected: &[(u32, u32, u32, &str)] = &[
+		// NML's: the block's command and fence.
+		(0, 0, 4, "keyword"),
+		(1, 0, 3, "operator"),
+		// LuaLS's, in the block.
+		(2, 0, 5, "keyword"),
+		(2, 6, 1, "variable"),
+		(2, 10, 3, "string"),
+		(2, 14, 7, "comment"),
+		(3, 0, 8, "keyword"),
+		(3, 9, 5, "function"),
+		(3, 15, 4, "parameter"),
+		(3, 21, 6, "keyword"),
+		(3, 28, 1, "variable"),
+		(3, 30, 3, "keyword"),
+		(4, 0, 3, "operator"),
+		// NML's around the role, LuaLS's in it; not its wrapper.
+		(6, 0, 1, "operator"),
+		(6, 6, 4, "keyword"),
+		(6, 10, 1, "operator"),
+		(6, 11, 5, "function"),
+		(6, 17, 1, "number"),
+		(6, 19, 1, "operator"),
+	];
+	let shown: Vec<_> = (tokens.iter())
+		.map(|(line, column, length, kind)| (*line, *column, *length, kind.as_str()))
+		.collect();
+	assert_eq!(shown, expected);
+}
+
 #[test]
 fn luals_sees_imported_modules() {
 	let Some(luals) = luals_path() else {
@@ -1230,6 +1293,28 @@ fn luals_is_restarted_once() {
 	assert_eq!(response.response_result.unwrap(), serde_json::Value::Null);
 	// It is started again once; the second time, the user is told.
 	assert!(client.shown_message().starts_with("LuaLS stopped"));
+}
+
+#[test]
+fn semantic_tokens_without_luals_answer() {
+	let workspace = Workspace::new("luals-tokens-stops", &[("nml.toml", "")]);
+	let luals = fake_luals(&workspace, "sleep 1");
+	let client = Client::start_with(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": luals.to_string_lossy() }),
+	);
+	let page = workspace.url("a.nml");
+	client.open(&page, ":lua`x = 1`\n");
+	client.diagnostics();
+	// LuaLS stops before it answers: NML's tokens.
+	assert_eq!(
+		client.semantic_tokens(&page),
+		[
+			(0, 0, 4, "keyword".into()),
+			(0, 4, 1, "operator".into()),
+			(0, 10, 1, "operator".into()),
+		]
+	);
 }
 
 #[test]
