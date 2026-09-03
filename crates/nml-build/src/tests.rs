@@ -135,7 +135,7 @@ fn reference_labels() {
 			),
 			(
 				"b.nml",
-				"[[a#f2]], [[a#t]], [[a#setup]], [[a#here]], [[a#]], [[a#f2|caption]].\n",
+				"[[a#f2]], [[a#t]], [[a#setup]], [[a#here]], [[a#]], [[a#f2|caption]].\n\n[[a#f2|see figure **{number}**: {title}]] [[a#setup|{label}, {number}]]\n",
 			),
 		],
 	);
@@ -146,7 +146,9 @@ fn reference_labels() {
 		body(&workspace.output("b.html")),
 		"<p><a href=\"a.html#f2\">Figure 2</a>, <a href=\"a.html#t\">Table 1</a>, \
 		<a href=\"a.html#setup\">Setup</a>, <a href=\"a.html#here\">Here</a>, \
-		<a href=\"a.html\">A</a>, <a href=\"a.html#f2\">caption</a>.</p>\n"
+		<a href=\"a.html\">A</a>, <a href=\"a.html#f2\">caption</a>.</p>\n\
+		<p><a href=\"a.html#f2\">see figure <strong>2</strong>: Two</a> \
+		<a href=\"a.html#setup\">Setup, </a></p>\n"
 	);
 
 	// A figure added before it: the label follows, without parsing `b`.
@@ -157,7 +159,9 @@ fn reference_labels() {
 	let report = workspace.build();
 	assert_eq!(report.parsed, ["a.nml"]);
 	assert_eq!(report.written, ["a.nml", "b.nml"]);
-	assert!(body(&workspace.output("b.html")).contains(">Figure 3</a>"));
+	let b = body(&workspace.output("b.html")).to_string();
+	assert!(b.contains(">Figure 3</a>"), "{b}");
+	assert!(b.contains(">see figure <strong>3</strong>: Two</a>"), "{b}");
 }
 
 #[test]
