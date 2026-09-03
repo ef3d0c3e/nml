@@ -58,7 +58,7 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::LineEnd,
 			Atom::capture("code", Atom::Text),
 			Atom::LineStart,
-			Atom::same("fence"),
+			Atom::capture("close", Atom::same("fence")).with_class("operator"),
 			Atom::LineEnd,
 		],
 	);
@@ -89,7 +89,7 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("command", Atom::literal(":lua")).with_class("keyword"),
 			Atom::capture("fence", Atom::run('`', 1)).with_class("operator"),
 			Atom::capture("code", Atom::Text),
-			Atom::same("fence"),
+			Atom::capture("close", Atom::same("fence")).with_class("operator"),
 		],
 	);
 	language.add(role, |lower, m| {

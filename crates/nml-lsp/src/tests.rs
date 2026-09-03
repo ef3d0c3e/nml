@@ -316,6 +316,7 @@ fn semantic_tokens() {
 			(1, 7, 2, "operator".into()),
 			(2, 0, 4, "keyword".into()),
 			(2, 4, 1, "operator".into()),
+			(2, 10, 1, "operator".into()),
 		]
 	);
 }
