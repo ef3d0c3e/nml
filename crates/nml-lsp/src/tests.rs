@@ -792,16 +792,27 @@ fn lua_documents() {
 	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
 	client.open(
 		&url,
-		":lua\n```\nx = 1\nfunction f() return x end\n```\n\nA :lua`f()` and :lua`x = 2`.\n",
+		":lua\n```\nx = 1\nfunction f() return x end\n```\n\nA :lua`f()` and :lua`x = 2`.\n\n```rust\nfn f() {}\n```\n\n```\nplain\n```\n",
 	);
 	client.diagnostics();
 	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
 
+	// The Lua, and the code blocks with their language, in order.
 	let result = client.request(lua::CODE_RANGE, params.clone());
 	let ranges: Vec<lua::CodeRangeInfo> = serde_json::from_value(result).unwrap();
-	assert_eq!(ranges.len(), 3);
-	assert_eq!(ranges[0].range.start, position(2, 0));
-	assert_eq!(ranges[0].language, "lua");
+	let ranges: Vec<_> = (ranges.iter())
+		.map(|r| (r.range.start, r.range.end, r.language.as_str()))
+		.collect();
+	assert_eq!(
+		ranges,
+		[
+			(position(2, 0), position(4, 0), "lua"),
+			(position(6, 7), position(6, 10), "lua"),
+			(position(6, 21), position(6, 26), "lua"),
+			(position(9, 0), position(10, 0), "rust"),
+			(position(13, 0), position(14, 0), ""),
+		]
+	);
 
 	let result = client.request(lua::LUA_DOCUMENT, params);
 	let document: lua::LuaDocument = serde_json::from_value(result).unwrap();

@@ -106,6 +106,40 @@ fn pieces<'t>(
 	}
 }
 
+/// The code of the code blocks of a tree, in the file.
+fn code_blocks(
+	nodes: &[Node],
+	language: &nml_lang::Language,
+	file: &Url,
+	out: &mut Vec<CodeRangeInfo>,
+) {
+	for node in nodes {
+		match node {
+			Node::Paragraph { children, .. } => code_blocks(children, language, file, out),
+			Node::Match(m) => {
+				let name = language.rules().get(m.rule).map(|rule| rule.name.as_str());
+				if name == Some("code_block")
+					&& let Some(code) = m.capture("code")
+					&& code.token.root().source().location() == file
+				{
+					out.push(CodeRangeInfo {
+						range: convert::range(&code.token),
+						language: (m.capture("language"))
+							.map_or("", |language| language.token.content())
+							.into(),
+					});
+				}
+				for capture in &m.captures {
+					if let Value::Nodes(nodes) = &capture.value {
+						code_blocks(nodes, language, file, out);
+					}
+				}
+			}
+			_ => {}
+		}
+	}
+}
+
 /// Whether code is a Lua expression, as `:lua` roles decide it. The code is only compiled,
 /// never run, so a plain Lua state is enough.
 fn is_expression(lua: &mlua::Lua, code: &str) -> bool {
@@ -252,16 +286,22 @@ impl Server {
 			.collect()
 	}
 
+	/// The code of the document, with its language: its Lua, and its code blocks (whose
+	/// language is empty if it has none), in order.
 	pub(crate) fn code_ranges(&self, params: LuaParams) -> Result<Vec<CodeRangeInfo>> {
 		let url = Url::parse(params.text_document.uri.as_str())?;
-		Ok(self
-			.lua_fragments(&url)
-			.into_iter()
+		let mut ranges: Vec<_> = (self.lua_fragments(&url).into_iter())
 			.map(|(token, _)| CodeRangeInfo {
 				range: convert::range(&token),
 				language: "lua".into(),
 			})
-			.collect())
+			.collect();
+		if let Some(analysis) = self.analyses.get(&url) {
+			let language = analysis.language.as_deref().unwrap_or(&self.language);
+			code_blocks(&analysis.tree, language, &url, &mut ranges);
+		}
+		ranges.sort_by_key(|range| range.range.start);
+		Ok(ranges)
 	}
 
 	pub(crate) fn lua_document(&self, params: LuaParams) -> Result<LuaDocument> {
