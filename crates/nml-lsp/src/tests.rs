@@ -722,6 +722,71 @@ fn conceal_and_style() {
 }
 
 #[test]
+fn conceal_tokens() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
+	let text = " * a\n *- [x] b\n *- [-] c\n\n> q\n> r\n\n> [!warning] Careful\n> s\n\n```rust Main\nfn main() {}\n```\n\n> [!nope]\n> t\n";
+	client.open(&url, text);
+	client.diagnostics();
+	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
+	let result = client.request(display::CONCEAL, params);
+	let conceals: Vec<display::ConcealInfo> = serde_json::from_value(result).unwrap();
+	let shown: Vec<_> = conceals
+		.iter()
+		.map(|c| {
+			let (start, end) = (c.range.start, c.range.end);
+			assert_eq!(start.line, end.line);
+			let target = match &c.conceal_text {
+				display::ConcealTarget::Text(text) => format!("{text:?}"),
+				display::ConcealTarget::Token { token, params } => format!("{token} {params}"),
+			};
+			(start.line, start.character, end.character, target)
+		})
+		.collect();
+	let expected = [
+		(0, 1, 2, r#"bullet {"depth":0,"numbered":false}"#),
+		(1, 1, 2, r#"bullet {"depth":0,"numbered":false}"#),
+		(1, 2, 3, r#"bullet {"depth":1,"numbered":true}"#),
+		(1, 4, 7, r#"checkbox {"state":"Checked"}"#),
+		(2, 1, 2, r#"bullet {"depth":0,"numbered":false}"#),
+		(2, 2, 3, r#"bullet {"depth":1,"numbered":true}"#),
+		(2, 4, 7, r#"checkbox {"state":"Partial"}"#),
+		(4, 0, 1, r#"block {"name":"Quote"}"#),
+		(5, 0, 1, r#"block {"name":"Quote"}"#),
+		(7, 0, 1, r#"block {"name":"Warning"}"#),
+		(8, 0, 1, r#"block {"name":"Warning"}"#),
+		(7, 2, 12, r#"block_name {"name":"Warning"}"#),
+		(10, 0, 12, r#"code {"language":"rust","name":"Main"}"#),
+		(12, 0, 3, r#""""#),
+		// An unknown callout: its markers are text.
+		(14, 0, 4, r#""""#),
+		(14, 8, 9, r#""""#),
+	];
+	let shown: Vec<_> = (shown.iter())
+		.map(|(line, start, end, target)| (*line, *start, *end, target.as_str()))
+		.collect();
+	assert_eq!(shown, expected);
+
+	// Nested quotes, and a quote in a list entry: each `>` at its own column.
+	let url = Url::parse("file:///tmp/nml-lsp-none/b.nml").unwrap();
+	client.open(&url, "> a\n> > b\n> > c\n\n * e\n   > f\n   > g\n");
+	client.diagnostics();
+	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
+	let result = client.request(display::CONCEAL, params);
+	let conceals: Vec<display::ConcealInfo> = serde_json::from_value(result).unwrap();
+	let blocks: Vec<_> = (conceals.iter())
+		.filter(
+			|c| matches!(&c.conceal_text, display::ConcealTarget::Token { token, .. } if token == "block"),
+		)
+		.map(|c| (c.range.start.line, c.range.start.character))
+		.collect();
+	assert_eq!(
+		blocks,
+		[(0, 0), (1, 0), (2, 0), (1, 2), (2, 2), (5, 3), (6, 3)]
+	);
+}
+
+#[test]
 fn lua_documents() {
 	let client = Client::start(None);
 	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
