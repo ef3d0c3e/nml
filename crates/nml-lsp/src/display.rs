@@ -132,15 +132,19 @@ impl Markers<'_> {
 				Node::Paragraph { children, .. } => self.nodes(children),
 				Node::Match(m) => {
 					let rule = self.language.rules().get(m.rule);
-					let tokens = match rule.map(|rule| rule.name.as_str()) {
+					// Whether the rule's markers are handled: else, its `open` and `close`
+					// are hidden.
+					let handled = match rule.map(|rule| rule.name.as_str()) {
 						Some("bullet_entry" | "numbered_entry") => self.list_entry(m),
 						Some("quote") => self.quote(m, m.capture("marker"), "Quote"),
 						Some("callout") => self.callout(m),
 						Some("code_block") => self.code_block(m),
+						// Lua stays as written, with `:lua` and its fences.
+						Some("lua" | "lua-role") => true,
 						_ => false,
 					};
 					for capture in &m.captures {
-						if !tokens && matches!(&*capture.name, "open" | "close") {
+						if !handled && matches!(&*capture.name, "open" | "close") {
 							self.text(&capture.token);
 						}
 						if let Value::Nodes(nodes) = &capture.value {
@@ -173,8 +177,7 @@ impl Markers<'_> {
 		self.add(range, ConcealTarget::Token { token, params });
 	}
 
-	/// Each marker of a list entry, and its checkbox. Whether the rule has tokens (it has no
-	/// markers to hide as text).
+	/// Each marker of a list entry, and its checkbox.
 	fn list_entry(&mut self, m: &RuleMatch) -> bool {
 		let markers = m.captures("marker").chain(m.captures("markers"));
 		let mut depth = 0;

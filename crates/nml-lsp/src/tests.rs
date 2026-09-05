@@ -672,7 +672,10 @@ fn inlay_hints() {
 fn conceal_and_style() {
 	let client = Client::start(None);
 	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
-	client.open(&url, "# Title\na **b *c*** [[x|y]] `z`\n");
+	client.open(
+		&url,
+		"# Title\na **b *c*** [[x|y]] `z`\n\n:lua`1` and\n:lua\n```\nx = 1\n```\n",
+	);
 	client.diagnostics();
 	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
 
