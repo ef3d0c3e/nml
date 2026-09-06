@@ -189,11 +189,14 @@ struct LuaRules {
 ///
 /// `m.text` is the matched text, and `m.captures` the text of each capture by name. A
 /// capture inside `nml.many` is a list of texts, empty if it never matched.
+///
+/// Editors show `doc`, in Markdown, when the syntax is hovered or completed, and insert
+/// `snippet`, an LSP snippet (`:shot{${1:name}}`), to write it.
 #[api]
 fn rule(
 	lua: &Lua,
 	#[lua(
-		type = "{ name: string, atoms: (string|nml.Atom)[], handler: fun(m: table, out: table) }"
+		type = "{ name: string, atoms: (string|nml.Atom)[], handler: fun(m: table, out: table), doc: string?, snippet: string? }"
 	)]
 	definition: Table,
 ) -> mlua::Result<()> {
@@ -206,7 +209,15 @@ fn rule(
 	let handler: Function = definition
 		.get("handler")
 		.map_err(|_| mlua::Error::runtime("a rule needs a `handler` function"))?;
-	let rule = Rule::new(name, atoms(atoms_)?);
+	let text = |key: &str| -> mlua::Result<String> {
+		let value: Option<String> = definition
+			.get(key)
+			.map_err(|_| mlua::Error::runtime(format!("a rule's `{key}` is a string")))?;
+		Ok(value.unwrap_or_default())
+	};
+	let rule = Rule::new(name, atoms(atoms_)?)
+		.with_doc(text("doc")?)
+		.with_snippet(text("snippet")?);
 	if lua.app_data_ref::<LuaRules>().is_none() {
 		lua.set_app_data(LuaRules::default());
 	}
@@ -462,6 +473,44 @@ Press :kbd{Ctrl + **C**}.
 			),
 			"{html}"
 		);
+	}
+
+	#[test]
+	fn rules_are_documented() {
+		let compiled = compile(
+			r##":lua
+```
+nml.rule {
+	name = "shot",
+	atoms = { ":shot{", nml.capture("name", nml.text), "}" },
+	handler = function(m, out) end,
+	doc = "A **shot**.",
+	snippet = ":shot{${1:name}}",
+}
+nml.rule { name = "plain", atoms = { ":plain" }, handler = function(m, out) end }
+```
+
+:shot{x} :plain
+"##,
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let language = compiled.language.unwrap();
+		let rule = |name| {
+			let (_, rule) = (language.rules().iter())
+				.find(|(_, rule)| rule.name == name)
+				.unwrap();
+			(rule.doc.clone(), rule.snippet.clone())
+		};
+		assert_eq!(
+			rule("shot"),
+			("A **shot**.".into(), ":shot{${1:name}}".into())
+		);
+		assert_eq!(rule("plain"), (String::new(), String::new()));
+
+		let compiled = compile(
+			":lua\n```\nnml.rule { name = 'x', atoms = { ':x' }, handler = function() end, doc = {} }\n```\n",
+		);
+		assert_diagnostics!(compiled.diagnostics, [4001]);
 	}
 
 	#[test]
