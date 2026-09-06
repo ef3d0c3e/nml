@@ -16,7 +16,12 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("code", Atom::Text).with_class("string"),
 			Atom::capture("close", Atom::same("open")).with_class("operator"),
 		],
-	);
+	)
+	.with_doc(
+		"**Inline code**: ``` `code` ```, shown as written.\n\n\
+		A longer fence lets the code hold backticks: ``` `` a ` b `` ```.",
+	)
+	.with_snippet("`${1:code}`");
 	language.add(code, |lower, m| {
 		let code = code_text(m.capture("code").unwrap().token.content());
 		lower.builder.leaf(ElementKind::Code(code), m.token.clone());
@@ -31,7 +36,13 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("url", Atom::Text).with_class("string"),
 			Atom::capture("close", Atom::literal(")")).with_class("operator"),
 		],
-	);
+	)
+	.with_doc(
+		"**Link** to a URL: `[text](https://example.org)`.\n\n\
+		Without a text, `[](url)` shows the URL. To link to a heading, figure or page of the \
+		workspace, use a reference: `[[name]]`.",
+	)
+	.with_snippet("[${1:text}](${2:url})");
 	language.add(link, |lower, m| {
 		let url = m.capture("url").unwrap().token.content().trim().to_string();
 		let text = match m.capture("text").map(|capture| &capture.value) {

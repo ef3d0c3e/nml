@@ -25,7 +25,14 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("path", Atom::RestOfLine).with_class("string"),
 			Atom::LineEnd,
 		],
-	);
+	)
+	.with_doc(
+		"**Include** a file here, as part of this unit: `:include parts/intro`.\n\n\
+		It sees this file's grammar and variables, and what it declares belongs to this unit. \
+		The path is relative to this file, or to the workspace root with a leading `/`; \
+		`.nml` may be left out.",
+	)
+	.with_snippet(":include ${1:path}");
 	language.add(rule, |lower, m| {
 		let token = m.capture("path").unwrap().token.clone();
 		let report = |kind| Diagnostic::new(kind, DiagnosticMessage::new(token.clone()));

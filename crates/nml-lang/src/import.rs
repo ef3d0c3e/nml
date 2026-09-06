@@ -28,7 +28,14 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			]),
 			Atom::LineEnd,
 		],
-	);
+	)
+	.with_doc(
+		"**Import** a module, in the prologue: its rules, Lua and exported variables.\n\n\
+		```nml\n:import std.toc as toc\n```\n\n\
+		Its Lua is in the namespace (`toc.…`, the module's last name by default), and its \
+		variables are `%toc.name%`. Modules are the `[[module]]` roots of `nml.toml`.",
+	)
+	.with_snippet(":import ${1:module}");
 	language.add_prologue(rule, |lower, m| {
 		let module = m.capture("module").unwrap().token.clone();
 		let path = module.content();

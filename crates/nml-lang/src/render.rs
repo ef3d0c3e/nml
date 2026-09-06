@@ -34,7 +34,23 @@ const LAYOUTS: &[&str] = &[
 /// `:tex[env=…]`, `:graph[layout=…]` and `:typst`, each followed by a fence, and the role
 /// ``:typst`…` ``.
 pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
-	for (name, open, block) in [("math", "$", false), ("display_math", "$$", true)] {
+	for (name, open, block, doc, snippet) in [
+		(
+			"math",
+			"$",
+			false,
+			"**Math** in a line, in LaTeX: `$e^{i\\pi} + 1 = 0$`, rendered when the page is built.",
+			"\\$${1:x}\\$",
+		),
+		(
+			"display_math",
+			"$$",
+			true,
+			"**Math** on its own line, in LaTeX: `$$\\sum_{i=1}^n i$$`, rendered when the page \
+			is built.",
+			"\\$\\$${1:x}\\$\\$",
+		),
+	] {
 		let rule = Rule::new(
 			name,
 			vec![
@@ -42,7 +58,9 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 				Atom::capture("source", Atom::Text).with_class("string"),
 				Atom::capture("close", Atom::literal(open)).with_class("operator"),
 			],
-		);
+		)
+		.with_doc(doc)
+		.with_snippet(snippet);
 		language.add(rule, move |lower, m| {
 			let source = m.capture("source").unwrap().token.content().to_string();
 			let kind = ElementKind::Rendered {
@@ -61,12 +79,34 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	let graph = OptionSchema::new([OptionSpec::new("layout", OptionKind::Choice(layouts))
 		.with_default(OptionValue::Text("dot".into()))
 		.with_doc("The Graphviz layout engine.")]);
-	for (command, schema, languages) in [
-		("tex", Some(tex), &["tex", "latex"][..]),
-		("graph", Some(graph), &["dot"][..]),
-		("typst", None, &["typst"][..]),
+	for (command, schema, languages, doc) in [
+		(
+			"tex",
+			Some(tex),
+			&["tex", "latex"][..],
+			"**LaTeX**, rendered to an image when the page is built.\n\n\
+			````nml\n:tex[env=main]\n```\n\\begin{tikzpicture} … \\end{tikzpicture}\n```\n````\n\n\
+			`env` picks the environment of `[render.tex.<name>]` in `nml.toml`.",
+		),
+		(
+			"graph",
+			Some(graph),
+			&["dot"][..],
+			"**Graph**, in Graphviz's DOT, rendered when the page is built.\n\n\
+			````nml\n:graph[layout=dot]\n```\ndigraph { a -> b }\n```\n````\n\n\
+			`layout` is the Graphviz engine.",
+		),
+		(
+			"typst",
+			None,
+			&["typst"][..],
+			"**Typst**, rendered when the page is built.\n\n\
+			````nml\n:typst\n```\n#rect[Hello]\n```\n````",
+		),
 	] {
-		language.add(fenced(command, schema), move |lower, m| {
+		let snippet = format!(":{command}\n```\n${{0}}\n```");
+		let rule = fenced(command, schema).with_doc(doc).with_snippet(snippet);
+		language.add(rule, move |lower, m| {
 			lower_fenced(lower, m, command, languages)
 		})?;
 	}
@@ -79,7 +119,9 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("source", Atom::Text).with_class("string"),
 			Atom::capture("close", Atom::same("open")).with_class("operator"),
 		],
-	);
+	)
+	.with_doc("**Typst** in a line, rendered when the page is built: ``` :typst`$a^2$` ```.")
+	.with_snippet(":typst`${1}`");
 	language.add(role, |lower, m| {
 		let kind = ElementKind::Rendered {
 			kind: RenderKind::Typst,

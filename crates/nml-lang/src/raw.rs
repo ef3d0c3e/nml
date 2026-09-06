@@ -22,7 +22,12 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("close", Atom::same("fence")).with_class("operator"),
 			Atom::LineEnd,
 		],
-	);
+	)
+	.with_doc(
+		"**Raw HTML**, written to the page as it is.\n\n\
+		````nml\n:raw\n```\n<hr>\n```\n````",
+	)
+	.with_snippet(":raw\n```\n${0}\n```");
 	language.add(block, |lower, m| {
 		let content = m.capture("content").unwrap().token.content();
 		let content = content.strip_suffix('\n').unwrap_or(content);
@@ -37,7 +42,9 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("content", Atom::Text),
 			Atom::capture("close", Atom::same("open")).with_class("operator"),
 		],
-	);
+	)
+	.with_doc("**Raw HTML** in a line, written as it is: ``` :raw`<br>` ```.")
+	.with_snippet(":raw`${1:html}`");
 	language.add(role, |lower, m| {
 		let content = m.capture("content").unwrap().token.content();
 		lower.builder.leaf(raw(content, false), m.token.clone());

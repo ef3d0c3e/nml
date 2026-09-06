@@ -1292,3 +1292,25 @@ fn static_files() {
 	let report = workspace.build();
 	assert_diagnostics!(report.diagnostics, [3015 @ 16..24]);
 }
+
+#[test]
+fn every_rule_is_documented() {
+	let language = crate::language();
+	let mut undocumented = Vec::new();
+	for (_, rule) in language.rules().iter() {
+		if rule.doc.trim().is_empty() {
+			undocumented.push(rule.name.clone());
+		}
+		// A snippet writes what its rule matches, from its opener.
+		if let Some(opener) = rule.opener().as_ref().and_then(|o| o.literal()) {
+			let opener = opener.trim_end();
+			assert!(
+				rule.snippet.is_empty() || rule.snippet.replace("\\$", "$").starts_with(opener),
+				"{}: {:?} does not start with {opener:?}",
+				rule.name,
+				rule.snippet
+			);
+		}
+	}
+	assert_eq!(undocumented, Vec::<String>::new());
+}

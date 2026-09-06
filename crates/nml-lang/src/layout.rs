@@ -42,7 +42,14 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			]),
 			Atom::LineEnd,
 		],
-	);
+	)
+	.with_doc(
+		"**Layout**: content arranged in parts, separated by `:next`.\n\n\
+		```nml\n:layout split\nLeft.\n:next\nRight.\n:end\n```\n\n\
+		Layouts: `centered` (one part), `split` (side by side, any number of parts), \
+		`spoiler` (one part, hidden until opened; the title is what is shown).",
+	)
+	.with_snippet(":layout ${1|split,centered,spoiler|}\n${2}\n:next\n${0}\n:end");
 	language.add(rule, |lower, m| {
 		let name = m.capture("name").unwrap().token.clone();
 		let Some(kind) = LayoutKind::from_name(name.content()) else {

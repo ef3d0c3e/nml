@@ -25,7 +25,12 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			]),
 			Atom::LineEnd,
 		],
-	);
+	)
+	.with_doc(
+		"**Anchor**: a place to refer to, with an optional title.\n\n\
+		```nml\n:anchor setup The setup\n```\n\n`[[setup]]` links here.",
+	)
+	.with_snippet(":anchor ${1:name} ${2:Title}");
 	language.add(rule, |lower, m| {
 		let reference = m.capture("ref").unwrap().token.clone();
 		let title = match m.capture("title").map(|capture| &capture.value) {

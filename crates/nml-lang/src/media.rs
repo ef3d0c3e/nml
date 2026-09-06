@@ -58,7 +58,15 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 				Atom::Options(Arc::new(schema)),
 			)]),
 		],
-	);
+	)
+	.with_doc(
+		"**Media**: an image, a video or an audio file.\n\n\
+		```nml\n![A cat](cat.png)[width=50%]\n```\n\n\
+		The text is the media's alternative text. A file of the workspace is copied to the \
+		output's `assets/`; a URL is used as it is. Options: `type` (`auto`, `image`, `video`, \
+		`audio`) and `width`.",
+	)
+	.with_snippet("![${1:description}](${2:path})");
 	language.add(media, lower_media)?;
 
 	let figure = Rule::new(
@@ -77,7 +85,14 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::LineEnd,
 			Atom::capture("body", Atom::Block),
 		],
-	);
+	)
+	.with_doc(
+		"**Figure**: the block after it, numbered, with a caption.\n\n\
+		```nml\n:figure #cat A cat\n![](cat.png)\n```\n\n\
+		`#name` makes it referenceable: `[[cat]]` shows *Figure 1*, and \
+		`[[cat|see {number}]]` its number.",
+	)
+	.with_snippet(":figure #${1:name} ${2:Caption}\n${0}");
 	language.add(figure, lower_figure)?;
 	Ok(())
 }

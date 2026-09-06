@@ -28,7 +28,13 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("marker", Atom::literal("> ")).with_class("operator"),
 			body(),
 		],
-	);
+	)
+	.with_doc(
+		"**Quote**: lines that start with `> `.\n\n\
+		To give its source, write it as a callout: \
+		`> [!quote][author=…, cite=…, url=…]`.",
+	)
+	.with_snippet("> ${0}");
 	language.add(quote, |lower, m| {
 		let quote = ElementKind::Quote {
 			author: None,
@@ -68,7 +74,14 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::LineEnd,
 			body(),
 		],
-	);
+	)
+	.with_doc(
+		"**Callout**: a quote with a kind and an optional title.\n\n\
+		```nml\n> [!warning] Before you start\n> Back up your files.\n```\n\n\
+		Kinds: `note`, `tip`, `important`, `warning`, `caution`, `todo`, and `quote`, whose \
+		options give the quotation's source: `[author=…, cite=…, url=…]`.",
+	)
+	.with_snippet("> [!${1|note,tip,important,warning,caution,todo,quote|}] ${2:Title}\n> ${0}");
 	language.add(callout, |lower, m| {
 		let kind_token = m.capture("kind").unwrap().token.clone();
 		let options = match m.capture("options").map(|capture| &capture.value) {

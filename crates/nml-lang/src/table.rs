@@ -62,7 +62,15 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	};
 	let mut atoms = row();
 	atoms.push(Atom::repeat(row(), 0, None));
-	language.add(Rule::new("table_rows", atoms), lower_table)?;
+	let rows = Rule::new("table_rows", atoms)
+		.with_doc(
+			"**Table**: rows of cells between pipes.\n\n\
+			```nml\n| Name | Price |\n|:-----|------:|\n| Tea  |     3 |\n```\n\n\
+			A separator row makes the rows above it headers, and aligns the columns with `:`. \
+			A cell's options come right after its pipe: `|[hspan=2] wide |`, `vspan` for rows.",
+		)
+		.with_snippet("| ${1:Header} | ${2:Header} |\n|---|---|\n| ${3} | ${0} |");
+	language.add(rows, lower_table)?;
 
 	let command = Rule::new(
 		"table",
@@ -80,7 +88,13 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::LineEnd,
 			Atom::capture("body", Atom::Block),
 		],
-	);
+	)
+	.with_doc(
+		"**Numbered table**: the table after it, with a caption.\n\n\
+		```nml\n:table #prices Prices\n| Tea | 3 |\n```\n\n\
+		`#name` makes it referenceable: `[[prices]]` shows *Table 1*.",
+	)
+	.with_snippet(":table #${1:name} ${2:Caption}\n| ${3} | ${0} |");
 	language.add(command, lower_command)?;
 	Ok(())
 }

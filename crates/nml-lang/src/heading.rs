@@ -45,7 +45,14 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			]),
 			Atom::LineEnd,
 		],
-	);
+	)
+	.with_doc(
+		"**Heading**: `#` to `######` and a title, one `#` per level.\n\n\
+		```nml\n## Installation {#install .unlisted}\n```\n\n\
+		In braces, `#name` makes it referenceable as `[[name]]`, and `.class` gives it an HTML \
+		class (`unlisted` keeps it out of the table of contents, `unnumbered` unnumbers it).",
+	)
+	.with_snippet("# ${1:Title}");
 	language.add(rule, |lower, m| {
 		let level_token = &m.capture("level").unwrap().token;
 		let mut level = level_token.content().len();

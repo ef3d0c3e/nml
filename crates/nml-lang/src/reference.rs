@@ -58,7 +58,17 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			]),
 			Atom::capture("close", Atom::literal("]]")).with_class("operator"),
 		],
-	);
+	)
+	.with_doc(
+		"**Reference** to a heading, figure, table, anchor or page.\n\n\
+		- `[[name]]`: in this unit, or the only one of the workspace with that name.\n\
+		- `[[doc#name]]`: in the unit `doc`.\n\
+		- `[[doc#]]`: the page `doc`.\n\
+		- `[[#name]]`: anywhere in the workspace.\n\n\
+		Without a caption, it shows its target's label (*Figure 2*, a title). A caption, \
+		`[[name|see {number}]]`, can show the target's `{title}`, `{number}` and `{label}`.",
+	)
+	.with_snippet("[[${1:name}]]");
 	language.add(rule, |lower, m| {
 		let target_token = m.capture("target").unwrap().token.clone();
 		let caption = m.capture("caption").map(|capture| &capture.value);

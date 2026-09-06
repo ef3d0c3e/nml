@@ -54,7 +54,14 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("close", Atom::same("fence")).with_class("operator"),
 			Atom::LineEnd,
 		],
-	);
+	)
+	.with_doc(
+		"**Code block**, highlighted in its language, with an optional title.\n\n\
+		````nml\n```rust[line_offset=10] main.rs\nfn main() {}\n```\n````\n\n\
+		Options: `line_offset` (the number of the first line), `numbers` (whether lines are \
+		numbered). A longer fence lets the code hold ```` ``` ````.",
+	)
+	.with_snippet("```${1:language} ${2:Title}\n${0}\n```");
 	language.add(rule, |lower, m| {
 		let language = m.capture("language").map(|capture| capture.token.clone());
 		if let Some(language) = &language

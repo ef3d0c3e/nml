@@ -43,7 +43,29 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 				numbered list, `disc`, `circle`, `square` or `none` otherwise.",
 			),
 	]));
-	for (name, marker) in [("bullet_entry", "*"), ("numbered_entry", "-")] {
+	for (name, marker, doc, snippet) in [
+		(
+			"bullet_entry",
+			"*",
+			"**List entry**: ` * entry`, a blank, `*`, a blank and the entry.\n\n\
+			```nml\n * Fruits\n ** Apple\n *- First step\n```\n\n\
+			The run of markers is the depth: `**` is in a list inside the entry above, and \
+			`*-` in a numbered list inside it. A checkbox follows: ` * [x] Done` (`[ ]`, \
+			`[-]` or `[x]`). Options, right after the markers: `offset` (the entry's number), \
+			`bullet` (`disc`, `circle`, `square`, `none`).",
+			" * ${0}",
+		),
+		(
+			"numbered_entry",
+			"-",
+			"**Numbered list entry**: ` - entry`, a blank, `-`, a blank and the entry.\n\n\
+			```nml\n - First\n - Second\n -* A point of the second\n```\n\n\
+			The run of markers is the depth. A checkbox follows: ` - [x] Done`. Options, right \
+			after the markers: `offset` (the entry's number, or where the list starts), \
+			`bullet` (`1`, `a`, `A`, `i`, `I`).",
+			" - ${0}",
+		),
+	] {
 		let markers = || Atom::or([vec![Atom::literal("*")], vec![Atom::literal("-")]]);
 		let checkboxes =
 			[" [ ]", " []", " [-]", " [x]", " [X]"].map(|checkbox| vec![Atom::literal(checkbox)]);
@@ -67,7 +89,9 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			],
 		)
 		// Without a blank after its markers, ` *word*` is no entry.
-		.guarded(7);
+		.guarded(7)
+		.with_doc(doc)
+		.with_snippet(snippet);
 		language.add_grouped(rule, |_| "list".into(), list)?;
 	}
 	Ok(())

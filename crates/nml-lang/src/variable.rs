@@ -36,7 +36,23 @@ const BUILTIN: &[&str] = &[REFERENCE_KEY, OUTPUT];
 /// An exported variable is also a symbol of the unit (its title is the value's text), and
 /// the units that import it as a module see it as `%namespace.name%`.
 pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
-	for (command, export) in [(":set ", false), (":export ", true)] {
+	for (command, export, doc) in [
+		(
+			":set ",
+			false,
+			"**Variable**, set in the prologue: `:set name = value`.\n\n\
+			`%name%` stands for the value, parsed as markup where it is used. \
+			`nml.reference_key` sets the unit's name in references, and `nml.output` where \
+			its page is written.",
+		),
+		(
+			":export ",
+			true,
+			"**Exported variable**, set in the prologue: `:export name = value`.\n\n\
+			Like `:set`, and also a symbol of the unit. The units that import this one as a \
+			module see it as `%namespace.name%`.",
+		),
+	] {
 		let rule = Rule::new(
 			command.trim_start_matches(':').trim_end(),
 			vec![
@@ -47,7 +63,9 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 				Atom::capture("value", Atom::RestOfLine).with_class("string"),
 				Atom::LineEnd,
 			],
-		);
+		)
+		.with_doc(doc)
+		.with_snippet(format!("{command}${{1:name}} = ${{0:value}}"));
 		language.add_prologue(rule, move |lower, m| set(lower, m, export))?;
 	}
 
@@ -58,7 +76,12 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("name", Atom::Text).with_class("variable"),
 			Atom::capture("close", Atom::literal("%")).with_class("operator"),
 		],
-	);
+	)
+	.with_doc(
+		"**Variable**: `%name%` stands for the value of the variable `name`, parsed as markup \
+		here. Set it with `:set name = value`; an imported module's are `%namespace.name%`.",
+	)
+	.with_snippet("%${1:name}%");
 	language.add(substitution, substitute)?;
 
 	language.on_import(|lower, import| {
