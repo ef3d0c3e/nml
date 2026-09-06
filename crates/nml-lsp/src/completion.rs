@@ -6,9 +6,14 @@ use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::CompletionParams;
 use lsp_types::CompletionTextEdit;
+use lsp_types::Documentation;
+use lsp_types::InsertTextFormat;
+use lsp_types::MarkupContent;
+use lsp_types::MarkupKind;
 use lsp_types::Position;
 use lsp_types::Range;
 use lsp_types::TextEdit;
+use nml_document::Export;
 use nml_grammar::Atom;
 use nml_grammar::OptionKind;
 use nml_grammar::OptionSchema;
@@ -25,6 +30,12 @@ pub(crate) struct Candidate {
 	pub label: String,
 	pub detail: Option<String>,
 	pub kind: CompletionItemKind,
+	/// Markdown shown with the candidate.
+	pub documentation: Option<String>,
+	/// What is inserted instead of the label.
+	pub text: Option<String>,
+	/// A snippet inserted instead, for clients that take them.
+	pub snippet: Option<String>,
 }
 
 fn candidate(
@@ -36,7 +47,34 @@ fn candidate(
 		label: label.into(),
 		detail,
 		kind,
+		documentation: None,
+		text: None,
+		snippet: None,
 	}
+}
+
+impl Candidate {
+	fn documented(mut self, documentation: impl Into<String>) -> Self {
+		let documentation = documentation.into();
+		self.documentation = (!documentation.is_empty()).then_some(documentation);
+		self
+	}
+
+	fn inserting(mut self, text: impl Into<String>) -> Self {
+		self.text = Some(text.into());
+		self
+	}
+
+	fn with_snippet(mut self, snippet: &str) -> Self {
+		self.snippet = (!snippet.is_empty()).then(|| snippet.to_string());
+		self
+	}
+}
+
+/// The first paragraph of a rule's documentation, as a one-line detail.
+fn summary(doc: &str) -> Option<String> {
+	let first = doc.split("\n\n").next()?.trim();
+	(!first.is_empty()).then(|| first.replace('\n', " "))
 }
 
 /// What the text before the cursor is in the middle of, and the length (in bytes) of the
@@ -55,6 +93,10 @@ pub(crate) enum Context<'a> {
 	CodeLanguage,
 	/// After `> [!`: the kind of a callout.
 	Callout,
+	/// After an unclosed `%`: a variable.
+	Variable,
+	/// A word alone at the start of a line: the snippets of the grammar.
+	Snippet,
 	/// Inside the option list of the command `opener`: a name, or the value of `key`.
 	Option {
 		opener: &'a str,
@@ -81,6 +123,24 @@ pub(crate) fn context(prefix: &str) -> Option<(Context<'_>, &str)> {
 				None => (Context::Reference, inside),
 			});
 		}
+	}
+	// An odd number of unescaped `%`: a variable is being written.
+	let percents = prefix.match_indices('%');
+	let unescaped: Vec<_> = percents
+		.filter(|(i, _)| !prefix[..*i].ends_with('\\'))
+		.map(|(i, _)| i)
+		.collect();
+	if unescaped.len() % 2 == 1 {
+		let name = &prefix[unescaped.last().unwrap() + 1..];
+		if name
+			.chars()
+			.all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
+		{
+			return Some((Context::Variable, name));
+		}
+	}
+	if prefix.chars().all(|c| c.is_alphanumeric() || c == '_') {
+		return Some((Context::Snippet, prefix));
 	}
 	let mut quoted = prefix;
 	while let Some(rest) = quoted.strip_prefix("> ") {
@@ -153,8 +213,31 @@ pub(crate) fn commands(rules: &RuleSet, line_start: bool) -> Vec<Candidate> {
 	}
 	openers
 		.into_iter()
-		.map(|(opener, name)| candidate(opener, Some(name), CompletionItemKind::KEYWORD))
+		.map(|(opener, name)| {
+			let rule = rules.iter().find(|(_, rule)| rule.name == name).unwrap().1;
+			candidate(opener, Some(name), CompletionItemKind::KEYWORD)
+				.documented(&rule.doc)
+				.with_snippet(&rule.snippet)
+		})
 		.collect()
+}
+
+/// The rules with a snippet, by name (`code block`), to write them from scratch.
+pub(crate) fn snippets(rules: &RuleSet) -> Vec<Candidate> {
+	let mut candidates: Vec<_> = (rules.iter())
+		.filter(|(_, rule)| !rule.snippet.is_empty())
+		.map(|(_, rule)| {
+			candidate(
+				rule.name.replace(['_', '-'], " "),
+				summary(&rule.doc),
+				CompletionItemKind::SNIPPET,
+			)
+			.documented(&rule.doc)
+			.with_snippet(&rule.snippet)
+		})
+		.collect();
+	candidates.sort_by(|a, b| a.label.cmp(&b.label));
+	candidates
 }
 
 /// The languages of code blocks: their names, as one word in lower case, and their file
@@ -249,18 +332,23 @@ impl Server {
 		};
 		let line = source.line_range(cursor.line).unwrap();
 		let prefix = &source.content()[line.start..offset];
+		let suffix = &source.content()[offset..line.end];
 		let Some((context, typed)) = context(prefix) else {
 			return Ok(Vec::new());
 		};
 		let language = analysis.language.as_deref().unwrap_or(&self.language);
 		let candidates = match context {
 			Context::Reference => {
+				let close = !suffix.starts_with("]]") && !suffix.starts_with('|');
 				let mut candidates: Vec<_> = analysis
 					.exports
 					.iter()
 					.map(|export| {
 						let title = export.property("title").map(String::from);
+						let text = format!("{}{}", export.name, if close { "]]" } else { "" });
 						candidate(&export.name, title, CompletionItemKind::REFERENCE)
+							.documented(self.export_doc(analysis, export))
+							.inserting(text)
 					})
 					.collect();
 				if let Some(index) = self.index() {
@@ -271,39 +359,69 @@ impl Server {
 						.filter(|u| u.role == nml_workspace::Role::Page)
 					{
 						let detail = Some(format!("{} ({})", unit.title, unit.path));
-						candidates.push(candidate(
-							format!("{}#", unit.name),
-							detail,
-							CompletionItemKind::FILE,
-						));
+						let doc = format!("**{}**\n\nThe page `{}`.", unit.title, unit.path);
+						candidates.push(
+							candidate(format!("{}#", unit.name), detail, CompletionItemKind::FILE)
+								.documented(doc),
+						);
 					}
 				}
 				candidates
 			}
 			Context::Symbol { unit } => {
+				let close = |name: &str| {
+					let close = !suffix.starts_with("]]") && !suffix.starts_with('|');
+					format!("{name}{}", if close { "]]" } else { "" })
+				};
 				let mut candidates = Vec::new();
-				if let Some(index) = self.index() {
-					for (key, name, title) in index.all_exports()? {
-						if unit.is_empty() || key == unit {
-							let detail = title.map(|title| format!("{title} ({key})"));
-							candidates.push(candidate(name, detail, CompletionItemKind::REFERENCE));
-						}
-					}
-				}
+				// This unit's own first: its buffer may not be saved.
 				if unit.is_empty() || unit == analysis.key {
 					for export in &analysis.exports {
-						if !candidates.iter().any(|c| c.label == export.name) {
-							let title = export.property("title").map(String::from);
-							candidates.push(candidate(
-								&export.name,
-								title,
-								CompletionItemKind::REFERENCE,
-							));
+						let title = export.property("title").map(String::from);
+						candidates.push(
+							candidate(&export.name, title, CompletionItemKind::REFERENCE)
+								.documented(self.export_doc(analysis, export))
+								.inserting(close(&export.name)),
+						);
+					}
+				}
+				if let Some(index) = self.index() {
+					for (key, name, title) in index.all_exports()? {
+						let own = key == analysis.key
+							&& candidates.iter().any(|c: &Candidate| c.label == name);
+						if (unit.is_empty() || key == unit) && !own {
+							let detail = title.as_ref().map(|title| format!("{title} ({key})"));
+							let doc = format!(
+								"**{}**\n\n`{name}` in `{key}`",
+								title.as_deref().unwrap_or(&name)
+							);
+							candidates.push(
+								candidate(&name, detail, CompletionItemKind::REFERENCE)
+									.documented(doc)
+									.inserting(close(&name)),
+							);
 						}
 					}
 				}
 				candidates
 			}
+			Context::Variable => {
+				let close = if suffix.starts_with('%') { "" } else { "%" };
+				let mut names: Vec<_> = analysis.variables.keys().collect();
+				names.sort();
+				names
+					.into_iter()
+					.map(|name| {
+						let variable = &analysis.variables[name];
+						let detail = Some(variable.value.content().trim().to_string());
+						candidate(name, detail, CompletionItemKind::VARIABLE)
+							.documented(self.variable_doc(name, variable))
+							.inserting(format!("{name}{close}"))
+					})
+					.collect()
+			}
+			Context::Snippet if self.snippets => snippets(language.rules()),
+			Context::Snippet => Vec::new(),
 			Context::Command { line_start } => commands(language.rules(), line_start),
 			Context::Module => self
 				.module_paths()
@@ -331,17 +449,65 @@ impl Server {
 		Ok(candidates
 			.into_iter()
 			.filter(|candidate| candidate.label.starts_with(typed))
-			.map(|candidate| CompletionItem {
-				label: candidate.label.clone(),
-				kind: Some(candidate.kind),
-				detail: candidate.detail,
-				text_edit: Some(CompletionTextEdit::Edit(TextEdit::new(
-					range,
-					candidate.label,
-				))),
-				..CompletionItem::default()
+			.map(|candidate| {
+				let (text, format) = match candidate.snippet {
+					Some(snippet) if self.snippets => (snippet, InsertTextFormat::SNIPPET),
+					_ => (
+						candidate.text.unwrap_or_else(|| candidate.label.clone()),
+						InsertTextFormat::PLAIN_TEXT,
+					),
+				};
+				CompletionItem {
+					label: candidate.label,
+					kind: Some(candidate.kind),
+					detail: candidate.detail,
+					documentation: candidate.documentation.map(|value| {
+						Documentation::MarkupContent(MarkupContent {
+							kind: MarkupKind::Markdown,
+							value,
+						})
+					}),
+					insert_text_format: Some(format),
+					text_edit: Some(CompletionTextEdit::Edit(TextEdit::new(range, text))),
+					..CompletionItem::default()
+				}
 			})
 			.collect())
+	}
+
+	/// The documentation of a symbol of the document: its label, title and kind.
+	pub(crate) fn export_doc(&self, analysis: &crate::Analysis, export: &Export) -> String {
+		let target = nml_build::Target {
+			unit: self.current_unit(analysis),
+			export: Some(export.clone()),
+		};
+		let label = nml_build::label(&target);
+		let title = export.property("title").unwrap_or(&export.name);
+		let mut doc = format!("**{label}**");
+		if title != label {
+			doc.push_str(&format!(": {title}"));
+		}
+		let kind = format!("{:?}", export.kind).to_lowercase();
+		let path = match &export.declared {
+			Some((path, _)) => path.as_str(),
+			None => &analysis.path,
+		};
+		doc.push_str(&format!("\n\n{kind} `{}` in `{path}`", export.name));
+		doc
+	}
+
+	/// The documentation of a variable: its value, and where it is set.
+	pub(crate) fn variable_doc(&self, name: &str, variable: &nml_lang::Variable) -> String {
+		let value = variable.value.content().trim();
+		let root = variable.name.root();
+		let source = root.source();
+		let file = self
+			.workspace_path(source.location())
+			.unwrap_or_else(|| source.location().path().to_string());
+		let line = source
+			.position(root.start(), Encoding::Utf8)
+			.map_or(0, |position| position.line + 1);
+		format!("**`%{name}%`**\n\n```nml\n{value}\n```\n\nSet in `{file}`, line {line}.")
 	}
 
 	/// The module paths of the `.nml` files under the module roots.
@@ -432,6 +598,20 @@ mod tests {
 			))
 		);
 		assert_eq!(context("plain text"), None);
+		// Variables: after an unclosed `%`, not an escaped one.
+		assert_eq!(context("Hi %na"), Some((Context::Variable, "na")));
+		assert_eq!(
+			context("%a% and %lib.si"),
+			Some((Context::Variable, "lib.si"))
+		);
+		assert_eq!(context("%a% and"), None);
+		assert_eq!(context("50\\% and %"), Some((Context::Variable, "")));
+		assert_eq!(context("50\\% off"), None);
+		assert_eq!(context("%a b"), None);
+		// A word alone at the start of a line, or nothing: snippets.
+		assert_eq!(context("fig"), Some((Context::Snippet, "fig")));
+		assert_eq!(context(""), Some((Context::Snippet, "")));
+		assert_eq!(context(" fig"), None);
 		assert_eq!(context("```ru"), Some((Context::CodeLanguage, "ru")));
 		assert_eq!(context("> [!wa"), Some((Context::Callout, "wa")));
 		assert_eq!(context("> > [!"), Some((Context::Callout, "")));

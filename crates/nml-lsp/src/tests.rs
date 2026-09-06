@@ -49,6 +49,10 @@ impl Client {
 				}]
 			}),
 			initialization_options: Some(options),
+			capabilities: serde_json::from_value(serde_json::json!({
+				"textDocument": { "completion": { "completionItem": { "snippetSupport": true } } },
+			}))
+			.unwrap(),
 			..InitializeParams::default()
 		};
 		client.request("initialize", serde_json::to_value(params).unwrap());
@@ -602,11 +606,194 @@ fn completion() {
 	);
 	assert_eq!(complete("# Home {#top}\nSee [[gu"), ["guide#"]);
 	assert_eq!(complete("# Home {#top}\nSee [[guide#"), ["install"]);
-	assert_eq!(complete("# Home {#top}\nSee [[#"), ["install", "top"]);
+	// The page's own symbols first: its buffer may be newer than the index.
+	assert_eq!(complete("# Home {#top}\nSee [[#"), ["top", "install"]);
 	// Commands at the start of a line, roles elsewhere.
 	assert_eq!(complete(":i"), [":import", ":include"]);
 	assert_eq!(complete("x :l"), [":lua"]);
 	assert_eq!(complete(":import st"), ["std.util"]);
+}
+
+/// Completes at a position of a document: the items.
+fn complete_at(
+	client: &Client,
+	url: &Url,
+	line: u32,
+	character: u32,
+) -> Vec<lsp_types::CompletionItem> {
+	let params = lsp_types::CompletionParams {
+		text_document_position: at(url, line, character),
+		work_done_progress_params: Default::default(),
+		partial_result_params: Default::default(),
+		context: None,
+	};
+	let result = client.request(Completion::METHOD, serde_json::to_value(params).unwrap());
+	serde_json::from_value(result).unwrap()
+}
+
+/// An item's inserted text, its format, and its documentation.
+fn inserted(item: &lsp_types::CompletionItem) -> (String, bool, String) {
+	let Some(lsp_types::CompletionTextEdit::Edit(edit)) = &item.text_edit else {
+		panic!("{item:?}")
+	};
+	let snippet = item.insert_text_format == Some(lsp_types::InsertTextFormat::SNIPPET);
+	let doc = match &item.documentation {
+		Some(lsp_types::Documentation::MarkupContent(markup)) => markup.value.clone(),
+		_ => String::new(),
+	};
+	(edit.new_text.clone(), snippet, doc)
+}
+
+#[test]
+fn documented_completion() {
+	let workspace = navigation_workspace("documented-completion");
+	let client = Client::start(Some(&workspace.0));
+	let page = workspace.url("index.nml");
+	client.save(&page);
+	let text = ":set name = **Bob**\n:set nml.output = home.html\n\n# Home {#top}\n:figure #f Flower\nx\n\nSee [[ and [[f]], hi %na and %nml.output%.\nco\n:fig\n[[#]]\n%nml.output%\n";
+	client.open(&page, text);
+	client.diagnostics();
+	let item = |items: Vec<lsp_types::CompletionItem>, label: &str| {
+		let item = items.iter().find(|item| item.label == label);
+		inserted(item.unwrap_or_else(|| panic!("no {label} in {items:?}")))
+	};
+
+	// References: their label and title, closed unless `]]` follows.
+	let (text, snippet, doc) = item(complete_at(&client, &page, 7, 6), "f");
+	assert_eq!((text.as_str(), snippet), ("f]]", false));
+	assert_eq!(doc, "**Figure 1**: Flower\n\nfigure `f` in `index.nml`");
+	let (text, _, doc) = item(complete_at(&client, &page, 7, 6), "top");
+	assert_eq!(text, "top]]");
+	assert_eq!(doc, "**Home**\n\nheading `top` in `index.nml`");
+	let (text, _, doc) = item(complete_at(&client, &page, 7, 6), "guide#");
+	assert_eq!(text, "guide#");
+	assert!(doc.contains("The page `docs/guide.nml`"), "{doc}");
+	assert_eq!(item(complete_at(&client, &page, 7, 14), "f").0, "f");
+	assert_eq!(item(complete_at(&client, &page, 10, 3), "f").0, "f");
+	let (text, _, doc) = item(complete_at(&client, &page, 10, 3), "install");
+	assert_eq!(text, "install");
+	assert!(doc.contains("`install` in `guide`"), "{doc}");
+
+	// Variables: their value, and where they are set; closed unless `%` follows.
+	let items = complete_at(&client, &page, 7, 24);
+	assert_eq!(items.len(), 1);
+	let (text, snippet, doc) = inserted(&items[0]);
+	assert_eq!((text.as_str(), snippet), ("name%", false));
+	assert_eq!(items[0].detail.as_deref(), Some("**Bob**"));
+	assert_eq!(
+		doc,
+		"**`%name%`**\n\n```nml\n**Bob**\n```\n\nSet in `index.nml`, line 1."
+	);
+	assert_eq!(
+		item(complete_at(&client, &page, 11, 11), "nml.output").0,
+		"nml.output"
+	);
+
+	// A word at the start of a line: snippets, documented.
+	let items = complete_at(&client, &page, 8, 2);
+	let labels: Vec<_> = items.iter().map(|item| item.label.as_str()).collect();
+	assert_eq!(labels, ["code block", "code span"]);
+	let (text, snippet, doc) = inserted(&items[0]);
+	assert_eq!(
+		(text.as_str(), snippet),
+		("```${1:language} ${2:Title}\n${0}\n```", true)
+	);
+	assert!(doc.starts_with("**Code block**"), "{doc}");
+	assert!(
+		items[0]
+			.detail
+			.as_deref()
+			.unwrap()
+			.starts_with("**Code block**")
+	);
+
+	// Commands insert their snippet.
+	let (text, snippet, doc) = item(complete_at(&client, &page, 9, 4), ":figure");
+	assert_eq!(
+		(text.as_str(), snippet),
+		(":figure #${1:name} ${2:Caption}\n${0}", true)
+	);
+	assert!(doc.starts_with("**Figure**"), "{doc}");
+}
+
+#[test]
+fn completion_without_snippets() {
+	let (server, connection) = Connection::memory();
+	let thread = std::thread::spawn(move || run(server).unwrap());
+	let client = Client {
+		connection,
+		server: Some(thread),
+		pending: Default::default(),
+	};
+	let params = InitializeParams {
+		initialization_options: Some(serde_json::json!({ "luals": false })),
+		..InitializeParams::default()
+	};
+	client.request("initialize", serde_json::to_value(params).unwrap());
+	client.notify::<Initialized>(serde_json::json!({}));
+	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
+	client.open(&url, "co\n:fig\n");
+	client.diagnostics();
+	assert!(complete_at(&client, &url, 0, 2).is_empty());
+	let items = complete_at(&client, &url, 1, 4);
+	let (text, snippet, doc) = inserted(&items[0]);
+	assert_eq!((text.as_str(), snippet), (":figure", false));
+	assert!(doc.starts_with("**Figure**"));
+}
+
+#[test]
+fn syntax_hover() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
+	let text =
+		":set name = **Bob**\n\nSome **bold** and %name% %nope%.\n\n```rust\nfn main() {}\n```\n";
+	client.open(&url, text);
+	client.diagnostics();
+	let hover = |line, character| -> Option<(String, lsp_types::Range)> {
+		let result = client.request(
+			HoverRequest::METHOD,
+			serde_json::to_value(lsp_types::HoverParams {
+				text_document_position_params: at(&url, line, character),
+				work_done_progress_params: Default::default(),
+			})
+			.unwrap(),
+		);
+		let hover: Option<lsp_types::Hover> = serde_json::from_value(result).unwrap();
+		hover.map(|hover| {
+			let lsp_types::HoverContents::Markup(markup) = hover.contents else {
+				unreachable!()
+			};
+			(markup.value, hover.range.unwrap())
+		})
+	};
+	let range =
+		|line, start, end| lsp_types::Range::new(position(line, start), position(line, end));
+
+	// On a marker: the rule's documentation, over the marker.
+	let (doc, at) = hover(2, 5).unwrap();
+	assert!(doc.starts_with("**Bold text**: `**text**`."), "{doc}");
+	assert_eq!(at, range(2, 5, 7));
+	// In its content: nothing.
+	assert_eq!(hover(2, 9), None);
+	// Variables: where they are used, and where they are set.
+	let variable =
+		"**`%name%`**\n\n```nml\n**Bob**\n```\n\nSet in `/tmp/nml-lsp-none/a.nml`, line 1.";
+	assert_eq!(hover(2, 21), Some((variable.to_string(), range(2, 19, 23))));
+	assert_eq!(hover(0, 6), Some((variable.to_string(), range(0, 5, 9))));
+	assert_eq!(hover(2, 27).unwrap().0, "`nope` is not set");
+	// The command of `:set`: its documentation.
+	assert!(
+		hover(0, 1)
+			.unwrap()
+			.0
+			.starts_with("**Variable**, set in the prologue")
+	);
+	// A code block's fence and language, not its code.
+	assert!(hover(4, 1).unwrap().0.starts_with("**Code block**"));
+	assert!(hover(4, 4).unwrap().0.starts_with("**Code block**"));
+	assert_eq!(hover(5, 3), None);
+	// Plain text.
+	assert_eq!(hover(2, 1), None);
 }
 
 #[test]

@@ -161,6 +161,11 @@ pub fn run(connection: Connection) -> Result<()> {
 		_ => luals::find(),
 	};
 	let mut server = Server::new(connection, root(&params), luals);
+	server.snippets = (params.capabilities.text_document.as_ref())
+		.and_then(|document| document.completion.as_ref())
+		.and_then(|completion| completion.completion_item.as_ref())
+		.and_then(|item| item.snippet_support)
+		.unwrap_or(false);
 	server.run()
 }
 
@@ -203,6 +208,8 @@ struct Server {
 	/// The diagnostics published for each document, NML's and LuaLS's.
 	nml_diagnostics: HashMap<Url, Vec<lsp_types::Diagnostic>>,
 	lua_diagnostics: HashMap<Url, Vec<lsp_types::Diagnostic>>,
+	/// Whether the client takes snippets in completions.
+	snippets: bool,
 }
 
 /// What the server knows of an open document, from its last compilation.
@@ -221,6 +228,8 @@ struct Analysis {
 	language: Option<Arc<Language>>,
 	/// The names the Lua of each imported module exports, by module file.
 	module_exports: std::collections::BTreeMap<String, Vec<String>>,
+	/// The variables it sets and imports.
+	variables: HashMap<String, nml_lang::Variable>,
 	/// The includer it was analysed in, for an included file.
 	context: Option<IncludeContext>,
 }
@@ -260,6 +269,7 @@ impl Server {
 			lua_documents: HashMap::new(),
 			nml_diagnostics: HashMap::new(),
 			lua_diagnostics: HashMap::new(),
+			snippets: false,
 		};
 		server.start_luals();
 		server
@@ -492,7 +502,7 @@ impl Server {
 	}
 
 	/// The path of a file in the workspace, with `/` separators.
-	fn workspace_path(&self, url: &Url) -> Option<String> {
+	pub(crate) fn workspace_path(&self, url: &Url) -> Option<String> {
 		let path = url.to_file_path().ok()?;
 		let relative = path.strip_prefix(self.root.as_ref()?).ok()?;
 		let parts: Vec<_> = relative
@@ -582,6 +592,7 @@ impl Server {
 				diagnostics: compiled.diagnostics.clone(),
 				language: compiled.language.clone(),
 				module_exports: compiled.module_exports.clone(),
+				variables: compiled.variables.clone(),
 				context: include_context,
 			},
 		);

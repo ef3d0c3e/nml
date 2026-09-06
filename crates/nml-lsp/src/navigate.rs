@@ -132,16 +132,10 @@ impl Server {
 		))
 	}
 
-	/// Resolves a reference written in the document, as the link stage would: in the
-	/// document itself for `[[name]]`, in the index otherwise.
-	fn resolve(
-		&self,
-		analysis: &Analysis,
-		target: &SymbolRef,
-	) -> std::result::Result<Target, LinkError> {
-		let index = self.index();
-		let current = index
-			.as_ref()
+	/// The document's unit: its record in the index, or one made from its analysis if it is
+	/// not built yet.
+	pub(crate) fn current_unit(&self, analysis: &Analysis) -> UnitRecord {
+		self.index()
 			.and_then(|index| index.unit(&analysis.path).ok().flatten())
 			.unwrap_or_else(|| UnitRecord {
 				id: -1,
@@ -156,7 +150,18 @@ impl Server {
 				},
 				output: nml_lang::output_path(&analysis.path),
 				output_range: None,
-			});
+			})
+	}
+
+	/// Resolves a reference written in the document, as the link stage would: in the
+	/// document itself for `[[name]]`, in the index otherwise.
+	fn resolve(
+		&self,
+		analysis: &Analysis,
+		target: &SymbolRef,
+	) -> std::result::Result<Target, LinkError> {
+		let index = self.index();
+		let current = self.current_unit(analysis);
 		if target.scope == Scope::Local {
 			// The buffer may not be saved: its own symbols come from its analysis.
 			let export = analysis
@@ -179,7 +184,7 @@ impl Server {
 
 	pub(crate) fn hover(&self, position: &TextDocumentPositionParams) -> Result<Option<Hover>> {
 		let Some(Subject::Reference(target, token)) = self.subject(position)? else {
-			return Ok(None);
+			return self.syntax_hover(position);
 		};
 		let analysis = self.analysis(position)?.unwrap().0;
 		let value = match self.resolve(analysis, &target) {
@@ -208,6 +213,61 @@ impl Server {
 					_ => DiagnosticKind::UnresolvedReference { target },
 				};
 				self.localizer.title(&kind)
+			}
+		};
+		Ok(Some(Hover {
+			contents: HoverContents::Markup(MarkupContent {
+				kind: MarkupKind::Markdown,
+				value,
+			}),
+			range: Some(convert::range(&token)),
+		}))
+	}
+
+	/// The documentation of the syntax under the cursor: a variable's value, or the rule of
+	/// the innermost match, when the cursor is on its markup (not on its content).
+	fn syntax_hover(&self, position: &TextDocumentPositionParams) -> Result<Option<Hover>> {
+		let Some((analysis, offset, url)) = self.analysis(position)? else {
+			return Ok(None);
+		};
+		let language = analysis.language.as_deref().unwrap_or(&self.language);
+		let hits = find::at(&analysis.tree, &url, offset);
+		let Some(hit) = hits.last() else {
+			return Ok(None);
+		};
+		let Some(rule) = language.rules().get(hit.matched.rule) else {
+			return Ok(None);
+		};
+		let capture = hit.capture.map(|capture| &*capture.name);
+		let variable = match (rule.name.as_str(), capture) {
+			("substitution", _) | ("set" | "export", Some("name")) => {
+				hit.matched.capture("name").map(|c| c.token.clone())
+			}
+			_ => None,
+		};
+		let (value, token) = match variable {
+			Some(name) => {
+				let value = match analysis.variables.get(name.content()) {
+					Some(variable) => self.variable_doc(name.content(), variable),
+					None => self.localizer.title(&DiagnosticKind::UndefinedVariable {
+						name: name.content().into(),
+					}),
+				};
+				(value, name)
+			}
+			None => {
+				// In content, or in code: what is there is not the rule's markup.
+				if let Some(capture) = hit.capture
+					&& (matches!(capture.value, nml_grammar::Value::Nodes(_))
+						|| matches!(&*capture.name, "code" | "content" | "source" | "value"))
+				{
+					return Ok(None);
+				}
+				if rule.doc.is_empty() {
+					return Ok(None);
+				}
+				let token = hit.capture.map_or(&hit.matched.token, |c| &c.token);
+				(rule.doc.clone(), token.clone())
 			}
 		};
 		Ok(Some(Hover {
