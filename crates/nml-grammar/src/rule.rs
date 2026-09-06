@@ -24,6 +24,11 @@ pub struct Rule {
 	/// they do not, the opener is no syntax there: a block rule leaves a paragraph. Without a
 	/// guard (0), the opener always applies, and a rule that fails is an error.
 	pub guard: usize,
+	/// What the syntax is, in Markdown, for editors. Empty if undocumented.
+	pub doc: String,
+	/// An LSP snippet that writes the syntax (`${1:placeholder}`), for editors. Empty if the
+	/// rule has none.
+	pub snippet: String,
 }
 
 impl Rule {
@@ -33,7 +38,21 @@ impl Rule {
 			atoms,
 			replaces: None,
 			guard: 0,
+			doc: String::new(),
+			snippet: String::new(),
 		}
+	}
+
+	/// Sets the documentation: see [`Rule::doc`].
+	pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
+		self.doc = doc.into();
+		self
+	}
+
+	/// Sets the snippet: see [`Rule::snippet`].
+	pub fn with_snippet(mut self, snippet: impl Into<String>) -> Self {
+		self.snippet = snippet.into();
+		self
 	}
 
 	/// Sets the guard: see [`Rule::guard`].
@@ -546,6 +565,19 @@ fn check_branch(atoms: &[Atom]) -> Result<(), RuleErrorKind> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn documentation() {
+		let rule = Rule::new("bold", vec![Atom::literal("**")]);
+		assert_eq!((rule.doc.as_str(), rule.snippet.as_str()), ("", ""));
+		let rule = rule
+			.with_doc("**Bold** text.")
+			.with_snippet("**${1:text}**")
+			.guarded(1);
+		assert_eq!(rule.doc, "**Bold** text.");
+		assert_eq!(rule.snippet, "**${1:text}**");
+		assert_eq!(rule.guard, 1);
+	}
 
 	fn lit(text: &str) -> Atom {
 		Atom::literal(text)
