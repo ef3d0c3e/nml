@@ -217,6 +217,26 @@ mod tests {
 	use crate::tests::compile_with;
 
 	#[test]
+	fn compiled_variables() {
+		let compiled = compile_with(
+			":import std.lib\n:set nml.output = x.html\n:set name = **Bob**\n\nHi %name%.\n",
+			&[("modules/std/lib.nml", ":export site = Docs\n")],
+		);
+		let mut variables: Vec<_> = (compiled.variables.iter())
+			.map(|(key, v)| (key.as_str(), v.name.content(), v.value.content()))
+			.collect();
+		variables.sort();
+		assert_eq!(
+			variables,
+			[
+				("lib.site", "site", "Docs"),
+				("name", "name", "**Bob**"),
+				("nml.output", "nml.output", "x.html"),
+			]
+		);
+	}
+
+	#[test]
 	fn output() {
 		let compiled = compile_text(":set nml.output = guide/index.html\n\n# A");
 		assert_diagnostics!(compiled.diagnostics, []);

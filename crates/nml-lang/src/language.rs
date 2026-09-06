@@ -159,6 +159,9 @@ pub struct Compiled {
 	pub language: Option<Arc<Language>>,
 	/// The names the Lua of each imported module exports, by module file. For editors.
 	pub module_exports: BTreeMap<String, Vec<String>>,
+	/// The variables set while compiling, the built-in ones included, and those of the
+	/// imported modules (`namespace.name`). For editors.
+	pub variables: HashMap<String, Variable>,
 	/// Parse errors and errors found while lowering. A unit with errors is not committed to
 	/// the workspace.
 	pub diagnostics: Vec<Diagnostic>,
@@ -240,6 +243,7 @@ pub fn compile(
 	} = lower;
 	let mut diagnostics = parse_diagnostics;
 	diagnostics.extend(lowering_diagnostics);
+	let all_variables = variables.clone();
 	Compiled {
 		unit: Unit {
 			reference_key: variables
@@ -257,6 +261,7 @@ pub fn compile(
 		tree,
 		language: extended,
 		module_exports,
+		variables: all_variables,
 		diagnostics,
 	}
 }
