@@ -61,7 +61,14 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("close", Atom::same("fence")).with_class("operator"),
 			Atom::LineEnd,
 		],
-	);
+	)
+	.with_doc(
+		"**Lua**, run in the unit's Lua state when the document is parsed.\n\n\
+		````nml\n:lua\n```\nfunction greet(name) return 'Hello, ' .. name end\n```\n````\n\n\
+		What it defines is seen by the Lua after it. In the prologue, it can define rules \
+		with `nml.rule`. The API is the `nml` table.",
+	)
+	.with_snippet(":lua\n```\n${0}\n```");
 	language.add_prologue(block, |lower, m| {
 		let info = &m.capture("info").unwrap().token;
 		if !matches!(info.content().trim(), "" | "lua") {
@@ -91,7 +98,13 @@ pub fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("code", Atom::Text),
 			Atom::capture("close", Atom::same("fence")).with_class("operator"),
 		],
-	);
+	)
+	.with_doc(
+		"**Lua** in a line: ``` :lua`greet('you')` ``` shows the value of an expression \
+		(a string is text, an element from `nml.element` is that element), or runs \
+		statements and shows nothing.",
+	)
+	.with_snippet(":lua`${1}`");
 	language.add(role, |lower, m| {
 		let code = m.capture("code").unwrap().token.clone();
 		let evaluated = evaluate(lower, &code);
