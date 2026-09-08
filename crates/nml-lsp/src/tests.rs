@@ -699,13 +699,8 @@ fn documented_completion() {
 		("```${1:language} ${2:Title}\n${0}\n```", true)
 	);
 	assert!(doc.starts_with("**Code block**"), "{doc}");
-	assert!(
-		items[0]
-			.detail
-			.as_deref()
-			.unwrap()
-			.starts_with("**Code block**")
-	);
+	// The detail is plain: editors show it as code.
+	assert_eq!(items[0].detail.as_deref(), Some("Code block"));
 
 	// Commands insert their snippet.
 	let (text, snippet, doc) = item(complete_at(&client, &page, 9, 4), ":figure");

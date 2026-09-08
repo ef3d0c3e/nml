@@ -71,10 +71,11 @@ impl Candidate {
 	}
 }
 
-/// The first paragraph of a rule's documentation, as a one-line detail.
+/// What a rule's documentation names, as plain text for a detail (editors show details as
+/// code, not Markdown): its leading `**Name**`.
 fn summary(doc: &str) -> Option<String> {
-	let first = doc.split("\n\n").next()?.trim();
-	(!first.is_empty()).then(|| first.replace('\n', " "))
+	let name = doc.strip_prefix("**")?.split("**").next()?.trim();
+	(!name.is_empty()).then(|| name.to_string())
 }
 
 /// What the text before the cursor is in the middle of, and the length (in bytes) of the
