@@ -794,6 +794,13 @@ fn syntax_hover() {
 	assert_eq!(hover(5, 3), None);
 	// Plain text.
 	assert_eq!(hover(2, 1), None);
+
+	// While a variable is written, unclosed: the failed match documents nothing (it runs to
+	// the end of its paragraph), and what follows it is documented as usual.
+	client.change(&url, "Hello %wh and more\n\nSome **bold**.\n");
+	client.diagnostics();
+	assert_eq!(hover(0, 12), None);
+	assert!(hover(2, 5).unwrap().0.starts_with("**Bold text**"));
 }
 
 #[test]

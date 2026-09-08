@@ -231,8 +231,10 @@ impl Server {
 			return Ok(None);
 		};
 		let language = analysis.language.as_deref().unwrap_or(&self.language);
+		// A match that failed may run on past what is being written (`%name` unclosed): it
+		// documents nothing.
 		let hits = find::at(&analysis.tree, &url, offset);
-		let Some(hit) = hits.last() else {
+		let Some(hit) = hits.iter().rev().find(|hit| hit.matched.complete) else {
 			return Ok(None);
 		};
 		let Some(rule) = language.rules().get(hit.matched.rule) else {
