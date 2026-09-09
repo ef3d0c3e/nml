@@ -120,6 +120,7 @@ pub fn run(connection: Connection) -> Result<()> {
 				".".into(),
 				",".into(),
 				"=".into(),
+				">".into(),
 			]),
 			..CompletionOptions::default()
 		}),

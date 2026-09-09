@@ -36,6 +36,8 @@ pub(crate) struct Candidate {
 	pub text: Option<String>,
 	/// A snippet inserted instead, for clients that take them.
 	pub snippet: Option<String>,
+	/// What the typed text is matched against instead of the label.
+	pub filter: Option<String>,
 }
 
 fn candidate(
@@ -50,6 +52,7 @@ fn candidate(
 		documentation: None,
 		text: None,
 		snippet: None,
+		filter: None,
 	}
 }
 
@@ -69,6 +72,25 @@ impl Candidate {
 		self.snippet = (!snippet.is_empty()).then(|| snippet.to_string());
 		self
 	}
+
+	fn filtered_by(mut self, filter: impl Into<String>) -> Self {
+		self.filter = Some(filter.into());
+		self
+	}
+
+	/// The candidate for text that starts with `typed`, which its label does not: it is
+	/// matched after `typed` and inserted after `lead`.
+	fn led_by(self, typed: &str, lead: &str) -> Self {
+		let filter = format!("{typed}{}", self.label);
+		match (&self.text, lead) {
+			// A snippet alone stays one: it is not inserted as its label.
+			(None, "") => self.filtered_by(filter),
+			(text, _) => {
+				let text = format!("{lead}{}", text.as_deref().unwrap_or(&self.label));
+				self.inserting(text).filtered_by(filter)
+			}
+		}
+	}
 }
 
 /// What a rule's documentation names, as plain text for a detail (editors show details as
@@ -84,6 +106,9 @@ fn summary(doc: &str) -> Option<String> {
 pub(crate) enum Context<'a> {
 	/// After `[[`: a unit key or a local symbol.
 	Reference,
+	/// After a lone `[`, which the text being typed starts with: a reference, its second `[`
+	/// not typed yet.
+	Bracket,
 	/// After `[[doc#`, or `[[#` with an empty `doc`: a symbol.
 	Symbol { unit: &'a str },
 	/// A `:word` command (at the start of the line) or role.
@@ -98,6 +123,9 @@ pub(crate) enum Context<'a> {
 	Variable,
 	/// A word alone at the start of a line: the snippets of the grammar.
 	Snippet,
+	/// A `>` at the start of a line, which the text being typed starts with: quotes and
+	/// callouts.
+	Quote,
 	/// Inside the option list of the command `opener`: a name, or the value of `key`.
 	Option {
 		opener: &'a str,
@@ -143,6 +171,12 @@ pub(crate) fn context(prefix: &str) -> Option<(Context<'_>, &str)> {
 	if prefix.chars().all(|c| c.is_alphanumeric() || c == '_') {
 		return Some((Context::Snippet, prefix));
 	}
+	if prefix
+		.strip_prefix('>')
+		.is_some_and(|rest| rest.chars().all(|c| c.is_alphanumeric()))
+	{
+		return Some((Context::Quote, prefix));
+	}
 	let mut quoted = prefix;
 	while let Some(rest) = quoted.strip_prefix("> ") {
 		quoted = rest;
@@ -187,6 +221,19 @@ pub(crate) fn context(prefix: &str) -> Option<(Context<'_>, &str)> {
 				current.trim_start(),
 			),
 		});
+	}
+	if let Some(open) = word_start
+		.checked_sub(1)
+		.filter(|i| prefix[*i..].starts_with('['))
+	{
+		let before = &prefix[..open];
+		// Not media's `![`, its options' `)[`, an escaped `\[` or a checkbox's `* [`.
+		let checkbox = !before.trim().is_empty()
+			&& before.trim().chars().all(|c| matches!(c, '*' | '-'))
+			&& before.ends_with(' ');
+		if !before.ends_with(['[', '!', ')', '\\']) && !checkbox {
+			return Some((Context::Bracket, &prefix[open..]));
+		}
 	}
 	let colon = word_start
 		.checked_sub(1)
@@ -239,6 +286,48 @@ pub(crate) fn snippets(rules: &RuleSet) -> Vec<Candidate> {
 		.collect();
 	candidates.sort_by(|a, b| a.label.cmp(&b.label));
 	candidates
+}
+
+/// What a `>` at the start of a line begins: the rules whose snippet starts with it (a quote
+/// and a callout), and a callout of each kind.
+pub(crate) fn quotes(rules: &RuleSet) -> Vec<Candidate> {
+	let mut candidates: Vec<_> = snippets(rules)
+		.into_iter()
+		.filter(|candidate| {
+			candidate
+				.snippet
+				.as_ref()
+				.is_some_and(|s| s.starts_with('>'))
+		})
+		.map(|candidate| match candidate.label.as_str() {
+			"quote" => candidate.inserting("> "),
+			_ => candidate,
+		})
+		.collect();
+	let callout = rules.iter().find(|(_, rule)| rule.name == "callout");
+	let doc = callout.map_or("", |(_, rule)| rule.doc.as_str());
+	for kind in nml_document::CalloutKind::ALL.map(|kind| kind.name()) {
+		candidates.push(
+			candidate(kind, Some("Callout".into()), CompletionItemKind::SNIPPET)
+				.documented(doc)
+				.inserting(format!("> [!{kind}] "))
+				.with_snippet(&format!("> [!{kind}] ${{1:Title}}\n> ${{0}}")),
+		);
+	}
+	candidates.push(
+		candidate(
+			"cited quote",
+			Some("Callout".into()),
+			CompletionItemKind::SNIPPET,
+		)
+		.documented(doc)
+		.inserting("> [!quote][author=")
+		.with_snippet("> [!quote][author=${1:Author}]\n> ${0}"),
+	);
+	candidates
+		.into_iter()
+		.map(|candidate| candidate.led_by(">", ""))
+		.collect()
 }
 
 /// The languages of code blocks: their names, as one word in lower case, and their file
@@ -339,36 +428,14 @@ impl Server {
 		};
 		let language = analysis.language.as_deref().unwrap_or(&self.language);
 		let candidates = match context {
-			Context::Reference => {
-				let close = !suffix.starts_with("]]") && !suffix.starts_with('|');
-				let mut candidates: Vec<_> = analysis
-					.exports
-					.iter()
-					.map(|export| {
-						let title = export.property("title").map(String::from);
-						let text = format!("{}{}", export.name, if close { "]]" } else { "" });
-						candidate(&export.name, title, CompletionItemKind::REFERENCE)
-							.documented(self.export_doc(analysis, export))
-							.inserting(text)
-					})
-					.collect();
-				if let Some(index) = self.index() {
-					// Only pages: a link to a library has no page to point to.
-					for unit in index
-						.units()?
-						.into_iter()
-						.filter(|u| u.role == nml_workspace::Role::Page)
-					{
-						let detail = Some(format!("{} ({})", unit.title, unit.path));
-						let doc = format!("**{}**\n\nThe page `{}`.", unit.title, unit.path);
-						candidates.push(
-							candidate(format!("{}#", unit.name), detail, CompletionItemKind::FILE)
-								.documented(doc),
-						);
-					}
-				}
-				candidates
-			}
+			Context::Reference => self.reference_candidates(analysis, suffix)?,
+			Context::Bracket => (self.reference_candidates(analysis, suffix)?.into_iter())
+				.map(|candidate| candidate.led_by("[", "[["))
+				.collect(),
+			Context::Quote => quotes(language.rules())
+				.into_iter()
+				.filter(|candidate| self.snippets || candidate.text.is_some())
+				.collect(),
 			Context::Symbol { unit } => {
 				let close = |name: &str| {
 					let close = !suffix.starts_with("]]") && !suffix.starts_with('|');
@@ -449,7 +516,11 @@ impl Server {
 		);
 		Ok(candidates
 			.into_iter()
-			.filter(|candidate| candidate.label.starts_with(typed))
+			.filter(|candidate| {
+				(candidate.filter.as_ref())
+					.unwrap_or(&candidate.label)
+					.starts_with(typed)
+			})
 			.map(|candidate| {
 				let (text, format) = match candidate.snippet {
 					Some(snippet) if self.snippets => (snippet, InsertTextFormat::SNIPPET),
@@ -460,6 +531,7 @@ impl Server {
 				};
 				CompletionItem {
 					label: candidate.label,
+					filter_text: candidate.filter,
 					kind: Some(candidate.kind),
 					detail: candidate.detail,
 					documentation: candidate.documentation.map(|value| {
@@ -474,6 +546,43 @@ impl Server {
 				}
 			})
 			.collect())
+	}
+
+	/// The references that can be written after `[[`: this unit's symbols, then the pages
+	/// of the workspace.
+	fn reference_candidates(
+		&self,
+		analysis: &crate::Analysis,
+		suffix: &str,
+	) -> Result<Vec<Candidate>> {
+		let close = !suffix.starts_with("]]") && !suffix.starts_with('|');
+		let mut candidates: Vec<_> = analysis
+			.exports
+			.iter()
+			.map(|export| {
+				let title = export.property("title").map(String::from);
+				let text = format!("{}{}", export.name, if close { "]]" } else { "" });
+				candidate(&export.name, title, CompletionItemKind::REFERENCE)
+					.documented(self.export_doc(analysis, export))
+					.inserting(text)
+			})
+			.collect();
+		if let Some(index) = self.index() {
+			// Only pages: a link to a library has no page to point to.
+			for unit in index
+				.units()?
+				.into_iter()
+				.filter(|u| u.role == nml_workspace::Role::Page)
+			{
+				let detail = Some(format!("{} ({})", unit.title, unit.path));
+				let doc = format!("**{}**\n\nThe page `{}`.", unit.title, unit.path);
+				candidates.push(
+					candidate(format!("{}#", unit.name), detail, CompletionItemKind::FILE)
+						.documented(doc),
+				);
+			}
+		}
+		Ok(candidates)
 	}
 
 	/// The documentation of a symbol of the document: its label, title and kind.
@@ -613,6 +722,24 @@ mod tests {
 		assert_eq!(context("fig"), Some((Context::Snippet, "fig")));
 		assert_eq!(context(""), Some((Context::Snippet, "")));
 		assert_eq!(context(" fig"), None);
+		// A lone `[`: a reference, but not media, options, an escape or a checkbox.
+		assert_eq!(context("See ["), Some((Context::Bracket, "[")));
+		assert_eq!(context("["), Some((Context::Bracket, "[")));
+		assert_eq!(context("See [gu"), Some((Context::Bracket, "[gu")));
+		assert_eq!(context("[[a]] and [x"), Some((Context::Bracket, "[x")));
+		assert_eq!(context("See [two words"), None);
+		assert_eq!(context("!["), None);
+		assert_eq!(context("![a](b.png)["), None);
+		assert_eq!(context("\\["), None);
+		assert_eq!(context("* ["), None);
+		assert_eq!(context("** ["), None);
+		assert_eq!(context("- [ "), None);
+		assert_eq!(context("a * ["), Some((Context::Bracket, "[")));
+		// A `>` at the start of a line: quotes and callouts.
+		assert_eq!(context(">"), Some((Context::Quote, ">")));
+		assert_eq!(context(">to"), Some((Context::Quote, ">to")));
+		assert_eq!(context("> to"), None);
+		assert_eq!(context("a >"), None);
 		assert_eq!(context("```ru"), Some((Context::CodeLanguage, "ru")));
 		assert_eq!(context("> [!wa"), Some((Context::Callout, "wa")));
 		assert_eq!(context("> > [!"), Some((Context::Callout, "")));

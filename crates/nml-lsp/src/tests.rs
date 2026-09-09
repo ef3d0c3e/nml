@@ -712,6 +712,68 @@ fn documented_completion() {
 }
 
 #[test]
+fn bracket_and_quote_completion() {
+	let workspace = navigation_workspace("bracket-completion");
+	let client = Client::start(Some(&workspace.0));
+	let page = workspace.url("index.nml");
+	client.save(&page);
+	let text = ":figure #f Flower\nx\n\nSee [ and [f]].\n>\n>t\n";
+	client.open(&page, text);
+	client.diagnostics();
+	let find = |items: &[lsp_types::CompletionItem], label: &str| {
+		let item = items.iter().find(|item| item.label == label);
+		item.unwrap_or_else(|| panic!("no {label} in {items:?}"))
+			.clone()
+	};
+	let range = |item: &lsp_types::CompletionItem| match &item.text_edit {
+		Some(lsp_types::CompletionTextEdit::Edit(edit)) => {
+			(edit.range.start.character, edit.range.end.character)
+		}
+		_ => panic!("{item:?}"),
+	};
+
+	// A lone `[` becomes `[[`, the reference closed unless `]]` follows.
+	let items = complete_at(&client, &page, 3, 5);
+	let figure = find(&items, "f");
+	assert_eq!(inserted(&figure).0, "[[f]]");
+	assert_eq!(figure.filter_text.as_deref(), Some("[f"));
+	assert_eq!(range(&figure), (4, 5));
+	assert_eq!(inserted(&find(&items, "guide#")).0, "[[guide#");
+	let items = complete_at(&client, &page, 3, 12);
+	assert_eq!(inserted(&find(&items, "f")).0, "[[f");
+
+	// A `>` at the start of a line: quotes and callouts, matched after it.
+	let items = complete_at(&client, &page, 4, 1);
+	let labels: Vec<_> = items.iter().map(|item| item.label.as_str()).collect();
+	assert_eq!(
+		labels,
+		[
+			"callout",
+			"quote",
+			"note",
+			"tip",
+			"important",
+			"warning",
+			"caution",
+			"todo",
+			"cited quote"
+		]
+	);
+	let todo = find(&items, "todo");
+	let (text, snippet, doc) = inserted(&todo);
+	assert_eq!(
+		(text.as_str(), snippet),
+		("> [!todo] ${1:Title}\n> ${0}", true)
+	);
+	assert!(doc.starts_with("**Callout**"), "{doc}");
+	assert_eq!(todo.filter_text.as_deref(), Some(">todo"));
+	assert_eq!(range(&todo), (0, 1));
+	let items = complete_at(&client, &page, 5, 2);
+	let labels: Vec<_> = items.iter().map(|item| item.label.as_str()).collect();
+	assert_eq!(labels, ["tip", "todo"]);
+}
+
+#[test]
 fn completion_without_snippets() {
 	let (server, connection) = Connection::memory();
 	let thread = std::thread::spawn(move || run(server).unwrap());
@@ -727,9 +789,15 @@ fn completion_without_snippets() {
 	client.request("initialize", serde_json::to_value(params).unwrap());
 	client.notify::<Initialized>(serde_json::json!({}));
 	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
-	client.open(&url, "co\n:fig\n");
+	client.open(&url, "co\n:fig\n>\n");
 	client.diagnostics();
 	assert!(complete_at(&client, &url, 0, 2).is_empty());
+	// Quotes and callouts insert their start.
+	let items = complete_at(&client, &url, 2, 1);
+	let texts: Vec<_> = items.iter().map(|item| inserted(item).0).collect();
+	assert_eq!(texts[0], "> ");
+	assert!(texts.contains(&"> [!todo] ".to_string()), "{texts:?}");
+	assert!(items.iter().all(|item| item.label != "callout"));
 	let items = complete_at(&client, &url, 1, 4);
 	let (text, snippet, doc) = inserted(&items[0]);
 	assert_eq!((text.as_str(), snippet), (":figure", false));
