@@ -124,6 +124,37 @@ fn resolves_references() {
 }
 
 #[test]
+fn media_references() {
+	let workspace = Workspace::new(
+		"media-references",
+		&[
+			("nml.toml", ""),
+			("cat.png", "cat"),
+			(
+				"a.nml",
+				"![](cat.png) ![A cat](cat.png){#cat}\n\nSee [[cat]] and [[cat|the {title} {label}]].\n",
+			),
+			("b.nml", "[[a#cat]]\n"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	let asset = copy_of("cat.png", "cat");
+	assert_eq!(
+		body(&workspace.output("a.html")),
+		format!(
+			"<p><img src=\"{asset}\" alt=\"\"> <img id=\"cat\" src=\"{asset}\" alt=\"A cat\">\
+			<span class=\"media-number\">(1)</span></p>\n\
+			<p>See <a href=\"#cat\">(1)</a> and <a href=\"#cat\">the A cat (1)</a>.</p>\n"
+		)
+	);
+	assert_eq!(
+		body(&workspace.output("b.html")),
+		"<p><a href=\"a.html#cat\">(1)</a></p>\n"
+	);
+}
+
+#[test]
 fn reference_labels() {
 	let workspace = Workspace::new(
 		"labels",

@@ -477,6 +477,7 @@ impl Output<'_> {
 				url,
 				alt,
 				width,
+				number,
 			} => {
 				let mut extra = String::from(" src=\"");
 				escape(&mut extra, url, true);
@@ -505,6 +506,9 @@ impl Output<'_> {
 					self.raw("</");
 					self.raw(tag);
 					self.raw(">");
+				}
+				if let Some(number) = number {
+					self.raw(&format!("<span class=\"media-number\">({number})</span>"));
 				}
 			}
 			ElementKind::Figure { number } => {

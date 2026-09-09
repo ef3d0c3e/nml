@@ -23,6 +23,7 @@ use nml_grammar::Value;
 use crate::Language;
 use crate::Lower;
 use crate::ResolveError;
+use crate::attributes;
 use crate::language::plain_text;
 use crate::resolve::asset_output_path;
 use crate::resolve::relative_output_url;
@@ -57,14 +58,16 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 				"options",
 				Atom::Options(Arc::new(schema)),
 			)]),
+			attributes::atoms("{"),
 		],
 	)
 	.with_doc(
 		"**Media**: an image, a video or an audio file.\n\n\
-		```nml\n![A cat](cat.png)[width=50%]\n```\n\n\
+		```nml\n![A cat](cat.png)[width=50%]{#cat}\n```\n\n\
 		The text is the media's alternative text. A file of the workspace is copied to the \
 		output's `assets/`; a URL is used as it is. Options: `type` (`auto`, `image`, `video`, \
-		`audio`) and `width`.",
+		`audio`) and `width`. In braces, `#name` numbers it and makes it referenceable: \
+		`[[cat]]` shows *(1)*; `.class` gives it an HTML class.",
 	)
 	.with_snippet("![${1:description}](${2:path})");
 	language.add(media, lower_media)?;
@@ -170,13 +173,43 @@ fn lower_media(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 		Some(Value::Nodes(nodes)) => plain_text(nodes),
 		_ => String::new(),
 	};
+	let (attributes, reference) = attributes::lower(lower, m);
+	let number = reference.as_ref().map(|_| next_media(lower));
 	let media = ElementKind::Media {
 		kind,
-		url,
-		alt,
+		url: url.clone(),
+		alt: alt.clone(),
 		width: option("width"),
+		number,
 	};
-	lower.builder.leaf(media, m.token.clone());
+	lower.builder.open_with(media, m.token.clone(), attributes);
+	let element = lower.builder.close();
+	if let (Some(reference), Some(number)) = (reference, number) {
+		// Its asset, which an earlier medium may have added.
+		let output = lower.output_path();
+		let medium = (lower.assets.iter())
+			.find(|asset| relative_output_url(&output, &asset.output) == url)
+			.map(|asset| asset.path.clone());
+		let export = Export::new(reference.content(), SymbolKind::Media, Some(element))
+			.with("title", alt)
+			.with("number", number.to_string());
+		let export = match medium {
+			Some(medium) => export.with("media", medium),
+			None => export,
+		};
+		lower.export(export, reference);
+	}
+}
+
+/// The number of the last named medium of a unit.
+#[derive(Default)]
+struct Media(u32);
+
+/// Takes the next number of the unit's named media.
+fn next_media(lower: &mut Lower<'_, '_>) -> u32 {
+	let media = lower.extension(Media::default);
+	media.0 += 1;
+	media.0
 }
 
 /// The number of the last figure of a unit.
@@ -274,6 +307,7 @@ mod tests {
 			url: url.into(),
 			alt: alt.into(),
 			width: width.map(String::from),
+			number: None,
 		}
 	}
 
@@ -411,6 +445,59 @@ mod tests {
 
 		let compiled = compile_with(":figure #x X\n\nlater", &[]);
 		assert_diagnostics!(compiled.diagnostics, [1003]);
+	}
+
+	#[test]
+	fn named_media() {
+		// Named media are numbered among themselves, wherever they are: in a figure too.
+		let compiled = compile_with(
+			"![A *cat*](a.png){#cat .wide .wide} ![](b.png) ![x](https://x.y/c.png){.round}\n\n\
+			:figure #f Fig\n![](b.png)[width=5em]{#dog}\n\n![](a.png){#again}",
+			&[("a.png", "a"), ("b.png", "b")],
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let document = &compiled.unit.document;
+		assert_eq!(
+			crate::tests::show(document, document.root()),
+			r#"document[paragraph[media#cat[] " " media[] " " media[]] figure#f[paragraph[media#dog[]] caption["Fig"]] paragraph[media#again[]]]"#
+		);
+		let classes: Vec<_> = (document.descendants(document.root()))
+			.filter(|(_, element)| matches!(element.kind, ElementKind::Media { .. }))
+			.map(|(_, element)| element.attributes.classes.clone())
+			.collect();
+		assert_eq!(classes[0], ["wide"]);
+		assert_eq!(classes[2], ["round"]);
+		let numbers: Vec<_> = media_of(&compiled)
+			.into_iter()
+			.map(|kind| match kind {
+				ElementKind::Media { number, .. } => number,
+				_ => unreachable!(),
+			})
+			.collect();
+		assert_eq!(numbers, [Some(1), None, None, Some(2), Some(3)]);
+
+		let exports = &compiled.unit.exports;
+		let names: Vec<_> = exports.iter().map(|e| e.name.as_str()).collect();
+		assert_eq!(names, ["cat", "dog", "f", "again"]);
+		let cat = &exports[0];
+		assert_eq!(cat.kind, nml_document::SymbolKind::Media);
+		assert_eq!(cat.property("title"), Some("A cat"));
+		assert_eq!(cat.property("number"), Some("1"));
+		assert_eq!(cat.property("media"), Some("a.png"));
+		assert_eq!(exports[1].property("number"), Some("2"));
+		assert_eq!(exports[1].property("media"), Some("b.png"));
+		// `a.png` was copied before: its asset is still found.
+		assert_eq!(exports[3].property("media"), Some("a.png"));
+		assert_eq!(exports[3].property("number"), Some("3"));
+
+		// An external medium has no file to show.
+		let compiled = compile_with("![](https://x.y/c.png){#c}", &[]);
+		assert_diagnostics!(compiled.diagnostics, []);
+		assert_eq!(compiled.unit.exports[0].property("media"), None);
+		// One name only.
+		let compiled = compile_with("![](a.png){#a #b}", &[("a.png", "a")]);
+		assert_eq!(compiled.diagnostics.len(), 1);
+		assert_eq!(compiled.unit.exports.len(), 1);
 	}
 
 	#[test]

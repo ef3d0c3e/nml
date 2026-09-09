@@ -63,6 +63,8 @@ pub enum ElementKind {
 		alt: String,
 		/// A CSS width, such as `50%` or `20em`.
 		width: Option<String>,
+		/// Its number among the unit's named media, which references show.
+		number: Option<u32>,
 	},
 	/// A numbered figure: its first child is the block it shows, its second the caption.
 	Figure {

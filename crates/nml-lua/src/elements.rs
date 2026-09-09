@@ -194,6 +194,7 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 				url,
 				alt: text("alt")?.unwrap_or_default(),
 				width: text("width")?,
+				number: None,
 			})
 		}
 		"list" => {
@@ -467,6 +468,7 @@ pub(crate) fn open<'e>(
 			url,
 			alt,
 			width,
+			..
 		}) => {
 			let url = match nml_lang::media_url(lower, url) {
 				Ok(url) => url,
@@ -482,6 +484,7 @@ pub(crate) fn open<'e>(
 				url,
 				alt: alt.clone(),
 				width: width.clone(),
+				number: None,
 			};
 			lower
 				.builder
@@ -585,6 +588,7 @@ pub(crate) fn html(
 					url,
 					alt,
 					width,
+					..
 				}) => {
 					let url = match lower {
 						Some(lower) => nml_lang::media_url(lower, url).map_err(|_| {
@@ -603,6 +607,7 @@ pub(crate) fn html(
 						url,
 						alt: alt.clone(),
 						width: width.clone(),
+						number: None,
 					}
 				}
 				Content::Element(kind) => kind.clone(),

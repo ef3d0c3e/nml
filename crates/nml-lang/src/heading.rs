@@ -1,7 +1,6 @@
 use nml_diagnostics::Diagnostic;
 use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
-use nml_document::Attributes;
 use nml_document::ElementKind;
 use nml_document::Export;
 use nml_document::SymbolKind;
@@ -10,6 +9,7 @@ use nml_grammar::Rule;
 use nml_grammar::RuleError;
 
 use crate::Language;
+use crate::attributes;
 use crate::language::plain_text;
 
 /// The deepest heading level, as in HTML.
@@ -19,18 +19,6 @@ const MAX_LEVEL: usize = 6;
 /// heading under `ref`, and `.class` adds a class (`.unnumbered`, `.unlisted`, or any HTML
 /// class): `# Title {#ref .unlisted}`.
 pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
-	let attribute = |open: &str| {
-		Atom::or([
-			vec![
-				Atom::literal(format!("{open}#")),
-				Atom::capture("ref", Atom::Word).with_class("variable"),
-			],
-			vec![
-				Atom::literal(format!("{open}.")),
-				Atom::capture("class", Atom::Word).with_class("type"),
-			],
-		])
-	};
 	let rule = Rule::new(
 		"heading",
 		vec![
@@ -38,11 +26,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Atom::capture("level", Atom::run('#', 1)).with_class("operator"),
 			Atom::literal(" "),
 			Atom::capture("title", Atom::InlineContent),
-			Atom::optional(vec![
-				attribute(" {"),
-				Atom::repeat(vec![attribute(" ")], 0, None),
-				Atom::literal("}"),
-			]),
+			attributes::atoms(" {"),
 			Atom::LineEnd,
 		],
 	)
@@ -65,27 +49,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			lower.diagnostics.push(Diagnostic::new(kind, message));
 			level = MAX_LEVEL;
 		}
-		let mut references = m.captures("ref").map(|capture| capture.token.clone());
-		let reference = references.next();
-		for second in references {
-			let kind = DiagnosticKind::SecondReferenceName {
-				name: second.content().into(),
-			};
-			let first = DiagnosticMessage::fluent(reference.clone().unwrap(), "first");
-			let diagnostic = Diagnostic::new(kind, DiagnosticMessage::new(second)).with(first);
-			lower.diagnostics.push(diagnostic);
-		}
-		let mut classes: Vec<String> = Vec::new();
-		for class in m.captures("class") {
-			let class = class.token.content();
-			if !classes.iter().any(|c| c == class) {
-				classes.push(class.into());
-			}
-		}
-		let attributes = Attributes {
-			id: reference.as_ref().map(|r| r.content().to_string()),
-			classes,
-		};
+		let (attributes, reference) = attributes::lower(lower, m);
 
 		let heading = ElementKind::Heading { level: level as u8 };
 		lower

@@ -39,11 +39,14 @@ pub fn resolve(index: &Index, unit: &UnitRecord, target: &SymbolRef) -> Result<T
 }
 
 /// What a reference to `target` without a caption shows: a figure or a table by its number,
-/// anything else by its title.
+/// a medium by its number in parentheses, anything else by its title.
 pub fn label(target: &Target) -> String {
 	let Some(export) = &target.export else {
 		return target.unit.title.clone();
 	};
+	if let (SymbolKind::Media, Some(number)) = (export.kind, export.property("number")) {
+		return format!("({number})");
+	}
 	let word = match export.kind {
 		SymbolKind::Figure => "Figure",
 		SymbolKind::Table => "Table",

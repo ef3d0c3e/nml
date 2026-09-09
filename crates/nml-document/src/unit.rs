@@ -90,6 +90,8 @@ impl fmt::Display for SymbolRef {
 pub enum SymbolKind {
 	Heading,
 	Figure,
+	/// A medium with a name, outside of a figure or in one.
+	Media,
 	Table,
 	Anchor,
 	/// An exported variable (`:export`).
@@ -97,9 +99,10 @@ pub enum SymbolKind {
 }
 
 impl SymbolKind {
-	pub const ALL: [SymbolKind; 5] = [
+	pub const ALL: [SymbolKind; 6] = [
 		SymbolKind::Heading,
 		SymbolKind::Figure,
+		SymbolKind::Media,
 		SymbolKind::Table,
 		SymbolKind::Anchor,
 		SymbolKind::Variable,
@@ -110,6 +113,7 @@ impl SymbolKind {
 		match self {
 			SymbolKind::Heading => "heading",
 			SymbolKind::Figure => "figure",
+			SymbolKind::Media => "media",
 			SymbolKind::Table => "table",
 			SymbolKind::Anchor => "anchor",
 			SymbolKind::Variable => "variable",

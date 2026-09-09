@@ -1,6 +1,7 @@
 //! The built-in NML language: Rust rules for every core element.
 
 mod anchor;
+mod attributes;
 mod code;
 mod heading;
 mod import;
