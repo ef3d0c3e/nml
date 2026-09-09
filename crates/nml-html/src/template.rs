@@ -238,13 +238,25 @@ impl Output<'_> {
 				continue;
 			}
 			self.raw(&format!("<{section}>\n"));
+			// For each column, how many more rows a cell above still covers.
+			let mut covered: Vec<u32> = Vec::new();
 			for row in rows {
 				self.open(document, *row, "tr");
 				let mut column = 0;
 				for (child, element) in document.children(*row) {
-					let ElementKind::TableCell { hspan, vspan } = element.kind else {
+					let ElementKind::TableCell { hspan, vspan, align } = element.kind else {
 						continue;
 					};
+					while covered.get(column).is_some_and(|&rows| rows > 0) {
+						column += 1;
+					}
+					let end = column + hspan as usize;
+					if covered.len() < end {
+						covered.resize(end, 0);
+					}
+					for rows in &mut covered[column..end] {
+						*rows = vspan;
+					}
 					let mut extra = String::new();
 					if hspan > 1 {
 						extra.push_str(&format!(" colspan=\"{hspan}\""));
@@ -252,7 +264,11 @@ impl Output<'_> {
 					if vspan > 1 {
 						extra.push_str(&format!(" rowspan=\"{vspan}\""));
 					}
-					let align = match alignments.get(column) {
+					let align = match align {
+						Alignment::Default => alignments.get(column).copied(),
+						align => Some(align),
+					};
+					let align = match align {
 						Some(Alignment::Left) => Some("left"),
 						Some(Alignment::Center) => Some("center"),
 						Some(Alignment::Right) => Some("right"),
@@ -264,7 +280,10 @@ impl Output<'_> {
 					self.open_with(document, child, cell, None, &extra);
 					self.children(document, child);
 					self.raw(&format!("</{cell}>"));
-					column += hspan as usize;
+					column = end;
+				}
+				for rows in &mut covered {
+					*rows = rows.saturating_sub(1);
 				}
 				self.raw("</tr>\n");
 			}

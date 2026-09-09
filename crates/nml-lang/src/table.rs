@@ -28,7 +28,7 @@ use crate::language::plain_text;
 
 /// Tables: rows of cells between pipes, `| a | b |`. A separator row, `|:--|--:|`, makes the
 /// rows above it header rows and sets the alignment of the columns. A cell can start with
-/// options right after its pipe: `|[hspan=2] wide |`.
+/// options right after its pipe: `|[hspan=2, align=center] wide |`.
 ///
 /// `:table [#ref] [Caption]` before a table numbers it, gives it a caption and makes it
 /// referenceable.
@@ -41,6 +41,16 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	let schema = Arc::new(OptionSchema::new([
 		span("hspan", "How many columns the cell spans."),
 		span("vspan", "How many rows the cell spans."),
+		OptionSpec::new(
+			"align",
+			OptionKind::Choice(
+				["auto", "left", "center", "right"]
+					.map(String::from)
+					.to_vec(),
+			),
+		)
+		.with_default(OptionValue::Text("auto".into()))
+		.with_doc("The cell's alignment; `auto` follows its column's."),
 	]));
 	let cell = || {
 		vec![
@@ -67,7 +77,8 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			"**Table**: rows of cells between pipes.\n\n\
 			```nml\n| Name | Price |\n|:-----|------:|\n| Tea  |     3 |\n```\n\n\
 			A separator row makes the rows above it headers, and aligns the columns with `:`. \
-			A cell's options come right after its pipe: `|[hspan=2] wide |`, `vspan` for rows.",
+			A cell's options come right after its pipe: `|[hspan=2] wide |`, `vspan` for rows, \
+			`align` (`left`, `center`, `right`) for the cell alone.",
 		)
 		.with_snippet("| ${1:Header} | ${2:Header} |\n|---|---|\n| ${3} | ${0} |");
 	language.add(rows, lower_table)?;
@@ -261,9 +272,19 @@ fn lower_table(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 				}
 			}
 			let clamp = |span: i64| u32::try_from(span.max(1)).unwrap_or(u32::MAX);
+			let align = match cell.options.and_then(|options| options.get("align")) {
+				Some(OptionValue::Text(align)) => match align.as_str() {
+					"left" => Alignment::Left,
+					"center" => Alignment::Center,
+					"right" => Alignment::Right,
+					_ => Alignment::Default,
+				},
+				_ => Alignment::Default,
+			};
 			let kind = ElementKind::TableCell {
 				hspan: clamp(hspan),
 				vspan: clamp(vspan),
+				align,
 			};
 			lower.builder.open(kind, cell.capture.token.clone());
 			if let Value::Nodes(nodes) = &cell.capture.value {
@@ -376,11 +397,30 @@ mod tests {
 		let spans: Vec<_> = document
 			.descendants(document.root())
 			.filter_map(|(_, element)| match element.kind {
-				ElementKind::TableCell { hspan, vspan } => Some((hspan, vspan)),
+				ElementKind::TableCell { hspan, vspan, .. } => Some((hspan, vspan)),
 				_ => None,
 			})
 			.collect();
 		assert_eq!(spans, [(2, 1), (1, 3), (1, 1)]);
+
+		let compiled = compile_text("|[align=center] a |[align=right, hspan=2] b | c |");
+		assert_diagnostics!(compiled.diagnostics, []);
+		let document = &compiled.unit.document;
+		let aligns: Vec<_> = document
+			.descendants(document.root())
+			.filter_map(|(_, element)| match element.kind {
+				ElementKind::TableCell { align, .. } => Some(align),
+				_ => None,
+			})
+			.collect();
+		assert_eq!(
+			aligns,
+			[Alignment::Center, Alignment::Right, Alignment::Default]
+		);
+		let compiled = compile_text("|[align=auto] a |");
+		assert_diagnostics!(compiled.diagnostics, []);
+		let compiled = compile_text("|[align=top] a |");
+		assert_diagnostics!(compiled.diagnostics, [1007 @ 8..11]);
 
 		let compiled = compile_text("|[hspan=0] a |");
 		assert_diagnostics!(compiled.diagnostics, [1007 @ 8..9]);

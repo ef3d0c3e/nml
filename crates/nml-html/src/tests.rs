@@ -209,6 +209,16 @@ fn tables() {
 		body("|[vspan=2]a|b|\n|c|"),
 		"<table>\n<tbody>\n<tr><td rowspan=\"2\">a</td><td>b</td></tr>\n<tr><td>c</td></tr>\n</tbody>\n</table>\n"
 	);
+	// A cell's own alignment beats its column's; a cell under a row span is in the column
+	// after it.
+	assert_eq!(
+		body("|a|b|c|\n|:-|:-:|-:|\n|[vspan=2]d|[align=right]e|f|\n|g|h|"),
+		"<table>\n<thead>\n<tr><th style=\"text-align: left\">a</th><th style=\"text-align: center\">b</th>\
+		<th style=\"text-align: right\">c</th></tr>\n</thead>\n<tbody>\n\
+		<tr><td rowspan=\"2\" style=\"text-align: left\">d</td><td style=\"text-align: right\">e</td>\
+		<td style=\"text-align: right\">f</td></tr>\n\
+		<tr><td style=\"text-align: center\">g</td><td style=\"text-align: right\">h</td></tr>\n</tbody>\n</table>\n"
+	);
 }
 
 #[test]

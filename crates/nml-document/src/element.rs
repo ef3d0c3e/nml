@@ -105,6 +105,8 @@ pub enum ElementKind {
 		hspan: u32,
 		/// How many rows it spans.
 		vspan: u32,
+		/// Its own alignment; [`Alignment::Default`] follows its column's.
+		align: Alignment,
 	},
 	/// Source rendered by an external program into an image: math, LaTeX, Graphviz, Typst.
 	Rendered {
@@ -269,7 +271,7 @@ impl RenderKind {
 	}
 }
 
-/// The alignment of a table column.
+/// The alignment of a table column or cell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Alignment {
 	#[default]
