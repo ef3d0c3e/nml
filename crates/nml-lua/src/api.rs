@@ -166,7 +166,7 @@ pub const DISABLED_LIBRARIES: &[&str] = &["io", "os", "debug", "package"];
 pub fn write_types(root: &Path) -> io::Result<()> {
 	let dir = root.join(TYPES_DIR);
 	let path = dir.join("nml.lua");
-	let content = luacats(API, CLASSES, crate::rules::VALUES);
+	let content = luacats(API, CLASSES, crate::rules::VALUES) + crate::tables::DECLARATION;
 	if fs::read_to_string(&path).is_ok_and(|current| current == content) {
 		return Ok(());
 	}

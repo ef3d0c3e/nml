@@ -30,6 +30,7 @@ pub use language::Import;
 pub use language::ImportHook;
 pub use language::Language;
 pub use language::Lower;
+pub use language::ScriptTable;
 pub use language::Variable;
 pub use language::compile;
 pub use media::figure_export;

@@ -11,6 +11,7 @@ use crate::events;
 use crate::files;
 use crate::module::Modules;
 use crate::post_parse;
+use crate::tables;
 use crate::variables;
 
 /// The Lua of the unit being lowered: its state, its chunks, and the errors raised where no
@@ -49,7 +50,7 @@ pub(crate) fn unit_lua<'a>(lower: &'a mut Lower<'_, '_>) -> &'a mut UnitLua {
 		});
 		lower.extension(|| unit);
 	}
-	// Scripts see the variables as they are now.
+	// Scripts see the variables and tables as they are now.
 	let lua = lower
 		.extension_mut::<UnitLua>()
 		.unwrap()
@@ -57,5 +58,7 @@ pub(crate) fn unit_lua<'a>(lower: &'a mut Lower<'_, '_>) -> &'a mut UnitLua {
 		.lua()
 		.clone();
 	variables::sync(lower, &lua);
+	// A table that cannot be built (out of memory) stays missing until the next sync.
+	let _ = tables::sync(lower, &lua);
 	lower.extension_mut().unwrap()
 }

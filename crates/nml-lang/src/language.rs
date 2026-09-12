@@ -192,6 +192,7 @@ pub fn compile(
 		imports: Vec::new(),
 		module_exports: BTreeMap::new(),
 		exported: Vec::new(),
+		tables: BTreeMap::new(),
 		placeholders: None,
 		extensions: HashMap::new(),
 		finishers: Vec::new(),
@@ -293,6 +294,8 @@ pub struct Lower<'a, 'l> {
 	pub module_exports: BTreeMap<String, Vec<String>>,
 	/// Exported names and where they are written.
 	exported: Vec<(String, Token)>,
+	/// Tables named for scripts with `:table[lua=name]`, by name.
+	pub tables: BTreeMap<String, Arc<ScriptTable>>,
 	/// While a reference's caption is lowered: its target, and where it is written. The
 	/// caption's `{title}`, `{number}` and `{label}` become link slots.
 	pub(crate) placeholders: Option<(SymbolRef, Token)>,
@@ -300,6 +303,18 @@ pub struct Lower<'a, 'l> {
 	extensions: HashMap<TypeId, Box<dyn Any>>,
 	/// Run when the lowering ends, in the order they were added.
 	finishers: Vec<Finisher>,
+}
+
+/// A table as scripts see it: the text of its cells, in a rectangular grid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptTable {
+	/// Where its name is written.
+	pub name: Token,
+	/// How many rows, from the first, are header rows.
+	pub header: usize,
+	/// The cells' text, row by row. A cell that spans several positions has its text in
+	/// each, and short rows are padded with empty text.
+	pub rows: Vec<Vec<String>>,
 }
 
 /// A variable: where its name and its value are written.

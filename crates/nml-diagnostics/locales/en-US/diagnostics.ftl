@@ -45,6 +45,8 @@ diagnostic-layout-parts = the `{ $name }` layout has { $expected ->
    *[other] { $expected } parts
 }, not { $found }
 diagnostic-not-a-table = `:table` applies to a table, which starts with `|`
+diagnostic-duplicate-table-name = a table is already named `{ $name }` for scripts
+    .first = first named here
 diagnostic-fence-language = `{ $language }` is not the language of this command: write `{ $expected }`, or nothing
 diagnostic-render-error = { $message }
 diagnostic-invalid-reference = `{ $target }` is not a reference: write `name`, `doc#name`, `doc#` or `#name`

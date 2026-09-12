@@ -236,6 +236,22 @@ impl<'l> DocumentBuilder<'l> {
 		self.slots[id.0 as usize] = slot;
 	}
 
+	/// An element that is already written.
+	///
+	/// # Panics
+	///
+	/// If the element does not exist.
+	pub fn get(&self, id: ElementId) -> &Element {
+		&self.elements[id.0 as usize]
+	}
+
+	/// The text below an element that is already written, without markup.
+	pub fn text(&self, id: ElementId) -> String {
+		let mut text = String::new();
+		collect_text(&self.elements, &self.get(id).children, &mut text);
+		text
+	}
+
 	/// The number of open elements, the document root included.
 	pub fn depth(&self) -> usize {
 		self.open.len()

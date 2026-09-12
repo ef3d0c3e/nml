@@ -17,6 +17,7 @@ mod script;
 #[cfg(test)]
 mod std_modules;
 mod system;
+mod tables;
 mod unit;
 mod variables;
 

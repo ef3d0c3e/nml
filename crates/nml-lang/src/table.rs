@@ -24,6 +24,7 @@ use nml_grammar::Value;
 
 use crate::Language;
 use crate::Lower;
+use crate::ScriptTable;
 use crate::language::plain_text;
 
 /// Tables: rows of cells between pipes, `| a | b |`. A separator row, `|:--|--:|`, makes the
@@ -31,7 +32,7 @@ use crate::language::plain_text;
 /// options right after its pipe: `|[hspan=2, align=center] wide |`.
 ///
 /// `:table [#ref] [Caption]` before a table numbers it, gives it a caption and makes it
-/// referenceable.
+/// referenceable. `:table[lua=name]` gives scripts its cells' text, as a [`ScriptTable`].
 pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	let span = |name: &str, doc: &str| {
 		OptionSpec::new(name, OptionKind::Integer)
@@ -88,6 +89,17 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		vec![
 			Atom::LineStart,
 			Atom::capture("command", Atom::literal(":table")).with_class("keyword"),
+			Atom::optional(vec![Atom::capture(
+				"options",
+				Atom::Options(Arc::new(OptionSchema::new([OptionSpec::new(
+					"lua",
+					OptionKind::Text,
+				)
+				.with_default(OptionValue::Text(String::new()))
+				.with_doc(
+					"A name for scripts: the table is `nml.tables.<name>`, after the table.",
+				)]))),
+			)]),
 			Atom::optional(vec![
 				Atom::literal(" #"),
 				Atom::capture("ref", Atom::Word).with_class("variable"),
@@ -103,7 +115,9 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	.with_doc(
 		"**Numbered table**: the table after it, with a caption.\n\n\
 		```nml\n:table #prices Prices\n| Tea | 3 |\n```\n\n\
-		`#name` makes it referenceable: `[[prices]]` shows *Table 1*.",
+		`#name` makes it referenceable: `[[prices]]` shows *Table 1*. \
+		`:table[lua=prices]` gives scripts the cells' text as `nml.tables.prices`; \
+		with only options, the table is not numbered.",
 	)
 	.with_snippet(":table #${1:name} ${2:Caption}\n| ${3} | ${0} |");
 	language.add(command, lower_command)?;
@@ -118,7 +132,7 @@ struct Cell<'a> {
 
 /// What a `:table` gives the table it applies to.
 struct Pending {
-	number: u32,
+	number: Option<u32>,
 	id: Option<String>,
 	caption: Option<Vec<Node>>,
 	/// The table's element, once it is written.
@@ -150,14 +164,27 @@ fn lower_command(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 		lower.capture(m, "body");
 		return;
 	}
-	let tables = lower.extension(Tables::default);
-	tables.count += 1;
-	let number = tables.count;
 	let reference = m.capture("ref").map(|capture| capture.token.clone());
 	let caption = match m.capture("caption").map(|capture| &capture.value) {
 		Some(Value::Nodes(nodes)) => Some(nodes.clone()),
 		_ => None,
 	};
+	let options = match m.capture("options").map(|capture| &capture.value) {
+		Some(Value::Options(options)) => Some(options),
+		_ => None,
+	};
+	// The name for scripts, where it is written.
+	let script_name = options.and_then(|options| {
+		let entry = options.entries.iter().find(|e| e.key.content() == "lua")?;
+		let token = entry.value_token.clone()?;
+		(!token.content().is_empty()).then_some(token)
+	});
+	// A `:table` with only options does not number the table.
+	let number = (reference.is_some() || caption.is_some() || options.is_none()).then(|| {
+		let tables = lower.extension(Tables::default);
+		tables.count += 1;
+		tables.count
+	});
 	let title = caption.as_deref().map(plain_text).unwrap_or_default();
 	lower.extension(Tables::default).pending = Some(Pending {
 		number,
@@ -171,12 +198,79 @@ fn lower_command(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 	let Some(element) = pending.and_then(|pending| pending.element) else {
 		return;
 	};
-	if let Some(reference) = reference {
+	if let Some(token) = script_name {
+		script_table(lower, element, token);
+	}
+	if let (Some(reference), Some(number)) = (reference, number) {
 		let export = Export::new(reference.content(), SymbolKind::Table, Some(element))
 			.with("title", title)
 			.with("number", number.to_string());
 		lower.export(export, reference);
 	}
+}
+
+/// Gives scripts the table `element` under the name written at `name`.
+fn script_table(lower: &mut Lower<'_, '_>, element: ElementId, name: nml_source::Token) {
+	if let Some(first) = lower.tables.get(name.content()) {
+		let kind = DiagnosticKind::DuplicateTableName {
+			name: name.content().into(),
+		};
+		let first = DiagnosticMessage::fluent(first.name.clone(), "first");
+		let diagnostic = Diagnostic::new(kind, DiagnosticMessage::new(name)).with(first);
+		lower.diagnostics.push(diagnostic);
+		return;
+	}
+	let builder = &lower.builder;
+	let table = builder.get(element);
+	let header = match table.kind {
+		ElementKind::Table { header_rows, .. } => header_rows,
+		_ => 0,
+	};
+	let rows: Vec<ElementId> = table
+		.children()
+		.iter()
+		.copied()
+		.filter(|&row| builder.get(row).kind == ElementKind::TableRow)
+		.collect();
+	let mut grid: Vec<Vec<Option<String>>> = vec![Vec::new(); rows.len()];
+	for (y, &row) in rows.iter().enumerate() {
+		let mut x = 0;
+		for &cell in builder.get(row).children() {
+			let ElementKind::TableCell { hspan, vspan, .. } = builder.get(cell).kind else {
+				continue;
+			};
+			// Past the positions that cells above span down to.
+			while grid[y].get(x).is_some_and(Option::is_some) {
+				x += 1;
+			}
+			let text = builder.text(cell).trim().to_string();
+			let end = x + hspan as usize;
+			for line in grid.iter_mut().skip(y).take(vspan as usize) {
+				if line.len() < end {
+					line.resize(end, None);
+				}
+				for position in &mut line[x..end] {
+					position.get_or_insert_with(|| text.clone());
+				}
+			}
+			x = end;
+		}
+	}
+	let width = grid.iter().map(Vec::len).max().unwrap_or(0);
+	let rows = grid
+		.into_iter()
+		.map(|row| {
+			let mut row: Vec<String> = row.into_iter().map(Option::unwrap_or_default).collect();
+			row.resize(width, String::new());
+			row
+		})
+		.collect();
+	let table = ScriptTable {
+		name: name.clone(),
+		header,
+		rows,
+	};
+	lower.tables.insert(name.content().to_string(), Arc::new(table));
 }
 
 fn lower_table(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
@@ -224,10 +318,8 @@ fn lower_table(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 		.and_then(|tables| tables.pending.as_mut())
 		.filter(|pending| pending.element.is_none())
 		.map(|pending| (pending.number, pending.id.clone(), pending.caption.take()));
-	let (number, id, caption) = match pending {
-		Some((number, id, caption)) => (Some(number), id, caption),
-		None => (None, None, None),
-	};
+	let pending_table = pending.is_some();
+	let (number, id, caption) = pending.unwrap_or_default();
 	let kind = ElementKind::Table {
 		alignments,
 		header_rows,
@@ -298,7 +390,7 @@ fn lower_table(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 	if let Some(pending) = lower
 		.extension_mut::<Tables>()
 		.and_then(|tables| tables.pending.as_mut())
-		.filter(|_| number.is_some())
+		.filter(|_| pending_table)
 	{
 		pending.element = Some(element);
 	}
@@ -447,6 +539,28 @@ mod tests {
 				number: Some(1),
 			}
 		);
+
+		// With only options, the table is not numbered, and does not take a number.
+		let compiled = compile_text(":table[lua=a]\n| a |\n\n:table[lua=b] #b B\n| b |");
+		assert_diagnostics!(compiled.diagnostics, []);
+		let document = &compiled.unit.document;
+		let numbers: Vec<_> = document
+			.descendants(document.root())
+			.filter_map(|(_, element)| match element.kind {
+				ElementKind::Table { number, .. } => Some(number),
+				_ => None,
+			})
+			.collect();
+		assert_eq!(numbers, [None, Some(1)]);
+		assert_eq!(compiled.unit.exports.len(), 1);
+		assert_eq!(compiled.unit.exports[0].property("number"), Some("1"));
+		// A name is given once; an empty one is no name.
+		let compiled = compile_text(":table[lua=a]\n| a |\n\n:table[lua=a]\n| b |");
+		assert_diagnostics!(compiled.diagnostics, [2022 @ 32..33]);
+		let compiled = compile_text(":table[lua=]\n| a |\n\n:table[lua=]\n| b |");
+		assert_diagnostics!(compiled.diagnostics, []);
+		let compiled = compile_text(":table[name=a]\n| a |");
+		assert_diagnostics!(compiled.diagnostics, [1005]);
 
 		let compiled = compile_text(":table #t T\nnot a table");
 		assert_diagnostics!(compiled.diagnostics, [2019 @ 0..6]);

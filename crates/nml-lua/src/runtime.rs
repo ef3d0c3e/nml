@@ -64,6 +64,7 @@ impl Runtime {
 		let api = lua.create_table()?;
 		crate::api::register(&lua, &api, crate::API)?;
 		crate::rules::register_values(&api)?;
+		crate::tables::register(&lua, &api)?;
 		globals.raw_set("nml", api)?;
 
 		lua.set_memory_limit(limits.memory)?;

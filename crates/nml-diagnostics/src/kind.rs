@@ -94,6 +94,8 @@ pub enum DiagnosticKind {
 	FenceLanguage { language: String, expected: String },
 	#[diag(id = 2021, message = "diagnostic-invalid-output-path")]
 	InvalidOutputPath { path: String },
+	#[diag(id = 2022, message = "diagnostic-duplicate-table-name")]
+	DuplicateTableName { name: String },
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]
