@@ -35,13 +35,17 @@ impl Default for Renderers {
 	}
 }
 
-/// A LaTeX environment: what comes before the content.
+/// A LaTeX environment: what comes before the content, and the program.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TexEnvironment {
 	/// Inserted before `\begin{document}`: packages and macros.
 	pub preamble: String,
 	/// The font size in points.
 	pub font_size: Option<u32>,
+	/// Inserted before the source of LaTeX blocks (not math), on a line of its own.
+	pub block_prepend: String,
+	/// The LaTeX program, instead of [`Renderers::latex`].
+	pub latex: Option<String>,
 }
 
 /// What to render.
@@ -113,18 +117,26 @@ impl Renderers {
 	/// environment. Part of its cache key.
 	pub fn environment_key(&self, job: &Job) -> Result<String, RenderError> {
 		Ok(match job {
-			Job::Math { .. } => self.tex_document_key("main")?,
-			Job::Tex { environment, .. } => self.tex_document_key(environment)?,
+			Job::Math { .. } => self.tex_document_key("main", false)?,
+			Job::Tex { environment, .. } => self.tex_document_key(environment, true)?,
 			Job::Graph { layout, .. } => format!("{}\0{layout}", self.dot),
 			Job::Typst { .. } => self.typst.clone(),
 		})
 	}
 
-	fn tex_document_key(&self, environment: &str) -> Result<String, RenderError> {
+	fn tex_document_key(&self, environment: &str, block: bool) -> Result<String, RenderError> {
 		let env = self.environment(environment)?;
+		let prepend = if block {
+			env.block_prepend.as_str()
+		} else {
+			""
+		};
 		Ok(format!(
-			"{}\0{}\0{}\0{:?}",
-			self.latex, self.dvisvgm, env.preamble, env.font_size
+			"{}\0{}\0{}\0{:?}\0{prepend}",
+			env.latex.as_deref().unwrap_or(&self.latex),
+			self.dvisvgm,
+			env.preamble,
+			env.font_size
 		))
 	}
 
@@ -137,12 +149,12 @@ impl Renderers {
 				} else {
 					format!("${source}$")
 				};
-				self.latex(&body, "main")?
+				self.latex(&body, "main", false)?
 			}
 			Job::Tex {
 				source,
 				environment,
-			} => self.latex(source, environment)?,
+			} => self.latex(source, environment, true)?,
 			Job::Graph { source, layout } => run(
 				Command::new(&self.dot)
 					.arg(format!("-K{layout}"))
@@ -164,30 +176,41 @@ impl Renderers {
 		Ok(strip_prologue(&svg).to_string())
 	}
 
-	/// LaTeX in a standalone document, through `latex` then `dvisvgm`, in a directory of its
-	/// own.
-	fn latex(&self, body: &str, environment: &str) -> Result<String, RenderError> {
-		let env = self.environment(environment)?;
+	/// The standalone LaTeX document of `body` in an environment. A block gets the
+	/// environment's `block_prepend` first.
+	fn tex_document(env: &TexEnvironment, body: &str, block: bool) -> String {
 		let size = env
 			.font_size
 			.map(|size| format!(",{size}pt"))
 			.unwrap_or_default();
-		let document = format!(
-			"\\documentclass[preview{size}]{{standalone}}\n{}\n\\begin{{document}}\n{body}\n\\end{{document}}\n",
+		let prepend = match block && !env.block_prepend.is_empty() {
+			true => format!("{}\n", env.block_prepend),
+			false => String::new(),
+		};
+		format!(
+			"\\documentclass[preview{size}]{{standalone}}\n{}\n\\begin{{document}}\n{prepend}{body}\n\\end{{document}}\n",
 			env.preamble
-		);
+		)
+	}
+
+	/// LaTeX in a standalone document, through the environment's LaTeX program then
+	/// `dvisvgm`, in a directory of its own.
+	fn latex(&self, body: &str, environment: &str, block: bool) -> Result<String, RenderError> {
+		let env = self.environment(environment)?;
+		let document = Self::tex_document(&env, body, block);
+		let latex = env.latex.as_deref().unwrap_or(&self.latex);
 		let dir = TempDir::new()?;
 		std::fs::write(dir.path().join("doc.tex"), document).map_err(|error| {
 			RenderError::Failed {
-				program: self.latex.clone(),
+				program: latex.to_string(),
 				message: error.to_string(),
 			}
 		})?;
 		let log = run(
-			Command::new(&self.latex)
+			Command::new(latex)
 				.args(["-interaction=nonstopmode", "-halt-on-error", "doc.tex"])
 				.current_dir(dir.path()),
-			&self.latex,
+			latex,
 			b"",
 		);
 		if let Err(RenderError::Failed { program, message }) = log {
@@ -447,6 +470,54 @@ mod tests {
 	}
 
 	#[test]
+	fn block_prepend_and_program() {
+		let env = TexEnvironment {
+			preamble: "\\usepackage{tikz}".into(),
+			font_size: Some(11),
+			block_prepend: "\\centering".into(),
+			latex: Some("nml-no-such-latex".into()),
+		};
+		// Only blocks get `block_prepend`.
+		assert_eq!(
+			Renderers::tex_document(&env, "x", true),
+			"\\documentclass[preview,11pt]{standalone}\n\\usepackage{tikz}\n\
+			\\begin{document}\n\\centering\nx\n\\end{document}\n"
+		);
+		assert!(!Renderers::tex_document(&env, "x", false).contains("centering"));
+		let renderers = Renderers {
+			tex_environments: vec![("own".into(), env.clone())],
+			..Renderers::default()
+		};
+		// The environment's program runs, and is part of the key, as `block_prepend` is.
+		let job = Job::Tex {
+			source: "x".into(),
+			environment: "own".into(),
+		};
+		let error = renderers.render(&job).unwrap_err();
+		assert!(
+			matches!(&error, RenderError::Missing { program, .. } if program == "nml-no-such-latex"),
+			"{error}"
+		);
+		let key = renderers.environment_key(&job).unwrap();
+		let other = Renderers {
+			tex_environments: vec![(
+				"own".into(),
+				TexEnvironment {
+					block_prepend: String::new(),
+					..env.clone()
+				},
+			)],
+			..Renderers::default()
+		};
+		assert_ne!(other.environment_key(&job).unwrap(), key);
+		let other = Renderers {
+			tex_environments: vec![("own".into(), TexEnvironment { latex: None, ..env })],
+			..Renderers::default()
+		};
+		assert_ne!(other.environment_key(&job).unwrap(), key);
+	}
+
+	#[test]
 	fn environments() {
 		let renderers = Renderers {
 			tex_environments: vec![(
@@ -454,6 +525,7 @@ mod tests {
 				TexEnvironment {
 					preamble: "\\usepackage{tikz}".into(),
 					font_size: Some(12),
+					..TexEnvironment::default()
 				},
 			)],
 			..Renderers::default()

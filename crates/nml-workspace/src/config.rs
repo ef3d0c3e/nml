@@ -71,6 +71,9 @@ struct RawTexEnvironment {
 	#[serde(default)]
 	preamble: String,
 	font_size: Option<u32>,
+	#[serde(default)]
+	block_prepend: String,
+	latex: Option<String>,
 }
 
 #[derive(Default, Deserialize)]
@@ -215,6 +218,8 @@ impl Config {
 					let env = nml_render::TexEnvironment {
 						preamble: env.preamble,
 						font_size: env.font_size,
+						block_prepend: env.block_prepend,
+						latex: env.latex,
 					};
 					(name, env)
 				})
@@ -316,6 +321,8 @@ dot = "/opt/bin/dot"
 [render.tex.tikz]
 preamble = "\\usepackage{tikz}"
 font_size = 11
+block_prepend = "\\centering"
+latex = "lualatex"
 
 [[module]]
 name = "std"
@@ -344,7 +351,9 @@ root = "lib/nav"
 				"tikz".to_string(),
 				nml_render::TexEnvironment {
 					preamble: "\\usepackage{tikz}".into(),
-					font_size: Some(11)
+					font_size: Some(11),
+					block_prepend: "\\centering".into(),
+					latex: Some("lualatex".into()),
 				}
 			)]
 		);
