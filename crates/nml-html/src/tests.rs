@@ -107,6 +107,14 @@ fn code_blocks() {
 		"{html}"
 	);
 	assert!(html.contains("<span class=\"hl-"), "{html}");
+	// The numbers and the code scroll together past `max_lines`.
+	assert_eq!(
+		body("```[max_lines=2]\na\nb\nc\n```"),
+		"<figure class=\"code-block\">\n\
+		<div class=\"code\" style=\"max-height: 2lh; overflow-y: auto\">\
+		<pre class=\"line-numbers\" aria-hidden=\"true\">1\n2\n3</pre>\
+		<pre><code>a\nb\nc</code></pre></div>\n</figure>\n"
+	);
 }
 
 #[test]

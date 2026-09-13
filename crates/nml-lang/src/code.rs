@@ -31,6 +31,9 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		OptionSpec::new("numbers", OptionKind::Bool)
 			.with_default(OptionValue::Bool(true))
 			.with_doc("Whether lines are numbered."),
+		OptionSpec::new("max_lines", OptionKind::Integer)
+			.with_default(OptionValue::Integer(0))
+			.with_doc("How many lines are shown before the rest scrolls; `0` shows them all."),
 	]);
 	let rule = Rule::new(
 		"code_block",
@@ -59,7 +62,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		"**Code block**, highlighted in its language, with an optional title.\n\n\
 		````nml\n```rust[line_offset=10] main.rs\nfn main() {}\n```\n````\n\n\
 		Options: `line_offset` (the number of the first line), `numbers` (whether lines are \
-		numbered). A longer fence lets the code hold ```` ``` ````.",
+		numbered), `max_lines` (how many lines are shown before the rest scrolls). A longer fence lets the code hold ```` ``` ````.",
 	)
 	.with_snippet("```${1:language} ${2:Title}\n${0}\n```");
 	language.add(rule, |lower, m| {
@@ -83,6 +86,31 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			Some(OptionValue::Integer(first)) => *first,
 			_ => 1,
 		};
+		let max_lines = match option("max_lines") {
+			Some(OptionValue::Integer(0)) | None => None,
+			Some(OptionValue::Integer(lines)) if *lines > 0 => {
+				Some(u32::try_from(*lines).unwrap_or(u32::MAX))
+			}
+			_ => {
+				let entry = options.and_then(|options| {
+					options
+						.entries
+						.iter()
+						.find(|e| e.key.content() == "max_lines")
+				});
+				let location = entry
+					.and_then(|entry| entry.value_token.clone())
+					.unwrap_or_else(|| m.token.clone());
+				let kind = DiagnosticKind::InvalidOptionValue {
+					name: "max_lines".into(),
+					expected: "Positive".into(),
+				};
+				lower
+					.diagnostics
+					.push(Diagnostic::new(kind, DiagnosticMessage::new(location)));
+				None
+			}
+		};
 		let code = m.capture("code").unwrap().token.content();
 		// The line break before the closing fence ends the last line; it is not part of it.
 		let code = code
@@ -93,6 +121,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			language: language.map(|language| language.content().to_string()),
 			code: code.to_string(),
 			first_line: numbered.then_some(first_line),
+			max_lines,
 		};
 		lower.builder.open(kind, m.token.clone());
 		lower.capture(m, "title");
@@ -125,6 +154,7 @@ mod tests {
 			language: language.map(String::from),
 			code: code.into(),
 			first_line,
+			max_lines: None,
 		}
 	}
 
@@ -169,6 +199,25 @@ mod tests {
 		);
 		let compiled = compile_text("```rs[lines=3]\nx\n```");
 		assert_diagnostics!(compiled.diagnostics, [1005]);
+		// `max_lines` limits the lines shown; 0 is no limit.
+		let (kind, _) = block("```rs[max_lines=20]\nx\n```");
+		assert!(matches!(
+			kind,
+			ElementKind::CodeBlock {
+				max_lines: Some(20),
+				..
+			}
+		));
+		let (kind, _) = block("```rs[max_lines=0]\nx\n```");
+		assert!(matches!(
+			kind,
+			ElementKind::CodeBlock {
+				max_lines: None,
+				..
+			}
+		));
+		let compiled = compile_text("```rs[max_lines=-2]\nx\n```");
+		assert_diagnostics!(compiled.diagnostics, [1007 @ 16..18]);
 	}
 
 	#[test]

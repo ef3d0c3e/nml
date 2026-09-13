@@ -477,6 +477,7 @@ impl<'a> Output<'a> {
 		language: Option<&str>,
 		code: &str,
 		first_line: Option<i64>,
+		max_lines: Option<u32>,
 	) {
 		let mut extra = String::new();
 		if let Some(language) = language {
@@ -491,7 +492,13 @@ impl<'a> Output<'a> {
 			self.children(document, id);
 			self.raw("</figcaption>\n");
 		}
-		self.raw("<div class=\"code\">");
+		match max_lines {
+			// The line numbers scroll with the code.
+			Some(lines) => self.raw(&format!(
+				"<div class=\"code\" style=\"max-height: {lines}lh; overflow-y: auto\">"
+			)),
+			None => self.raw("<div class=\"code\">"),
+		}
 		if let Some(first) = first_line {
 			let lines = code.split('\n').count() as i64;
 			self.raw("<pre class=\"line-numbers\" aria-hidden=\"true\">");
@@ -575,7 +582,15 @@ impl<'a> Output<'a> {
 				language,
 				code,
 				first_line,
-			} => self.code_block(document, id, language.as_deref(), code, *first_line),
+				max_lines,
+			} => self.code_block(
+				document,
+				id,
+				language.as_deref(),
+				code,
+				*first_line,
+				*max_lines,
+			),
 			ElementKind::Media {
 				kind,
 				url,

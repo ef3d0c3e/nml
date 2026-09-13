@@ -53,6 +53,8 @@ pub enum ElementKind {
 		code: String,
 		/// The number of the first line, if lines are numbered.
 		first_line: Option<i64>,
+		/// How many lines are shown before the rest scrolls, if they are limited.
+		max_lines: Option<u32>,
 	},
 	/// An image, a video or an audio file.
 	Media {

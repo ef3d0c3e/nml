@@ -99,7 +99,10 @@ const KINDS: &[(&str, &str)] = &[
 	("link", "url"),
 	("reference", "target"),
 	("code", "code"),
-	("code_block", "code, language, line_offset, numbers"),
+	(
+		"code_block",
+		"code, language, line_offset, numbers, max_lines",
+	),
 	("media", "url, type, alt, width"),
 	("figure", "caption, ref"),
 	("list", "numbered, start, bullet"),
@@ -122,7 +125,7 @@ const KINDS: &[(&str, &str)] = &[
 /// | `link` | `url` |
 /// | `reference` | `target` (`name`, `doc#name`, `doc#`, `#name`); children are the caption |
 /// | `code` | `code` |
-/// | `code_block` | `code`, `language`, `line_offset`, `numbers`; children are the title |
+/// | `code_block` | `code`, `language`, `line_offset`, `numbers`, `max_lines`; children are the title |
 /// | `media` | `url` (a path in the workspace, copied with the page, or an external URL), `type` (`image`, `video`, `audio`), `alt`, `width` |
 /// | `figure` | `caption`, `ref` (its reference name, and its id); children are the body. Numbered with the unit's other figures |
 /// | `list` | `numbered`, `start`, `bullet` (`1`, `a`, `A`, `i`, `I` if numbered; `disc`, `circle`, `square`, `none` if not); children that are not items become items |
@@ -181,10 +184,20 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 		"code_block" => {
 			let numbered = spec.get::<Option<bool>>("numbers")?.unwrap_or(true);
 			let first = spec.get::<Option<i64>>("line_offset")?.unwrap_or(1);
+			let max_lines = match spec.get::<Option<i64>>("max_lines")? {
+				None | Some(0) => None,
+				Some(lines) if lines > 0 => Some(u32::try_from(lines).unwrap_or(u32::MAX)),
+				Some(_) => {
+					return Err(mlua::Error::runtime(
+						"a code block's `max_lines` is positive, or 0 for no limit",
+					));
+				}
+			};
 			Content::Element(ElementKind::CodeBlock {
 				language: text("language")?,
 				code: required("code")?,
 				first_line: numbered.then_some(first),
+				max_lines,
 			})
 		}
 		"media" => {
@@ -1041,6 +1054,16 @@ mod tests {
 			};
 			assert!(error.contains(message), "{code}: {error}");
 		}
+	}
+
+	#[test]
+	fn code_blocks() {
+		assert!(
+			body(":lua`nml.element('code_block', {code = 'x', max_lines = 3})`")
+				.contains("<div class=\"code\" style=\"max-height: 3lh; overflow-y: auto\">")
+		);
+		let compiled = compile(":lua`nml.element('code_block', {code = 'x', max_lines = -1})`");
+		assert_diagnostics!(compiled.diagnostics, [4001]);
 	}
 
 	#[test]
