@@ -508,7 +508,7 @@ impl Builder {
 					source: source.clone(),
 					environment: environment.clone(),
 				},
-				RenderKind::Graph { layout } => Job::Graph {
+				RenderKind::Graph { layout, .. } => Job::Graph {
 					source: source.clone(),
 					layout: layout.clone(),
 				},

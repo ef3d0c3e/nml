@@ -297,20 +297,36 @@ fn rendered() {
 		<div class=\"rendered graph\" role=\"img\" aria-label=\"graph {}\"><code>graph {}</code></div>\n"
 	);
 
-	let source = Source::new(Url::parse("file:///a.nml").unwrap(), "$x$".into(), 0);
-	let compiled = nml_lang::compile(
-		&Language::builtin(),
-		Arc::new(source),
-		"a.nml",
-		Arc::new(MemoryResolver::default()),
+	// With the rendered image.
+	let page = |text: &str| {
+		let source = Source::new(Url::parse("file:///a.nml").unwrap(), text.into(), 0);
+		let compiled = nml_lang::compile(
+			&Language::builtin(),
+			Arc::new(source),
+			"a.nml",
+			Arc::new(MemoryResolver::default()),
+		);
+		let document = &compiled.unit.document;
+		let (id, _) = document
+			.descendants(document.root())
+			.find(|(_, element)| matches!(element.kind, nml_document::ElementKind::Rendered { .. }))
+			.unwrap();
+		let mut options = PageOptions::default();
+		options.rendered.insert(id, "<svg width=\"62pt\"/>".into());
+		compile(document, &options).content
+	};
+	let math = page("$x$");
+	assert!(
+		math.contains("aria-label=\"x\"><svg width=\"62pt\"/></span>"),
+		"{math}"
 	);
-	let document = &compiled.unit.document;
-	let (id, _) = document
-		.descendants(document.root())
-		.find(|(_, element)| matches!(element.kind, nml_document::ElementKind::Rendered { .. }))
-		.unwrap();
-	let mut options = PageOptions::default();
-	options.rendered.insert(id, "<svg/>".into());
-	let page = compile(document, &options).content;
-	assert!(page.contains("aria-label=\"x\"><svg/></span>"), "{page}");
+	// A graph with a width fills a box of that width.
+	let graph = page(":graph[width=50%]\n```\ngraph {}\n```");
+	assert!(
+		graph.contains(
+			"<div class=\"rendered graph\" role=\"img\" aria-label=\"graph {}\" style=\"width: 50%\">\
+			<svg style=\"width: 100%; height: auto\" width=\"62pt\"/></div>"
+		),
+		"{graph}"
+	);
 }

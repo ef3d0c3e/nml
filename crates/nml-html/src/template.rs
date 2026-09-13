@@ -10,6 +10,7 @@ use nml_document::LayoutKind;
 use nml_document::ListKind;
 use nml_document::MediaKind;
 use nml_document::OutputContext;
+use nml_document::RenderKind;
 use nml_document::Slot;
 use nml_document::SlotId;
 use nml_document::Style;
@@ -711,9 +712,24 @@ impl<'a> Output<'a> {
 				let mut extra = String::from(" role=\"img\" aria-label=\"");
 				escape(&mut extra, source, true);
 				extra.push('"');
+				let width = match kind {
+					RenderKind::Graph { width, .. } => width.as_deref(),
+					_ => None,
+				};
+				if let Some(width) = width {
+					extra.push_str(" style=\"width: ");
+					escape(&mut extra, width, true);
+					extra.push('"');
+				}
 				let class = format!("rendered {}", kind.name());
 				self.open_with(document, id, tag, Some(&class), &extra);
 				match self.rendered.get(&id) {
+					// A sized image fills its box: CSS beats the SVG's own size.
+					Some(svg) if width.is_some() => self.raw(&svg.replacen(
+						"<svg",
+						"<svg style=\"width: 100%; height: auto\"",
+						1,
+					)),
 					Some(svg) => self.raw(svg),
 					None => {
 						self.raw("<code>");

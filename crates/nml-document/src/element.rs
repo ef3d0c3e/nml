@@ -258,6 +258,8 @@ pub enum RenderKind {
 	/// Graphviz, with a layout engine.
 	Graph {
 		layout: String,
+		/// The CSS width of the image; the graph keeps its proportions.
+		width: Option<String>,
 	},
 	Typst,
 }

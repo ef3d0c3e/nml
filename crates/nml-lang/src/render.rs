@@ -76,9 +76,14 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		.with_default(OptionValue::Text("main".into()))
 		.with_doc("The LaTeX environment of the configuration (`[render.tex.<name>]`).")]);
 	let layouts = LAYOUTS.iter().map(|layout| layout.to_string()).collect();
-	let graph = OptionSchema::new([OptionSpec::new("layout", OptionKind::Choice(layouts))
-		.with_default(OptionValue::Text("dot".into()))
-		.with_doc("The Graphviz layout engine.")]);
+	let graph = OptionSchema::new([
+		OptionSpec::new("layout", OptionKind::Choice(layouts))
+			.with_default(OptionValue::Text("dot".into()))
+			.with_doc("The Graphviz layout engine."),
+		OptionSpec::new("width", OptionKind::Text)
+			.with_default(OptionValue::Text(String::new()))
+			.with_doc("A CSS width, such as `50%` or `20em`; the graph keeps its proportions."),
+	]);
 	for (command, schema, languages, doc) in [
 		(
 			"tex",
@@ -94,7 +99,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			&["dot"][..],
 			"**Graph**, in Graphviz's DOT, rendered when the page is built.\n\n\
 			````nml\n:graph[layout=dot]\n```\ndigraph { a -> b }\n```\n````\n\n\
-			`layout` is the Graphviz engine.",
+			`layout` is the Graphviz engine, `width` a CSS width.",
 		),
 		(
 			"typst",
@@ -184,6 +189,7 @@ fn lower_fenced(lower: &mut Lower<'_, '_>, m: &RuleMatch, command: &str, languag
 		},
 		"graph" => RenderKind::Graph {
 			layout: option("layout").unwrap_or_else(|| "dot".into()),
+			width: option("width").filter(|width| !width.is_empty()),
 		},
 		_ => RenderKind::Typst,
 	};
@@ -246,7 +252,8 @@ mod tests {
 			[
 				element(
 					RenderKind::Graph {
-						layout: "neato".into()
+						layout: "neato".into(),
+						width: None,
 					},
 					"digraph { a -> b }",
 					true
@@ -266,7 +273,23 @@ mod tests {
 			rendered(":graph\n```\ngraph {}\n```"),
 			[element(
 				RenderKind::Graph {
-					layout: "dot".into()
+					layout: "dot".into(),
+					width: None,
+				},
+				"graph {}",
+				true
+			)]
+		);
+	}
+
+	#[test]
+	fn graph_width() {
+		assert_eq!(
+			rendered(":graph[width=50%, layout=circo]\n```\ngraph {}\n```"),
+			[element(
+				RenderKind::Graph {
+					layout: "circo".into(),
+					width: Some("50%".into()),
 				},
 				"graph {}",
 				true
