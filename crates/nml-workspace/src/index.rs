@@ -22,7 +22,7 @@ use rusqlite::params;
 use serde_json::Value as Json;
 
 /// The version of the schema below. A database with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 9;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value ANY) STRICT;
@@ -38,7 +38,10 @@ CREATE TABLE units (
 	output TEXT NOT NULL,
 	output_start INTEGER,
 	output_end INTEGER,
-	link_errors INTEGER NOT NULL DEFAULT 0
+	link_errors INTEGER NOT NULL DEFAULT 0,
+	-- Whether its output is out of date: committed or relinked by a build that does not
+	-- write, such as the language server's.
+	unwritten INTEGER NOT NULL DEFAULT 1
 ) STRICT;
 CREATE INDEX units_by_name ON units(name);
 CREATE TABLE exports (
@@ -90,6 +93,9 @@ CREATE TABLE unit_renders (
 	key TEXT NOT NULL
 ) STRICT;
 CREATE INDEX unit_renders_by_unit ON unit_renders(unit);
+-- Outputs of pages that are gone, or written elsewhere now, left by a build that does not
+-- write: the next build that writes deletes them.
+CREATE TABLE stale_outputs (output TEXT PRIMARY KEY, path TEXT NOT NULL) STRICT;
 CREATE TABLE assets (
 	unit INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
 	path TEXT NOT NULL,
@@ -521,6 +527,56 @@ impl Index {
 			params![path, errors],
 		)?;
 		Ok(())
+	}
+
+	/// Records whether a page's output is up to date: written by its last link. A commit
+	/// marks the page unwritten.
+	pub fn set_written(&mut self, path: &str, written: bool) -> Result<()> {
+		self.connection.execute(
+			"UPDATE units SET unwritten = ?2 WHERE path = ?1",
+			params![path, !written],
+		)?;
+		Ok(())
+	}
+
+	/// The paths of the pages whose output is out of date.
+	pub fn unwritten_pages(&self) -> Result<Vec<String>> {
+		let mut statement = self
+			.connection
+			.prepare("SELECT path FROM units WHERE unwritten AND role = 'page' ORDER BY path")?;
+		let paths = statement
+			.query_map([], |row| row.get(0))?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(paths)
+	}
+
+	/// Records an output to delete, of the page at `path`, which is gone or written
+	/// elsewhere now.
+	pub fn add_stale_output(&mut self, output: &str, path: &str) -> Result<()> {
+		self.connection.execute(
+			"INSERT INTO stale_outputs (output, path) VALUES (?1, ?2)
+			ON CONFLICT (output) DO UPDATE SET path = ?2",
+			[output, path],
+		)?;
+		Ok(())
+	}
+
+	/// The outputs to delete, as (output, page path), and forgets them. Outputs a page is
+	/// written to now are left out.
+	pub fn take_stale_outputs(&mut self) -> Result<Vec<(String, String)>> {
+		let tx = self.connection.transaction()?;
+		let outputs = {
+			let mut statement = tx.prepare(
+				"SELECT output, path FROM stale_outputs WHERE output NOT IN
+				(SELECT output FROM units WHERE role = 'page') ORDER BY output",
+			)?;
+			statement
+				.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+				.collect::<rusqlite::Result<_>>()?
+		};
+		tx.execute("DELETE FROM stale_outputs", [])?;
+		tx.commit()?;
+		Ok(outputs)
 	}
 
 	/// The paths of the units whose template has a deferred slot.
@@ -1713,6 +1769,32 @@ mod tests {
 		index.set_link_errors("a.nml", true).unwrap();
 		index.set_link_errors("a.nml", false).unwrap();
 		assert!(index.units_with_link_errors().unwrap().is_empty());
+	}
+
+	#[test]
+	fn unwritten_pages_and_stale_outputs() {
+		let mut index = Index::open_in_memory().unwrap();
+		commit(&mut index, "a.nml", 1);
+		commit(&mut index, "b.nml", 1);
+		// Committed pages are unwritten until a link writes them.
+		assert_eq!(index.unwritten_pages().unwrap(), ["a.nml", "b.nml"]);
+		index.set_written("a.nml", true).unwrap();
+		index.set_written("b.nml", true).unwrap();
+		assert!(index.unwritten_pages().unwrap().is_empty());
+		index.set_written("b.nml", false).unwrap();
+		assert_eq!(index.unwritten_pages().unwrap(), ["b.nml"]);
+		commit(&mut index, "a.nml", 2);
+		assert_eq!(index.unwritten_pages().unwrap(), ["a.nml", "b.nml"]);
+
+		let output = index.unit("a.nml").unwrap().unwrap().output;
+		index.add_stale_output("gone.html", "gone.nml").unwrap();
+		index.add_stale_output(&output, "old.nml").unwrap();
+		// An output a page is written to now is not deleted.
+		assert_eq!(
+			index.take_stale_outputs().unwrap(),
+			[("gone.html".to_string(), "gone.nml".to_string())]
+		);
+		assert!(index.take_stale_outputs().unwrap().is_empty());
 	}
 
 	#[test]

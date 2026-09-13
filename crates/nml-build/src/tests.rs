@@ -580,6 +580,82 @@ fn includes_and_imports_invalidate_their_users() {
 	assert_diagnostics!(report.diagnostics, [3008]);
 }
 
+/// A build that does not write, as the language server's.
+fn editor_build(workspace: &Workspace) -> BuildReport {
+	build_with(&workspace.0, BuildOptions { write: false }).unwrap()
+}
+
+#[test]
+fn builds_that_do_not_write_leave_pages_to_write() {
+	let workspace = Workspace::new(
+		"unwritten",
+		&[
+			("nml.toml", ""),
+			("foo.nml", "# Foo\n"),
+			("b.nml", "# B {#x}\n"),
+		],
+	);
+	workspace.build();
+	workspace.write("a.nml", "See [[b#x]].\n");
+	workspace.build();
+
+	// The renamed page is written, and the old output deleted.
+	fs::rename(workspace.0.join("foo.nml"), workspace.0.join("bar.nml")).unwrap();
+	let report = workspace.build();
+	assert_eq!(report.deleted, ["foo.nml"]);
+	assert!(!workspace.0.join("public/foo.html").exists());
+
+	// A new page, an edited page and a page to relink, all seen by the editor first.
+	workspace.write("foo.nml", "# New foo\n");
+	workspace.write("b.nml", "# Bee {#x}\n");
+	let report = editor_build(&workspace);
+	assert_eq!(report.written, ["a.nml", "b.nml", "foo.nml"]);
+	assert!(!workspace.0.join("public/foo.html").exists());
+	// Building again without writing changes nothing.
+	editor_build(&workspace);
+
+	let report = workspace.build();
+	assert_eq!(report.written, ["a.nml", "b.nml", "foo.nml"]);
+	assert!(workspace.output("foo.html").contains("<h1>New foo</h1>"));
+	assert!(workspace.output("b.html").contains("Bee"));
+	assert!(
+		workspace.output("a.html").contains(">Bee</a>"),
+		"{}",
+		workspace.output("a.html")
+	);
+	// Then they are up to date.
+	assert!(workspace.build().written.is_empty());
+}
+
+#[test]
+fn builds_that_do_not_write_leave_outputs_to_delete() {
+	let workspace = Workspace::new(
+		"stale",
+		&[("nml.toml", ""), ("a.nml", "# A\n"), ("b.nml", "# B\n")],
+	);
+	workspace.build();
+
+	// Removed while only the editor builds: deleted by the next build that writes.
+	workspace.remove("a.nml");
+	let report = editor_build(&workspace);
+	assert!(report.deleted.is_empty());
+	assert!(workspace.0.join("public/a.html").exists());
+	let report = workspace.build();
+	assert_eq!(report.deleted, ["a.nml"]);
+	assert!(!workspace.0.join("public/a.html").exists());
+	assert!(workspace.build().deleted.is_empty());
+
+	// Removed, then made again: the output is the new page's, and is not deleted.
+	workspace.remove("b.nml");
+	editor_build(&workspace);
+	workspace.write("b.nml", "# New B\n");
+	editor_build(&workspace);
+	let report = workspace.build();
+	assert!(report.deleted.is_empty());
+	assert_eq!(report.written, ["b.nml"]);
+	assert!(workspace.output("b.html").contains("New B"));
+}
+
 #[test]
 fn outputs_of_removed_pages_are_deleted() {
 	let workspace = Workspace::new(

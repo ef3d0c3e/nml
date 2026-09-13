@@ -308,6 +308,12 @@ impl Builder {
 		for path in self.index.units_with_link_errors()? {
 			self.to_link.insert(path);
 		}
+		// Pages a build that does not write committed or relinked since they were written.
+		if self.write {
+			for path in self.index.unwritten_pages()? {
+				self.to_link.insert(path);
+			}
+		}
 		for (unit, name) in std::mem::take(&mut self.affected) {
 			for id in self.index.users(&unit, &name)? {
 				let user = self.index.unit_by_id(id)?.unwrap();
@@ -321,6 +327,14 @@ impl Builder {
 		for path in std::mem::take(&mut self.to_link) {
 			if !conflicts.contains(&path) {
 				self.link(&path)?;
+			}
+		}
+		// Outputs a build that does not write left behind, unless a page is written there now.
+		if self.write {
+			for (output, path) in self.index.take_stale_outputs()? {
+				if self.delete_file(&output)? {
+					self.report.deleted.push(path);
+				}
 			}
 		}
 		// Renders no unit uses any more, since a unit changed or went away.
@@ -607,8 +621,11 @@ impl Builder {
 	/// Deletes `output`, the output of the page at `path` that is gone, no longer a page, or
 	/// written elsewhere now, and the directories it leaves empty. Only pages the index
 	/// knows are deleted: other files in the output directory are left alone.
+	/// A build that does not write records it, for the next build that writes.
 	fn delete_output(&mut self, path: &str, output: &str) -> Result<(), BuildError> {
-		if self.write && self.delete_file(output)? {
+		if !self.write {
+			self.index.add_stale_output(output, path)?;
+		} else if self.delete_file(output)? {
 			self.report.deleted.push(path.to_string());
 		}
 		Ok(())
@@ -877,6 +894,7 @@ impl Builder {
 			}
 		}
 		self.index.set_link_errors(path, has_errors(&reported))?;
+		self.index.set_written(path, self.write)?;
 		self.report.diagnostics.extend(reported);
 		self.report.written.push(path.to_string());
 		Ok(())
