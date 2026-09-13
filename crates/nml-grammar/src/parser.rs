@@ -184,6 +184,8 @@ struct Error {
 	pos: usize,
 	/// The partial value of an unclosed atom, kept in the tree.
 	value: Option<Value>,
+	/// Whether verbatim text ran to the end of the region without its delimiter.
+	unclosed_text: bool,
 }
 
 impl Error {
@@ -192,6 +194,7 @@ impl Error {
 			diagnostic: Box::new(diagnostic),
 			pos,
 			value: None,
+			unclosed_text: false,
 		}
 	}
 }
@@ -477,7 +480,14 @@ impl Parser<'_> {
 			if text_start < pos {
 				nodes.push(Node::Text(self.token(text_start..pos)));
 			}
-			let m = self.rule(rule, pos..pos + len, end);
+			let (m, unclosed_text) = self.try_rule(rule, pos..pos + len, end);
+			if unclosed_text {
+				// Its verbatim text would run to the end of the paragraph: the opener is
+				// text, and the rest is parsed as if the rule had not matched.
+				text_start = pos;
+				pos += len;
+				continue;
+			}
 			pos = m.token.end();
 			text_start = pos;
 			nodes.push(Node::Match(m));
@@ -515,23 +525,37 @@ impl Parser<'_> {
 	/// Matches a rule whose opener covers `opener`. A rule that fails is reported, and its
 	/// partial match ends where it failed.
 	fn rule(&mut self, rule: RuleId, opener: Range<usize>, end: usize) -> RuleMatch {
+		self.try_rule(rule, opener, end).0
+	}
+
+	/// Matches a rule like [`rule`](Self::rule), and tells whether it failed because its
+	/// verbatim text has no end.
+	fn try_rule(&mut self, rule: RuleId, opener: Range<usize>, end: usize) -> (RuleMatch, bool) {
 		let start = opener.start;
 		let context = Context { rule, opener, end };
 		let mut captures = Vec::new();
+		let mut unclosed_text = false;
+		let diagnostics = self.diagnostics.len();
 		let (pos, complete) = match self.seq(&context, self.rules.ops(rule), start, &mut captures) {
 			Ok(pos) => (pos, true),
 			Err(error) => {
+				unclosed_text = error.unclosed_text;
+				if unclosed_text {
+					// What it holds is parsed again: its errors would be reported twice.
+					self.diagnostics.truncate(diagnostics);
+				}
 				self.error(*error.diagnostic);
 				// Resume after the opener at least, so that parsing always advances.
 				(error.pos.max(context.opener.end), false)
 			}
 		};
-		RuleMatch {
+		let m = RuleMatch {
 			rule,
 			token: self.token(start..pos),
 			captures,
 			complete,
-		}
+		};
+		(m, unclosed_text)
 	}
 
 	fn seq(
@@ -720,6 +744,7 @@ impl Parser<'_> {
 						diagnostic: Box::new(self.unclosed(context, delimiters, pos, end)),
 						pos,
 						value: Some(Value::Span),
+						unclosed_text: true,
 					});
 				}
 			}
@@ -753,6 +778,7 @@ impl Parser<'_> {
 				diagnostic: Box::new(self.unclosed(context, &delimiters, pos, end)),
 				pos,
 				value: Some(Value::Nodes(nodes)),
+				unclosed_text: false,
 			})
 		}
 	}
@@ -1511,14 +1537,24 @@ pub(crate) mod tests {
 	fn unclosed_text() {
 		let rules = rules();
 		let parsed = parse(&rules, source("a `b\n\nc"));
-		assert_eq!(
-			show(&rules, &parsed.nodes),
-			r#"P["a " code!(fence="`" code="b")] P["c"]"#
-		);
+		assert_eq!(show(&rules, &parsed.nodes), r#"P["a " "`b"] P["c"]"#);
 		assert_diagnostics!(parsed.diagnostics, [1001 @ 2..3]);
 		let diagnostic = &parsed.diagnostics[0];
 		assert_eq!(diagnostic.messages()[1].location.range(), 4..4);
 		assert_eq!(diagnostic.fixes[0].edits[0].replacement, "\\`");
+
+		// What follows the opener is parsed as if the rule had not matched.
+		let diagnostics = check("a `b **c**", r#"P["a " "`b " bold(body=["c"])]"#);
+		assert_diagnostics!(diagnostics, [1001 @ 2..3]);
+		// Errors inside the failed rule are reported once, by the parse that follows.
+		let diagnostics = check("[**a](u", r#"P["[" bold!(body=["a](u"])]"#);
+		assert_diagnostics!(diagnostics, [1001 @ 0..1, 1001 @ 1..3]);
+		// Block rules keep their partial match.
+		let diagnostics = check(
+			"```\nx **y**",
+			r#"fence!(fence="```" info="" body="x **y**")"#,
+		);
+		assert_eq!(diagnostics.len(), 1);
 	}
 
 	#[test]

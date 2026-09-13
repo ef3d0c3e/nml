@@ -186,39 +186,49 @@ mod delimiters {
 mod generated {
 	use super::*;
 
-	/// Checks that `nodes` cover `range` exactly, without gaps or overlaps, and returns the
-	/// number of incomplete matches.
-	fn check_cover(nodes: &[Node], range: Range<usize>, text: &str) -> usize {
+	/// What a tree holds: the ranges of its incomplete matches and of its text.
+	#[derive(Default)]
+	struct Cover {
+		incomplete: Vec<Range<usize>>,
+		text: Vec<Range<usize>>,
+	}
+
+	/// Checks that `nodes` cover `range` exactly, without gaps or overlaps, and collects
+	/// their incomplete matches and text.
+	fn check_cover(nodes: &[Node], range: Range<usize>, text: &str, cover: &mut Cover) {
 		let mut pos = range.start;
-		let mut incomplete = 0;
 		for node in nodes {
 			let token = node.token();
 			assert_eq!(token.start(), pos, "gap or overlap in {text:?}");
 			pos = token.end();
 			match node {
 				Node::Paragraph { children, token } => {
-					incomplete += check_cover(children, token.range(), text);
+					check_cover(children, token.range(), text, cover);
 				}
 				Node::Match(m) => {
-					incomplete += usize::from(!m.complete);
+					if !m.complete {
+						cover.incomplete.push(token.range());
+					}
 					for capture in &m.captures {
 						let inside = capture.token.start() >= token.start()
 							&& capture.token.end() <= token.end();
 						assert!(inside, "capture outside its match in {text:?}");
 						if let Value::Nodes(nodes) = &capture.value {
-							incomplete += check_cover(nodes, capture.token.range(), text);
+							check_cover(nodes, capture.token.range(), text, cover);
 						}
 					}
 				}
-				Node::Text(_) | Node::Escape(_) | Node::Comment(_) => {}
+				Node::Text(_) => cover.text.push(token.range()),
+				Node::Escape(_) | Node::Comment(_) => {}
 			}
 		}
 		assert_eq!(pos, range.end, "the nodes end early in {text:?}");
-		incomplete
 	}
 
 	/// Random single-paragraph inputs over the inline syntax: the parser never panics, the
-	/// tree covers the source, and there is one error per incomplete match.
+	/// tree covers the source, every incomplete match has an error, and every error is in an
+	/// incomplete match or on text (the opener of a rule whose verbatim text has no end),
+	/// once.
 	#[test]
 	fn random_inline_input() {
 		// A line break is followed by text, so no line is blank.
@@ -235,12 +245,33 @@ mod generated {
 				panic!("not one paragraph: {text:?}");
 			};
 			assert_eq!(token.range(), 0..text.len());
-			let incomplete = check_cover(children, token.range(), &text);
-			assert_eq!(
-				incomplete,
-				parsed.diagnostics.len(),
-				"errors do not match incomplete matches in {text:?}"
-			);
+			let mut cover = Cover::default();
+			check_cover(children, token.range(), &text, &mut cover);
+			let errors: Vec<_> = parsed
+				.diagnostics
+				.iter()
+				.map(|d| d.primary().location.range())
+				.collect();
+			let within = |error: &Range<usize>, range: &Range<usize>| {
+				range.start <= error.start && error.end <= range.end
+			};
+			for range in &cover.incomplete {
+				assert!(
+					errors.iter().any(|error| within(error, range)),
+					"an incomplete match without an error in {text:?}"
+				);
+			}
+			for (i, error) in errors.iter().enumerate() {
+				assert!(
+					cover
+						.incomplete
+						.iter()
+						.chain(&cover.text)
+						.any(|range| within(error, range)),
+					"an error outside incomplete matches and text in {text:?}"
+				);
+				assert!(!errors[..i].contains(error), "an error twice in {text:?}");
+			}
 		}
 	}
 

@@ -173,6 +173,23 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn unclosed_verbatim_text_keeps_the_rest_of_its_paragraph() {
+		// The opener is text, and the rest is parsed.
+		let compiled = check(
+			"Hello %wh\nSome **bold**.",
+			r#"document[paragraph["Hello %wh\nSome " Bold["bold"] "."]]"#,
+		);
+		nml_diagnostics::assert_diagnostics!(compiled.diagnostics, [1001 @ 6..7]);
+		let compiled = check(
+			"See [[a and *b*",
+			r#"document[paragraph["See [[a and " Italic["b"]]]"#,
+		);
+		nml_diagnostics::assert_diagnostics!(compiled.diagnostics, [1001 @ 4..6]);
+		let compiled = check("`a *b*", r#"document[paragraph["`a " Italic["b"]]]"#);
+		nml_diagnostics::assert_diagnostics!(compiled.diagnostics, [1001 @ 0..1]);
+	}
+
+	#[test]
 	fn unclosed_emphasis_keeps_its_text() {
 		let compiled = check("a **b", r#"document[paragraph["a " "b"]]"#);
 		nml_diagnostics::assert_diagnostics!(compiled.diagnostics, [1001 @ 2..4]);
