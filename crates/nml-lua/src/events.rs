@@ -189,11 +189,11 @@ Count: :lua`#headings`, :lua`table.concat(headings, ", ")`.
 		assert_diagnostics!(compiled.diagnostics, []);
 		let body = html(&compiled);
 		assert!(
-			body.contains("<h1 id=\"h-1\" class=\"numbered\">First</h1>"),
+			body.contains("<h1 id=\"h-1\" class=\"numbered\"><a class=\"heading-link\" href=\"#h-1\">🔗</a> <span class=\"heading-number\">1.</span> First</h1>"),
 			"{body}"
 		);
 		assert!(
-			body.contains("<h2 id=\"two\" class=\"numbered\">Second</h2>"),
+			body.contains("<h2 id=\"two\" class=\"numbered\"><a class=\"heading-link\" href=\"#two\">🔗</a> <span class=\"heading-number\">1.1.</span> Second</h2>"),
 			"{body}"
 		);
 		assert!(body.contains("Count: 2, 1:First, 2:Second."), "{body}");

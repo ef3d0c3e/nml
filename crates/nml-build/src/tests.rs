@@ -78,7 +78,7 @@ fn builds_pages() {
 	assert!(index.contains("<title>Welcome</title>"));
 	assert_eq!(
 		body(&index),
-		"<h1 id=\"top\">Welcome</h1>\n<p>Some <strong>bold</strong> text.</p>\n"
+		"<h1 id=\"top\"><a class=\"heading-link\" href=\"#top\">🔗</a> <span class=\"heading-number\">1.</span> Welcome</h1>\n<p>Some <strong>bold</strong> text.</p>\n"
 	);
 	let guide = workspace.output("docs/guide.html");
 	assert!(guide.contains("<title>guide</title>"));
@@ -113,7 +113,7 @@ fn resolves_references() {
 	assert_diagnostics!(report.diagnostics, []);
 	assert_eq!(
 		body(&workspace.output("index.html")),
-		"<h1 id=\"top\">Home</h1>\n<p>See <a href=\"docs/guide.html#install\">Installing</a>, \
+		"<h1 id=\"top\"><a class=\"heading-link\" href=\"#top\">🔗</a> <span class=\"heading-number\">1.</span> Home</h1>\n<p>See <a href=\"docs/guide.html#install\">Installing</a>, \
 		<a href=\"docs/guide.html#faq\">the FAQ</a>, <a href=\"docs/guide.html\">The guide</a> \
 		and <a href=\"#top\">Home</a>.</p>\n"
 	);
@@ -552,7 +552,7 @@ fn includes_and_imports_invalidate_their_users() {
 	assert!(
 		workspace
 			.output("a.html")
-			.contains("<h2 id=\"intro\">Intro</h2>")
+			.contains("<span class=\"heading-number\">1.1.</span> Intro</h2>")
 	);
 	assert!(
 		workspace
@@ -616,7 +616,7 @@ fn builds_that_do_not_write_leave_pages_to_write() {
 
 	let report = workspace.build();
 	assert_eq!(report.written, ["a.nml", "b.nml", "foo.nml"]);
-	assert!(workspace.output("foo.html").contains("<h1>New foo</h1>"));
+	assert!(workspace.output("foo.html").contains("New foo</h1>"));
 	assert!(workspace.output("b.html").contains("Bee"));
 	assert!(
 		workspace.output("a.html").contains(">Bee</a>"),

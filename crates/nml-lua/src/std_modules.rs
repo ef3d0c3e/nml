@@ -29,13 +29,14 @@ fn table_of_contents() {
 		),
 		"{body}"
 	);
-	assert!(body.contains("<h1 id=\"intro\">Intro</h1>"), "{body}");
-	assert!(body.contains("<h2 id=\"setup\">Setup</h2>"), "{body}");
+	// The headings keep the ids the table links to, and are numbered.
+	assert!(body.contains("<h1 id=\"intro\"><a class=\"heading-link\" href=\"#intro\">🔗</a> <span class=\"heading-number\">1.</span> Intro</h1>"), "{body}");
+	assert!(body.contains("<h2 id=\"setup\"><a class=\"heading-link\" href=\"#setup\">🔗</a> <span class=\"heading-number\">1.1.</span> Setup</h2>"), "{body}");
 	assert!(
-		body.contains("<h1 class=\"unlisted\">Hidden</h1>"),
+		body.contains("<h1 id=\"hidden\" class=\"unlisted\"><a class=\"heading-link\" href=\"#hidden\">🔗</a> <span class=\"heading-number\">2.</span> Hidden</h1>"),
 		"{body}"
 	);
-	assert!(body.contains("<h1 id=\"intro-2\">Intro</h1>"), "{body}");
+	assert!(body.contains("<h1 id=\"intro-2\"><a class=\"heading-link\" href=\"#intro-2\">🔗</a> <span class=\"heading-number\">3.</span> Intro</h1>"), "{body}");
 }
 
 #[test]

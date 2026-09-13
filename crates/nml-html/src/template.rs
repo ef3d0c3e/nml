@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use nml_document::Alignment;
 use nml_document::Checkbox;
@@ -51,11 +52,7 @@ pub struct PageOptions {
 
 /// Compiles a document into a full HTML page.
 pub fn compile(document: &Document, options: &PageOptions) -> Template {
-	let mut out = Output {
-		content: String::new(),
-		slots: Vec::new(),
-		rendered: &options.rendered,
-	};
+	let mut out = Output::new(document, &options.rendered);
 	out.raw("<!DOCTYPE html>\n<html");
 	if let Some(language) = &options.language {
 		out.raw(" lang=\"");
@@ -90,11 +87,7 @@ pub fn compile(document: &Document, options: &PageOptions) -> Template {
 /// have no slots left to fill.
 pub fn fragment(document: &Document) -> String {
 	let rendered = HashMap::new();
-	let mut out = Output {
-		content: String::new(),
-		slots: Vec::new(),
-		rendered: &rendered,
-	};
+	let mut out = Output::new(document, &rendered);
 	out.element(document, document.root());
 	debug_assert!(out.slots.is_empty(), "a fragment has no slots");
 	out.content
@@ -104,9 +97,99 @@ struct Output<'a> {
 	content: String,
 	slots: Vec<TemplateSlot>,
 	rendered: &'a HashMap<ElementId, String>,
+	/// The numbers of the enclosing sections, outermost first.
+	sections: Vec<u32>,
+	/// The ids in the output, so that the ids made for headings are unique.
+	ids: HashSet<String>,
 }
 
-impl Output<'_> {
+impl<'a> Output<'a> {
+	fn new(document: &Document, rendered: &'a HashMap<ElementId, String>) -> Self {
+		let ids = document
+			.descendants(document.root())
+			.filter_map(|(_, element)| element.attributes.id.clone())
+			.collect();
+		Self {
+			content: String::new(),
+			slots: Vec::new(),
+			rendered,
+			sections: Vec::new(),
+			ids,
+		}
+	}
+
+	/// The number of the next section at `level`, `1.2.`: it closes the deeper sections,
+	/// and opens the levels it skips at 1.
+	fn section_number(&mut self, level: usize) -> String {
+		if self.sections.len() >= level {
+			self.sections.truncate(level);
+			*self.sections.last_mut().unwrap() += 1;
+		} else {
+			self.sections.resize(level, 1);
+		}
+		self.sections.iter().map(|n| format!("{n}.")).collect()
+	}
+
+	/// An id made from a heading's text, unlike every other id of the output.
+	fn heading_id(&mut self, text: &str) -> String {
+		let mut slug = String::new();
+		for c in text.chars().flat_map(char::to_lowercase) {
+			if c.is_alphanumeric() {
+				slug.push(c);
+			} else if !slug.is_empty() && !slug.ends_with('-') {
+				slug.push('-');
+			}
+		}
+		let slug = match slug.trim_end_matches('-') {
+			"" => "section".to_string(),
+			slug => slug.to_string(),
+		};
+		let mut id = slug.clone();
+		let mut n = 1;
+		while self.ids.contains(&id) {
+			n += 1;
+			id = format!("{slug}-{n}");
+		}
+		self.ids.insert(id.clone());
+		id
+	}
+
+	/// A heading: a link to itself, its number unless it is `unnumbered`, then its content.
+	/// A heading without an id gets one from its text.
+	fn heading(&mut self, document: &Document, id: ElementId, level: u8) {
+		let tag = format!("h{}", level.clamp(1, 6));
+		let attributes = &document.get(id).attributes;
+		let numbered = !attributes.classes.iter().any(|c| c == "unnumbered");
+		let anchor = match &attributes.id {
+			Some(anchor) => anchor.clone(),
+			None => self.heading_id(&document.text(id)),
+		};
+		let classes = attributes.classes.join(" ");
+		self.raw("<");
+		self.raw(&tag);
+		self.raw(" id=\"");
+		self.attribute(&anchor);
+		self.raw("\"");
+		if !classes.is_empty() {
+			self.raw(" class=\"");
+			self.attribute(&classes);
+			self.raw("\"");
+		}
+		self.raw("><a class=\"heading-link\" href=\"#");
+		self.attribute(&anchor);
+		self.raw("\">🔗</a> ");
+		if numbered {
+			let number = self.section_number(usize::from(level.max(1)));
+			self.raw("<span class=\"heading-number\">");
+			self.raw(&number);
+			self.raw("</span> ");
+		}
+		self.children(document, id);
+		self.raw("</");
+		self.raw(&tag);
+		self.raw(">\n");
+	}
+
 	fn raw(&mut self, text: &str) {
 		self.content.push_str(text);
 	}
@@ -463,10 +546,7 @@ impl Output<'_> {
 				};
 				self.wrap(document, id, tag);
 			}
-			ElementKind::Heading { level } => {
-				self.wrap(document, id, &format!("h{}", level.clamp(&1, &6)));
-				self.raw("\n");
-			}
+			ElementKind::Heading { level } => self.heading(document, id, *level),
 			ElementKind::Slot(slot) => match document.slot(*slot) {
 				Slot::Markup(markup) => self.raw(markup),
 				_ => self.slot(document, *slot),
@@ -742,7 +822,8 @@ mod tests {
 			..PageOptions::default()
 		};
 		let template = compile(&document, &options);
-		let body = "<body>\n<h2 id=\"a&quot;b\" class=\"x y\">1 &lt; 2 &amp; \"3\"</h2>\n\
+		let body = "<body>\n<h2 id=\"a&quot;b\" class=\"x y\"><a class=\"heading-link\" href=\"#a&quot;b\">🔗</a> \
+			<span class=\"heading-number\">1.1.</span> 1 &lt; 2 &amp; \"3\"</h2>\n\
 			<p>See <strong></strong></p>\n</body>";
 		assert!(template.content.contains(body), "{}", template.content);
 		assert!(

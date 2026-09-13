@@ -83,7 +83,8 @@ fn inline_elements() {
 	);
 	assert_eq!(
 		body("# A {#a .unlisted .x}"),
-		"<h1 id=\"a\" class=\"unlisted x\">A</h1>\n"
+		"<h1 id=\"a\" class=\"unlisted x\"><a class=\"heading-link\" href=\"#a\">🔗</a> \
+		<span class=\"heading-number\">1.</span> A</h1>\n"
 	);
 	assert_eq!(body("a :: b\n:: c\nd"), "<p>a \nd</p>\n");
 }
@@ -141,7 +142,58 @@ fn raw_output() {
 		body("a :raw`<br>` b\n:raw\n```\n<hr class=\"x\">\n```"),
 		"<p>a <br> b</p>\n<hr class=\"x\">\n"
 	);
-	assert_eq!(body("# A :raw`<sup>2</sup>`"), "<h1>A <sup>2</sup></h1>\n");
+	assert!(body("# A :raw`<sup>2</sup>`").ends_with("A <sup>2</sup></h1>\n"));
+}
+
+#[test]
+fn headings() {
+	/// Each heading as `id number text`.
+	fn headings(text: &str) -> Vec<String> {
+		body(text)
+			.lines()
+			.filter(|line| line.starts_with("<h"))
+			.map(|line| {
+				let id = line.split('"').nth(1).unwrap();
+				let number = line
+					.split("<span class=\"heading-number\">")
+					.nth(1)
+					.map_or("-", |rest| rest.split('<').next().unwrap());
+				let text = line.split_once("</a> ").unwrap().1;
+				let text = text.split_once("</span> ").map_or(text, |(_, text)| text);
+				let text = text.split("</h").next().unwrap();
+				format!("{id} {number} {text}")
+			})
+			.collect()
+	}
+	// Levels open at 1, deeper ones close, and unnumbered headings do not count.
+	assert_eq!(
+		headings("# Intro\n### Deep\n## Two\n## Off {.unnumbered}\n## Three\n# Next\n## Again"),
+		[
+			"intro 1. Intro",
+			"deep 1.1.1. Deep",
+			"two 1.2. Two",
+			"off - Off",
+			"three 1.3. Three",
+			"next 2. Next",
+			"again 2.1. Again"
+		]
+	);
+	// Ids come from the text, are unique, and never take an id of the page.
+	assert_eq!(
+		headings("# Café, *au* lait!\n# Same\n# Same\n# Taken\n:anchor taken\n# ?"),
+		[
+			"café-au-lait 1. Café, <em>au</em> lait!",
+			"same 2. Same",
+			"same-2 3. Same",
+			"taken-2 4. Taken",
+			"section 5. ?"
+		]
+	);
+	assert_eq!(
+		body("## B {#b}"),
+		"<h2 id=\"b\"><a class=\"heading-link\" href=\"#b\">🔗</a> \
+		<span class=\"heading-number\">1.1.</span> B</h2>\n"
+	);
 }
 
 #[test]

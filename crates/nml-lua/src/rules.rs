@@ -577,7 +577,7 @@ text
 		);
 		assert_diagnostics!(compiled.diagnostics, []);
 		assert!(
-			html(&compiled).contains("<h3>Note: Careful</h3>\n<p>text</p>"),
+			html(&compiled).contains("Note: Careful</h3>\n<p>text</p>"),
 			"{}",
 			html(&compiled)
 		);
