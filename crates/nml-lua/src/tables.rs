@@ -76,10 +76,7 @@ end
 			:table[lua=m]\n| a | **b** | c |\n|---|---|---|\n|[vspan=2] 1 |[hspan=2] x |\n| y |\n| z |\n\n\
 			:lua`show(nml.tables.m)`"
 		);
-		assert_eq!(
-			paragraphs(&text),
-			["nil", "1:a,b,c;1,x,x;1,y,;z,,"]
-		);
+		assert_eq!(paragraphs(&text), ["nil", "1:a,b,c;1,x,x;1,y,;z,,"]);
 		// Numbers coerce, and the table works with a reference and a caption.
 		let compiled = compile(
 			":table[lua=sizes] #sizes Sizes\n| 1.5 | 2 |\n| 3 | 4 |\n\n\

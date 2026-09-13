@@ -244,7 +244,12 @@ impl Output<'_> {
 				self.open(document, *row, "tr");
 				let mut column = 0;
 				for (child, element) in document.children(*row) {
-					let ElementKind::TableCell { hspan, vspan, align } = element.kind else {
+					let ElementKind::TableCell {
+						hspan,
+						vspan,
+						align,
+					} = element.kind
+					else {
 						continue;
 					};
 					while covered.get(column).is_some_and(|&rows| rows > 0) {
