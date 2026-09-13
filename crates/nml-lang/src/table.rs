@@ -180,11 +180,8 @@ fn lower_command(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 		(!token.content().is_empty()).then_some(token)
 	});
 	// A `:table` with only options does not number the table.
-	let number = (reference.is_some() || caption.is_some() || options.is_none()).then(|| {
-		let tables = lower.extension(Tables::default);
-		tables.count += 1;
-		tables.count
-	});
+	let numbered = reference.is_some() || caption.is_some() || options.is_none();
+	let number = numbered.then(|| next_table(lower));
 	let title = caption.as_deref().map(plain_text).unwrap_or_default();
 	lower.extension(Tables::default).pending = Some(Pending {
 		number,
@@ -202,11 +199,23 @@ fn lower_command(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 		script_table(lower, element, token);
 	}
 	if let (Some(reference), Some(number)) = (reference, number) {
-		let export = Export::new(reference.content(), SymbolKind::Table, Some(element))
-			.with("title", title)
-			.with("number", number.to_string());
+		let export = table_export(reference.content(), element, number, title);
 		lower.export(export, reference);
 	}
+}
+
+/// The number of the next numbered table of the unit.
+pub fn next_table(lower: &mut Lower<'_, '_>) -> u32 {
+	let tables = lower.extension(Tables::default);
+	tables.count += 1;
+	tables.count
+}
+
+/// The symbol of a numbered table: its caption's text is its title.
+pub fn table_export(name: &str, element: ElementId, number: u32, title: String) -> Export {
+	Export::new(name, SymbolKind::Table, Some(element))
+		.with("title", title)
+		.with("number", number.to_string())
 }
 
 /// Gives scripts the table `element` under the name written at `name`.
@@ -270,7 +279,9 @@ fn script_table(lower: &mut Lower<'_, '_>, element: ElementId, name: nml_source:
 		header,
 		rows,
 	};
-	lower.tables.insert(name.content().to_string(), Arc::new(table));
+	lower
+		.tables
+		.insert(name.content().to_string(), Arc::new(table));
 }
 
 fn lower_table(lower: &mut Lower<'_, '_>, m: &RuleMatch) {

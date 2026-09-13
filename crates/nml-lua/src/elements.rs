@@ -12,6 +12,7 @@ use mlua::Value;
 use nml_diagnostics::Diagnostic;
 use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
+use nml_document::Alignment;
 use nml_document::Attributes;
 use nml_document::BulletStyle;
 use nml_document::CalloutKind;
@@ -51,6 +52,14 @@ enum Content {
 		reference: Option<String>,
 		caption: Vec<Element>,
 	},
+	/// A table, numbered when it is written into a document if it has a reference or a
+	/// caption. Its children are its rows.
+	Table {
+		reference: Option<String>,
+		caption: Vec<Element>,
+		alignments: Vec<Alignment>,
+		header: usize,
+	},
 }
 
 impl UserData for Element {
@@ -60,6 +69,7 @@ impl UserData for Element {
 				Content::Element(kind) => kind.name(),
 				Content::Reference(_) => "reference",
 				Content::Figure { .. } => "figure",
+				Content::Table { .. } => "table",
 			})
 		});
 	}
@@ -98,6 +108,8 @@ const KINDS: &[(&str, &str)] = &[
 	("callout", "type, title"),
 	("layout", "type, title"),
 	("raw", "content, block"),
+	("table", "caption, ref, header, align"),
+	("cell", "hspan, vspan, align"),
 ];
 
 /// Builds an element. The list part of `spec` holds its children (strings, numbers,
@@ -119,10 +131,12 @@ const KINDS: &[(&str, &str)] = &[
 /// | `callout` | `type` (`note`, `tip`, …), `title` |
 /// | `layout` | `type` (`centered`, `split`, `spoiler`), `title`; each child is a part |
 /// | `raw` | `content` (HTML, written as is), `block` |
+/// | `table` | `caption`, `ref` (its reference name, and its id), `header` (how many rows are header rows), `align` (each column's: `auto`, `left`, `center`, `right`); children are the rows, each a list of cells. Numbered with the unit's other tables if it has a `ref` or a `caption` |
+/// | `cell` | `hspan`, `vspan`, `align`; a cell of a table's row, for a cell that needs these. Any other value in a row is a cell's content |
 ///
-/// Every kind takes `id` and `classes`. References and figures only work where the element
-/// goes into the document as it is parsed (roles and rules), not in post-parse or deferred
-/// output; nor do media with paths in deferred output.
+/// Every kind takes `id` and `classes`. References, figures and numbered tables only work
+/// where the element goes into the document as it is parsed (roles and rules), not in
+/// post-parse or deferred output; nor do media with paths in deferred output.
 #[api(returns = "nml.Node")]
 fn element(lua: &Lua, kind: String, spec: Option<Table>) -> mlua::Result<AnyUserData> {
 	let spec = match spec {
@@ -293,26 +307,53 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 			Content::Element(ElementKind::Layout(kind))
 		}
 		"figure" => {
-			let reference = text("ref")?;
-			if let Some(name) = &reference {
-				let valid = SymbolRef::parse(name)
-					.is_some_and(|symbol| symbol.scope == Scope::Local && symbol.name == *name);
-				if !valid {
-					return Err(mlua::Error::runtime(format!(
-						"`{name}` is not a reference name"
-					)));
-				}
-				if text("id")?.is_some() {
-					return Err(mlua::Error::runtime(
-						"a figure's `ref` is its id: it cannot have an `id` too",
-					));
-				}
-			}
 			children = paragraphs(children);
 			Content::Figure {
-				reference,
+				reference: reference_name(kind, spec)?,
 				caption: nodes(spec.get::<Value>("caption")?)?,
 			}
+		}
+		"table" => {
+			children = rows(spec)?;
+			let header = spec.get::<Option<usize>>("header")?.unwrap_or(0);
+			if header > children.len() {
+				return Err(mlua::Error::runtime(format!(
+					"a table of {} row(s) cannot have {header} header row(s)",
+					children.len()
+				)));
+			}
+			let alignments = spec
+				.get::<Option<Vec<String>>>("align")?
+				.unwrap_or_default()
+				.iter()
+				.map(|name| alignment(name))
+				.collect::<mlua::Result<_>>()?;
+			Content::Table {
+				reference: reference_name(kind, spec)?,
+				caption: nodes(spec.get::<Value>("caption")?)?,
+				alignments,
+				header,
+			}
+		}
+		"cell" => {
+			let span = |name: &str| -> mlua::Result<u32> {
+				match spec.get::<Option<i64>>(name)? {
+					None => Ok(1),
+					Some(span) if span >= 1 => Ok(u32::try_from(span).unwrap_or(u32::MAX)),
+					Some(_) => Err(mlua::Error::runtime(format!(
+						"a cell's `{name}` is at least 1"
+					))),
+				}
+			};
+			let align = match text("align")? {
+				Some(name) => alignment(&name)?,
+				None => Alignment::Default,
+			};
+			Content::Element(ElementKind::TableCell {
+				hspan: span("hspan")?,
+				vspan: span("vspan")?,
+				align,
+			})
 		}
 		"raw" => Content::Element(ElementKind::Raw {
 			content: required("content")?,
@@ -327,7 +368,7 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 		}
 	};
 	let id = match &content {
-		Content::Figure { reference, .. } => reference.clone(),
+		Content::Figure { reference, .. } | Content::Table { reference, .. } => reference.clone(),
 		_ => text("id")?,
 	};
 	let attributes = Attributes {
@@ -341,6 +382,74 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 		attributes,
 		children,
 	})
+}
+
+/// The reference name in `ref` of a figure or table, which is also its id.
+fn reference_name(kind: &str, spec: &Table) -> mlua::Result<Option<String>> {
+	let Some(name) = spec.get::<Option<String>>("ref")? else {
+		return Ok(None);
+	};
+	let valid = SymbolRef::parse(&name)
+		.is_some_and(|symbol| symbol.scope == Scope::Local && symbol.name == name);
+	if !valid {
+		return Err(mlua::Error::runtime(format!(
+			"`{name}` is not a reference name"
+		)));
+	}
+	if spec.get::<Option<String>>("id")?.is_some() {
+		return Err(mlua::Error::runtime(format!(
+			"a {kind}'s `ref` is its id: it cannot have an `id` too"
+		)));
+	}
+	Ok(Some(name))
+}
+
+/// The rows of a table: the list part of `spec`, each a list of cells.
+fn rows(spec: &Table) -> mlua::Result<Vec<Element>> {
+	let mut rows = Vec::new();
+	for row in spec.sequence_values::<Value>() {
+		let Value::Table(row) = row? else {
+			return Err(mlua::Error::runtime("a table's rows are lists of cells"));
+		};
+		let mut cells = Vec::new();
+		for cell in row.sequence_values::<Value>() {
+			let cell = cell?;
+			if let Value::UserData(data) = &cell
+				&& let Ok(element) = data.borrow::<Element>()
+				&& matches!(
+					element.content,
+					Content::Element(ElementKind::TableCell { .. })
+				) {
+				cells.push(element.clone());
+				continue;
+			}
+			cells.push(Element {
+				children: nodes(cell)?,
+				..leaf(ElementKind::TableCell {
+					hspan: 1,
+					vspan: 1,
+					align: Alignment::Default,
+				})
+			});
+		}
+		rows.push(Element {
+			children: cells,
+			..leaf(ElementKind::TableRow)
+		});
+	}
+	Ok(rows)
+}
+
+fn alignment(name: &str) -> mlua::Result<Alignment> {
+	match name {
+		"auto" => Ok(Alignment::Default),
+		"left" => Ok(Alignment::Left),
+		"center" => Ok(Alignment::Center),
+		"right" => Ok(Alignment::Right),
+		_ => Err(mlua::Error::runtime(format!(
+			"`{name}` is not an alignment: use auto, left, center or right"
+		))),
+	}
 }
 
 /// Blocks, with the inline elements between them gathered into paragraphs.
@@ -359,7 +468,7 @@ fn paragraphs(elements: Vec<Element>) -> Vec<Element> {
 		let block = match &element.content {
 			Content::Element(kind) => kind.is_block(),
 			Content::Reference(_) => false,
-			Content::Figure { .. } => true,
+			Content::Figure { .. } | Content::Table { .. } => true,
 		};
 		if block {
 			flush(&mut inline, &mut blocks);
@@ -443,6 +552,14 @@ pub(crate) fn lower(lower: &mut Lower<'_, '_>, elements: &[Element], token: &Tok
 /// What closing an element opened with [`open`] still has to do.
 pub(crate) struct Opened<'e> {
 	figure: Option<OpenFigure<'e>>,
+	table: Option<OpenTable<'e>>,
+}
+
+/// A numbered table being written.
+struct OpenTable<'e> {
+	number: u32,
+	reference: Option<&'e str>,
+	caption: &'e [Element],
 }
 
 struct OpenFigure<'e> {
@@ -462,6 +579,7 @@ pub(crate) fn open<'e>(
 	token: &Token,
 ) -> Opened<'e> {
 	let mut figure = None;
+	let mut table = None;
 	match &element.content {
 		Content::Element(ElementKind::Media {
 			kind,
@@ -499,7 +617,7 @@ pub(crate) fn open<'e>(
 			lower.open_reference(target.clone(), token.clone(), token.clone());
 			if element.children.is_empty() {
 				lower.reference_label(target.clone(), token.clone());
-				return Opened { figure };
+				return Opened { figure, table };
 			}
 		}
 		Content::Figure { reference, caption } => {
@@ -516,13 +634,49 @@ pub(crate) fn open<'e>(
 				assets: lower.assets.len(),
 			});
 		}
+		Content::Table {
+			reference,
+			caption,
+			alignments,
+			header,
+		} => {
+			let numbered = reference.is_some() || !caption.is_empty();
+			let number = numbered.then(|| nml_lang::next_table(lower));
+			let kind = ElementKind::Table {
+				alignments: alignments.clone(),
+				header_rows: *header,
+				number,
+			};
+			lower
+				.builder
+				.open_with(kind, token.clone(), element.attributes.clone());
+			if !caption.is_empty() {
+				lower.builder.open(ElementKind::Caption, token.clone());
+				self::lower(lower, caption, token);
+				lower.builder.close();
+			}
+			table = number.map(|number| OpenTable {
+				number,
+				reference: reference.as_deref(),
+				caption,
+			});
+		}
 	}
 	self::lower(lower, &element.children, token);
-	Opened { figure }
+	Opened { figure, table }
 }
 
 /// Closes an element opened with [`open`]: a figure gets its caption, and its symbol.
 pub(crate) fn close(lower: &mut Lower<'_, '_>, opened: Opened<'_>, token: &Token) {
+	if let Some(table) = opened.table {
+		let element = lower.builder.close();
+		if let Some(name) = table.reference {
+			let title = plain_text(table.caption);
+			let export = nml_lang::table_export(name, element, table.number, title);
+			lower.export(export, token.clone());
+		}
+		return;
+	}
 	let Some(figure) = opened.figure else {
 		lower.builder.close();
 		return;
@@ -550,7 +704,9 @@ fn plain_text(elements: &[Element]) -> String {
 			{
 				out.push_str(text);
 			}
-			if let Content::Figure { caption, .. } = &element.content {
+			if let Content::Figure { caption, .. } | Content::Table { caption, .. } =
+				&element.content
+			{
 				collect(caption, out);
 			}
 			collect(&element.children, out);
@@ -620,6 +776,24 @@ pub(crate) fn html(
 					return Err(mlua::Error::runtime(
 						"a figure is numbered during the parse: it cannot be made after it",
 					));
+				}
+				Content::Table {
+					reference,
+					caption,
+					alignments,
+					header,
+				} => {
+					if reference.is_some() || !caption.is_empty() {
+						return Err(mlua::Error::runtime(
+							"a table with a `ref` or a `caption` is numbered during the parse: \
+							 it cannot be made after it",
+						));
+					}
+					ElementKind::Table {
+						alignments: alignments.clone(),
+						header_rows: *header,
+						number: None,
+					}
 				}
 			};
 			builder.open_with(kind, token.clone(), element.attributes.clone());
@@ -856,6 +1030,118 @@ mod tests {
 			(
 				"nml.element('reference', {target = 'a b'})",
 				"not a reference",
+			),
+		] {
+			let compiled = compile(&format!(":lua`{code}`"));
+			assert_diagnostics!(compiled.diagnostics, [4001]);
+			let nml_diagnostics::DiagnosticKind::LuaError { message: error } =
+				&compiled.diagnostics[0].kind
+			else {
+				unreachable!()
+			};
+			assert!(error.contains(message), "{code}: {error}");
+		}
+	}
+
+	#[test]
+	fn tables() {
+		// Rows are lists of cells; a cell is any value, or a `cell` for spans and alignment.
+		assert_eq!(
+			body(
+				":lua`nml.element('table', {header = 1, align = {'left', 'right'}, {'Plan', 'Price'}, {nml.element('cell', {hspan = 2, align = 'center', 'Free'})}, {'Pro', {nml.element('italic', {'9'}), '.5'}}})`"
+			),
+			"<table>\n<thead>\n<tr><th style=\"text-align: left\">Plan</th><th style=\"text-align: right\">Price</th></tr>\n</thead>\n\
+			<tbody>\n<tr><td colspan=\"2\" style=\"text-align: center\">Free</td></tr>\n\
+			<tr><td style=\"text-align: left\">Pro</td><td style=\"text-align: right\"><em>9</em>.5</td></tr>\n</tbody>\n</table>\n"
+		);
+		assert_eq!(
+			body(":lua`nml.element('table', {{nml.element('cell', {vspan = 2, 'a'}), 1}, {2.5}})`"),
+			"<table>\n<tbody>\n<tr><td rowspan=\"2\">a</td><td>1</td></tr>\n<tr><td>2.5</td></tr>\n</tbody>\n</table>\n"
+		);
+		assert_eq!(
+			body(":lua`nml.element('table', {}).kind`"),
+			"<p>table</p>\n"
+		);
+		// Without a reference or a caption, a table can be made after the parse.
+		let late =
+			body(":lua`nml.post_parse(function() return nml.element('table', {{'x'}}) end)`");
+		assert!(
+			late.contains("<table>\n<tbody>\n<tr><td>x</td></tr>\n</tbody>\n</table>\n"),
+			"{late}"
+		);
+	}
+
+	#[test]
+	fn numbered_tables() {
+		let compiled = compile(
+			":table #a A\n| x |\n\n:lua`nml.element('table', {ref = 'b', caption = {'B ', nml.element('code', {code = 'c'})}, {'y'}})`\n\n:lua`nml.element('table', {caption = 'C', {'z'}})`\n\n:table #d D\n| w |",
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let html = html(&compiled);
+		// Numbered in document order with the markup tables; the caption comes first.
+		assert!(
+			html.contains(
+				"<table id=\"b\">\n<caption><span class=\"table-number\">Table 2:</span> B <code>c</code></caption>\n<tbody>\n<tr><td>y</td></tr>"
+			),
+			"{html}"
+		);
+		assert!(html.contains("Table 3:</span> C</caption>"), "{html}");
+		let exports: Vec<_> = compiled
+			.unit
+			.exports
+			.iter()
+			.map(|export| {
+				(
+					export.name.as_str(),
+					export.property("number").unwrap(),
+					export.property("title").unwrap(),
+				)
+			})
+			.collect();
+		assert_eq!(
+			exports,
+			[("a", "1", "A"), ("b", "2", "B c"), ("d", "4", "D")]
+		);
+	}
+
+	#[test]
+	fn table_errors() {
+		for (code, message) in [
+			(
+				"nml.element('table', {header = 2, {'a'}})",
+				"a table of 1 row(s) cannot have 2 header row(s)",
+			),
+			(
+				"nml.element('table', {align = {'middle'}})",
+				"`middle` is not an alignment",
+			),
+			(
+				"nml.element('table', {'a'})",
+				"a table's rows are lists of cells",
+			),
+			(
+				"nml.element('cell', {hspan = 0})",
+				"a cell's `hspan` is at least 1",
+			),
+			(
+				"nml.element('cell', {vspan = -1})",
+				"a cell's `vspan` is at least 1",
+			),
+			(
+				"nml.element('cell', {align = 'top'})",
+				"`top` is not an alignment",
+			),
+			(
+				"nml.element('table', {ref = 'a', id = 'b'})",
+				"a table's `ref` is its id",
+			),
+			(
+				"nml.element('table', {ref = 'a b'})",
+				"is not a reference name",
+			),
+			(
+				"nml.post_parse(function() return nml.element('table', {caption = 'x'}) end)",
+				"is numbered during the parse",
 			),
 		] {
 			let compiled = compile(&format!(":lua`{code}`"));

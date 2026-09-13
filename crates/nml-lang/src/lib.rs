@@ -48,6 +48,8 @@ pub use resolve::output_path;
 pub use resolve::relative_output_url;
 pub use resolve::resolve_file;
 pub use resolve::resolve_path;
+pub use table::next_table;
+pub use table::table_export;
 
 impl Language {
 	/// The built-in language.
