@@ -566,11 +566,21 @@ impl<'a> Output<'a> {
 				self.children(document, id);
 				self.raw("</a>");
 			}
-			ElementKind::Code(code) => {
-				self.open(document, id, "code");
-				self.text(code);
-				self.raw("</code>");
-			}
+			ElementKind::Code { code, language } => match language {
+				Some(language) => {
+					let mut extra = String::from(" data-language=\"");
+					escape(&mut extra, language, true);
+					extra.push('"');
+					self.open_with(document, id, "code", Some("highlighted"), &extra);
+					self.raw(&nml_render::highlight(code, Some(language)));
+					self.raw("</code>");
+				}
+				None => {
+					self.open(document, id, "code");
+					self.text(code);
+					self.raw("</code>");
+				}
+			},
 			ElementKind::Link { url } => {
 				let mut href = String::from(" href=\"");
 				escape(&mut href, url, true);

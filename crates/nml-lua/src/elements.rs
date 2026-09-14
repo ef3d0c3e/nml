@@ -98,7 +98,7 @@ const KINDS: &[(&str, &str)] = &[
 	("heading", "level"),
 	("link", "url"),
 	("reference", "target"),
-	("code", "code"),
+	("code", "code, language"),
 	(
 		"code_block",
 		"code, language, line_offset, numbers, max_lines",
@@ -124,7 +124,7 @@ const KINDS: &[(&str, &str)] = &[
 /// | `heading` | `level` (1 to 6) |
 /// | `link` | `url` |
 /// | `reference` | `target` (`name`, `doc#name`, `doc#`, `#name`); children are the caption |
-/// | `code` | `code` |
+/// | `code` | `code`, `language` (highlighted in it) |
 /// | `code_block` | `code`, `language`, `line_offset`, `numbers`, `max_lines`; children are the title |
 /// | `media` | `url` (a path in the workspace, copied with the page, or an external URL), `type` (`image`, `video`, `audio`), `alt`, `width` |
 /// | `figure` | `caption`, `ref` (its reference name, and its id); children are the body. Numbered with the unit's other figures |
@@ -180,7 +180,10 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 				.ok_or_else(|| mlua::Error::runtime(format!("`{target}` is not a reference")))?;
 			Content::Reference(target)
 		}
-		"code" => Content::Element(ElementKind::Code(required("code")?)),
+		"code" => Content::Element(ElementKind::Code {
+			code: required("code")?,
+			language: text("language")?,
+		}),
 		"code_block" => {
 			let numbered = spec.get::<Option<bool>>("numbers")?.unwrap_or(true);
 			let first = spec.get::<Option<i64>>("line_offset")?.unwrap_or(1);
@@ -712,8 +715,9 @@ pub(crate) fn close(lower: &mut Lower<'_, '_>, opened: Opened<'_>, token: &Token
 fn plain_text(elements: &[Element]) -> String {
 	fn collect(elements: &[Element], out: &mut String) {
 		for element in elements {
-			if let Content::Element(ElementKind::Text(text) | ElementKind::Code(text)) =
-				&element.content
+			if let Content::Element(
+				ElementKind::Text(text) | ElementKind::Code { code: text, .. },
+			) = &element.content
 			{
 				out.push_str(text);
 			}
@@ -1054,6 +1058,14 @@ mod tests {
 			};
 			assert!(error.contains(message), "{code}: {error}");
 		}
+	}
+
+	#[test]
+	fn code_in_a_language() {
+		assert!(
+			body(":lua`nml.element('code', {code = 'let x = 1;', language = 'rust'})`")
+				.starts_with("<p><code class=\"highlighted\" data-language=\"rust\"><span")
+		);
 	}
 
 	#[test]

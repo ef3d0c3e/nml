@@ -101,7 +101,7 @@ impl Server {
 				ElementKind::Style(Style::Strikethrough) => "@markup.strikethrough",
 				ElementKind::Style(Style::Highlight) => "@markup.highlight",
 				ElementKind::Heading { .. } => "@markup.heading",
-				ElementKind::Code(_) => "@markup.raw",
+				ElementKind::Code { .. } => "@markup.raw",
 				ElementKind::Link { .. } | ElementKind::Reference { .. } => "@markup.link",
 				_ => continue,
 			};

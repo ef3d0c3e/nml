@@ -694,9 +694,16 @@ impl Builder {
 			let mut stylesheets: Vec<_> = (self.config.html.stylesheets.iter())
 				.map(|url| site_url(&output, url))
 				.collect();
-			let has_code = document
-				.descendants(document.root())
-				.any(|(_, element)| matches!(element.kind, ElementKind::CodeBlock { .. }));
+			let has_code = document.descendants(document.root()).any(|(_, element)| {
+				matches!(
+					element.kind,
+					ElementKind::CodeBlock { .. }
+						| ElementKind::Code {
+							language: Some(_),
+							..
+						}
+				)
+			});
 			if has_code {
 				stylesheets.push(nml_lang::relative_output_url(
 					&output,

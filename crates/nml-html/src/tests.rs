@@ -107,6 +107,15 @@ fn code_blocks() {
 		"{html}"
 	);
 	assert!(html.contains("<span class=\"hl-"), "{html}");
+	// Inline code in a language is highlighted.
+	let html = body("a :code[rust]`let x = 1;` b");
+	assert!(
+		html.starts_with(
+			"<p>a <code class=\"highlighted\" data-language=\"rust\"><span class=\"hl-"
+		),
+		"{html}"
+	);
+	assert!(html.ends_with("</code> b</p>\n"), "{html}");
 	// The numbers and the code scroll together past `max_lines`.
 	assert_eq!(
 		body("```[max_lines=2]\na\nb\nc\n```"),

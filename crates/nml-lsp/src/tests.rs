@@ -692,7 +692,7 @@ fn documented_completion() {
 	// A word at the start of a line: snippets, documented.
 	let items = complete_at(&client, &page, 8, 2);
 	let labels: Vec<_> = items.iter().map(|item| item.label.as_str()).collect();
-	assert_eq!(labels, ["code block", "code span"]);
+	assert_eq!(labels, ["code block", "code role", "code span"]);
 	let (text, snippet, doc) = inserted(&items[0]);
 	assert_eq!(
 		(text.as_str(), snippet),

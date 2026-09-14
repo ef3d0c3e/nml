@@ -40,8 +40,12 @@ pub enum ElementKind {
 	Reference {
 		href: SlotId,
 	},
-	/// Inline code, verbatim.
-	Code(String),
+	/// Inline code, verbatim, highlighted if it has a language.
+	Code {
+		code: String,
+		/// The language to highlight the code in, as written.
+		language: Option<String>,
+	},
 	/// A link to a URL; its children are the text.
 	Link {
 		url: String,
@@ -193,7 +197,7 @@ impl ElementKind {
 			ElementKind::Heading { .. } => "heading",
 			ElementKind::Slot(_) => "slot",
 			ElementKind::Reference { .. } => "reference",
-			ElementKind::Code(_) => "code",
+			ElementKind::Code { .. } => "code",
 			ElementKind::Link { .. } => "link",
 			ElementKind::CodeBlock { .. } => "code_block",
 			ElementKind::Media { .. } => "media",

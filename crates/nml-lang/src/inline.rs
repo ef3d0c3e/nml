@@ -24,7 +24,37 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	.with_snippet("`${1:code}`");
 	language.add(code, |lower, m| {
 		let code = code_text(m.capture("code").unwrap().token.content());
-		lower.builder.leaf(ElementKind::Code(code), m.token.clone());
+		let kind = ElementKind::Code {
+			code,
+			language: None,
+		};
+		lower.builder.leaf(kind, m.token.clone());
+	})?;
+
+	let role = Rule::new(
+		"code_role",
+		vec![
+			Atom::capture("command", Atom::literal(":code[")).with_class("keyword"),
+			Atom::capture("language", Atom::Word).with_class("type"),
+			Atom::capture("bracket", Atom::literal("]")).with_class("keyword"),
+			Atom::capture("open", Atom::run('`', 1)).with_class("operator"),
+			Atom::capture("code", Atom::Text).with_class("string"),
+			Atom::capture("close", Atom::same("open")).with_class("operator"),
+		],
+	)
+	.with_doc(
+		"**Inline code in a language**, highlighted: ``` :code[rust]`fn main()` ```.\n\n\
+		The language is named as for code blocks: `rust` or `rs`.",
+	)
+	.with_snippet(":code[${1:language}]`${2:code}`");
+	language.add(role, |lower, m| {
+		let language = m.capture("language").unwrap().token.clone();
+		crate::code::check_language(lower, &language);
+		let kind = ElementKind::Code {
+			code: code_text(m.capture("code").unwrap().token.content()),
+			language: Some(language.content().to_string()),
+		};
+		lower.builder.leaf(kind, m.token.clone());
 	})?;
 
 	let link = Rule::new(
@@ -88,7 +118,7 @@ mod tests {
 		document
 			.descendants(document.root())
 			.map(|(_, element)| element.kind.clone())
-			.filter(|kind| matches!(kind, ElementKind::Code(_) | ElementKind::Link { .. }))
+			.filter(|kind| matches!(kind, ElementKind::Code { .. } | ElementKind::Link { .. }))
 			.collect()
 	}
 
@@ -101,7 +131,10 @@ mod tests {
 	#[test]
 	fn code_spans() {
 		check("a `b *c*` d", r#"document[paragraph["a " code[] " d"]]"#);
-		let code = |text: &str| ElementKind::Code(text.into());
+		let code = |text: &str| ElementKind::Code {
+			code: text.into(),
+			language: None,
+		};
 		assert_eq!(kinds("`b *c*`"), [code("b *c*")]);
 		assert_eq!(kinds("`` a ` b ``"), [code("a ` b")]);
 		assert_eq!(kinds("`` `a` ``"), [code("`a`")]);
@@ -113,6 +146,25 @@ mod tests {
 
 		let compiled = crate::tests::compile_text("`a");
 		assert_diagnostics!(compiled.diagnostics, [1001 @ 0..1]);
+	}
+
+	#[test]
+	fn code_in_a_language() {
+		check(
+			"a :code[rs]`fn x()` b",
+			r#"document[paragraph["a " code[] " b"]]"#,
+		);
+		let code = |text: &str, language: &str| ElementKind::Code {
+			code: text.into(),
+			language: Some(language.into()),
+		};
+		assert_eq!(kinds(":code[rs]`fn x()`"), [code("fn x()", "rs")]);
+		assert_eq!(kinds(":code[rust]`` a ` b ``"), [code("a ` b", "rust")]);
+		// An unknown language is a warning, and the code is kept.
+		let compiled = crate::tests::compile_text(":code[nope]`x`");
+		assert_diagnostics!(compiled.diagnostics, [2012 @ 6..10]);
+		// Without a language, `:code` is text.
+		check(":code`x`", r#"document[paragraph[":code" code[]]]"#);
 	}
 
 	#[test]

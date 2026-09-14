@@ -868,14 +868,17 @@ fn code_stylesheet() {
 		"code-stylesheet",
 		&[
 			("nml.toml", ""),
-			("index.nml", "No code."),
+			("index.nml", "No code, `plain` code."),
 			("docs/a.nml", "```rust\nfn main() {}\n```\n"),
+			("docs/b.nml", "Inline :code[rust]`fn main() {}`.\n"),
 		],
 	);
 	let report = workspace.build();
 	assert_diagnostics!(report.diagnostics, []);
 	let link = "<link rel=\"stylesheet\" href=\"../nml-code.css\">";
 	assert!(workspace.output("docs/a.html").contains(link));
+	// Highlighted inline code needs it too; plain code does not.
+	assert!(workspace.output("docs/b.html").contains(link));
 	assert!(!workspace.output("index.html").contains("nml-code.css"));
 	let css = workspace.output("nml-code.css");
 	assert!(css.contains(".hl-"), "{css}");

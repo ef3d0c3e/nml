@@ -67,14 +67,8 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	.with_snippet("```${1:language} ${2:Title}\n${0}\n```");
 	language.add(rule, |lower, m| {
 		let language = m.capture("language").map(|capture| capture.token.clone());
-		if let Some(language) = &language
-			&& !nml_render::is_known_language(language.content())
-		{
-			let kind = DiagnosticKind::UnknownCodeLanguage {
-				language: language.content().into(),
-			};
-			let message = DiagnosticMessage::new(language.clone());
-			lower.diagnostics.push(Diagnostic::new(kind, message));
+		if let Some(language) = &language {
+			check_language(lower, language);
 		}
 		let options = match m.capture("options").map(|capture| &capture.value) {
 			Some(Value::Options(options)) => Some(options),
@@ -128,6 +122,17 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		lower.builder.close();
 	})?;
 	Ok(())
+}
+
+/// Warns about a language syntect does not know: the code is shown plain.
+pub(crate) fn check_language(lower: &mut crate::Lower<'_, '_>, language: &nml_source::Token) {
+	if !nml_render::is_known_language(language.content()) {
+		let kind = DiagnosticKind::UnknownCodeLanguage {
+			language: language.content().into(),
+		};
+		let message = DiagnosticMessage::new(language.clone());
+		lower.diagnostics.push(Diagnostic::new(kind, message));
+	}
 }
 
 #[cfg(test)]
