@@ -19,12 +19,15 @@ use nml_document::CalloutKind;
 use nml_document::Checkbox;
 use nml_document::DocumentBuilder;
 use nml_document::ElementKind;
+use nml_document::Export;
 use nml_document::LayoutKind;
 use nml_document::ListKind;
 use nml_document::MediaKind;
 use nml_document::NumberStyle;
+use nml_document::RenderKind;
 use nml_document::Scope;
 use nml_document::Style;
+use nml_document::SymbolKind;
 use nml_document::SymbolRef;
 use nml_lang::Lower;
 use nml_source::Source;
@@ -52,6 +55,11 @@ enum Content {
 		reference: Option<String>,
 		caption: Vec<Element>,
 	},
+	/// An anchor: a reference target, declared when it is written into a document.
+	Anchor {
+		reference: String,
+		title: Option<String>,
+	},
 	/// A table, numbered when it is written into a document if it has a reference or a
 	/// caption. Its children are its rows.
 	Table {
@@ -70,6 +78,7 @@ impl UserData for Element {
 				Content::Reference(_) => "reference",
 				Content::Figure { .. } => "figure",
 				Content::Table { .. } => "table",
+				Content::Anchor { .. } => "anchor",
 			})
 		});
 	}
@@ -113,6 +122,11 @@ const KINDS: &[(&str, &str)] = &[
 	("raw", "content, block"),
 	("table", "caption, ref, header, align"),
 	("cell", "hspan, vspan, align"),
+	("anchor", "ref, title"),
+	("math", "source, block"),
+	("tex", "source, env"),
+	("graph", "source, layout, width"),
+	("typst", "source, block"),
 ];
 
 /// Builds an element. The list part of `spec` holds its children (strings, numbers,
@@ -136,10 +150,16 @@ const KINDS: &[(&str, &str)] = &[
 /// | `raw` | `content` (HTML, written as is), `block` |
 /// | `table` | `caption`, `ref` (its reference name, and its id), `header` (how many rows are header rows), `align` (each column's: `auto`, `left`, `center`, `right`); children are the rows, each a list of cells. Numbered with the unit's other tables if it has a `ref` or a `caption` |
 /// | `cell` | `hspan`, `vspan`, `align`; a cell of a table's row, for a cell that needs these. Any other value in a row is a cell's content |
+/// | `anchor` | `ref` (its reference name, and its id), `title` |
+/// | `math` | `source` (LaTeX math), `block` (displayed) |
+/// | `tex` | `source` (a LaTeX document body), `env` (an environment of `[render.tex]`, `main` by default) |
+/// | `graph` | `source` (Graphviz DOT), `layout` (`dot` by default), `width` |
+/// | `typst` | `source`, `block` |
 ///
-/// Every kind takes `id` and `classes`. References, figures and numbered tables only work
-/// where the element goes into the document as it is parsed (roles and rules), not in
-/// post-parse or deferred output; nor do media with paths in deferred output.
+/// Every kind takes `id` and `classes`. References, figures, numbered tables, anchors and
+/// rendered images (`math`, `tex`, `graph`, `typst`) only work where the element goes into
+/// the document as it is parsed (roles and rules), not in post-parse or deferred output;
+/// nor do media with paths in deferred output.
 #[api(returns = "nml.Node")]
 fn element(lua: &Lua, kind: String, spec: Option<Table>) -> mlua::Result<AnyUserData> {
 	let spec = match spec {
@@ -351,6 +371,43 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 				header,
 			}
 		}
+		"anchor" => Content::Anchor {
+			reference: reference_name(kind, spec)?
+				.ok_or_else(|| mlua::Error::runtime("an `anchor` element needs the field `ref`"))?,
+			title: text("title")?,
+		},
+		"math" | "typst" => Content::Element(ElementKind::Rendered {
+			kind: match kind {
+				"math" => RenderKind::Math,
+				_ => RenderKind::Typst,
+			},
+			source: required("source")?,
+			block: spec.get::<Option<bool>>("block")?.unwrap_or(false),
+		}),
+		"tex" => Content::Element(ElementKind::Rendered {
+			kind: RenderKind::Tex {
+				environment: text("env")?.unwrap_or_else(|| "main".into()),
+			},
+			source: required("source")?,
+			block: true,
+		}),
+		"graph" => {
+			let layout = text("layout")?.unwrap_or_else(|| "dot".into());
+			if !nml_lang::GRAPH_LAYOUTS.contains(&layout.as_str()) {
+				return Err(mlua::Error::runtime(format!(
+					"`{layout}` is not a Graphviz layout: use one of {}",
+					nml_lang::GRAPH_LAYOUTS.join(", ")
+				)));
+			}
+			Content::Element(ElementKind::Rendered {
+				kind: RenderKind::Graph {
+					layout,
+					width: text("width")?,
+				},
+				source: required("source")?,
+				block: true,
+			})
+		}
 		"cell" => {
 			let span = |name: &str| -> mlua::Result<u32> {
 				match spec.get::<Option<i64>>(name)? {
@@ -385,6 +442,7 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 	};
 	let id = match &content {
 		Content::Figure { reference, .. } | Content::Table { reference, .. } => reference.clone(),
+		Content::Anchor { reference, .. } => Some(reference.clone()),
 		_ => text("id")?,
 	};
 	let attributes = Attributes {
@@ -483,7 +541,7 @@ fn paragraphs(elements: Vec<Element>) -> Vec<Element> {
 	for element in elements {
 		let block = match &element.content {
 			Content::Element(kind) => kind.is_block(),
-			Content::Reference(_) => false,
+			Content::Reference(_) | Content::Anchor { .. } => false,
 			Content::Figure { .. } | Content::Table { .. } => true,
 		};
 		if block {
@@ -569,6 +627,8 @@ pub(crate) fn lower(lower: &mut Lower<'_, '_>, elements: &[Element], token: &Tok
 pub(crate) struct Opened<'e> {
 	figure: Option<OpenFigure<'e>>,
 	table: Option<OpenTable<'e>>,
+	/// An anchor's reference name and title.
+	anchor: Option<(&'e str, &'e str)>,
 }
 
 /// A numbered table being written.
@@ -596,6 +656,7 @@ pub(crate) fn open<'e>(
 ) -> Opened<'e> {
 	let mut figure = None;
 	let mut table = None;
+	let mut anchor = None;
 	match &element.content {
 		Content::Element(ElementKind::Media {
 			kind,
@@ -633,7 +694,11 @@ pub(crate) fn open<'e>(
 			lower.open_reference(target.clone(), token.clone(), token.clone());
 			if element.children.is_empty() {
 				lower.reference_label(target.clone(), token.clone());
-				return Opened { figure, table };
+				return Opened {
+					figure,
+					table,
+					anchor,
+				};
 			}
 		}
 		Content::Figure { reference, caption } => {
@@ -649,6 +714,14 @@ pub(crate) fn open<'e>(
 				caption,
 				assets: lower.assets.len(),
 			});
+		}
+		Content::Anchor { reference, title } => {
+			lower.builder.open_with(
+				ElementKind::Anchor,
+				token.clone(),
+				element.attributes.clone(),
+			);
+			anchor = Some((reference.as_str(), title.as_deref().unwrap_or(reference)));
 		}
 		Content::Table {
 			reference,
@@ -679,11 +752,21 @@ pub(crate) fn open<'e>(
 		}
 	}
 	self::lower(lower, &element.children, token);
-	Opened { figure, table }
+	Opened {
+		figure,
+		table,
+		anchor,
+	}
 }
 
 /// Closes an element opened with [`open`]: a figure gets its caption, and its symbol.
 pub(crate) fn close(lower: &mut Lower<'_, '_>, opened: Opened<'_>, token: &Token) {
+	if let Some((reference, title)) = opened.anchor {
+		let element = lower.builder.close();
+		let export = Export::new(reference, SymbolKind::Anchor, Some(element)).with("title", title);
+		lower.export(export, token.clone());
+		return;
+	}
 	if let Some(table) = opened.table {
 		let element = lower.builder.close();
 		if let Some(name) = table.reference {
@@ -783,6 +866,12 @@ pub(crate) fn html(
 						number: None,
 					}
 				}
+				Content::Element(ElementKind::Rendered { kind, .. }) => {
+					return Err(mlua::Error::runtime(format!(
+						"`{}` is rendered from the parse: it cannot be made after it",
+						kind.name()
+					)));
+				}
 				Content::Element(kind) => kind.clone(),
 				Content::Reference(_) => {
 					return Err(mlua::Error::runtime(
@@ -792,6 +881,11 @@ pub(crate) fn html(
 				Content::Figure { .. } => {
 					return Err(mlua::Error::runtime(
 						"a figure is numbered during the parse: it cannot be made after it",
+					));
+				}
+				Content::Anchor { .. } => {
+					return Err(mlua::Error::runtime(
+						"an anchor is declared during the parse: it cannot be made after it",
 					));
 				}
 				Content::Table {
@@ -1047,6 +1141,101 @@ mod tests {
 			(
 				"nml.element('reference', {target = 'a b'})",
 				"not a reference",
+			),
+		] {
+			let compiled = compile(&format!(":lua`{code}`"));
+			assert_diagnostics!(compiled.diagnostics, [4001]);
+			let nml_diagnostics::DiagnosticKind::LuaError { message: error } =
+				&compiled.diagnostics[0].kind
+			else {
+				unreachable!()
+			};
+			assert!(error.contains(message), "{code}: {error}");
+		}
+	}
+
+	#[test]
+	fn anchors() {
+		let compiled = compile(
+			":lua`nml.element('anchor', {ref = 'a', title = 'The A'})` :lua`nml.element('anchor', {ref = 'b'})`\n\nSee [[a]].",
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let exports: Vec<_> = compiled
+			.unit
+			.exports
+			.iter()
+			.map(|export| (export.name.as_str(), export.property("title").unwrap()))
+			.collect();
+		assert_eq!(exports, [("a", "The A"), ("b", "b")]);
+		let html = html(&compiled);
+		assert!(html.contains("<span id=\"a\"></span>"), "{html}");
+		// Declared twice, as `:anchor` would be.
+		let compiled = compile(":anchor a\n:lua`nml.element('anchor', {ref = 'a'})`");
+		assert_diagnostics!(compiled.diagnostics, [2002]);
+	}
+
+	#[test]
+	fn rendered() {
+		let compiled = compile(
+			":lua`{nml.element('math', {source = 'x^2'}), nml.element('typst', {source = '$y$', block = true}), nml.element('tex', {source = 'T'}), nml.element('graph', {source = 'graph {}', layout = 'neato', width = '50%'})}`",
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let document = &compiled.unit.document;
+		let kinds: Vec<_> = document
+			.descendants(document.root())
+			.filter_map(|(_, element)| match &element.kind {
+				ElementKind::Rendered {
+					kind,
+					source,
+					block,
+				} => Some((kind.clone(), source.as_str(), *block)),
+				_ => None,
+			})
+			.collect();
+		assert_eq!(
+			kinds,
+			[
+				(nml_document::RenderKind::Math, "x^2", false),
+				(nml_document::RenderKind::Typst, "$y$", true),
+				(
+					nml_document::RenderKind::Tex {
+						environment: "main".into()
+					},
+					"T",
+					true
+				),
+				(
+					nml_document::RenderKind::Graph {
+						layout: "neato".into(),
+						width: Some("50%".into())
+					},
+					"graph {}",
+					true
+				),
+			]
+		);
+	}
+
+	#[test]
+	fn anchor_and_rendered_errors() {
+		for (code, message) in [
+			("nml.element('anchor')", "needs the field `ref`"),
+			(
+				"nml.element('anchor', {ref = 'a b'})",
+				"is not a reference name",
+			),
+			("nml.element('math')", "needs the field `source`"),
+			(
+				"nml.element('graph', {source = 'x', layout = 'grid'})",
+				"`grid` is not a Graphviz layout",
+			),
+			(
+				"nml.post_parse(function() return nml.element('anchor', {ref = 'a'}) end)",
+				"an anchor is declared during the parse",
+			),
+			(
+				"nml.post_parse(function() return nml.element('math', {source = 'x'}) end)",
+				"`math` is rendered from the parse",
 			),
 		] {
 			let compiled = compile(&format!(":lua`{code}`"));

@@ -19,7 +19,7 @@ use crate::Language;
 use crate::Lower;
 
 /// The Graphviz layout engines.
-const LAYOUTS: &[&str] = &[
+pub const GRAPH_LAYOUTS: &[&str] = &[
 	"dot",
 	"neato",
 	"fdp",
@@ -75,7 +75,10 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	let tex = OptionSchema::new([OptionSpec::new("env", OptionKind::Text)
 		.with_default(OptionValue::Text("main".into()))
 		.with_doc("The LaTeX environment of the configuration (`[render.tex.<name>]`).")]);
-	let layouts = LAYOUTS.iter().map(|layout| layout.to_string()).collect();
+	let layouts = GRAPH_LAYOUTS
+		.iter()
+		.map(|layout| layout.to_string())
+		.collect();
 	let graph = OptionSchema::new([
 		OptionSpec::new("layout", OptionKind::Choice(layouts))
 			.with_default(OptionValue::Text("dot".into()))

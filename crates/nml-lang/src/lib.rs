@@ -37,6 +37,7 @@ pub use media::figure_export;
 pub use media::is_external;
 pub use media::media_url;
 pub use media::next_figure;
+pub use render::GRAPH_LAYOUTS;
 pub use resolve::ASSETS_DIR;
 pub use resolve::MemoryResolver;
 pub use resolve::ResolveError;
