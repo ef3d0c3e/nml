@@ -179,8 +179,10 @@ pub fn build_with(root: &Path, options: BuildOptions) -> Result<BuildReport, Bui
 	let index = Index::open(&root.join(&config.database))?;
 	let resolver: Arc<dyn Resolver> =
 		Arc::new(WorkspaceResolver::new(root.clone(), config.modules.clone()));
+	let scan = nml_workspace::scan(&root, &config, &index)?;
 	let mut builder = Builder {
 		write: options.write,
+		single_file: false,
 		config_source,
 		output: root.join(&config.output),
 		root,
@@ -195,13 +197,89 @@ pub fn build_with(root: &Path, options: BuildOptions) -> Result<BuildReport, Bui
 		to_link: BTreeSet::new(),
 		report: BuildReport::default(),
 	};
-	builder.run(&config_hash)?;
+	builder.run(&config_hash, scan)?;
+	Ok(builder.report)
+}
+
+/// Builds one file without a workspace: default configuration, an index in memory, and
+/// the page written to `output` (by default, next to the file with the `.html` extension),
+/// with its assets in `assets/` beside it. Files it includes and shows are found from its
+/// directory; it can import no module.
+pub fn build_file(file: &Path, output: Option<&Path>) -> Result<BuildReport, BuildError> {
+	let file = fs::canonicalize(file).map_err(|e| BuildError::Io(file.into(), e))?;
+	let root = file.parent().unwrap().to_path_buf();
+	let name = file.file_name().unwrap().to_string_lossy().to_string();
+	let output = match output {
+		Some(output) => {
+			std::path::absolute(output).map_err(|e| BuildError::Io(output.into(), e))?
+		}
+		None => file.with_extension("html"),
+	};
+	let output_dir = output.parent().unwrap().to_path_buf();
+
+	let config_source = Arc::new(Source::new(
+		Url::parse("virtual:///nml.toml").unwrap(),
+		String::new(),
+		0,
+	));
+	let mut config =
+		Config::parse(config_source.clone()).expect("the default configuration is valid");
+	config.output = output_dir.clone();
+	let content = fs::read_to_string(&file).map_err(|e| BuildError::Io(file.clone(), e))?;
+	let scanned = ScannedFile {
+		path: name.clone(),
+		absolute: file.clone(),
+		role: Role::Page,
+		state: nml_workspace::FileState {
+			mtime: 0,
+			size: content.len() as u64,
+			hash: nml_workspace::hash(content.as_bytes()),
+		},
+		content: Some(content),
+		change: Change::Added,
+	};
+	let scan = nml_workspace::Scan {
+		files: vec![scanned],
+		removed: Vec::new(),
+	};
+	let resolver: Arc<dyn Resolver> = Arc::new(WorkspaceResolver::new(root.clone(), Vec::new()));
+	let mut builder = Builder {
+		write: true,
+		single_file: true,
+		config_source,
+		output: output_dir,
+		root,
+		config,
+		resolver,
+		pages: None,
+		pages_changed: false,
+		index: Index::open_in_memory()?,
+		language: language(),
+		sources: HashMap::new(),
+		affected: BTreeSet::new(),
+		to_link: BTreeSet::new(),
+		report: BuildReport::default(),
+	};
+	builder.run("", scan)?;
+	// The page is written under its own name, then renamed. A page that `nml.output` puts
+	// in another directory stays there, where its links to assets work.
+	if let Some(unit) = builder.index.unit(&name)?
+		&& builder.report.written.contains(&name)
+	{
+		let written = builder.output.join(&unit.output);
+		if written != output && written.parent() == output.parent() {
+			fs::rename(&written, &output).map_err(|e| BuildError::Io(written, e))?;
+		}
+	}
 	Ok(builder.report)
 }
 
 struct Builder {
 	/// Whether outputs are written; see [`BuildOptions::write`].
 	write: bool,
+	/// Whether one file is built without a workspace: the output directory may hold the
+	/// files of other builds, which are left alone.
+	single_file: bool,
 	root: PathBuf,
 	config_source: Arc<Source>,
 	config: Config,
@@ -225,8 +303,7 @@ struct Builder {
 }
 
 impl Builder {
-	fn run(&mut self, config_hash: &str) -> Result<(), BuildError> {
-		let scan = nml_workspace::scan(&self.root, &self.config, &self.index)?;
+	fn run(&mut self, config_hash: &str, scan: nml_workspace::Scan) -> Result<(), BuildError> {
 		for path in &scan.removed {
 			self.remove(path)?;
 		}
@@ -580,6 +657,9 @@ impl Builder {
 			fs::copy(&from, &partial).map_err(|e| BuildError::Io(from, e))?;
 			fs::rename(&partial, &to).map_err(|e| BuildError::Io(to.clone(), e))?;
 		}
+		if self.single_file {
+			return Ok(());
+		}
 		let kept: BTreeSet<PathBuf> = assets
 			.iter()
 			.map(|asset| self.output.join(&asset.output))
@@ -592,6 +672,18 @@ impl Builder {
 	fn write_code_stylesheet(&self) -> Result<(), BuildError> {
 		if !self.write {
 			return Ok(());
+		}
+		// One file is built into a directory of its own: only with code.
+		if self.single_file {
+			let mut uses_code = false;
+			for unit in self.index.units()? {
+				let template = self.index.template(unit.id)?;
+				uses_code |=
+					template.is_some_and(|t| t.content.contains(nml_html::CODE_STYLESHEET));
+			}
+			if !uses_code {
+				return Ok(());
+			}
 		}
 		// The theme was checked with the configuration.
 		let css = nml_render::stylesheet(&self.config.html.code_theme).unwrap_or_default();

@@ -25,18 +25,21 @@ enum Command {
 	},
 	/// Run the language server on stdin and stdout.
 	Lsp,
-	/// Build every page of a workspace.
+	/// Build every page of a workspace, or one file without a workspace.
 	Build {
-		/// The workspace root, which holds `nml.toml`.
+		/// The workspace root, which holds `nml.toml`, or an `.nml` file.
 		#[arg(default_value = ".")]
 		root: PathBuf,
+		/// For a file: where to write its page, instead of next to it.
+		#[arg(short, long)]
+		output: Option<PathBuf>,
 	},
 }
 
 fn main() -> ExitCode {
 	match Cli::parse().command {
 		Command::Init { root } => init(root),
-		Command::Build { root } => build(root),
+		Command::Build { root, output } => build(root, output),
 		Command::Lsp => match nml_lsp::run_stdio() {
 			Ok(()) => ExitCode::SUCCESS,
 			Err(error) => {
@@ -76,8 +79,18 @@ fn init(root: PathBuf) -> ExitCode {
 	}
 }
 
-fn build(root: PathBuf) -> ExitCode {
-	let report = match nml_build::build(&root) {
+fn build(root: PathBuf, output: Option<PathBuf>) -> ExitCode {
+	let result = if root.is_file() {
+		nml_build::build_file(&root, output.as_deref())
+	} else if output.is_some() {
+		eprintln!(
+			"error: `--output` is for building one file; a workspace sets its output in `nml.toml`"
+		);
+		return ExitCode::FAILURE;
+	} else {
+		nml_build::build(&root)
+	};
+	let report = match result {
 		Ok(report) => report,
 		Err(error) => {
 			eprintln!("error: {error}");

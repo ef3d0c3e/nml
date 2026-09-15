@@ -1424,3 +1424,63 @@ fn every_rule_is_documented() {
 	}
 	assert_eq!(undocumented, Vec::<String>::new());
 }
+
+#[test]
+fn builds_one_file_without_a_workspace() {
+	let workspace = Workspace::new(
+		"single",
+		&[
+			(
+				"doc.nml",
+				"# Title\n:include part\n![Cat](img/cat.png)\n\nSee [[here]] and :code[rs]`fn x()`.\n",
+			),
+			("part.nml", ":anchor here Here\n"),
+			("img/cat.png", "cat"),
+			// Not part of the build, and not parsed.
+			("broken.nml", "**unclosed"),
+			// Another build's asset in the same output directory.
+			("assets/other.png", "other"),
+		],
+	);
+	let file = workspace.0.join("doc.nml");
+	let report = build_file(&file, None).unwrap();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(report.parsed, ["doc.nml"]);
+	assert_eq!(report.written, ["doc.nml"]);
+	let page = fs::read_to_string(workspace.0.join("doc.html")).unwrap();
+	assert!(page.contains("<title>Title</title>"), "{page}");
+	assert!(page.contains("<a href=\"#here\">Here</a>"), "{page}");
+	assert!(page.contains("<img src=\"assets/"), "{page}");
+	assert!(page.contains("href=\"nml-code.css\""), "{page}");
+	assert!(workspace.0.join("nml-code.css").exists());
+	assert!(workspace.0.join("assets/other.png").exists());
+	// No database or configuration is made.
+	assert!(!workspace.0.join("nml.toml").exists());
+	assert!(!workspace.0.join(".nml").exists());
+
+	// Elsewhere, under another name, with the assets beside it.
+	let out = workspace.0.join("out/page.html");
+	let report = build_file(&file, Some(&out)).unwrap();
+	assert_diagnostics!(report.diagnostics, []);
+	let page = fs::read_to_string(&out).unwrap();
+	let src = page
+		.split("<img src=\"")
+		.nth(1)
+		.unwrap()
+		.split('"')
+		.next()
+		.unwrap();
+	assert!(workspace.0.join("out").join(src).exists(), "{src}");
+	assert!(!workspace.0.join("out/doc.html").exists());
+
+	// Without code, no code stylesheet.
+	workspace.write("plain/p.nml", "Plain.\n");
+	build_file(&workspace.0.join("plain/p.nml"), None).unwrap();
+	assert!(workspace.0.join("plain/p.html").exists());
+	assert!(!workspace.0.join("plain/nml-code.css").exists());
+
+	// Errors are reported, and nothing is written.
+	let report = build_file(&workspace.0.join("broken.nml"), None).unwrap();
+	assert_eq!(report.failed, ["broken.nml"]);
+	assert!(!workspace.0.join("broken.html").exists());
+}
