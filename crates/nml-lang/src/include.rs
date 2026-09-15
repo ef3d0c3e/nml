@@ -37,7 +37,8 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		let token = m.capture("path").unwrap().token.clone();
 		let report = |kind| Diagnostic::new(kind, DiagnosticMessage::new(token.clone()));
 		let from = lower.files.last().unwrap().clone();
-		let (path, source) = match lower.resolver.include(&from, token.content().trim_end()) {
+		let written = crate::variable::expand_paths(lower, token.content().trim_end());
+		let (path, source) = match lower.resolver.include(&from, &written) {
 			Ok(found) => found,
 			Err(ResolveError::NotFound { path } | ResolveError::UnknownModule { name: path }) => {
 				lower

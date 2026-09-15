@@ -74,7 +74,8 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	)
 	.with_snippet("[${1:text}](${2:url})");
 	language.add(link, |lower, m| {
-		let url = m.capture("url").unwrap().token.content().trim().to_string();
+		let url = m.capture("url").unwrap().token.content().trim();
+		let url = crate::variable::expand_paths(lower, url);
 		let text = match m.capture("text").map(|capture| &capture.value) {
 			Some(Value::Nodes(nodes)) if !nodes.is_empty() => Some(nodes),
 			_ => None,

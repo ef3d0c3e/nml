@@ -134,7 +134,8 @@ pub fn is_external(url: &str) -> bool {
 
 fn lower_media(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 	let url_token = m.capture("url").unwrap().token.clone();
-	let written = url_token.content().trim();
+	let written = crate::variable::expand_paths(lower, url_token.content().trim());
+	let written = written.as_str();
 	let options = match m.capture("options").map(|capture| &capture.value) {
 		Some(Value::Options(options)) => Some(options),
 		_ => None,

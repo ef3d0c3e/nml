@@ -321,8 +321,11 @@ pub struct ScriptTable {
 #[derive(Debug, Clone)]
 pub struct Variable {
 	pub name: Token,
-	/// The value as written: markup, parsed where the variable is substituted.
+	/// The value as written: markup, parsed where the variable is substituted. For a path,
+	/// the resolved path, in a virtual source that maps to where it is written.
 	pub value: Token,
+	/// Whether it is a path (`:path`): its value is text, not markup.
+	pub path: bool,
 }
 
 /// Code run when a unit's lowering ends.
