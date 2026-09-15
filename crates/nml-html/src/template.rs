@@ -75,9 +75,9 @@ pub fn compile(document: &Document, options: &PageOptions) -> Template {
 		out.attribute(icon);
 		out.raw("\">\n");
 	}
-	out.raw("</head>\n<body>\n");
+	out.raw("</head>\n<body>\n<div class=\"nml-page\">\n<main class=\"nml-main\">\n");
 	out.element(document, document.root());
-	out.raw("</body>\n</html>\n");
+	out.raw("</main>\n</div>\n</body>\n</html>\n");
 	Template {
 		content: out.content,
 		slots: out.slots,
@@ -863,9 +863,9 @@ mod tests {
 			..PageOptions::default()
 		};
 		let template = compile(&document, &options);
-		let body = "<body>\n<h2 id=\"a&quot;b\" class=\"x y\"><a class=\"heading-link\" href=\"#a&quot;b\">🔗</a> \
+		let body = "<body>\n<div class=\"nml-page\">\n<main class=\"nml-main\">\n<h2 id=\"a&quot;b\" class=\"x y\"><a class=\"heading-link\" href=\"#a&quot;b\">🔗</a> \
 			<span class=\"heading-number\">1.1.</span> 1 &lt; 2 &amp; \"3\"</h2>\n\
-			<p>See <strong></strong></p>\n</body>";
+			<p>See <strong></strong></p>\n</main>\n</div>\n</body>";
 		assert!(template.content.contains(body), "{}", template.content);
 		assert!(
 			template

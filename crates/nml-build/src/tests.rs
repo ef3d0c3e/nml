@@ -44,10 +44,11 @@ impl Workspace {
 	}
 }
 
-/// The body of a page, without the head.
+/// The content of a page, without the page around it.
 fn body(page: &str) -> &str {
-	let start = page.find("<body>\n").unwrap() + 7;
-	let end = page.find("</body>").unwrap();
+	let start =
+		page.find("<main class=\"nml-main\">\n").unwrap() + "<main class=\"nml-main\">\n".len();
+	let end = page.find("</main>").unwrap();
 	&page[start..end]
 }
 

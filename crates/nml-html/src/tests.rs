@@ -35,8 +35,12 @@ fn body_with(text: &str, files: &[(&str, &str)]) -> String {
 		compiled.diagnostics
 	);
 	let template = compile(&compiled.unit.document, &PageOptions::default());
-	let start = template.content.find("<body>\n").unwrap() + "<body>\n".len();
-	let end = template.content.find("</body>").unwrap();
+	let start = template
+		.content
+		.find("<main class=\"nml-main\">\n")
+		.unwrap()
+		+ "<main class=\"nml-main\">\n".len();
+	let end = template.content.find("</main>").unwrap();
 	template.content[start..end].to_string()
 }
 

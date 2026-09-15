@@ -994,8 +994,9 @@ mod tests {
 		let compiled = compile(text);
 		assert_diagnostics!(compiled.diagnostics, []);
 		let html = html(&compiled);
-		let start = html.find("<body>\n").unwrap() + 7;
-		let end = html.find("</body>").unwrap();
+		let start =
+			html.find("<main class=\"nml-main\">\n").unwrap() + "<main class=\"nml-main\">\n".len();
+		let end = html.find("</main>").unwrap();
 		html[start..end].to_string()
 	}
 

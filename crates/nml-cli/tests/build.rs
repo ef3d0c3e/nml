@@ -41,8 +41,9 @@ impl Workspace {
 		assert!(output.status.success(), "{stderr}");
 		let summary = stderr.lines().last().unwrap().to_string();
 		let html = fs::read_to_string(self.0.join("public").join(page)).unwrap();
-		let start = html.find("<body>\n").unwrap() + 7;
-		let end = html.find("</body>").unwrap();
+		let start =
+			html.find("<main class=\"nml-main\">\n").unwrap() + "<main class=\"nml-main\">\n".len();
+		let end = html.find("</main>").unwrap();
 		(summary, html[start..end].trim().to_string())
 	}
 }
