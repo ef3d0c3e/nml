@@ -55,6 +55,8 @@ enum Content {
 		reference: Option<String>,
 		caption: Vec<Element>,
 	},
+	/// Markup, parsed with the unit's grammar when it is written into a document.
+	Markup(String),
 	/// An anchor: a reference target, declared when it is written into a document.
 	Anchor {
 		reference: String,
@@ -79,6 +81,7 @@ impl UserData for Element {
 				Content::Figure { .. } => "figure",
 				Content::Table { .. } => "table",
 				Content::Anchor { .. } => "anchor",
+				Content::Markup(_) => "markup",
 			})
 		});
 	}
@@ -167,6 +170,21 @@ fn element(lua: &Lua, kind: String, spec: Option<Table>) -> mlua::Result<AnyUser
 		None => lua.create_table()?,
 	};
 	lua.create_userdata(build(&kind, &spec)?)
+}
+
+/// Markup: `text` is parsed as inline content, with the page's grammar and variables, where
+/// the result goes into the document. A string a script returns is text; this is how a
+/// script writes markup instead.
+///
+/// Errors in `text` are reported where the script is. Like references, it only works where
+/// the element goes into the document as it is parsed, not in post-parse or deferred output.
+#[api(returns = "nml.Node")]
+fn parse(lua: &Lua, text: String) -> mlua::Result<AnyUserData> {
+	lua.create_userdata(Element {
+		content: Content::Markup(text),
+		attributes: Attributes::default(),
+		children: Vec::new(),
+	})
 }
 
 pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
@@ -541,7 +559,7 @@ fn paragraphs(elements: Vec<Element>) -> Vec<Element> {
 	for element in elements {
 		let block = match &element.content {
 			Content::Element(kind) => kind.is_block(),
-			Content::Reference(_) | Content::Anchor { .. } => false,
+			Content::Reference(_) | Content::Anchor { .. } | Content::Markup(_) => false,
 			Content::Figure { .. } | Content::Table { .. } => true,
 		};
 		if block {
@@ -629,6 +647,8 @@ pub(crate) struct Opened<'e> {
 	table: Option<OpenTable<'e>>,
 	/// An anchor's reference name and title.
 	anchor: Option<(&'e str, &'e str)>,
+	/// Whether nothing was opened: markup is written as it is parsed.
+	nothing: bool,
 }
 
 /// A numbered table being written.
@@ -698,6 +718,7 @@ pub(crate) fn open<'e>(
 					figure,
 					table,
 					anchor,
+					nothing: false,
 				};
 			}
 		}
@@ -714,6 +735,15 @@ pub(crate) fn open<'e>(
 				caption,
 				assets: lower.assets.len(),
 			});
+		}
+		Content::Markup(text) => {
+			lower_markup(lower, text, token);
+			return Opened {
+				figure,
+				table,
+				anchor,
+				nothing: true,
+			};
 		}
 		Content::Anchor { reference, title } => {
 			lower.builder.open_with(
@@ -756,11 +786,35 @@ pub(crate) fn open<'e>(
 		figure,
 		table,
 		anchor,
+		nothing: false,
 	}
+}
+
+/// Parses markup from a script and writes it. Its source is virtual: its positions all map
+/// to `token`, where the script is.
+fn lower_markup(lower: &mut Lower<'_, '_>, text: &str, token: &Token) {
+	let (root, offset) = token
+		.source()
+		.root_offset(token.start(), nml_source::Bias::Start);
+	let mut location = Url::parse("virtual:///").unwrap();
+	location.set_path(&format!(
+		"{}/script-markup/{offset}",
+		root.location().path()
+	));
+	let mut builder =
+		nml_source::VirtualSourceBuilder::new(token.source().clone(), location, token.start());
+	builder.insert(text);
+	let source = Arc::new(builder.build());
+	let parsed = nml_grammar::parse_inline(lower.language().rules(), source);
+	lower.diagnostics.extend(parsed.diagnostics);
+	lower.nodes(&parsed.nodes);
 }
 
 /// Closes an element opened with [`open`]: a figure gets its caption, and its symbol.
 pub(crate) fn close(lower: &mut Lower<'_, '_>, opened: Opened<'_>, token: &Token) {
+	if opened.nothing {
+		return;
+	}
 	if let Some((reference, title)) = opened.anchor {
 		let element = lower.builder.close();
 		let export = Export::new(reference, SymbolKind::Anchor, Some(element)).with("title", title);
@@ -808,6 +862,9 @@ fn plain_text(elements: &[Element]) -> String {
 				&element.content
 			{
 				collect(caption, out);
+			}
+			if let Content::Markup(text) = &element.content {
+				out.push_str(text);
 			}
 			collect(&element.children, out);
 		}
@@ -886,6 +943,11 @@ pub(crate) fn html(
 				Content::Anchor { .. } => {
 					return Err(mlua::Error::runtime(
 						"an anchor is declared during the parse: it cannot be made after it",
+					));
+				}
+				Content::Markup(_) => {
+					return Err(mlua::Error::runtime(
+						"markup from `nml.parse` needs the parse: it cannot be shown after it",
 					));
 				}
 				Content::Table {
@@ -1152,6 +1214,35 @@ mod tests {
 			};
 			assert!(error.contains(message), "{code}: {error}");
 		}
+	}
+
+	#[test]
+	fn parse_markup() {
+		// Parsed with the page's grammar and variables; strings stay text.
+		let compiled = compile(
+			":set name = *NML*\n:anchor a\n\n:lua`nml.parse('**bold** %name% [[a]]')` :lua`'**text**'` :lua``nml.element('italic', {nml.parse('`c`')})``",
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let html = html(&compiled);
+		assert!(
+			html.contains("<p><strong>bold</strong> <em>NML</em> <a href="),
+			"{html}"
+		);
+		assert!(
+			html.contains(" **text** <em><code>c</code></em></p>"),
+			"{html}"
+		);
+		assert_eq!(compiled.unit.uses.len(), 1);
+		assert_eq!(body(":lua`nml.parse('x').kind`"), "<p>markup</p>\n");
+		// Errors in the markup are reported where the script is.
+		let compiled = compile("Some :lua`nml.parse('**open')`");
+		assert_diagnostics!(compiled.diagnostics, [1001]);
+		let location = compiled.diagnostics[0].primary().location.root();
+		assert_eq!(location.source().location().as_str(), "file:///page.nml");
+		assert_eq!(location.range(), 5..5);
+		// After the parse, it is an error.
+		let compiled = compile(":lua`nml.post_parse(function() return nml.parse('**x**') end)`");
+		assert_diagnostics!(compiled.diagnostics, [4001]);
 	}
 
 	#[test]
