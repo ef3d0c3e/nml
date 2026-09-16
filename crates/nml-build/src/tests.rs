@@ -884,10 +884,20 @@ fn code_stylesheet() {
 	let css = workspace.output("nml-code.css");
 	assert!(css.contains(".hl-"), "{css}");
 
-	// A new theme rewrites the stylesheet.
-	workspace.write("nml.toml", "[html]\ncode_theme = \"InspiredGitHub\"\n");
+	// A new theme rewrites the stylesheet, light or dark.
+	workspace.write("nml.toml", "[html]\ncode_theme = \"Solarized (light)\"\n");
 	workspace.build();
-	assert_ne!(workspace.output("nml-code.css"), css);
+	let light = workspace.output("nml-code.css");
+	assert_ne!(light, css);
+	workspace.write(
+		"nml.toml",
+		"[html]\ncode_theme = \"Solarized (light)\"\ncode_theme_dark = \"Solarized (dark)\"\n",
+	);
+	workspace.build();
+	let dark = workspace.output("nml-code.css");
+	assert_ne!(dark, light);
+	// The light colors stay.
+	assert_eq!(dark.split("@media").next(), light.split("@media").next());
 }
 
 /// Where the workspace file `path` with this content is copied, in the output directory.

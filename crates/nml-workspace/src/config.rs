@@ -46,6 +46,8 @@ pub struct HtmlConfig {
 	pub icon: Option<String>,
 	/// The theme of highlighted code, one of syntect's built-in themes.
 	pub code_theme: String,
+	/// The theme of highlighted code in the dark color scheme.
+	pub code_theme_dark: String,
 	/// The directory, relative to the workspace root, whose files are copied as they are to
 	/// the output directory, at the same paths.
 	pub static_dir: Option<PathBuf>,
@@ -84,6 +86,7 @@ struct RawHtml {
 	stylesheets: Vec<String>,
 	icon: Option<String>,
 	code_theme: Option<Spanned<String>>,
+	code_theme_dark: Option<Spanned<String>>,
 	#[serde(rename = "static")]
 	static_dir: Option<Spanned<PathBuf>>,
 }
@@ -180,7 +183,7 @@ impl Config {
 			modules.push((module, location));
 		}
 
-		let code_theme = match raw.html.code_theme {
+		let mut check_theme = |theme: Option<Spanned<String>>, default: &str| match theme {
 			Some(theme) => {
 				let themes = nml_render::theme_names();
 				if !themes.contains(&theme.get_ref().as_str()) {
@@ -193,13 +196,16 @@ impl Config {
 				}
 				theme.into_inner()
 			}
-			None => nml_render::DEFAULT_THEME.to_string(),
+			None => default.to_string(),
 		};
+		let code_theme = check_theme(raw.html.code_theme, nml_render::DEFAULT_THEME);
+		let code_theme_dark = check_theme(raw.html.code_theme_dark, nml_render::DEFAULT_DARK_THEME);
 		let html = HtmlConfig {
 			language: raw.html.language,
 			stylesheets: raw.html.stylesheets,
 			icon: raw.html.icon,
 			code_theme,
+			code_theme_dark,
 			static_range: (raw.html.static_dir.as_ref()).map_or(0..0, Spanned::span),
 			static_dir: raw.html.static_dir.map(Spanned::into_inner),
 		};
@@ -295,6 +301,7 @@ mod tests {
 		assert_eq!(config.database, Path::new(".nml/index.db"));
 		assert!(config.modules.is_empty());
 		assert_eq!(config.html.code_theme, nml_render::DEFAULT_THEME);
+		assert_eq!(config.html.code_theme_dark, nml_render::DEFAULT_DARK_THEME);
 		assert!(config.is_page(Path::new("a/b.nml")));
 		assert!(!config.is_page(Path::new("a/b.txt")));
 	}
@@ -312,7 +319,8 @@ database = "index.db"
 language = "en"
 stylesheets = ["style.css"]
 icon = "icon.png"
-code_theme = "InspiredGitHub"
+code_theme = "Solarized (light)"
+code_theme_dark = "Solarized (dark)"
 static = "static"
 
 [render]
@@ -341,7 +349,8 @@ root = "lib/nav"
 		assert_eq!(config.output, Path::new("site"));
 		assert_eq!(config.html.language.as_deref(), Some("en"));
 		assert_eq!(config.html.stylesheets, ["style.css"]);
-		assert_eq!(config.html.code_theme, "InspiredGitHub");
+		assert_eq!(config.html.code_theme, "Solarized (light)");
+		assert_eq!(config.html.code_theme_dark, "Solarized (dark)");
 		assert_eq!(config.html.static_dir.as_deref(), Some(Path::new("static")));
 		assert_eq!(config.render.dot, "/opt/bin/dot");
 		assert_eq!(config.render.latex, "latex");
@@ -389,6 +398,9 @@ root = "lib/nav"
 
 		let diagnostics = parse("[html]\ncode_theme = \"nope\"\n").unwrap_err();
 		assert_diagnostics!(diagnostics, [3011 @ 20..26]);
+		let diagnostics =
+			parse("[html]\ncode_theme = \"no\"\ncode_theme_dark = \"nope\"\n").unwrap_err();
+		assert_diagnostics!(diagnostics, [3011 @ 20..24, 3011 @ 43..49]);
 	}
 
 	#[test]

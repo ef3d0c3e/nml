@@ -685,8 +685,10 @@ impl Builder {
 				return Ok(());
 			}
 		}
-		// The theme was checked with the configuration.
-		let css = nml_render::stylesheet(&self.config.html.code_theme).unwrap_or_default();
+		// The themes were checked with the configuration.
+		let html = &self.config.html;
+		let css =
+			nml_render::stylesheet(&html.code_theme, &html.code_theme_dark).unwrap_or_default();
 		let path = self.output.join(nml_html::CODE_STYLESHEET);
 		if fs::read_to_string(&path).is_ok_and(|current| current == css) {
 			return Ok(());

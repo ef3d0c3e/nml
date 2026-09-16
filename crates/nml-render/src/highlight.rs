@@ -14,8 +14,10 @@ use syntect::util::LinesWithEndings;
 /// The prefix of the highlighting classes, so that they do not clash with a page's own.
 const CLASS_STYLE: ClassStyle = ClassStyle::SpacedPrefixed { prefix: "hl-" };
 
-/// The theme used when the configuration names none.
-pub const DEFAULT_THEME: &str = "base16-ocean.dark";
+/// The theme of the light color scheme when the configuration names none.
+pub const DEFAULT_THEME: &str = "InspiredGitHub";
+/// The theme of the dark color scheme when the configuration names none.
+pub const DEFAULT_DARK_THEME: &str = "base16-ocean.dark";
 
 fn syntaxes() -> &'static SyntaxSet {
 	static SYNTAXES: OnceLock<SyntaxSet> = OnceLock::new();
@@ -73,12 +75,17 @@ pub fn highlight(code: &str, language: Option<&str>) -> String {
 	generator.finalize()
 }
 
-/// The stylesheet of a theme, with the layout of code blocks, or `None` if there is no
-/// theme of that name.
-pub fn stylesheet(theme: &str) -> Option<String> {
-	let theme = themes().themes.get(theme)?;
-	let colors = css_for_theme_with_class_style(theme, CLASS_STYLE).ok()?;
-	Some(format!("{LAYOUT}\n{colors}"))
+/// The stylesheet of highlighted code: the layout of code blocks, the colors of `light`,
+/// and those of `dark` for the dark color scheme. `None` if a theme has no such name.
+pub fn stylesheet(light: &str, dark: &str) -> Option<String> {
+	let colors = |theme: &str| {
+		let theme = themes().themes.get(theme)?;
+		css_for_theme_with_class_style(theme, CLASS_STYLE).ok()
+	};
+	let (light, dark) = (colors(light)?, colors(dark)?);
+	Some(format!(
+		"{LAYOUT}\n{light}\n@media (prefers-color-scheme: dark) {{\n{dark}}}\n"
+	))
 }
 
 /// The layout of code blocks: line numbers in a gutter that is not selected with the code.
@@ -134,10 +141,25 @@ mod tests {
 
 	#[test]
 	fn stylesheets() {
-		let css = stylesheet(DEFAULT_THEME).unwrap();
+		let css = stylesheet(DEFAULT_THEME, DEFAULT_DARK_THEME).unwrap();
 		assert!(css.contains(".hl-"), "{css}");
 		assert!(css.contains(".line-numbers"));
-		assert!(stylesheet("nope").is_none());
+		// The dark colors come after the light ones, for the dark scheme only.
+		let (light, dark) = css
+			.split_once("@media (prefers-color-scheme: dark) {")
+			.unwrap();
+		assert!(light.contains(".hl-"), "{css}");
+		assert!(dark.contains(".hl-"), "{css}");
+		assert!(dark.trim_end().ends_with('}'));
+		assert_eq!(
+			css.matches('{').count(),
+			css.matches('}').count(),
+			"balanced: {css}"
+		);
+		assert_ne!(light, dark);
+		assert!(stylesheet("nope", DEFAULT_DARK_THEME).is_none());
+		assert!(stylesheet(DEFAULT_THEME, "nope").is_none());
 		assert!(theme_names().contains(&DEFAULT_THEME));
+		assert!(theme_names().contains(&DEFAULT_DARK_THEME));
 	}
 }
