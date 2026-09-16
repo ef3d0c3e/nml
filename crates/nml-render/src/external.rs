@@ -346,6 +346,44 @@ fn strip_prologue(svg: &str) -> &str {
 	}
 }
 
+/// Makes an SVG draw in the color of the text around it, so that it can be read in any
+/// color scheme. Black strokes and fills become `currentColor`, the shapes without a fill
+/// (LaTeX's glyphs, Graphviz's text) inherit it, and Graphviz's white page is removed. Other
+/// colors stay.
+pub fn recolor(svg: &str) -> String {
+	let mut out = svg.to_string();
+	for attribute in ["fill", "stroke"] {
+		for black in ["black", "#000000", "#000"] {
+			out = out.replace(
+				&format!(" {attribute}=\"{black}\""),
+				&format!(" {attribute}=\"currentColor\""),
+			);
+		}
+	}
+	// Graphviz draws the page first in the graph's group.
+	let page = "<polygon fill=\"white\" stroke=\"none\"";
+	if let Some(group) = out.find(" class=\"graph\"")
+		&& let Some(end) = out[group..].find('>')
+	{
+		let start = group + end + 1;
+		let first = start + (out[start..].len() - out[start..].trim_start().len());
+		if out[first..].starts_with(page) {
+			out.replace_range(
+				first..first + page.len(),
+				"<polygon fill=\"none\" stroke=\"none\"",
+			);
+		}
+	}
+	// SVG's default fill is black.
+	if let Some(start) = out.find("<svg")
+		&& let Some(end) = out[start..].find('>')
+		&& !out[start..start + end].contains(" fill=")
+	{
+		out.insert_str(start + 4, " fill=\"currentColor\"");
+	}
+	out
+}
+
 /// Prefixes the ids of an SVG, and the references to them, so that several SVGs can share a
 /// page: `id="g1"` becomes `id="p-g1"`, `#g1` becomes `#p-g1`.
 pub fn scope_ids(svg: &str, prefix: &str) -> String {
@@ -552,6 +590,76 @@ mod tests {
 				name: "nope".into()
 			})
 		);
+	}
+
+	#[test]
+	fn recolored() {
+		// Graphviz.
+		let svg = r#"<svg width="62pt" height="116pt">
+<g id="x-graph0" class="graph" transform="scale(1 1)">
+<polygon fill="white" stroke="none" points="-4,4 -4,-112"/>
+<ellipse fill="none" stroke="black" cx="27"/>
+<ellipse fill="white" stroke="none" cx="1"/>
+<text text-anchor="middle">a</text>
+<polygon fill="black" stroke="black" points="30.5,-47.62"/>
+<ellipse fill="none" stroke="red" cx="99"/>
+</g>
+</svg>"#;
+		assert_eq!(
+			recolor(svg),
+			r#"<svg fill="currentColor" width="62pt" height="116pt">
+<g id="x-graph0" class="graph" transform="scale(1 1)">
+<polygon fill="none" stroke="none" points="-4,4 -4,-112"/>
+<ellipse fill="none" stroke="currentColor" cx="27"/>
+<ellipse fill="white" stroke="none" cx="1"/>
+<text text-anchor="middle">a</text>
+<polygon fill="currentColor" stroke="currentColor" points="30.5,-47.62"/>
+<ellipse fill="none" stroke="red" cx="99"/>
+</g>
+</svg>"#
+		);
+		// A graph with a background of its own keeps it.
+		let svg = r#"<svg><g class="graph"><polygon fill="lightgrey" stroke="none"/></g></svg>"#;
+		assert_eq!(
+			recolor(svg),
+			r#"<svg fill="currentColor"><g class="graph"><polygon fill="lightgrey" stroke="none"/></g></svg>"#
+		);
+		// Typst and dvisvgm.
+		assert_eq!(
+			recolor(r##"<svg class="typst-doc"><path fill="#000000" stroke="#000"/></svg>"##),
+			r#"<svg fill="currentColor" class="typst-doc"><path fill="currentColor" stroke="currentColor"/></svg>"#
+		);
+		assert_eq!(
+			recolor(
+				r##"<svg height="9pt"><g id="page1"><use x="1" xlink:href="#g0-1"/></g></svg>"##
+			),
+			r##"<svg fill="currentColor" height="9pt"><g id="page1"><use x="1" xlink:href="#g0-1"/></g></svg>"##
+		);
+		// A fill of the SVG's own stays.
+		assert_eq!(
+			recolor(r#"<svg fill="blue"><path/></svg>"#),
+			r#"<svg fill="blue"><path/></svg>"#
+		);
+		// Idempotent: cached SVGs may be recolored again.
+		assert_eq!(recolor(&recolor(svg)), recolor(svg));
+	}
+
+	#[test]
+	fn graphviz_is_recolored() {
+		if !has("dot") {
+			eprintln!("skipped: no `dot`");
+			return;
+		}
+		let svg = Renderers::default()
+			.render(&Job::Graph {
+				source: "digraph { a -> b }".into(),
+				layout: "dot".into(),
+			})
+			.unwrap();
+		let svg = recolor(&svg);
+		assert!(svg.starts_with("<svg fill=\"currentColor\""), "{svg}");
+		assert!(!svg.contains("\"black\""), "{svg}");
+		assert!(!svg.contains("\"white\""), "{svg}");
 	}
 
 	#[test]

@@ -7,6 +7,7 @@ pub use external::Job;
 pub use external::RenderError;
 pub use external::Renderers;
 pub use external::TexEnvironment;
+pub use external::recolor;
 pub use external::scope_ids;
 pub use highlight::DEFAULT_DARK_THEME;
 pub use highlight::DEFAULT_THEME;

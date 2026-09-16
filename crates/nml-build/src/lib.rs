@@ -43,6 +43,7 @@ use nml_lua::DeferredRuntime;
 use nml_lua::PageInfo;
 use nml_render::Job;
 use nml_render::RenderError;
+use nml_render::recolor;
 use nml_render::scope_ids;
 use nml_source::Source;
 use nml_source::Token;
@@ -606,7 +607,7 @@ impl Builder {
 			keys.push(key.clone());
 			match self.index.render(&key)? {
 				Some(svg) => {
-					rendered.insert(id, svg);
+					rendered.insert(id, recolor(&svg));
 				}
 				None => missing.push((id, key, job, element.token.clone())),
 			}
@@ -622,8 +623,9 @@ impl Builder {
 		for (id, key, svg, token) in results {
 			match svg {
 				Ok(svg) => {
+					// The cache keeps the program's output: how it is shown may change.
 					self.index.store_render(&key, &svg)?;
-					rendered.insert(id, svg);
+					rendered.insert(id, recolor(&svg));
 				}
 				Err(error) => diagnostics.push(render_error(&error, &token)),
 			}

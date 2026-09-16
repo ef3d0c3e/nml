@@ -1294,10 +1294,11 @@ fn rendered_graphs() {
 	let page = workspace.output("a.html");
 	assert!(
 		page.contains(
-			"<div class=\"rendered graph\" role=\"img\" aria-label=\"digraph { scan -&gt; parse }\"><svg"
+			"<div class=\"rendered graph\" role=\"img\" aria-label=\"digraph { scan -&gt; parse }\"><svg fill=\"currentColor\""
 		),
 		"{page}"
 	);
+	assert!(!page.contains("stroke=\"black\""), "{page}");
 	assert!(page.contains("<figcaption><span class=\"figure-number\">Figure 1:</span> Stages"));
 
 	// The SVG comes from the cache when the page changes elsewhere.
@@ -1307,7 +1308,11 @@ fn rendered_graphs() {
 	);
 	let report = workspace.build();
 	assert_diagnostics!(report.diagnostics, []);
-	assert!(workspace.output("a.html").contains("<svg"));
+	assert!(
+		workspace
+			.output("a.html")
+			.contains("<svg fill=\"currentColor\"")
+	);
 
 	// A graph that does not render is an error of the page.
 	workspace.write("a.nml", ":graph\n```\ndigraph { a -> }\n```\n");
