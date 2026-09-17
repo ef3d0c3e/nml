@@ -419,6 +419,7 @@ impl Builder {
 		self.index.prune_renders()?;
 		self.sync_assets()?;
 		self.sync_static(&statics)?;
+		self.write_default_stylesheet()?;
 		self.write_code_stylesheet()
 	}
 
@@ -461,6 +462,7 @@ impl Builder {
 				Err(_) => path.to_string_lossy().into_owned(),
 			};
 			let reserved = output == nml_html::CODE_STYLESHEET
+				|| output == nml_html::DEFAULT_STYLESHEET
 				|| output.starts_with(&format!("{}/", nml_lang::ASSETS_DIR));
 			if reserved {
 				let kind = DiagnosticKind::ReservedStaticFile { path: output };
@@ -670,6 +672,29 @@ impl Builder {
 		Ok(())
 	}
 
+	/// Writes the default stylesheet if it changed, or deletes it if pages do not use it.
+	fn write_default_stylesheet(&self) -> Result<(), BuildError> {
+		if !self.write {
+			return Ok(());
+		}
+		if !self.config.html.default_style {
+			// The name is reserved: the file is the build's.
+			self.delete_file(nml_html::DEFAULT_STYLESHEET)?;
+			return Ok(());
+		}
+		self.write_if_changed(nml_html::DEFAULT_STYLESHEET, nml_html::DEFAULT_STYLE)
+	}
+
+	/// Writes `content` to `output` in the output directory, unless it is there already.
+	fn write_if_changed(&self, output: &str, content: &str) -> Result<(), BuildError> {
+		let path = self.output.join(output);
+		if fs::read_to_string(&path).is_ok_and(|current| current == content) {
+			return Ok(());
+		}
+		fs::create_dir_all(&self.output).map_err(|e| BuildError::Io(self.output.clone(), e))?;
+		fs::write(&path, content).map_err(|e| BuildError::Io(path, e))
+	}
+
 	/// Writes the stylesheet of highlighted code, if it changed.
 	fn write_code_stylesheet(&self) -> Result<(), BuildError> {
 		if !self.write {
@@ -691,12 +716,7 @@ impl Builder {
 		let html = &self.config.html;
 		let css =
 			nml_render::stylesheet(&html.code_theme, &html.code_theme_dark).unwrap_or_default();
-		let path = self.output.join(nml_html::CODE_STYLESHEET);
-		if fs::read_to_string(&path).is_ok_and(|current| current == css) {
-			return Ok(());
-		}
-		fs::create_dir_all(&self.output).map_err(|e| BuildError::Io(self.output.clone(), e))?;
-		fs::write(&path, css).map_err(|e| BuildError::Io(path, e))
+		self.write_if_changed(nml_html::CODE_STYLESHEET, &css)
 	}
 
 	fn remove(&mut self, path: &str) -> Result<(), BuildError> {
@@ -787,9 +807,16 @@ impl Builder {
 		let name = unit.reference_key.as_deref().unwrap_or(basename);
 		let title = title(document).unwrap_or_else(|| basename.to_string());
 		let template = (file.role == Role::Page).then(|| {
-			let mut stylesheets: Vec<_> = (self.config.html.stylesheets.iter())
-				.map(|url| site_url(&output, url))
-				.collect();
+			// The default style first: the workspace's own override it.
+			let mut stylesheets = Vec::new();
+			if self.config.html.default_style {
+				stylesheets.push(nml_lang::relative_output_url(
+					&output,
+					nml_html::DEFAULT_STYLESHEET,
+				));
+			}
+			stylesheets
+				.extend((self.config.html.stylesheets.iter()).map(|url| site_url(&output, url)));
 			let has_code = document.descendants(document.root()).any(|(_, element)| {
 				matches!(
 					element.kind,

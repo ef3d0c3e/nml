@@ -44,6 +44,8 @@ pub struct HtmlConfig {
 	/// directory.
 	pub stylesheets: Vec<String>,
 	pub icon: Option<String>,
+	/// Whether pages link the default stylesheet, `nml.css`.
+	pub default_style: bool,
 	/// The theme of highlighted code, one of syntect's built-in themes.
 	pub code_theme: String,
 	/// The theme of highlighted code in the dark color scheme.
@@ -85,6 +87,7 @@ struct RawHtml {
 	#[serde(default)]
 	stylesheets: Vec<String>,
 	icon: Option<String>,
+	default_style: Option<bool>,
 	code_theme: Option<Spanned<String>>,
 	code_theme_dark: Option<Spanned<String>>,
 	#[serde(rename = "static")]
@@ -204,6 +207,7 @@ impl Config {
 			language: raw.html.language,
 			stylesheets: raw.html.stylesheets,
 			icon: raw.html.icon,
+			default_style: raw.html.default_style.unwrap_or(true),
 			code_theme,
 			code_theme_dark,
 			static_range: (raw.html.static_dir.as_ref()).map_or(0..0, Spanned::span),
@@ -302,6 +306,7 @@ mod tests {
 		assert!(config.modules.is_empty());
 		assert_eq!(config.html.code_theme, nml_render::DEFAULT_THEME);
 		assert_eq!(config.html.code_theme_dark, nml_render::DEFAULT_DARK_THEME);
+		assert!(config.html.default_style);
 		assert!(config.is_page(Path::new("a/b.nml")));
 		assert!(!config.is_page(Path::new("a/b.txt")));
 	}
@@ -321,6 +326,7 @@ stylesheets = ["style.css"]
 icon = "icon.png"
 code_theme = "Solarized (light)"
 code_theme_dark = "Solarized (dark)"
+default_style = false
 static = "static"
 
 [render]
@@ -351,6 +357,7 @@ root = "lib/nav"
 		assert_eq!(config.html.stylesheets, ["style.css"]);
 		assert_eq!(config.html.code_theme, "Solarized (light)");
 		assert_eq!(config.html.code_theme_dark, "Solarized (dark)");
+		assert!(!config.html.default_style);
 		assert_eq!(config.html.static_dir.as_deref(), Some(Path::new("static")));
 		assert_eq!(config.render.dot, "/opt/bin/dot");
 		assert_eq!(config.render.latex, "latex");

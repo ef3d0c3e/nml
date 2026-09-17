@@ -1117,7 +1117,8 @@ fn configured_urls_are_relative_to_each_page() {
 	};
 	let links = |prefix: &str| {
 		format!(
-			"<link rel=\"stylesheet\" href=\"{prefix}style.css\">\n\
+			"<link rel=\"stylesheet\" href=\"{prefix}nml.css\">\n\
+			<link rel=\"stylesheet\" href=\"{prefix}style.css\">\n\
 			<link rel=\"stylesheet\" href=\"/root.css\">\n\
 			<link rel=\"stylesheet\" href=\"https://cdn.example/a.css\">\n\
 			<link rel=\"icon\" href=\"{prefix}img/icon.png\">\n"
@@ -1387,12 +1388,18 @@ fn static_files() {
 	// Files where the build writes its own are not copied.
 	workspace.write("static/assets/a.png", "a");
 	workspace.write("static/nml-code.css", "code");
+	workspace.write("static/nml.css", "style");
 	let report = workspace.build();
-	assert_diagnostics!(report.diagnostics, [3014 @ 16..24, 3014 @ 16..24]);
+	assert_diagnostics!(
+		report.diagnostics,
+		[3014 @ 16..24, 3014 @ 16..24, 3014 @ 16..24]
+	);
 	assert!(!workspace.0.join("public/assets").exists());
 	assert_ne!(workspace.output("nml-code.css"), "code");
+	assert_eq!(workspace.output("nml.css"), nml_html::DEFAULT_STYLE);
 	workspace.remove("static/assets/a.png");
 	workspace.remove("static/nml-code.css");
+	workspace.remove("static/nml.css");
 
 	// A page written where a static file is copied is not written.
 	workspace.write("static/index.html", "static");
@@ -1469,6 +1476,8 @@ fn builds_one_file_without_a_workspace() {
 	assert!(page.contains("<img src=\"assets/"), "{page}");
 	assert!(page.contains("href=\"nml-code.css\""), "{page}");
 	assert!(workspace.0.join("nml-code.css").exists());
+	assert!(page.contains("href=\"nml.css\""), "{page}");
+	assert!(workspace.0.join("nml.css").exists());
 	assert!(workspace.0.join("assets/other.png").exists());
 	// No database or configuration is made.
 	assert!(!workspace.0.join("nml.toml").exists());
@@ -1494,9 +1503,70 @@ fn builds_one_file_without_a_workspace() {
 	build_file(&workspace.0.join("plain/p.nml"), None).unwrap();
 	assert!(workspace.0.join("plain/p.html").exists());
 	assert!(!workspace.0.join("plain/nml-code.css").exists());
+	assert!(workspace.0.join("plain/nml.css").exists());
 
 	// Errors are reported, and nothing is written.
 	let report = build_file(&workspace.0.join("broken.nml"), None).unwrap();
 	assert_eq!(report.failed, ["broken.nml"]);
 	assert!(!workspace.0.join("broken.html").exists());
+}
+
+#[test]
+fn default_stylesheet() {
+	let workspace = Workspace::new(
+		"default-style",
+		&[
+			("nml.toml", "[html]\nstylesheets = [\"style.css\"]\n"),
+			("index.nml", "a"),
+			("docs/guide.nml", "```rust\nfn main() {}\n```\n"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(workspace.output("nml.css"), nml_html::DEFAULT_STYLE);
+	// First, so that the workspace's stylesheets override it; the code theme last.
+	let index = workspace.output("index.html");
+	assert!(
+		index.contains(
+			"<link rel=\"stylesheet\" href=\"nml.css\">\n<link rel=\"stylesheet\" href=\"style.css\">\n"
+		),
+		"{index}"
+	);
+	let guide = workspace.output("docs/guide.html");
+	assert!(
+		guide.contains(
+			"<link rel=\"stylesheet\" href=\"../nml.css\">\n\
+			<link rel=\"stylesheet\" href=\"../style.css\">\n\
+			<link rel=\"stylesheet\" href=\"../nml-code.css\">\n"
+		),
+		"{guide}"
+	);
+
+	// An edited copy is restored.
+	workspace.write("public/nml.css", "edited");
+	workspace.build();
+	assert_eq!(workspace.output("nml.css"), nml_html::DEFAULT_STYLE);
+
+	// Turned off: not linked, and the copy is deleted.
+	workspace.write(
+		"nml.toml",
+		"[html]\nstylesheets = [\"style.css\"]\ndefault_style = false\n",
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(!workspace.output("index.html").contains("nml.css"));
+	assert!(!workspace.output("docs/guide.html").contains("nml.css\""));
+	assert!(!workspace.0.join("public/nml.css").exists());
+
+	// And on again.
+	workspace.write("nml.toml", "[html]\nstylesheets = [\"style.css\"]\n");
+	workspace.build();
+	assert!(workspace.output("index.html").contains("href=\"nml.css\""));
+	assert_eq!(workspace.output("nml.css"), nml_html::DEFAULT_STYLE);
+
+	// A build that does not write leaves it alone.
+	workspace.remove("public/nml.css");
+	let report = build_with(&workspace.0, BuildOptions { write: false }).unwrap();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(!workspace.0.join("public/nml.css").exists());
 }
