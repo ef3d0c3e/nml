@@ -7,6 +7,7 @@ use nml_lang::MemoryResolver;
 use nml_source::Source;
 use nml_source::Url;
 
+use crate::DEFAULT_STYLE;
 use crate::PageOptions;
 use crate::compile;
 
@@ -98,12 +99,12 @@ fn code_blocks() {
 	assert_eq!(
 		body("```[line_offset=9] A <title>\na < b\nc\n```"),
 		"<figure class=\"code-block\">\n<figcaption>A &lt;title&gt;</figcaption>\n\
-		<div class=\"code\"><pre class=\"line-numbers\" aria-hidden=\"true\">9\n10</pre>\
+		<div class=\"code hl-code\"><pre class=\"line-numbers\" aria-hidden=\"true\">9\n10</pre>\
 		<pre><code>a &lt; b\nc</code></pre></div>\n</figure>\n"
 	);
 	assert_eq!(
 		body("```[numbers=false]\nx\n```"),
-		"<figure class=\"code-block\">\n<div class=\"code\"><pre><code>x</code></pre></div>\n</figure>\n"
+		"<figure class=\"code-block\">\n<div class=\"code hl-code\"><pre><code>x</code></pre></div>\n</figure>\n"
 	);
 	let html = body("```rust\nfn main() {}\n```");
 	assert!(
@@ -115,7 +116,7 @@ fn code_blocks() {
 	let html = body("a :code[rust]`let x = 1;` b");
 	assert!(
 		html.starts_with(
-			"<p>a <code class=\"highlighted\" data-language=\"rust\"><span class=\"hl-"
+			"<p>a <code class=\"highlighted hl-code\" data-language=\"rust\"><span class=\"hl-"
 		),
 		"{html}"
 	);
@@ -124,7 +125,7 @@ fn code_blocks() {
 	assert_eq!(
 		body("```[max_lines=2]\na\nb\nc\n```"),
 		"<figure class=\"code-block\">\n\
-		<div class=\"code\" style=\"max-height: 2lh; overflow-y: auto\">\
+		<div class=\"code hl-code\" style=\"max-height: 2lh; overflow-y: auto\">\
 		<pre class=\"line-numbers\" aria-hidden=\"true\">1\n2\n3</pre>\
 		<pre><code>a\nb\nc</code></pre></div>\n</figure>\n"
 	);
@@ -342,4 +343,159 @@ fn rendered() {
 		),
 		"{graph}"
 	);
+}
+
+/// The classes the writer gives elements, from its source: `class=\"a b\"` and the
+/// classes passed to `open_with`. Those made at run time, `callout {kind}`, are left out.
+fn written_classes() -> Vec<String> {
+	let source = include_str!("template.rs");
+	let source = &source[..source.find("#[cfg(test)]").unwrap()];
+	let mut found = Vec::new();
+	let mut rest = source;
+	while let Some(start) = rest.find("class=\\\"") {
+		rest = &rest[start + 8..];
+		found.push(&rest[..rest.find("\\\"").unwrap()]);
+	}
+	for call in source.split("open_with(").skip(1) {
+		let arguments = &call[..call.find(");").unwrap()];
+		if let Some(start) = arguments.find("Some(\"") {
+			let class = &arguments[start + 6..];
+			found.push(&class[..class.find('"').unwrap()]);
+		}
+	}
+	let mut classes = Vec::new();
+	for class in found.iter().flat_map(|classes| classes.split(' ')) {
+		let identifier =
+			!class.is_empty() && (class.chars()).all(|c| c.is_ascii_alphanumeric() || c == '-');
+		if identifier {
+			classes.push(class.to_string());
+		}
+	}
+	classes.sort();
+	classes.dedup();
+	classes
+}
+
+/// Whether the stylesheet has a selector with `.class`.
+fn styles(css: &str, class: &str) -> bool {
+	let selector = format!(".{class}");
+	css.match_indices(&selector).any(|(at, _)| {
+		let next = css[at + selector.len()..].chars().next();
+		!next.is_some_and(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+	})
+}
+
+#[test]
+fn the_default_style_covers_the_output() {
+	let css = DEFAULT_STYLE;
+	let written = written_classes();
+	// The scan finds them.
+	for class in [
+		"nml-page",
+		"nml-main",
+		"heading-link",
+		"code-block",
+		"media-number",
+	] {
+		assert!(written.iter().any(|c| c == class), "{class} in {written:?}");
+	}
+	// Styled by the code theme in `nml-code.css`, or by the element they are on.
+	let elsewhere = ["hl-code", "hl-", "line-numbers", "highlighted"];
+	for class in &written {
+		if !elsewhere.contains(&class.as_str()) {
+			assert!(styles(css, class), "`.{class}` is not styled");
+		}
+	}
+	for kind in nml_document::CalloutKind::ALL {
+		assert!(styles(css, kind.name()), "callout `{}`", kind.name());
+	}
+	for class in [
+		"layout",
+		"rendered",
+		"graph",
+		"nml-unresolved",
+		"nml-sidebar",
+	] {
+		assert!(styles(css, class), "`.{class}` is not styled");
+	}
+	// `std.toc` and `std.nav`.
+	for class in [
+		"toc",
+		"toc-title",
+		"unnumbered",
+		"nav",
+		"current",
+		"category",
+	] {
+		assert!(styles(css, class), "`.{class}` is not styled");
+	}
+}
+
+/// The custom properties set in the block that `block` starts with.
+fn properties(block: &str) -> Vec<(&str, &str)> {
+	let block = &block[block.find('{').unwrap() + 1..];
+	let block = &block[..block.find('}').unwrap()];
+	block
+		.split(';')
+		.filter_map(|declaration| {
+			let (name, value) = declaration.split_once(':')?;
+			let name = name.trim();
+			name.starts_with("--").then(|| (name, value.trim()))
+		})
+		.collect()
+}
+
+#[test]
+fn the_default_style_has_both_color_schemes() {
+	let css = DEFAULT_STYLE;
+	let mut depth = 0i32;
+	for c in css.chars() {
+		depth += match c {
+			'{' => 1,
+			'}' => -1,
+			_ => 0,
+		};
+		assert!(depth >= 0, "unbalanced braces");
+	}
+	assert_eq!(depth, 0, "unbalanced braces");
+
+	let light = properties(&css[css.find(":root {").unwrap()..]);
+	let dark_media = css.find("@media (prefers-color-scheme: dark) {").unwrap();
+	let dark_root = dark_media + css[dark_media..].find(":root {").unwrap();
+	let dark = properties(&css[dark_root..]);
+	let colors: Vec<_> = (light.iter())
+		.filter(|(_, value)| value.starts_with('#'))
+		.map(|(name, _)| *name)
+		.collect();
+	assert!(colors.len() >= 10, "{colors:?}");
+	let dark_names: Vec<_> = dark.iter().map(|(name, _)| *name).collect();
+	// Every color is set for the dark scheme, to something else, and nothing more is.
+	assert_eq!(colors, dark_names);
+	for (name, value) in &dark {
+		let light = light.iter().find(|(n, _)| n == name).unwrap().1;
+		assert_ne!(*value, light, "{name}");
+	}
+
+	// Every property used is set.
+	let mut rest = css;
+	while let Some(at) = rest.find("var(") {
+		rest = &rest[at + 4..];
+		let name = &rest[..rest.find(')').unwrap()];
+		let name = name.split(',').next().unwrap().trim();
+		let set = light.iter().any(|(n, _)| *n == name) || css.contains(&format!("{name}:"));
+		assert!(set, "`{name}` is used but never set");
+	}
+}
+
+#[test]
+fn highlighted_code_has_the_theme_colors() {
+	// `nml-code.css` gives `.hl-code` the theme's text and background.
+	let html = body("```rust\nfn main() {}\n```\n\n:code[rust]`x`");
+	assert!(html.contains("<div class=\"code hl-code\">"), "{html}");
+	assert!(
+		html.contains("<code class=\"highlighted hl-code\""),
+		"{html}"
+	);
+	let css = nml_render::stylesheet(nml_render::DEFAULT_THEME, nml_render::DEFAULT_DARK_THEME);
+	assert!(css.unwrap().contains(".hl-code {"));
 }

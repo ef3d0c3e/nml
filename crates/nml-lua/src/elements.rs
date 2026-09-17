@@ -1345,15 +1345,16 @@ mod tests {
 	fn code_in_a_language() {
 		assert!(
 			body(":lua`nml.element('code', {code = 'let x = 1;', language = 'rust'})`")
-				.starts_with("<p><code class=\"highlighted\" data-language=\"rust\"><span")
+				.starts_with("<p><code class=\"highlighted hl-code\" data-language=\"rust\"><span")
 		);
 	}
 
 	#[test]
 	fn code_blocks() {
 		assert!(
-			body(":lua`nml.element('code_block', {code = 'x', max_lines = 3})`")
-				.contains("<div class=\"code\" style=\"max-height: 3lh; overflow-y: auto\">")
+			body(":lua`nml.element('code_block', {code = 'x', max_lines = 3})`").contains(
+				"<div class=\"code hl-code\" style=\"max-height: 3lh; overflow-y: auto\">"
+			)
 		);
 		let compiled = compile(":lua`nml.element('code_block', {code = 'x', max_lines = -1})`");
 		assert_diagnostics!(compiled.diagnostics, [4001]);

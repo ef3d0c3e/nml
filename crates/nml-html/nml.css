@@ -1,0 +1,598 @@
+/*
+ * The default style of NML pages.
+ *
+ * Every color is a custom property: a stylesheet linked after this one retheme pages by
+ * setting them on `:root`, for the light scheme and in the dark media query.
+ */
+
+/*** Properties ***/
+
+:root {
+	color-scheme: light dark;
+
+	--nml-background: #fdfdfc;
+	--nml-text: #1f2328;
+	--nml-muted: #5c6670;
+	--nml-border: #d5dbe1;
+	--nml-surface: #f3f5f7;
+	--nml-link: #0b62c4;
+	--nml-mark: #fff1a8;
+
+	--nml-note: #0b62c4;
+	--nml-tip: #1a7f37;
+	--nml-important: #7c4dd6;
+	--nml-warning: #9a6700;
+	--nml-caution: #c9252f;
+	--nml-todo: #b4520f;
+
+	--nml-font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell,
+		"Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+	--nml-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+		"Liberation Mono", monospace;
+	--nml-measure: 72ch;
+	--nml-sidebar-width: 16rem;
+	--nml-radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--nml-background: #16181d;
+		--nml-text: #e3e5e8;
+		--nml-muted: #9aa3ad;
+		--nml-border: #363c45;
+		--nml-surface: #20242b;
+		--nml-link: #5ba3f5;
+		--nml-mark: #5c4d0a;
+
+		--nml-note: #5ba3f5;
+		--nml-tip: #46b95c;
+		--nml-important: #a98af5;
+		--nml-warning: #d4a12a;
+		--nml-caution: #f2665c;
+		--nml-todo: #e5843d;
+	}
+}
+
+/*** Page ***/
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--nml-background);
+	color: var(--nml-text);
+	font-family: var(--nml-font);
+	font-size: 1rem;
+	line-height: 1.6;
+	overflow-wrap: break-word;
+}
+
+/* The content, centered; a sidebar takes a column of its own beside it. */
+.nml-page {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 2.5rem;
+	max-width: calc(var(--nml-measure) + 2rem);
+	margin: 0 auto;
+	padding: 2rem 1rem 4rem;
+}
+
+.nml-page:has(> .nml-sidebar) {
+	grid-template-columns: var(--nml-sidebar-width) minmax(0, 1fr);
+	max-width: calc(var(--nml-sidebar-width) + var(--nml-measure) + 4.5rem);
+}
+
+.nml-sidebar {
+	position: sticky;
+	top: 2rem;
+	align-self: start;
+	max-height: calc(100vh - 4rem);
+	overflow-y: auto;
+	font-size: 0.9rem;
+}
+
+@media (max-width: 52rem) {
+	.nml-page:has(> .nml-sidebar) {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.nml-sidebar {
+		position: static;
+		max-height: none;
+	}
+}
+
+.nml-main > :first-child {
+	margin-top: 0;
+}
+
+/*** Text ***/
+
+p,
+ul,
+ol,
+blockquote,
+table,
+figure,
+details,
+aside {
+	margin: 0 0 1rem;
+}
+
+a {
+	color: var(--nml-link);
+	text-decoration: underline;
+	text-decoration-thickness: from-font;
+	text-underline-offset: 0.15em;
+}
+
+a:hover {
+	text-decoration-thickness: 2px;
+}
+
+mark {
+	background: var(--nml-mark);
+	color: inherit;
+	padding: 0 0.15em;
+	border-radius: 2px;
+}
+
+code,
+pre {
+	font-family: var(--nml-font-mono);
+	font-size: 0.875em;
+	tab-size: 4;
+}
+
+:not(pre) > code {
+	background: var(--nml-surface);
+	padding: 0.1em 0.35em;
+	border-radius: 4px;
+}
+
+pre code {
+	font-size: inherit;
+}
+
+.nml-unresolved {
+	color: var(--nml-caution);
+	text-decoration: underline wavy;
+	text-underline-offset: 0.2em;
+}
+
+/*** Headings ***/
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	position: relative;
+	margin: 2rem 0 1rem;
+	line-height: 1.25;
+	font-weight: 650;
+	scroll-margin-top: 1rem;
+}
+
+h1 {
+	font-size: 2em;
+}
+
+h2 {
+	font-size: 1.5em;
+	padding-bottom: 0.25em;
+	border-bottom: 1px solid var(--nml-border);
+}
+
+h3 {
+	font-size: 1.25em;
+}
+
+h4 {
+	font-size: 1em;
+}
+
+h5 {
+	font-size: 0.9em;
+}
+
+h6 {
+	font-size: 0.85em;
+	color: var(--nml-muted);
+}
+
+.heading-number {
+	color: var(--nml-muted);
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+/* In the margin, shown when the heading is pointed at. */
+.heading-link {
+	position: absolute;
+	right: 100%;
+	padding-right: 0.3em;
+	font-size: 0.6em;
+	line-height: 2.1;
+	text-decoration: none;
+	opacity: 0;
+	transition: opacity 0.15s;
+}
+
+:is(h1, h2, h3, h4, h5, h6):hover .heading-link,
+.heading-link:focus-visible {
+	opacity: 0.6;
+}
+
+/*** Lists ***/
+
+ul,
+ol {
+	padding-left: 1.75em;
+}
+
+li > ul,
+li > ol {
+	margin: 0.25em 0;
+}
+
+li + li {
+	margin-top: 0.25em;
+}
+
+li:has(> input[type="checkbox"]:first-child) {
+	list-style: none;
+}
+
+li > input[type="checkbox"]:first-child {
+	margin: 0 0.35em 0 -1.4em;
+	vertical-align: -0.1em;
+}
+
+/*** Quotes and callouts ***/
+
+blockquote {
+	margin-left: 0;
+	margin-right: 0;
+	padding: 0.1em 1em;
+	border-left: 3px solid var(--nml-border);
+	color: var(--nml-muted);
+}
+
+blockquote > :last-child {
+	margin-bottom: 0;
+}
+
+figure.quote {
+	margin-left: 0;
+	margin-right: 0;
+	text-align: start;
+}
+
+figure.quote blockquote {
+	margin-bottom: 0.4rem;
+}
+
+figure.quote figcaption {
+	margin: 0;
+	padding-left: 1.2em;
+	color: var(--nml-muted);
+	font-size: 0.9em;
+}
+
+.callout {
+	--nml-callout: var(--nml-note);
+	padding: 0.6rem 1rem;
+	border-left: 4px solid var(--nml-callout);
+	border-radius: 0 var(--nml-radius) var(--nml-radius) 0;
+	background: color-mix(in srgb, var(--nml-callout) 8%, transparent);
+}
+
+.callout.note {
+	--nml-callout: var(--nml-note);
+}
+
+.callout.tip {
+	--nml-callout: var(--nml-tip);
+}
+
+.callout.important {
+	--nml-callout: var(--nml-important);
+}
+
+.callout.warning {
+	--nml-callout: var(--nml-warning);
+}
+
+.callout.caution {
+	--nml-callout: var(--nml-caution);
+}
+
+.callout.todo {
+	--nml-callout: var(--nml-todo);
+}
+
+.callout-title {
+	margin-bottom: 0.4rem;
+	color: var(--nml-callout);
+	font-weight: 600;
+}
+
+.callout > :last-child {
+	margin-bottom: 0;
+}
+
+/*** Code ***/
+
+figure.code-block {
+	margin-left: 0;
+	margin-right: 0;
+	text-align: start;
+}
+
+.code-block figcaption {
+	margin: 0;
+	padding: 0.35rem 1rem;
+	color: var(--nml-text);
+	border: 1px solid var(--nml-border);
+	border-bottom: none;
+	border-radius: var(--nml-radius) var(--nml-radius) 0 0;
+	background: var(--nml-surface);
+	font-size: 0.85em;
+}
+
+.code-block .code {
+	padding: 0.75rem 1rem;
+	border: 1px solid var(--nml-border);
+	border-radius: var(--nml-radius);
+	line-height: 1.45;
+}
+
+/* Without specificity: the code theme of `nml-code.css` (`.hl-code`) sets the colors. */
+:where(.code-block .code) {
+	background: var(--nml-surface);
+}
+
+.code-block figcaption + .code {
+	border-radius: 0 0 var(--nml-radius) var(--nml-radius);
+}
+
+/*** Figures, media and tables ***/
+
+figure {
+	margin-left: 0;
+	margin-right: 0;
+	text-align: center;
+}
+
+figure > figcaption,
+caption {
+	margin-top: 0.4rem;
+	color: var(--nml-muted);
+	font-size: 0.9em;
+}
+
+.figure-number,
+.table-number {
+	color: var(--nml-text);
+	font-weight: 600;
+}
+
+img,
+video {
+	max-width: 100%;
+	height: auto;
+}
+
+audio {
+	max-width: 100%;
+	vertical-align: middle;
+}
+
+.media-number {
+	margin-left: 0.25em;
+	color: var(--nml-muted);
+	font-size: 0.9em;
+}
+
+table {
+	border-collapse: collapse;
+	font-variant-numeric: tabular-nums;
+}
+
+caption {
+	caption-side: top;
+	margin: 0 0 0.4rem;
+}
+
+th,
+td {
+	padding: 0.35rem 0.75rem;
+	border: 1px solid var(--nml-border);
+	text-align: start;
+	vertical-align: top;
+}
+
+thead th,
+thead td {
+	background: var(--nml-surface);
+	font-weight: 600;
+}
+
+/*** Rendered math, graphs and pictures ***/
+
+.rendered svg {
+	overflow: visible;
+}
+
+span.rendered {
+	display: inline-block;
+	vertical-align: middle;
+}
+
+div.rendered {
+	margin: 0 0 1rem;
+	overflow-x: auto;
+	text-align: center;
+}
+
+div.rendered.graph {
+	margin-left: auto;
+	margin-right: auto;
+}
+
+div.rendered.graph svg {
+	max-width: 100%;
+	height: auto;
+}
+
+/* The source, when it could not be rendered. */
+.rendered > code {
+	color: var(--nml-muted);
+}
+
+/*** Layouts ***/
+
+.layout.spoiler {
+	padding: 0.5rem 1rem;
+	border: 1px solid var(--nml-border);
+	border-radius: var(--nml-radius);
+}
+
+.layout.spoiler > summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+
+.layout.spoiler[open] > summary {
+	margin-bottom: 0.5rem;
+}
+
+.layout .part > :last-child {
+	margin-bottom: 0;
+}
+
+.layout.split {
+	margin-bottom: 1rem;
+}
+
+/* The split is set inline, so that it works without a stylesheet. */
+@media (max-width: 40rem) {
+	.layout.split {
+		flex-direction: column !important;
+	}
+}
+
+/*** std.toc ***/
+
+.toc {
+	margin-bottom: 1.5rem;
+	padding: 0.75rem 1rem;
+	border: 1px solid var(--nml-border);
+	border-radius: var(--nml-radius);
+	font-size: 0.95em;
+}
+
+.toc-title {
+	margin-bottom: 0.5rem;
+	font-weight: 600;
+}
+
+/* Numbered like the headings: `1.2.` */
+.toc ol {
+	margin: 0;
+	padding-left: 0;
+	list-style: none;
+	counter-reset: nml-toc;
+}
+
+.toc ol ol {
+	padding-left: 1.5em;
+}
+
+.toc li {
+	counter-increment: nml-toc;
+}
+
+.toc li::before {
+	content: counters(nml-toc, ".") ". ";
+	color: var(--nml-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.toc li.unnumbered {
+	counter-increment: none;
+}
+
+.toc li.unnumbered::before {
+	content: none;
+}
+
+/*** std.nav ***/
+
+.nav ul {
+	margin: 0;
+	padding-left: 0;
+	list-style: none;
+}
+
+.nav ul ul {
+	padding-left: 0.85em;
+	border-left: 1px solid var(--nml-border);
+}
+
+.nav li {
+	margin: 0.2em 0;
+}
+
+.nav a {
+	color: var(--nml-muted);
+	text-decoration: none;
+}
+
+.nav a:hover {
+	color: var(--nml-text);
+}
+
+.nav li.current > a {
+	color: var(--nml-text);
+	font-weight: 600;
+}
+
+.nav li.category {
+	margin-top: 0.75em;
+	font-weight: 600;
+}
+
+.nav li.category li {
+	font-weight: normal;
+}
+
+/*** Print ***/
+
+@media print {
+	body {
+		background: none;
+		color: #000;
+	}
+
+	.nml-page {
+		max-width: none;
+		padding: 0;
+	}
+
+	.nml-sidebar,
+	.heading-link {
+		display: none;
+	}
+}

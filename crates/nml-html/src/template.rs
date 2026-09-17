@@ -37,6 +37,13 @@ pub struct TemplateSlot {
 /// to it.
 pub const CODE_STYLESHEET: &str = "nml-code.css";
 
+/// The default stylesheet, in the output directory. Pages link to it before the
+/// configuration's stylesheets.
+pub const DEFAULT_STYLESHEET: &str = "nml.css";
+
+/// The content of [`DEFAULT_STYLESHEET`].
+pub const DEFAULT_STYLE: &str = include_str!("../nml.css");
+
 /// The page around a document.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PageOptions {
@@ -496,9 +503,9 @@ impl<'a> Output<'a> {
 		match max_lines {
 			// The line numbers scroll with the code.
 			Some(lines) => self.raw(&format!(
-				"<div class=\"code\" style=\"max-height: {lines}lh; overflow-y: auto\">"
+				"<div class=\"code hl-code\" style=\"max-height: {lines}lh; overflow-y: auto\">"
 			)),
-			None => self.raw("<div class=\"code\">"),
+			None => self.raw("<div class=\"code hl-code\">"),
 		}
 		if let Some(first) = first_line {
 			let lines = code.split('\n').count() as i64;
@@ -571,7 +578,7 @@ impl<'a> Output<'a> {
 					let mut extra = String::from(" data-language=\"");
 					escape(&mut extra, language, true);
 					extra.push('"');
-					self.open_with(document, id, "code", Some("highlighted"), &extra);
+					self.open_with(document, id, "code", Some("highlighted hl-code"), &extra);
 					self.raw(&nml_render::highlight(code, Some(language)));
 					self.raw("</code>");
 				}
