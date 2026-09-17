@@ -1570,3 +1570,26 @@ fn default_stylesheet() {
 	assert_diagnostics!(report.diagnostics, []);
 	assert!(!workspace.0.join("public/nml.css").exists());
 }
+
+#[test]
+fn another_nml_builds_everything_again() {
+	let workspace = Workspace::new(
+		"build-id",
+		&[("nml.toml", ""), ("a.nml", "a"), ("b.nml", "b")],
+	);
+	workspace.build();
+	assert!(workspace.build().parsed.is_empty());
+
+	// As left by another version of nml, with the same configuration.
+	let mut index = Index::open(&workspace.0.join(".nml/index.db")).unwrap();
+	assert_eq!(index.meta(CONFIG_HASH).unwrap(), Some(config_hash("")));
+	index.set_meta(CONFIG_HASH, "an older nml").unwrap();
+	drop(index);
+	let report = workspace.build();
+	assert_eq!(report.parsed, ["a.nml", "b.nml"]);
+	assert!(workspace.build().parsed.is_empty());
+
+	// The identity is that of this build.
+	assert_ne!(config_hash(""), hex(&nml_workspace::hash(b"")));
+	assert!(env!("NML_BUILD_ID").starts_with(env!("CARGO_PKG_VERSION")));
+}

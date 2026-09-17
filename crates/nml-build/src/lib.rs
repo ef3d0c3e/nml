@@ -176,7 +176,7 @@ pub fn build_with(root: &Path, options: BuildOptions) -> Result<BuildReport, Bui
 			});
 		}
 	};
-	let config_hash = hex(&nml_workspace::hash(config_source.content().as_bytes()));
+	let config_hash = config_hash(config_source.content());
 	let index = Index::open(&root.join(&config.database))?;
 	let resolver: Arc<dyn Resolver> =
 		Arc::new(WorkspaceResolver::new(root.clone(), config.modules.clone()));
@@ -1225,6 +1225,13 @@ fn walk(dir: &Path, skip: &[PathBuf], files: &mut Vec<PathBuf>) -> Result<(), Bu
 const STATIC_FILES: &str = "static_files";
 
 const CONFIG_HASH: &str = "config_hash";
+
+/// What the output of a build depends on besides its files: the configuration, and the nml
+/// that builds it. Everything is parsed again when it changes.
+fn config_hash(config: &str) -> String {
+	let identity = format!("{config}\0{}", env!("NML_BUILD_ID"));
+	hex(&nml_workspace::hash(identity.as_bytes()))
+}
 
 /// Adds to `invalid` the units that depend, transitively, on the units at the `seeds`
 /// paths: they include it, or import it as a module. Only existing files are added.
