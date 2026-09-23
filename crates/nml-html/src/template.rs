@@ -56,6 +56,10 @@ pub struct PageOptions {
 	/// The SVG of the document's rendered elements (math, graphs, …). An element without
 	/// one shows its source.
 	pub rendered: HashMap<ElementId, String>,
+	/// Whether the top-level blocks of the document carry where they start in the page's
+	/// source, `data-nml-at="<byte offset>"`, for a preview to follow the editor. Blocks
+	/// from other files (included) carry none.
+	pub source_offsets: bool,
 }
 
 /// Compiles a document into a full HTML page.
@@ -83,7 +87,11 @@ pub fn compile(document: &Document, options: &PageOptions) -> Template {
 		out.raw("\">\n");
 	}
 	out.raw("</head>\n<body>\n<div class=\"nml-page\">\n<main class=\"nml-main\">\n");
-	out.element(document, document.root());
+	if options.source_offsets {
+		out.blocks_with_offsets(document);
+	} else {
+		out.element(document, document.root());
+	}
 	out.raw("</main>\n</div>\n</body>\n</html>\n");
 	Template {
 		content: out.content,
@@ -136,6 +144,39 @@ impl<'a> Output<'a> {
 			self.sections.resize(level, 1);
 		}
 		self.sections.iter().map(|n| format!("{n}.")).collect()
+	}
+
+	/// The blocks of the document, each with `data-nml-at` on its first tag if it comes from
+	/// the page's own source.
+	fn blocks_with_offsets(&mut self, document: &Document) {
+		let page = document.source().location();
+		for &child in document.get(document.root()).children() {
+			let start = self.content.len();
+			let slots = self.slots.len();
+			self.element(document, child);
+			let token = document.get(child).token.root();
+			if token.source().location() != page {
+				continue;
+			}
+			// After the name of the first tag, if the block starts with one.
+			let written = &self.content[start..];
+			let Some(name) = written.strip_prefix('<') else {
+				continue;
+			};
+			if !name.starts_with(|c: char| c.is_ascii_alphabetic()) {
+				continue;
+			}
+			let end = name
+				.find(|c: char| !c.is_ascii_alphanumeric())
+				.unwrap_or(name.len());
+			let at = start + 1 + end;
+			let attribute = format!(" data-nml-at=\"{}\"", token.start());
+			self.content.insert_str(at, &attribute);
+			// The slots of the block are after its first tag's name.
+			for slot in &mut self.slots[slots..] {
+				slot.position += attribute.len();
+			}
+		}
 	}
 
 	/// An id made from a heading's text, unlike every other id of the output.

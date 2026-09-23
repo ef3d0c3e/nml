@@ -499,3 +499,57 @@ fn highlighted_code_has_the_theme_colors() {
 	let css = nml_render::stylesheet(nml_render::DEFAULT_THEME, nml_render::DEFAULT_DARK_THEME);
 	assert!(css.unwrap().contains(".hl-code {"));
 }
+
+#[test]
+fn source_offsets() {
+	let text = "# Title\n\nSee [[#t]].\n\n:include part\n * a\n * b\n";
+	let source = Source::new(Url::parse("file:///docs/page.nml").unwrap(), text.into(), 0);
+	let mut resolver = MemoryResolver::default();
+	resolver
+		.files
+		.insert("docs/part.nml".into(), "From elsewhere.\n".into());
+	let compiled = nml_lang::compile(
+		&Language::builtin(),
+		Arc::new(source),
+		"docs/page.nml",
+		Arc::new(resolver),
+	);
+	assert!(
+		compiled.diagnostics.is_empty(),
+		"{:?}",
+		compiled.diagnostics
+	);
+	let document = &compiled.unit.document;
+	let options = PageOptions {
+		source_offsets: true,
+		..PageOptions::default()
+	};
+	let template = compile(document, &options);
+	// Filled as a page is written: the slots moved with the blocks.
+	let mut page = Vec::new();
+	crate::write(
+		&template.content,
+		&template.slot_positions(),
+		|_| crate::Resolved::Value("#t".into()),
+		&mut page,
+	)
+	.unwrap();
+	let page = String::from_utf8(page).unwrap();
+	let main = &page[page.find("<main").unwrap()..page.find("</main>").unwrap()];
+	assert!(
+		main.contains("<h1 data-nml-at=\"0\" id=\"title\">"),
+		"{main}"
+	);
+	assert!(
+		main.contains("<p data-nml-at=\"9\">See <a href=\"#t\">#t</a>.</p>"),
+		"{main}"
+	);
+	// The included paragraph is from another file.
+	assert!(main.contains("<p>From elsewhere.</p>"), "{main}");
+	assert!(main.contains("<ul data-nml-at=\"36\">"), "{main}");
+	assert_eq!(&text[36..39], " * ");
+
+	// Built pages have none.
+	let built = compile(document, &PageOptions::default());
+	assert!(!built.content.contains("data-nml-at"));
+}

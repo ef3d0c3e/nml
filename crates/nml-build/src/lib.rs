@@ -839,6 +839,7 @@ impl Builder {
 				stylesheets,
 				icon: (self.config.html.icon.as_ref()).map(|url| site_url(&output, url)),
 				rendered,
+				source_offsets: false,
 			};
 			store_template(document, &nml_html::compile(document, &options))
 		});
