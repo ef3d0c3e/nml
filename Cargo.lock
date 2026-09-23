@@ -805,6 +805,7 @@ dependencies = [
  "nml-grammar",
  "nml-lang",
  "nml-lua",
+ "nml-preview",
  "nml-render",
  "nml-source",
  "nml-workspace",
@@ -834,6 +835,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "nml-preview"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "nml-build",
 ]
 
 [[package]]

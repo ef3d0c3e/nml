@@ -7,7 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 /// The crates whose changes do not change pages.
-const SKIPPED: [&str; 2] = ["nml-cli", "nml-lsp"];
+const SKIPPED: [&str; 3] = ["nml-cli", "nml-lsp", "nml-preview"];
 
 fn main() {
 	let version = std::env::var("CARGO_PKG_VERSION").unwrap();

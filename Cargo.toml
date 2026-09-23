@@ -13,6 +13,7 @@ members = [
 	"crates/nml-html",
 	"crates/nml-workspace",
 	"crates/nml-build",
+	"crates/nml-preview",
 	"crates/nml-lsp",
 	"crates/nml-cli",
 ]
@@ -58,6 +59,7 @@ nml-render = { path = "crates/nml-render" }
 nml-html = { path = "crates/nml-html" }
 nml-workspace = { path = "crates/nml-workspace" }
 nml-build = { path = "crates/nml-build" }
+nml-preview = { path = "crates/nml-preview" }
 nml-lsp = { path = "crates/nml-lsp" }
 
 [workspace.lints.rust]
