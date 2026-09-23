@@ -240,6 +240,8 @@ impl Index {
 		}
 		let connection = Connection::open(path)?;
 		connection.pragma_update(None, "journal_mode", "WAL")?;
+		// Another process or thread may be writing, such as a build beside a preview.
+		connection.busy_timeout(std::time::Duration::from_secs(10))?;
 		Self::init(connection)
 	}
 

@@ -1593,3 +1593,235 @@ fn another_nml_builds_everything_again() {
 	assert_ne!(config_hash(""), hex(&nml_workspace::hash(b"")));
 	assert!(env!("NML_BUILD_ID").starts_with(env!("CARGO_PKG_VERSION")));
 }
+
+/// The `<main>` of a page.
+fn main_of(page: &str) -> &str {
+	let start = page.find("<main class=\"nml-main\">\n").unwrap();
+	&page[start + "<main class=\"nml-main\">\n".len()..page.find("</main>").unwrap()]
+}
+
+#[test]
+fn preview_serves_the_workspace_from_memory() {
+	let workspace = Workspace::new(
+		"preview-lookup",
+		&[
+			("nml.toml", "[html]\nstatic = \"static\"\n"),
+			("index.nml", "# Home\n![](img/cat.png)\n"),
+			("docs/guide.nml", "# Guide\n"),
+			("img/cat.png", "cat"),
+			("static/robots.txt", "robots"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	// A build that writes, then nothing written by the preview.
+	fs::remove_dir_all(workspace.0.join("public")).unwrap();
+	let preview = Preview::open(&workspace.0).unwrap();
+
+	let page = |path: &str| Some(Served::Page(path.into()));
+	assert_eq!(preview.lookup("index.html").unwrap(), page("index.nml"));
+	assert_eq!(preview.lookup("/").unwrap(), page("index.nml"));
+	assert_eq!(preview.lookup("").unwrap(), page("index.nml"));
+	assert_eq!(
+		preview.lookup("/docs/guide.html").unwrap(),
+		page("docs/guide.nml")
+	);
+	let file = |content_type, body: &[u8]| {
+		Some(Served::File {
+			content_type,
+			body: body.to_vec(),
+		})
+	};
+	assert_eq!(
+		preview.lookup("nml.css").unwrap(),
+		file(
+			"text/css; charset=utf-8",
+			nml_html::DEFAULT_STYLE.as_bytes()
+		)
+	);
+	let Some(Served::File { body, .. }) = preview.lookup("nml-code.css").unwrap() else {
+		panic!("no code stylesheet");
+	};
+	assert!(String::from_utf8(body).unwrap().contains(".hl-"));
+	let asset = copy_of("img/cat.png", "cat");
+	assert_eq!(preview.lookup(&asset).unwrap(), file("image/png", b"cat"));
+	assert_eq!(
+		preview.lookup("robots.txt").unwrap(),
+		file("text/plain; charset=utf-8", b"robots")
+	);
+	// Nothing outside the output, and nothing else.
+	for url in [
+		"../nml.toml",
+		"static/../../nml.toml",
+		"/etc/passwd",
+		"img/cat.png",
+		"nope.html",
+	] {
+		assert_eq!(preview.lookup(url).unwrap(), None, "{url}");
+	}
+	assert!(!workspace.0.join("public").exists());
+
+	assert_eq!(
+		preview.output_of("docs/guide.nml").unwrap().as_deref(),
+		Some("docs/guide.html")
+	);
+	assert_eq!(preview.output_of("nope.nml").unwrap(), None);
+
+	// Without the default style.
+	workspace.write("nml.toml", "[html]\ndefault_style = false\n");
+	let preview = Preview::open(&workspace.0).unwrap();
+	assert_eq!(preview.lookup("nml.css").unwrap(), None);
+	workspace.write("nml.toml", "[html\n");
+	assert!(matches!(
+		Preview::open(&workspace.0),
+		Err(BuildError::InvalidConfig(_))
+	));
+}
+
+#[test]
+fn preview_pages_are_live() {
+	let workspace = Workspace::new(
+		"preview-page",
+		&[
+			("nml.toml", ""),
+			("a.nml", "# A\nSee [[b#]].\n"),
+			("b.nml", "# B\n"),
+			("c.nml", "x"),
+		],
+	);
+	workspace.build();
+	let mut preview = Preview::open(&workspace.0).unwrap();
+	let page = preview.page("a.nml").unwrap().unwrap();
+	assert!(page.pending.is_empty());
+	assert!(
+		page.html
+			.contains("<link rel=\"stylesheet\" href=\"nml.css\">")
+	);
+	assert_eq!(
+		main_of(&page.html),
+		"<h1 data-nml-at=\"0\" id=\"a\"><a class=\"heading-link\" href=\"#a\">🔗</a> \
+		<span class=\"heading-number\">1.</span> A</h1>\n\
+		<p data-nml-at=\"4\">See <a href=\"b.html\">B</a>.</p>\n"
+	);
+
+	// Unsaved: the page itself as it is in the editor, references into it included; other
+	// pages as they were last built.
+	preview.set_overlay(HashMap::from([
+		(
+			"a.nml".to_string(),
+			"# A\n:anchor new New\n\nSee [[b#]] and [[#new]].\n".to_string(),
+		),
+		("b.nml".to_string(), "# Renamed\n".to_string()),
+	]));
+	let page = preview.page("a.nml").unwrap().unwrap();
+	assert!(
+		main_of(&page.html).contains("See <a href=\"b.html\">B</a> and <a href=\"#new\">New</a>."),
+		"{}",
+		page.html
+	);
+	// Saved, then removed in the editor: gone.
+	workspace.write("a.nml", "# A\n:anchor new New\n\nSee [[b#]] and [[#new]].\n");
+	workspace.build();
+	preview.set_overlay(HashMap::from([(
+		"a.nml".to_string(),
+		"# A\n[[#new]]\n".to_string(),
+	)]));
+	let page = preview.page("a.nml").unwrap().unwrap();
+	assert!(main_of(&page.html).contains("nml-unresolved"), "{}", page.html);
+	preview.set_overlay(HashMap::new());
+	let page = preview.page("a.nml").unwrap().unwrap();
+	assert!(!main_of(&page.html).contains("nml-unresolved"), "{}", page.html);
+
+	// Saved and built, the other page shows.
+	workspace.write("b.nml", "# Renamed\n");
+	workspace.build();
+	let page = preview.page("a.nml").unwrap().unwrap();
+	assert!(main_of(&page.html).contains("<a href=\"b.html\">Renamed</a>"));
+
+	// A page with errors is shown as far as it parses.
+	preview.set_overlay(HashMap::from([(
+		"a.nml".to_string(),
+		"# A\n**unclosed\n".to_string(),
+	)]));
+	let page = preview.page("a.nml").unwrap().unwrap();
+	assert!(main_of(&page.html).contains("A</h1>"), "{}", page.html);
+
+	// Only pages the index knows.
+	assert!(preview.page("nope.nml").unwrap().is_none());
+	workspace.write("new.nml", "new");
+	assert!(preview.page("new.nml").unwrap().is_none());
+	// Nothing is written.
+	let written = fs::read_to_string(workspace.0.join("public/a.html")).unwrap();
+	assert!(!written.contains("data-nml-at"));
+}
+
+#[test]
+fn preview_shows_unsaved_assets() {
+	let workspace = Workspace::new(
+		"preview-assets",
+		&[("nml.toml", ""), ("a.nml", "a"), ("new.png", "new")],
+	);
+	workspace.build();
+	let mut preview = Preview::open(&workspace.0).unwrap();
+	let asset = copy_of("new.png", "new");
+	assert_eq!(preview.lookup(&asset).unwrap(), None);
+	preview.set_overlay(HashMap::from([(
+		"a.nml".to_string(),
+		"![](new.png)\n".to_string(),
+	)]));
+	let page = preview.page("a.nml").unwrap().unwrap();
+	assert!(page.html.contains(&asset), "{}", page.html);
+	assert!(matches!(
+		preview.lookup(&asset).unwrap(),
+		Some(Served::File { .. })
+	));
+}
+
+#[test]
+fn preview_renders_in_the_background() {
+	if std::process::Command::new("dot")
+		.arg("-V")
+		.output()
+		.is_err()
+	{
+		eprintln!("skipped: no `dot`");
+		return;
+	}
+	let workspace = Workspace::new("preview-render", &[("nml.toml", ""), ("a.nml", "a")]);
+	workspace.build();
+	let mut preview = Preview::open(&workspace.0).unwrap();
+	let graph = ":graph\n```\ndigraph { a -> b }\n```\n";
+	preview.set_overlay(HashMap::from([("a.nml".to_string(), graph.to_string())]));
+	let page = preview.page("a.nml").unwrap().unwrap();
+	// The source until it renders.
+	assert_eq!(page.pending.len(), 1);
+	assert!(
+		page.html.contains("<code>digraph { a -&gt; b }</code>"),
+		"{}",
+		page.html
+	);
+	preview.render(&page.pending[0]).unwrap().unwrap();
+	let page = preview.page("a.nml").unwrap().unwrap();
+	assert!(page.pending.is_empty());
+	assert!(
+		page.html.contains("<svg fill=\"currentColor\""),
+		"{}",
+		page.html
+	);
+
+	// One that fails says why.
+	preview.set_overlay(HashMap::from([(
+		"a.nml".to_string(),
+		":graph\n```\ndigraph { a -> }\n```\n".to_string(),
+	)]));
+	let page = preview.page("a.nml").unwrap().unwrap();
+	assert!(preview.render(&page.pending[0]).unwrap().is_err());
+}
+
+#[test]
+fn content_types() {
+	assert_eq!(content_type("a/b.HTML"), "text/html; charset=utf-8");
+	assert_eq!(content_type("x.svg"), "image/svg+xml");
+	assert_eq!(content_type("x.webm"), "video/webm");
+	assert_eq!(content_type("noextension"), "application/octet-stream");
+}

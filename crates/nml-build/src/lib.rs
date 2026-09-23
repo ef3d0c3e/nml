@@ -1,11 +1,17 @@
 //! The build pipeline shared by the CLI and the language server.
 
 mod link;
+mod preview;
 
 pub use link::LinkError;
 pub use link::Target;
 pub use link::label;
 pub use link::resolve;
+pub use preview::PendingRender;
+pub use preview::Preview;
+pub use preview::PreviewPage;
+pub use preview::Served;
+pub use preview::content_type;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -60,6 +66,7 @@ use nml_workspace::StoredSlot;
 use nml_workspace::StoredTemplate;
 use nml_workspace::StoredUnit;
 use nml_workspace::StoredUse;
+use nml_workspace::UnitRecord;
 use rayon::prelude::*;
 
 use crate::link::Linker;
@@ -96,6 +103,8 @@ fn has_errors(diagnostics: &[Diagnostic]) -> bool {
 #[derive(Debug)]
 pub enum BuildError {
 	NoConfig(PathBuf),
+	/// The configuration has errors; a build reports them.
+	InvalidConfig(PathBuf),
 	Io(PathBuf, io::Error),
 	Index(IndexError),
 }
@@ -105,6 +114,9 @@ impl std::fmt::Display for BuildError {
 		match self {
 			BuildError::NoConfig(root) => {
 				write!(f, "no {CONFIG_FILE} in {}", root.display())
+			}
+			BuildError::InvalidConfig(root) => {
+				write!(f, "{} has errors", root.join(CONFIG_FILE).display())
 			}
 			BuildError::Io(path, error) => write!(f, "{}: {error}", path.display()),
 			BuildError::Index(error) => error.fmt(f),
@@ -579,33 +591,13 @@ impl Builder {
 			else {
 				continue;
 			};
-			let job = match kind {
-				RenderKind::Math => Job::Math {
-					source: source.clone(),
-					display: *block,
-				},
-				RenderKind::Tex { environment } => Job::Tex {
-					source: source.clone(),
-					environment: environment.clone(),
-				},
-				RenderKind::Graph { layout, .. } => Job::Graph {
-					source: source.clone(),
-					layout: layout.clone(),
-				},
-				_ => Job::Typst {
-					source: source.clone(),
-				},
-			};
-			let environment = match renderers.environment_key(&job) {
-				Ok(environment) => environment,
+			let (job, key) = match render_job(renderers, kind, source, *block) {
+				Ok(job) => job,
 				Err(error) => {
 					diagnostics.push(render_error(&error, &element.token));
 					continue;
 				}
 			};
-			let key = hex(&nml_workspace::hash(
-				format!("{}\0{environment}\0{source}", kind.name()).as_bytes(),
-			));
 			keys.push(key.clone());
 			match self.index.render(&key)? {
 				Some(svg) => {
@@ -614,10 +606,10 @@ impl Builder {
 				None => missing.push((id, key, job, element.token.clone())),
 			}
 		}
+		let index = &self.index;
 		let results: Vec<_> = missing
 			.into_par_iter()
 			.map(|(id, key, job, token)| {
-				// Ids in an SVG are scoped by its key, so that several can share a page.
 				let svg = renderers.render(&job).map(|svg| scope_ids(&svg, &key[..8]));
 				(id, key, svg, token)
 			})
@@ -626,7 +618,7 @@ impl Builder {
 			match svg {
 				Ok(svg) => {
 					// The cache keeps the program's output: how it is shown may change.
-					self.index.store_render(&key, &svg)?;
+					index.store_render(&key, &svg)?;
 					rendered.insert(id, recolor(&svg));
 				}
 				Err(error) => diagnostics.push(render_error(&error, &token)),
@@ -807,40 +799,7 @@ impl Builder {
 		let name = unit.reference_key.as_deref().unwrap_or(basename);
 		let title = title(document).unwrap_or_else(|| basename.to_string());
 		let template = (file.role == Role::Page).then(|| {
-			// The default style first: the workspace's own override it.
-			let mut stylesheets = Vec::new();
-			if self.config.html.default_style {
-				stylesheets.push(nml_lang::relative_output_url(
-					&output,
-					nml_html::DEFAULT_STYLESHEET,
-				));
-			}
-			stylesheets
-				.extend((self.config.html.stylesheets.iter()).map(|url| site_url(&output, url)));
-			let has_code = document.descendants(document.root()).any(|(_, element)| {
-				matches!(
-					element.kind,
-					ElementKind::CodeBlock { .. }
-						| ElementKind::Code {
-							language: Some(_),
-							..
-						}
-				)
-			});
-			if has_code {
-				stylesheets.push(nml_lang::relative_output_url(
-					&output,
-					nml_html::CODE_STYLESHEET,
-				));
-			}
-			let options = PageOptions {
-				language: self.config.html.language.clone(),
-				title: title.clone(),
-				stylesheets,
-				icon: (self.config.html.icon.as_ref()).map(|url| site_url(&output, url)),
-				rendered,
-				source_offsets: false,
-			};
+			let options = page_options(&self.config, &output, document, &title, rendered);
 			store_template(document, &nml_html::compile(document, &options))
 		});
 		let uses: Vec<_> = unit.uses.iter().map(store_use).collect();
@@ -935,30 +894,70 @@ impl Builder {
 		} else {
 			Box::new(io::sink())
 		};
-
 		let pages = match &self.pages {
 			Some(pages) => pages.clone(),
-			None => {
-				let mut pages = Vec::new();
-				for unit in self.index.units()? {
-					if unit.role == Role::Page {
-						let variables = variables(&self.index.exports(unit.id)?);
-						pages.push(PageInfo {
-							path: unit.path,
-							name: unit.name,
-							title: unit.title,
-							output: unit.output,
-							variables,
-						});
-					}
-				}
-				self.pages.insert(Arc::new(pages)).clone()
-			}
+			None => self.pages.insert(Arc::new(pages(&self.index)?)).clone(),
 		};
+		let page = PageLink {
+			index: &self.index,
+			resolver: &self.resolver,
+			pages: &pages,
+			unit: &unit,
+			live: None,
+		};
+		let reported = page.fill(&source, &template, &mut file, &target)?;
+		self.index.set_link_errors(path, has_errors(&reported))?;
+		self.index.set_written(path, self.write)?;
+		self.report.diagnostics.extend(reported);
+		self.report.written.push(path.to_string());
+		Ok(())
+	}
+}
+
+/// The pages of the workspace, for deferred functions.
+fn pages(index: &Index) -> Result<Vec<PageInfo>, BuildError> {
+	let mut pages = Vec::new();
+	for unit in index.units()? {
+		if unit.role == Role::Page {
+			let variables = variables(&index.exports(unit.id)?);
+			pages.push(PageInfo {
+				path: unit.path,
+				name: unit.name,
+				title: unit.title,
+				output: unit.output,
+				variables,
+			});
+		}
+	}
+	Ok(pages)
+}
+
+/// What filling the slots of a page's template needs.
+struct PageLink<'a> {
+	index: &'a Index,
+	resolver: &'a Arc<dyn Resolver>,
+	pages: &'a Arc<Vec<PageInfo>>,
+	unit: &'a UnitRecord,
+	/// The unit's exports as they are now, if they are not those of the index.
+	live: Option<&'a [Export]>,
+}
+
+impl PageLink<'_> {
+	/// Writes the page of `template` to `out` (the file at `target`), filling its slots.
+	/// Returns the diagnostics of the slots that could not be filled.
+	fn fill(
+		&self,
+		source: &Arc<Source>,
+		template: &StoredTemplate,
+		out: &mut impl io::Write,
+		target: &Path,
+	) -> Result<Vec<Diagnostic>, BuildError> {
+		let path = &self.unit.path;
 		let mut deferred = None;
 		let linker = Linker {
-			index: &self.index,
-			unit: &unit,
+			index: self.index,
+			unit: self.unit,
+			live: self.live,
 		};
 		let positions: Vec<_> = template
 			.slots
@@ -977,7 +976,7 @@ impl Builder {
 						let runtime = deferred.get_or_insert_with(|| {
 							DeferredRuntime::new(
 								self.resolver.clone(),
-								pages.clone(),
+								self.pages.clone(),
 								path.to_string(),
 							)
 						});
@@ -1004,9 +1003,9 @@ impl Builder {
 				let token = Token::new(source.clone(), stored.range.clone());
 				Resolved::Missing(Diagnostic::new(kind, DiagnosticMessage::new(token)))
 			},
-			&mut file,
+			out,
 		)
-		.map_err(io_error)?;
+		.map_err(|e| BuildError::Io(target.into(), e))?;
 		if let Some(error) = index_error {
 			return Err(error.into());
 		}
@@ -1024,11 +1023,7 @@ impl Builder {
 				reported.push(diagnostic);
 			}
 		}
-		self.index.set_link_errors(path, has_errors(&reported))?;
-		self.index.set_written(path, self.write)?;
-		self.report.diagnostics.extend(reported);
-		self.report.written.push(path.to_string());
-		Ok(())
+		Ok(reported)
 	}
 }
 
@@ -1158,6 +1153,99 @@ impl Resolver for WorkspaceResolver {
 }
 
 /// The diagnostic of a renderer that failed on the element at `token`.
+/// The page around a document written at `output`.
+fn page_options(
+	config: &Config,
+	output: &str,
+	document: &Document,
+	title: &str,
+	rendered: HashMap<ElementId, String>,
+) -> PageOptions {
+	// The default style first: the workspace's own override it.
+	let mut stylesheets = Vec::new();
+	if config.html.default_style {
+		stylesheets.push(nml_lang::relative_output_url(
+			output,
+			nml_html::DEFAULT_STYLESHEET,
+		));
+	}
+	stylesheets.extend((config.html.stylesheets.iter()).map(|url| site_url(output, url)));
+	let has_code = document.descendants(document.root()).any(|(_, element)| {
+		matches!(
+			element.kind,
+			ElementKind::CodeBlock { .. }
+				| ElementKind::Code {
+					language: Some(_),
+					..
+				}
+		)
+	});
+	if has_code {
+		stylesheets.push(nml_lang::relative_output_url(
+			output,
+			nml_html::CODE_STYLESHEET,
+		));
+	}
+	PageOptions {
+		language: config.html.language.clone(),
+		title: title.to_string(),
+		stylesheets,
+		icon: (config.html.icon.as_ref()).map(|url| site_url(output, url)),
+		rendered,
+		source_offsets: false,
+	}
+}
+
+/// What renders an element (math, a graph, …), and the key of its output in the cache.
+fn render_job(
+	renderers: &nml_render::Renderers,
+	kind: &RenderKind,
+	source: &str,
+	block: bool,
+) -> Result<(Job, String), RenderError> {
+	let job = match kind {
+		RenderKind::Math => Job::Math {
+			source: source.to_string(),
+			display: block,
+		},
+		RenderKind::Tex { environment } => Job::Tex {
+			source: source.to_string(),
+			environment: environment.clone(),
+		},
+		RenderKind::Graph { layout, .. } => Job::Graph {
+			source: source.to_string(),
+			layout: layout.clone(),
+		},
+		_ => Job::Typst {
+			source: source.to_string(),
+		},
+	};
+	let environment = renderers.environment_key(&job)?;
+	let key = hex(&nml_workspace::hash(
+		format!("{}\0{environment}\0{source}", kind.name()).as_bytes(),
+	));
+	Ok((job, key))
+}
+
+/// Renders a job into the cache. Ids in an SVG are scoped by its key, so that several can
+/// share a page. Returns the SVG as pages show it.
+fn render_into_cache(
+	index: &Index,
+	renderers: &nml_render::Renderers,
+	key: &str,
+	job: &Job,
+) -> Result<Result<String, RenderError>, BuildError> {
+	match renderers.render(job) {
+		Ok(svg) => {
+			let svg = scope_ids(&svg, &key[..8]);
+			// The cache keeps the program's output: how it is shown may change.
+			index.store_render(key, &svg)?;
+			Ok(Ok(recolor(&svg)))
+		}
+		Err(error) => Ok(Err(error)),
+	}
+}
+
 fn render_error(error: &RenderError, token: &Token) -> Diagnostic {
 	let kind = DiagnosticKind::RenderError {
 		message: error.to_string(),

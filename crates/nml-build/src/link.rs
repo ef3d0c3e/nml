@@ -35,7 +35,12 @@ pub struct Target {
 /// Resolves a reference written in the unit `unit` against the index, as the link stage
 /// does.
 pub fn resolve(index: &Index, unit: &UnitRecord, target: &SymbolRef) -> Result<Target, LinkError> {
-	Linker { index, unit }.resolve(target)
+	Linker {
+		index,
+		unit,
+		live: None,
+	}
+	.resolve(target)
 }
 
 /// What a reference to `target` without a caption shows: a figure or a table by its number,
@@ -62,6 +67,8 @@ pub fn label(target: &Target) -> String {
 pub(crate) struct Linker<'a> {
 	pub index: &'a Index,
 	pub unit: &'a UnitRecord,
+	/// The exports of `unit` as it is now, instead of those of the index: an unsaved page's.
+	pub live: Option<&'a [Export]>,
 }
 
 impl Linker<'_> {
@@ -70,7 +77,11 @@ impl Linker<'_> {
 			if target.is_page() {
 				return Ok(Target { unit, export: None });
 			}
-			match self.index.export(unit.id, &target.name)? {
+			let found = match self.live.filter(|_| unit.id == self.unit.id) {
+				Some(live) => live.iter().find(|e| e.name == target.name).cloned(),
+				None => self.index.export(unit.id, &target.name)?,
+			};
+			match found {
 				Some(export) => Ok(Target {
 					unit,
 					export: Some(export),
@@ -89,7 +100,14 @@ impl Linker<'_> {
 				}
 			}
 			Scope::Any => {
-				let exporters = self.index.exporters(&target.name)?;
+				let mut exporters = self.index.exporters(&target.name)?;
+				// The unit exports what it exports now.
+				if let Some(live) = self.live {
+					exporters.retain(|&id| id != self.unit.id);
+					if live.iter().any(|export| export.name == target.name) {
+						exporters.push(self.unit.id);
+					}
+				}
 				match exporters.as_slice() {
 					[] => Err(LinkError::Unresolved),
 					[unit] => {
