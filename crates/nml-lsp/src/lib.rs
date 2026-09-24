@@ -47,6 +47,7 @@ use lsp_types::SemanticTokensParams;
 use lsp_types::SemanticTokensServerCapabilities;
 use lsp_types::ServerCapabilities;
 use lsp_types::SignatureHelpOptions;
+use lsp_types::TextDocumentPositionParams;
 use lsp_types::TextDocumentSyncCapability;
 use lsp_types::TextDocumentSyncKind;
 use lsp_types::TextDocumentSyncOptions;
@@ -77,6 +78,7 @@ use nml_diagnostics::Diagnostic;
 use nml_diagnostics::Localizer;
 use nml_document::Dependency;
 use nml_lang::Language;
+use nml_source::Encoding;
 use nml_source::Source;
 use nml_source::Url;
 use nml_workspace::CONFIG_FILE;
@@ -89,6 +91,9 @@ const INCLUDE_CONTEXT_COMMAND: &str = "nml.includeContext";
 /// Starts the live preview, if it is not running, and answers the URL of a page: argument
 /// is the page's URI, or none for the workspace's index.
 const PREVIEW_COMMAND: &str = "nml.preview";
+
+/// Where the editor's cursor is, `TextDocumentPositionParams`: the preview follows it.
+const CURSOR: &str = "nml/cursor";
 
 /// The includers of a file: `{ current, candidates }`.
 const INCLUDE_CONTEXTS: &str = "nml/includeContexts";
@@ -509,6 +514,11 @@ impl Server {
 				}
 				self.preview_edited();
 			}
+			CURSOR => {
+				let params: TextDocumentPositionParams =
+					serde_json::from_value(notification.params)?;
+				self.cursor(&params);
+			}
 			DidSaveTextDocument::METHOD => {
 				self.build()?;
 				if let Some(preview) = &self.preview {
@@ -567,6 +577,26 @@ impl Server {
 		preview.page_url(&path).ok_or_else(|| {
 			format!("`{path}` is not a page of the workspace, or it does not build yet").into()
 		})
+	}
+
+	/// Tells the preview where the cursor is, in an open document.
+	fn cursor(&self, params: &TextDocumentPositionParams) {
+		let Some(preview) = &self.preview else {
+			return;
+		};
+		let Ok(url) = Url::parse(params.text_document.uri.as_str()) else {
+			return;
+		};
+		let Some(analysis) = self.analyses.get(&url) else {
+			return;
+		};
+		let position = nml_source::Position::new(
+			params.position.line as usize,
+			params.position.character as usize,
+		);
+		if let Some(offset) = analysis.source.offset(position, Encoding::Utf16) {
+			preview.cursor(&analysis.path, offset);
+		}
 	}
 
 	/// Tells the preview the open documents changed.

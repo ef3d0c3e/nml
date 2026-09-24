@@ -85,7 +85,10 @@ impl Client {
 		loop {
 			match self.receive() {
 				Message::Response(response) if response.id == id => {
-					return response.response_result.expect_err("the request fails").message;
+					return response
+						.response_result
+						.expect_err("the request fails")
+						.message;
 				}
 				Message::Notification(notification) => {
 					self.pending.borrow_mut().push_back(notification.into());
@@ -1873,4 +1876,101 @@ fn preview_needs_a_workspace() {
 	.unwrap();
 	let message = client.request_error(ExecuteCommand::METHOD, params);
 	assert!(message.contains("needs a workspace"), "{message}");
+}
+
+/// The events a browser receives from the preview, by name and data.
+struct Events(std::io::BufReader<std::net::TcpStream>);
+
+impl Events {
+	fn open(page_url: &str, page: &str) -> Self {
+		use std::io::BufRead;
+		use std::io::Write;
+		let host = page_url
+			.strip_prefix("http://")
+			.unwrap()
+			.split('/')
+			.next()
+			.unwrap();
+		let mut stream = std::net::TcpStream::connect(host).unwrap();
+		stream
+			.set_read_timeout(Some(Duration::from_secs(10)))
+			.unwrap();
+		write!(
+			stream,
+			"GET /__nml/events?page={page} HTTP/1.1\r\nHost: {host}\r\n\r\n"
+		)
+		.unwrap();
+		let mut reader = std::io::BufReader::new(stream);
+		let mut line = String::new();
+		while line != "\r\n" {
+			line.clear();
+			reader.read_line(&mut line).unwrap();
+		}
+		Self(reader)
+	}
+
+	/// The data of the next event named `name`.
+	fn next_named(&mut self, name: &str) -> String {
+		use std::io::BufRead;
+		let mut event = String::new();
+		let mut data = Vec::new();
+		loop {
+			let mut line = String::new();
+			assert!(self.0.read_line(&mut line).expect("an event in time") > 0);
+			let line = line.trim_end_matches('\n');
+			if let Some(value) = line.strip_prefix("event: ") {
+				event = value.to_string();
+			} else if let Some(value) = line.strip_prefix("data: ") {
+				data.push(value.to_string());
+			} else if line.is_empty() {
+				if event == name {
+					return data.join("\n");
+				}
+				event.clear();
+				data.clear();
+			}
+		}
+	}
+}
+
+#[test]
+fn preview_follows_the_cursor() {
+	let workspace = Workspace::new(
+		"preview-cursor",
+		&[("nml.toml", ""), ("a.nml", "# A\n"), ("b.nml", "# B\n")],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let a = workspace.url("a.nml");
+	let params = serde_json::to_value(lsp_types::ExecuteCommandParams {
+		command: PREVIEW_COMMAND.into(),
+		arguments: vec![a.as_str().into()],
+		work_done_progress_params: Default::default(),
+	})
+	.unwrap();
+	let url = client.request(ExecuteCommand::METHOD, params);
+	let url = url.as_str().unwrap();
+	fetch(url);
+	let mut events = Events::open(url, "a.nml");
+	// Listening once an edit arrives.
+	client.open(&a, "# A\nLine é x.\n");
+	client.diagnostics();
+	assert!(events.next_named("main").contains("Line é x."));
+
+	let cursor = |url: &Url, line, character| {
+		let params = TextDocumentPositionParams {
+			text_document: TextDocumentIdentifier::new(uri(url)),
+			position: position(line, character),
+		};
+		let notification = Notification::new(CURSOR.into(), params);
+		client.connection.sender.send(notification.into()).unwrap();
+	};
+	// Positions count UTF-16 units, offsets bytes: `é` is one unit and two bytes.
+	cursor(&a, 1, 7);
+	assert_eq!(events.next_named("scroll"), "12");
+	cursor(&a, 1, 0);
+	assert_eq!(events.next_named("scroll"), "4");
+	// Documents that are not open, or not shown, send nothing; the next one arrives.
+	cursor(&workspace.url("b.nml"), 0, 0);
+	cursor(&a, 1, 2);
+	assert_eq!(events.next_named("scroll"), "6");
 }
