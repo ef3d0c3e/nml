@@ -77,6 +77,24 @@ impl Client {
 		}
 	}
 
+	/// A request that fails: its error message.
+	fn request_error(&self, method: &str, params: serde_json::Value) -> String {
+		let id = RequestId::from(2);
+		let request = Request::new(id.clone(), method.into(), params);
+		self.connection.sender.send(request.into()).unwrap();
+		loop {
+			match self.receive() {
+				Message::Response(response) if response.id == id => {
+					return response.response_result.expect_err("the request fails").message;
+				}
+				Message::Notification(notification) => {
+					self.pending.borrow_mut().push_back(notification.into());
+				}
+				_ => {}
+			}
+		}
+	}
+
 	fn notify<N: lsp_types::notification::Notification>(&self, params: impl serde::Serialize) {
 		let notification = Notification::new(N::METHOD.into(), params);
 		self.connection.sender.send(notification.into()).unwrap();
@@ -1773,4 +1791,86 @@ fn luals_references_renames_and_symbols() {
 		.map(|symbol| symbol["name"].as_str().unwrap())
 		.collect();
 	assert_eq!(names, ["count", "bump"], "{result}");
+}
+
+/// A page from the preview server.
+fn fetch(url: &str) -> String {
+	use std::io::Read;
+	use std::io::Write;
+	let rest = url.strip_prefix("http://").unwrap();
+	let (host, path) = rest.split_once('/').unwrap();
+	let mut stream = std::net::TcpStream::connect(host).unwrap();
+	write!(stream, "GET /{path} HTTP/1.1\r\nHost: {host}\r\n\r\n").unwrap();
+	let mut response = String::new();
+	stream.read_to_string(&mut response).unwrap();
+	assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+	response.split_once("\r\n\r\n").unwrap().1.to_string()
+}
+
+#[test]
+fn preview() {
+	let workspace = Workspace::new(
+		"preview",
+		&[
+			("nml.toml", ""),
+			("index.nml", "# Home\n"),
+			("docs/a.nml", "# A\nSaved.\n"),
+			("lib/part.nml", "x"),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let command = |arguments: Vec<serde_json::Value>| {
+		serde_json::to_value(lsp_types::ExecuteCommandParams {
+			command: PREVIEW_COMMAND.into(),
+			arguments,
+			work_done_progress_params: Default::default(),
+		})
+		.unwrap()
+	};
+	let a = workspace.url("docs/a.nml");
+	let url = client.request(ExecuteCommand::METHOD, command(vec![a.as_str().into()]));
+	let url = url.as_str().unwrap().to_string();
+	assert!(url.starts_with("http://127.0.0.1:"), "{url}");
+	assert!(url.ends_with("/docs/a.html"), "{url}");
+	assert!(fetch(&url).contains("Saved."));
+
+	// Unsaved edits show.
+	client.open(&a, "# A\nUnsaved.\n");
+	client.diagnostics();
+	client.change(&a, "# A\nEdited.\n");
+	// Published once the preview has the edit.
+	client.diagnostics();
+	let page = fetch(&url);
+	assert!(page.contains("Edited."), "{page}");
+	assert!(page.contains("/__nml/preview.js"), "{page}");
+
+	// The same server; the index without a page.
+	let again = client.request(ExecuteCommand::METHOD, command(vec![a.as_str().into()]));
+	assert_eq!(again.as_str(), Some(url.as_str()));
+	let root = client.request(ExecuteCommand::METHOD, command(vec![]));
+	let root = root.as_str().unwrap();
+	assert!(url.starts_with(root), "{root}");
+	assert!(fetch(root).contains("Home"));
+
+	// A page the workspace does not have.
+	let message = client.request_error(
+		ExecuteCommand::METHOD,
+		command(vec![workspace.url("nope.nml").as_str().into()]),
+	);
+	assert!(message.contains("not a page"), "{message}");
+	let message = client.request_error(ExecuteCommand::METHOD, command(vec![1.into()]));
+	assert!(message.contains("takes the URI"), "{message}");
+}
+
+#[test]
+fn preview_needs_a_workspace() {
+	let client = Client::start(None);
+	let params = serde_json::to_value(lsp_types::ExecuteCommandParams {
+		command: PREVIEW_COMMAND.into(),
+		arguments: vec![],
+		work_done_progress_params: Default::default(),
+	})
+	.unwrap();
+	let message = client.request_error(ExecuteCommand::METHOD, params);
+	assert!(message.contains("needs a workspace"), "{message}");
 }

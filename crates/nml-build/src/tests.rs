@@ -1720,17 +1720,28 @@ fn preview_pages_are_live() {
 		page.html
 	);
 	// Saved, then removed in the editor: gone.
-	workspace.write("a.nml", "# A\n:anchor new New\n\nSee [[b#]] and [[#new]].\n");
+	workspace.write(
+		"a.nml",
+		"# A\n:anchor new New\n\nSee [[b#]] and [[#new]].\n",
+	);
 	workspace.build();
 	preview.set_overlay(HashMap::from([(
 		"a.nml".to_string(),
 		"# A\n[[#new]]\n".to_string(),
 	)]));
 	let page = preview.page("a.nml").unwrap().unwrap();
-	assert!(main_of(&page.html).contains("nml-unresolved"), "{}", page.html);
+	assert!(
+		main_of(&page.html).contains("nml-unresolved"),
+		"{}",
+		page.html
+	);
 	preview.set_overlay(HashMap::new());
 	let page = preview.page("a.nml").unwrap().unwrap();
-	assert!(!main_of(&page.html).contains("nml-unresolved"), "{}", page.html);
+	assert!(
+		!main_of(&page.html).contains("nml-unresolved"),
+		"{}",
+		page.html
+	);
 
 	// Saved and built, the other page shows.
 	workspace.write("b.nml", "# Renamed\n");

@@ -86,6 +86,10 @@ use nml_workspace::Config;
 /// includer's workspace path.
 const INCLUDE_CONTEXT_COMMAND: &str = "nml.includeContext";
 
+/// Starts the live preview, if it is not running, and answers the URL of a page: argument
+/// is the page's URI, or none for the workspace's index.
+const PREVIEW_COMMAND: &str = "nml.preview";
+
 /// The includers of a file: `{ current, candidates }`.
 const INCLUDE_CONTEXTS: &str = "nml/includeContexts";
 
@@ -126,7 +130,7 @@ pub fn run(connection: Connection) -> Result<()> {
 		}),
 		inlay_hint_provider: Some(OneOf::Left(true)),
 		execute_command_provider: Some(ExecuteCommandOptions {
-			commands: vec![INCLUDE_CONTEXT_COMMAND.into()],
+			commands: vec![INCLUDE_CONTEXT_COMMAND.into(), PREVIEW_COMMAND.into()],
 			..ExecuteCommandOptions::default()
 		}),
 		signature_help_provider: Some(SignatureHelpOptions {
@@ -211,6 +215,8 @@ struct Server {
 	lua_diagnostics: HashMap<Url, Vec<lsp_types::Diagnostic>>,
 	/// Whether the client takes snippets in completions.
 	snippets: bool,
+	/// The live preview, once a client asks for it.
+	preview: Option<nml_preview::PreviewServer>,
 }
 
 /// What the server knows of an open document, from its last compilation.
@@ -271,6 +277,7 @@ impl Server {
 			nml_diagnostics: HashMap::new(),
 			lua_diagnostics: HashMap::new(),
 			snippets: false,
+			preview: None,
 		};
 		server.start_luals();
 		server
@@ -439,6 +446,9 @@ impl Server {
 			}
 			ExecuteCommand::METHOD => {
 				let params: ExecuteCommandParams = serde_json::from_value(request.params)?;
+				if params.command == PREVIEW_COMMAND {
+					return Ok(serde_json::Value::String(self.preview(&params.arguments)?));
+				}
 				if params.command != INCLUDE_CONTEXT_COMMAND {
 					return Err(format!("unknown command `{}`", params.command).into());
 				}
@@ -471,6 +481,7 @@ impl Server {
 					serde_json::from_value(notification.params)?;
 				let url = Url::parse(params.text_document.uri.as_str())?;
 				self.buffers.insert(url.clone(), params.text_document.text);
+				self.preview_edited();
 				self.diagnose(&url)?;
 			}
 			DidChangeTextDocument::METHOD => {
@@ -481,6 +492,7 @@ impl Server {
 				if let Some(change) = params.content_changes.into_iter().last() {
 					self.buffers.insert(url.clone(), change.text);
 				}
+				self.preview_edited();
 				self.diagnose(&url)?;
 			}
 			DidCloseTextDocument::METHOD => {
@@ -495,8 +507,14 @@ impl Server {
 				if let Some(luals) = &mut self.luals {
 					let _ = luals.close(&url);
 				}
+				self.preview_edited();
 			}
-			DidSaveTextDocument::METHOD => self.build()?,
+			DidSaveTextDocument::METHOD => {
+				self.build()?;
+				if let Some(preview) = &self.preview {
+					preview.saved();
+				}
+			}
 			_ => {}
 		}
 		Ok(())
@@ -513,13 +531,54 @@ impl Server {
 		Some(parts.join("/"))
 	}
 
-	/// Finds the workspace's files and modules, with the open documents' content.
-	fn resolver(&self) -> WorkspaceResolver {
-		let overlay = self
-			.buffers
+	/// The open documents' content, by workspace path.
+	fn overlay(&self) -> HashMap<String, String> {
+		self.buffers
 			.iter()
 			.filter_map(|(url, text)| Some((self.workspace_path(url)?, text.clone())))
-			.collect();
+			.collect()
+	}
+
+	/// Starts the live preview if it is not running, and returns the URL of the page at
+	/// `arguments[0]` (a URI), or of the workspace's index without one.
+	fn preview(&mut self, arguments: &[serde_json::Value]) -> Result<String> {
+		let Some(root) = self.root.clone() else {
+			return Err("the preview needs a workspace with an `nml.toml`".into());
+		};
+		if self.preview.is_none() {
+			// The index has every page.
+			self.build()?;
+			let preview = nml_preview::PreviewServer::start(&root)
+				.map_err(|error| format!("the preview did not start: {error}"))?;
+			preview.edited(self.overlay());
+			self.preview = Some(preview);
+		}
+		let preview = self.preview.as_ref().unwrap();
+		let Some(argument) = arguments.first() else {
+			return Ok(format!("http://{}/", preview.address()));
+		};
+		let uri = argument
+			.as_str()
+			.ok_or("`nml.preview` takes the URI of a page")?;
+		let url = Url::parse(uri)?;
+		let path = self
+			.workspace_path(&url)
+			.ok_or_else(|| format!("`{uri}` is not in the workspace"))?;
+		preview.page_url(&path).ok_or_else(|| {
+			format!("`{path}` is not a page of the workspace, or it does not build yet").into()
+		})
+	}
+
+	/// Tells the preview the open documents changed.
+	fn preview_edited(&self) {
+		if let Some(preview) = &self.preview {
+			preview.edited(self.overlay());
+		}
+	}
+
+	/// Finds the workspace's files and modules, with the open documents' content.
+	fn resolver(&self) -> WorkspaceResolver {
+		let overlay = self.overlay();
 		let root = self.root.clone().unwrap_or_else(|| PathBuf::from("/"));
 		let modules = self
 			.config
