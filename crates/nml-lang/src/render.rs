@@ -3,6 +3,7 @@ use std::sync::Arc;
 use nml_diagnostics::Diagnostic;
 use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
+use nml_document::Attributes;
 use nml_document::ElementKind;
 use nml_document::RenderKind;
 use nml_grammar::Atom;
@@ -94,7 +95,8 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			&["tex", "latex"][..],
 			"**LaTeX**, rendered to an image when the page is built.\n\n\
 			````nml\n:tex[env=main]\n```\n\\begin{tikzpicture} … \\end{tikzpicture}\n```\n````\n\n\
-			`env` picks the environment of `[render.tex.<name>]` in `nml.toml`.",
+			`env` picks the environment of `[render.tex.<name>]` in `nml.toml`. \
+			`:tex #name Caption` makes it a numbered figure.",
 		),
 		(
 			"graph",
@@ -102,14 +104,17 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			&["dot"][..],
 			"**Graph**, in Graphviz's DOT, rendered when the page is built.\n\n\
 			````nml\n:graph[layout=dot]\n```\ndigraph { a -> b }\n```\n````\n\n\
-			`layout` is the Graphviz engine, `width` a CSS width.",
+			`layout` is the Graphviz engine, `width` a CSS width. \
+			`:graph[layout=dot] #name Caption` makes it a numbered figure: `[[name]]` shows \
+			*Figure 1*.",
 		),
 		(
 			"typst",
 			None,
 			&["typst"][..],
 			"**Typst**, rendered when the page is built.\n\n\
-			````nml\n:typst\n```\n#rect[Hello]\n```\n````",
+			````nml\n:typst\n```\n#rect[Hello]\n```\n````\n\n\
+			`:typst #name Caption` makes it a numbered figure.",
 		),
 	] {
 		let snippet = format!(":{command}\n```\n${{0}}\n```");
@@ -153,7 +158,16 @@ fn fenced(command: &str, schema: Option<OptionSchema>) -> Rule {
 			Atom::Options(Arc::new(schema)),
 		)]));
 	}
+	// A name or a caption makes it a figure.
 	atoms.extend([
+		Atom::optional(vec![
+			Atom::literal(" #"),
+			Atom::capture("ref", Atom::Word).with_class("variable"),
+		]),
+		Atom::optional(vec![
+			Atom::literal(" "),
+			Atom::capture("caption", Atom::InlineContent),
+		]),
 		Atom::LineEnd,
 		Atom::LineStart,
 		Atom::capture("fence", Atom::run('`', 3)).with_class("operator"),
@@ -203,7 +217,38 @@ fn lower_fenced(lower: &mut Lower<'_, '_>, m: &RuleMatch, command: &str, languag
 		source: source.to_string(),
 		block: true,
 	};
+	let reference = m.capture("ref").map(|capture| capture.token.clone());
+	let caption = m.capture("caption");
+	if reference.is_none() && caption.is_none() {
+		lower.builder.leaf(element, m.token.clone());
+		return;
+	}
+	// A figure of its own, as `:figure #name Caption` around it.
+	let number = crate::media::next_figure(lower);
+	let attributes = Attributes {
+		id: reference.as_ref().map(|r| r.content().to_string()),
+		classes: Vec::new(),
+	};
+	lower
+		.builder
+		.open_with(ElementKind::Figure { number }, m.token.clone(), attributes);
 	lower.builder.leaf(element, m.token.clone());
+	if let Some(caption) = caption {
+		lower
+			.builder
+			.open(ElementKind::Caption, caption.token.clone());
+		lower.capture(m, "caption");
+		lower.builder.close();
+	}
+	let figure = lower.builder.close();
+	if let Some(reference) = reference {
+		let title = match caption.map(|capture| &capture.value) {
+			Some(Value::Nodes(nodes)) => crate::language::plain_text(nodes),
+			_ => String::new(),
+		};
+		let export = crate::figure_export(reference.content(), figure, number, title, None);
+		lower.export(export, reference);
+	}
 }
 
 #[cfg(test)]
@@ -306,5 +351,61 @@ mod tests {
 		assert_diagnostics!(compiled.diagnostics, [2020 @ 10..17]);
 		let compiled = compile_text(":graph[layout=grid]\n```\nx\n```");
 		assert_diagnostics!(compiled.diagnostics, [1007]);
+	}
+
+	#[test]
+	fn named_blocks_are_figures() {
+		let compiled = compile_text(
+			":figure #first First\nText.\n\n\
+			:graph[layout=neato] #pipeline The *build* pipeline\n```\ndigraph { a -> b }\n```\n\
+			:tex #pic\n```\nx\n```\n\
+			:typst Only a caption\n```\ny\n```\n\
+			:graph\n```\nplain\n```\n",
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let document = &compiled.unit.document;
+		assert_eq!(
+			crate::tests::show(document, document.root()),
+			r#"document[figure#first[paragraph["Text."] caption["First"]] figure#pipeline[rendered[] caption["The " Italic["build"] " pipeline"]] figure#pic[rendered[]] figure[rendered[] caption["Only a caption"]] rendered[]]"#
+		);
+		// Numbered with the other figures.
+		let exports = &compiled.unit.exports;
+		let numbers: Vec<_> = exports
+			.iter()
+			.map(|e| {
+				(
+					e.name.as_str(),
+					e.property("number").unwrap(),
+					e.property("title").unwrap(),
+				)
+			})
+			.collect();
+		assert_eq!(
+			numbers,
+			[
+				("first", "1", "First"),
+				("pipeline", "2", "The build pipeline"),
+				("pic", "3", ""),
+			]
+		);
+		assert!(
+			exports
+				.iter()
+				.all(|e| e.kind == nml_document::SymbolKind::Figure)
+		);
+		// The options still apply.
+		let kinds: Vec<_> =
+			rendered(":graph[layout=neato, width=50%] #g G\n```\ndigraph {}\n```\n");
+		assert_eq!(
+			kinds,
+			[element(
+				RenderKind::Graph {
+					layout: "neato".into(),
+					width: Some("50%".into()),
+				},
+				"digraph {}",
+				true
+			)]
+		);
 	}
 }
