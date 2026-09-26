@@ -274,6 +274,7 @@ impl Markers<'_> {
 		};
 		let end = (m
 			.capture("title")
+			.or(m.capture("ref"))
 			.or(m.capture("options"))
 			.or(m.capture("language")))
 		.map_or(fence.token.end(), |capture| capture.token.end());

@@ -55,6 +55,7 @@ pub fn label(target: &Target) -> String {
 	let word = match export.kind {
 		SymbolKind::Figure => "Figure",
 		SymbolKind::Table => "Table",
+		SymbolKind::Listing => "Listing",
 		_ => "",
 	};
 	match export.property("number") {

@@ -1836,3 +1836,54 @@ fn content_types() {
 	assert_eq!(content_type("x.webm"), "video/webm");
 	assert_eq!(content_type("noextension"), "application/octet-stream");
 }
+
+#[test]
+fn named_graphs_and_listings() {
+	let workspace = Workspace::new(
+		"named-blocks",
+		&[
+			("nml.toml", ""),
+			(
+				"a.nml",
+				":figure #intro Intro\nText.\n\n\
+				:graph[layout=dot] #pipeline The build pipeline\n```\ndigraph { a -> b }\n```\n\n\
+				```rust #main The entry point\nfn main() {}\n```\n",
+			),
+			(
+				"b.nml",
+				"[[a#pipeline]], [[a#main]], [[a#main|{label}: {title}]], [[#pipeline|see {number}]].\n",
+			),
+		],
+	);
+	let report = workspace.build();
+	// Without `dot`, the graph is an error of the page; references are the point here.
+	let dot = std::process::Command::new("dot").arg("-V").output().is_ok();
+	if !dot {
+		eprintln!("skipped: no `dot`");
+		return;
+	}
+	assert_diagnostics!(report.diagnostics, []);
+	let a = workspace.output("a.html");
+	assert!(
+		a.contains("<figure id=\"pipeline\">\n<div class=\"rendered graph\""),
+		"{a}"
+	);
+	assert!(
+		a.contains(
+			"<figcaption><span class=\"figure-number\">Figure 2:</span> The build pipeline</figcaption>"
+		),
+		"{a}"
+	);
+	assert!(
+		a.contains(
+			"<figure id=\"main\" class=\"code-block\" data-language=\"rust\">\n\
+			<figcaption><span class=\"listing-number\">Listing 1:</span> The entry point</figcaption>"
+		),
+		"{a}"
+	);
+	assert_eq!(
+		main_of(&workspace.output("b.html")),
+		"<p><a href=\"a.html#pipeline\">Figure 2</a>, <a href=\"a.html#main\">Listing 1</a>, \
+		<a href=\"a.html#main\">Listing 1: The entry point</a>, <a href=\"a.html#pipeline\">see 2</a>.</p>\n"
+	);
+}

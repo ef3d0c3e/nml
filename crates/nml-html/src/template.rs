@@ -518,16 +518,19 @@ impl<'a> Output<'a> {
 		}
 	}
 
-	/// A code block: its title, the line numbers in a gutter, and the highlighted code.
+	/// A code block: its title (with its number, for a listing), the line numbers in a
+	/// gutter, and the highlighted code. `lines` are the first line's number, if lines are
+	/// numbered, and how many are shown.
 	fn code_block(
 		&mut self,
 		document: &Document,
 		id: ElementId,
 		language: Option<&str>,
 		code: &str,
-		first_line: Option<i64>,
-		max_lines: Option<u32>,
+		lines: (Option<i64>, Option<u32>),
+		number: Option<u32>,
 	) {
+		let (first_line, max_lines) = lines;
 		let mut extra = String::new();
 		if let Some(language) = language {
 			extra.push_str(" data-language=\"");
@@ -538,6 +541,11 @@ impl<'a> Output<'a> {
 		self.raw("\n");
 		if !document.get(id).children().is_empty() {
 			self.raw("<figcaption>");
+			if let Some(number) = number {
+				self.raw(&format!(
+					"<span class=\"listing-number\">Listing {number}:</span> "
+				));
+			}
 			self.children(document, id);
 			self.raw("</figcaption>\n");
 		}
@@ -642,13 +650,14 @@ impl<'a> Output<'a> {
 				code,
 				first_line,
 				max_lines,
+				number,
 			} => self.code_block(
 				document,
 				id,
 				language.as_deref(),
 				code,
-				*first_line,
-				*max_lines,
+				(*first_line, *max_lines),
+				*number,
 			),
 			ElementKind::Media {
 				kind,

@@ -59,6 +59,8 @@ pub enum ElementKind {
 		first_line: Option<i64>,
 		/// How many lines are shown before the rest scrolls, if they are limited.
 		max_lines: Option<u32>,
+		/// Its number among the unit's listings, if it has a name.
+		number: Option<u32>,
 	},
 	/// An image, a video or an audio file.
 	Media {

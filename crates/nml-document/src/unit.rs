@@ -93,17 +93,20 @@ pub enum SymbolKind {
 	/// A medium with a name, outside of a figure or in one.
 	Media,
 	Table,
+	/// A code block with a name: a numbered listing.
+	Listing,
 	Anchor,
 	/// An exported variable (`:export`).
 	Variable,
 }
 
 impl SymbolKind {
-	pub const ALL: [SymbolKind; 6] = [
+	pub const ALL: [SymbolKind; 7] = [
 		SymbolKind::Heading,
 		SymbolKind::Figure,
 		SymbolKind::Media,
 		SymbolKind::Table,
+		SymbolKind::Listing,
 		SymbolKind::Anchor,
 		SymbolKind::Variable,
 	];
@@ -115,6 +118,7 @@ impl SymbolKind {
 			SymbolKind::Figure => "figure",
 			SymbolKind::Media => "media",
 			SymbolKind::Table => "table",
+			SymbolKind::Listing => "listing",
 			SymbolKind::Anchor => "anchor",
 			SymbolKind::Variable => "variable",
 		}

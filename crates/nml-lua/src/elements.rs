@@ -239,6 +239,7 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 				code: required("code")?,
 				first_line: numbered.then_some(first),
 				max_lines,
+				number: None,
 			})
 		}
 		"media" => {

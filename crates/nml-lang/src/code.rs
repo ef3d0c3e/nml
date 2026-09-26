@@ -3,7 +3,10 @@ use std::sync::Arc;
 use nml_diagnostics::Diagnostic;
 use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
+use nml_document::Attributes;
 use nml_document::ElementKind;
+use nml_document::Export;
+use nml_document::SymbolKind;
 use nml_grammar::Atom;
 use nml_grammar::OptionKind;
 use nml_grammar::OptionSchema;
@@ -14,6 +17,8 @@ use nml_grammar::RuleError;
 use nml_grammar::Value;
 
 use crate::Language;
+use crate::Lower;
+use crate::language::plain_text;
 
 /// Code blocks: a fence of three or more backticks, the language, options and a title, the
 /// code, and the same fence.
@@ -47,6 +52,11 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 				"options",
 				Atom::Options(Arc::new(schema)),
 			)]),
+			// A name makes it a numbered listing.
+			Atom::optional(vec![
+				Atom::literal(" #"),
+				Atom::capture("ref", Atom::Word).with_class("variable"),
+			]),
 			Atom::optional(vec![
 				Atom::literal(" "),
 				Atom::capture("title", Atom::InlineContent),
@@ -62,7 +72,9 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		"**Code block**, highlighted in its language, with an optional title.\n\n\
 		````nml\n```rust[line_offset=10] main.rs\nfn main() {}\n```\n````\n\n\
 		Options: `line_offset` (the number of the first line), `numbers` (whether lines are \
-		numbered), `max_lines` (how many lines are shown before the rest scrolls). A longer fence lets the code hold ```` ``` ````.",
+		numbered), `max_lines` (how many lines are shown before the rest scrolls). A longer fence lets the code hold ```` ``` ````.\n\n\
+		A name before the title makes it a numbered listing: ```` ```rust #main The entry point ```` \
+		shows *Listing 1: The entry point*, and `[[main]]` shows *Listing 1*.",
 	)
 	.with_snippet("```${1:language} ${2:Title}\n${0}\n```");
 	language.add(rule, |lower, m| {
@@ -111,17 +123,45 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			.strip_suffix('\n')
 			.map(|code| code.strip_suffix('\r').unwrap_or(code))
 			.unwrap_or(code);
+		let reference = m.capture("ref").map(|capture| capture.token.clone());
+		let number = reference.as_ref().map(|_| next_listing(lower));
 		let kind = ElementKind::CodeBlock {
 			language: language.map(|language| language.content().to_string()),
 			code: code.to_string(),
 			first_line: numbered.then_some(first_line),
 			max_lines,
+			number,
 		};
-		lower.builder.open(kind, m.token.clone());
+		let attributes = Attributes {
+			id: reference.as_ref().map(|r| r.content().to_string()),
+			classes: Vec::new(),
+		};
+		lower.builder.open_with(kind, m.token.clone(), attributes);
 		lower.capture(m, "title");
-		lower.builder.close();
+		let element = lower.builder.close();
+		if let (Some(reference), Some(number)) = (reference, number) {
+			let title = match m.capture("title").map(|capture| &capture.value) {
+				Some(Value::Nodes(nodes)) => plain_text(nodes),
+				_ => String::new(),
+			};
+			let export = Export::new(reference.content(), SymbolKind::Listing, Some(element))
+				.with("title", title)
+				.with("number", number.to_string());
+			lower.export(export, reference);
+		}
 	})?;
 	Ok(())
+}
+
+/// The number of the last listing of a unit.
+#[derive(Default)]
+struct Listings(u32);
+
+/// Takes the next number of the unit's listings, in the order they are written.
+fn next_listing(lower: &mut Lower<'_, '_>) -> u32 {
+	let listings = lower.extension(Listings::default);
+	listings.0 += 1;
+	listings.0
 }
 
 /// Warns about a language syntect does not know: the code is shown plain.
@@ -139,6 +179,7 @@ pub(crate) fn check_language(lower: &mut crate::Lower<'_, '_>, language: &nml_so
 mod tests {
 	use nml_diagnostics::assert_diagnostics;
 	use nml_document::ElementKind;
+	use nml_document::SymbolKind;
 
 	use crate::tests::check;
 	use crate::tests::compile_text;
@@ -160,6 +201,7 @@ mod tests {
 			code: code.into(),
 			first_line,
 			max_lines: None,
+			number: None,
 		}
 	}
 
@@ -233,5 +275,56 @@ mod tests {
 
 		let compiled = compile_text("```rust\nx\n");
 		assert_diagnostics!(compiled.diagnostics, [1001]);
+	}
+
+	#[test]
+	fn listings() {
+		let compiled = compile_text(
+			"```rust #main The *entry* point\nfn main() {}\n```\n\
+			```rust Not a listing\nx\n```\n\
+			```rs[numbers=false] #helper\ny\n```\n\
+			:figure #f F\nText.\n",
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let document = &compiled.unit.document;
+		assert_eq!(
+			crate::tests::show(document, document.root()),
+			r#"document[code_block#main["The " Italic["entry"] " point"] code_block["Not a listing"] code_block#helper[] figure#f[paragraph["Text."] caption["F"]]]"#
+		);
+		let numbers: Vec<_> = (document.descendants(document.root()))
+			.filter_map(|(_, element)| match element.kind {
+				ElementKind::CodeBlock { number, .. } => Some(number),
+				_ => None,
+			})
+			.collect();
+		assert_eq!(numbers, [Some(1), None, Some(2)]);
+		// Listings are numbered apart from figures.
+		let exports: Vec<_> = (compiled.unit.exports.iter())
+			.map(|e| {
+				(
+					e.name.as_str(),
+					e.kind,
+					e.property("number").unwrap(),
+					e.property("title").unwrap(),
+				)
+			})
+			.collect();
+		assert_eq!(
+			exports,
+			[
+				("main", SymbolKind::Listing, "1", "The entry point"),
+				("helper", SymbolKind::Listing, "2", ""),
+				("f", SymbolKind::Figure, "1", "F"),
+			]
+		);
+		// The options still apply.
+		assert!(matches!(
+			block("```rs[numbers=false] #x T\ny\n```").0,
+			ElementKind::CodeBlock {
+				first_line: None,
+				number: Some(1),
+				..
+			}
+		));
 	}
 }

@@ -383,7 +383,8 @@ caption {
 }
 
 .figure-number,
-.table-number {
+.table-number,
+.listing-number {
 	color: var(--nml-text);
 	font-weight: 600;
 }

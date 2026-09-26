@@ -1065,6 +1065,38 @@ fn conceal_tokens() {
 		blocks,
 		[(0, 0), (1, 0), (2, 0), (1, 2), (2, 2), (5, 3), (6, 3)]
 	);
+
+	// A listing's name is part of the header, with or without a title.
+	let url = Url::parse("file:///tmp/nml-lsp-none/c.nml").unwrap();
+	client.open(
+		&url,
+		"```rust #main\nx\n```\n\n```rust #lib The library\ny\n```\n",
+	);
+	client.diagnostics();
+	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
+	let result = client.request(display::CONCEAL, params);
+	let conceals: Vec<display::ConcealInfo> = serde_json::from_value(result).unwrap();
+	let headers: Vec<_> = (conceals.iter())
+		.filter_map(|c| match &c.conceal_text {
+			display::ConcealTarget::Token { token, params } if token == "code" => Some((
+				c.range.start.line,
+				c.range.end.character,
+				params.to_string(),
+			)),
+			_ => None,
+		})
+		.collect();
+	assert_eq!(
+		headers,
+		[
+			(0, 13, r#"{"language":"rust","name":""}"#.to_string()),
+			(
+				4,
+				24,
+				r#"{"language":"rust","name":"The library"}"#.to_string()
+			),
+		]
+	);
 }
 
 #[test]
