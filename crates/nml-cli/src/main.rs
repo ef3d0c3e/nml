@@ -66,7 +66,8 @@ fn init(root: PathBuf) -> ExitCode {
 			true => Ok(()),
 			false => std::fs::write(&config, DEFAULT_CONFIG),
 		})
-		.and_then(|()| nml_lua::write_types(&root));
+		.and_then(|()| nml_lua::write_types(&root))
+		.and_then(|()| nml_lua::write_std(&root));
 	match result {
 		Ok(()) => {
 			eprintln!("workspace ready in {}", root.display());

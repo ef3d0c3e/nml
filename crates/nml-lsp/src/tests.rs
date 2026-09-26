@@ -2006,3 +2006,22 @@ fn preview_follows_the_cursor() {
 	cursor(&a, 1, 2);
 	assert_eq!(events.next_named("scroll"), "6");
 }
+
+#[test]
+fn std_modules_are_written() {
+	let workspace = Workspace::new("std-written", &[("nml.toml", "")]);
+	let client = Client::start(Some(&workspace.0));
+	// Answered once the server is up.
+	let uri = workspace.url("a.nml");
+	client.request(
+		SemanticTokensFullRequest::METHOD,
+		serde_json::json!({ "textDocument": { "uri": uri.as_str() } }),
+	);
+	for (name, content) in nml_lua::STD {
+		let path = workspace
+			.0
+			.join(nml_lua::STD_DIR)
+			.join(format!("{name}.nml"));
+		assert_eq!(fs::read_to_string(path).unwrap(), *content);
+	}
+}

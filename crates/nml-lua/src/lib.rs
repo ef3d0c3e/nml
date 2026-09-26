@@ -45,6 +45,48 @@ pub const STD: &[(&str, &str)] = &[
 	("nav", include_str!("../std/nav.nml")),
 ];
 
+/// Where editors find the modules that come with NML, relative to the workspace root: a
+/// copy of each, `std/<name>.nml`, written by [`write_std`].
+pub const STD_DIR: &str = ".nml/std";
+
+/// Writes the modules that come with NML to [`STD_DIR`], read-only, for editors to open:
+/// those that changed, and removes the others.
+pub fn write_std(root: &std::path::Path) -> std::io::Result<()> {
+	let dir = root.join(STD_DIR);
+	std::fs::create_dir_all(&dir)?;
+	for (name, content) in STD {
+		let path = dir.join(format!("{name}.nml"));
+		if std::fs::read_to_string(&path).is_ok_and(|current| current == *content) {
+			continue;
+		}
+		if let Ok(metadata) = std::fs::metadata(&path) {
+			let mut permissions = metadata.permissions();
+			#[allow(clippy::permissions_set_readonly_false)]
+			permissions.set_readonly(false);
+			std::fs::set_permissions(&path, permissions)?;
+		}
+		std::fs::write(&path, content)?;
+		let mut permissions = std::fs::metadata(&path)?.permissions();
+		permissions.set_readonly(true);
+		std::fs::set_permissions(&path, permissions)?;
+	}
+	for entry in std::fs::read_dir(&dir)? {
+		let path = entry?.path();
+		let known = (path.file_stem())
+			.and_then(|stem| stem.to_str())
+			.is_some_and(|stem| STD.iter().any(|(name, _)| *name == stem));
+		if !known || path.extension().is_none_or(|e| e != "nml") {
+			// Read-only files can be removed: the directory is writable.
+			if path.is_dir() {
+				std::fs::remove_dir_all(&path)?;
+			} else {
+				std::fs::remove_file(&path)?;
+			}
+		}
+	}
+	Ok(())
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 	use std::sync::Arc;

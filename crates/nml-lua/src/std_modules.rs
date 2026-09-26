@@ -79,3 +79,41 @@ fn modules_are_documented() {
 		}
 	}
 }
+
+#[test]
+fn modules_are_written_for_editors() {
+	let root = std::env::temp_dir().join(format!("nml-std-{}", std::process::id()));
+	let _ = std::fs::remove_dir_all(&root);
+	let dir = root.join(crate::STD_DIR);
+	crate::write_std(&root).unwrap();
+	for (name, content) in crate::STD {
+		let path = dir.join(format!("{name}.nml"));
+		assert_eq!(std::fs::read_to_string(&path).unwrap(), *content);
+		assert!(std::fs::metadata(&path).unwrap().permissions().readonly());
+	}
+	// Again: nothing to do.
+	crate::write_std(&root).unwrap();
+
+	// An edited copy is restored; other files go.
+	let toc = dir.join("toc.nml");
+	let mut permissions = std::fs::metadata(&toc).unwrap().permissions();
+	#[allow(clippy::permissions_set_readonly_false)]
+	permissions.set_readonly(false);
+	std::fs::set_permissions(&toc, permissions).unwrap();
+	std::fs::write(&toc, "edited").unwrap();
+	std::fs::write(dir.join("old.nml"), "gone").unwrap();
+	std::fs::create_dir_all(dir.join("sub")).unwrap();
+	crate::write_std(&root).unwrap();
+	assert_eq!(
+		std::fs::read_to_string(&toc).unwrap(),
+		crate::STD.iter().find(|(n, _)| *n == "toc").unwrap().1
+	);
+	assert!(std::fs::metadata(&toc).unwrap().permissions().readonly());
+	let mut names: Vec<_> = std::fs::read_dir(&dir)
+		.unwrap()
+		.map(|e| e.unwrap().file_name().into_string().unwrap())
+		.collect();
+	names.sort();
+	assert_eq!(names, ["nav.nml", "toc.nml"]);
+	let _ = std::fs::remove_dir_all(&root);
+}

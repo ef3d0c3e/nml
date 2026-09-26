@@ -109,9 +109,24 @@ impl Server {
 		path.exists().then(|| Index::open(&path).ok()).flatten()
 	}
 
+	/// Where a workspace path is on disk. A module that comes with NML, `std/<name>.nml`
+	/// (unless the workspace has its own `std`), is its copy in `.nml/std`.
+	pub(crate) fn disk_path(&self, path: &str) -> Option<std::path::PathBuf> {
+		let root = self.root.as_ref()?;
+		let absolute = root.join(path);
+		let own_std = (self.config.as_ref())
+			.is_some_and(|config| config.modules.iter().any(|module| module.name == "std"));
+		match path.strip_prefix("std/") {
+			Some(rest) if !own_std && !absolute.exists() => {
+				Some(root.join(nml_lua::STD_DIR).join(rest))
+			}
+			_ => Some(absolute),
+		}
+	}
+
 	/// The source of a workspace file: its open buffer, or the disk.
 	pub(crate) fn file(&self, path: &str) -> Option<Arc<Source>> {
-		let absolute = self.root.as_ref()?.join(path);
+		let absolute = self.disk_path(path)?;
 		let url = Url::from_file_path(&absolute).ok()?;
 		let content = match self.buffers.get(&url) {
 			Some(content) => content.clone(),

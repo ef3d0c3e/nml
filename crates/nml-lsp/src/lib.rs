@@ -284,6 +284,13 @@ impl Server {
 			snippets: false,
 			preview: None,
 		};
+		// Editors open the modules that come with NML from there.
+		if let (Some(root), Some(_)) = (&server.root, &server.config)
+			&& let Err(error) = nml_lua::write_std(root)
+		{
+			let message = format!("cannot write {}: {error}", nml_lua::STD_DIR);
+			server.show_message(lsp_types::MessageType::WARNING, message);
+		}
 		server.start_luals();
 		server
 	}
