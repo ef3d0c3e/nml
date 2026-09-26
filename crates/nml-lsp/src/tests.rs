@@ -2025,3 +2025,74 @@ fn std_modules_are_written() {
 		assert_eq!(fs::read_to_string(path).unwrap(), *content);
 	}
 }
+
+#[test]
+fn definition_of_syntax_and_modules() {
+	let kbd = ":: Keys.\n:lua\n```\nnml.rule {\n\tname = \"kbd\",\n\tatoms = { \":kbd{\", nml.capture(\"keys\", nml.inline), \"}\" },\n\thandler = function(m, out) out:content(m, \"keys\") end,\n}\n```\n";
+	let workspace = Workspace::new(
+		"definition-syntax",
+		&[
+			(
+				"nml.toml",
+				"exclude = [\"lib/**\"]\n[[module]]\nname = \"lib\"\nroot = \"lib\"\n",
+			),
+			("lib/kbd.nml", kbd),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let page = workspace.url("a.nml");
+	let text = ":lua\n```\nnml.rule { name = \"shout\", atoms = { \":shout\" }, handler = function() end }\n```\n:import std.toc\n:import lib.kbd\n\n:toc Contents\n\nPress :kbd{**X**} :shout.\n";
+	client.open(&page, text);
+	client.diagnostics();
+
+	let definition = |line, character| -> Option<lsp_types::Location> {
+		let result = client.request(
+			GotoDefinition::METHOD,
+			serde_json::to_value(lsp_types::GotoDefinitionParams {
+				text_document_position_params: at(&page, line, character),
+				work_done_progress_params: Default::default(),
+				partial_result_params: Default::default(),
+			})
+			.unwrap(),
+		);
+		serde_json::from_value(result).unwrap()
+	};
+	let place = |location: lsp_types::Location| {
+		(
+			location.uri.as_str().to_string(),
+			location.range.start.line,
+			location.range.start.character,
+		)
+	};
+	let std_toc = Url::from_file_path(workspace.0.join(nml_lua::STD_DIR).join("toc.nml")).unwrap();
+	let rule_line = |source: &str| {
+		source
+			.lines()
+			.position(|line| line.starts_with("nml.rule {"))
+			.unwrap() as u32
+	};
+	let toc_source = nml_lua::STD.iter().find(|(n, _)| *n == "toc").unwrap().1;
+
+	// `:toc`: the rule in the std module's copy.
+	assert_eq!(
+		place(definition(7, 2).unwrap()),
+		(std_toc.to_string(), rule_line(toc_source), 0)
+	);
+	// `:kbd{`: in the workspace's module, on any of its markup.
+	let lib = workspace.url("lib/kbd.nml").to_string();
+	assert_eq!(place(definition(9, 7).unwrap()), (lib.clone(), 3, 0));
+	assert_eq!(place(definition(9, 10).unwrap()), (lib.clone(), 3, 0));
+	// In its content, the content's own syntax: bold is built in.
+	assert_eq!(definition(9, 13), None);
+	// A rule of the page's prologue.
+	assert_eq!(place(definition(9, 20).unwrap()), (page.to_string(), 2, 0));
+	// The imports: the modules' files, std's copy included.
+	assert_eq!(
+		place(definition(4, 10).unwrap()),
+		(std_toc.to_string(), 0, 0)
+	);
+	assert_eq!(place(definition(5, 10).unwrap()), (lib, 0, 0));
+	// Built-in syntax, and plain text.
+	assert_eq!(definition(9, 11), None);
+	assert_eq!(definition(9, 2), None);
+}

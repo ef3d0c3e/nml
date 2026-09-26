@@ -301,7 +301,7 @@ impl Server {
 		position: &TextDocumentPositionParams,
 	) -> Result<Option<Location>> {
 		let Some(subject) = self.subject(position)? else {
-			return Ok(None);
+			return self.syntax_definition(position);
 		};
 		let analysis = self.analysis(position)?.unwrap().0;
 		Ok(match subject {
@@ -321,6 +321,49 @@ impl Server {
 			)),
 			Subject::File(path) => self.location(&path, 0..0),
 		})
+	}
+
+	/// Where the syntax under the cursor is defined: the `nml.rule` call of a rule from a
+	/// module or a prologue, when the cursor is on its markup. Built-in syntax has none.
+	fn syntax_definition(&self, position: &TextDocumentPositionParams) -> Result<Option<Location>> {
+		let Some((analysis, offset, url)) = self.analysis(position)? else {
+			return Ok(None);
+		};
+		let language = analysis.language.as_deref().unwrap_or(&self.language);
+		let hits = find::at(&analysis.tree, &url, offset);
+		let Some(hit) = hits.iter().rev().find(|hit| hit.matched.complete) else {
+			return Ok(None);
+		};
+		// In content: what is there is not the rule's markup.
+		if hit
+			.capture
+			.is_some_and(|capture| matches!(capture.value, nml_grammar::Value::Nodes(_)))
+		{
+			return Ok(None);
+		}
+		let origin = language
+			.rules()
+			.get(hit.matched.rule)
+			.and_then(|rule| rule.origin.as_ref());
+		Ok(origin.and_then(|origin| self.token_location(origin)))
+	}
+
+	/// The location of a token, in the file at the end of its source's chain. The modules
+	/// that come with NML (`nml:///std/…`) are their copies on disk.
+	pub(crate) fn token_location(&self, token: &Token) -> Option<Location> {
+		let token = token.root();
+		let location = token.source().location();
+		let url = match location.scheme() {
+			"nml" => {
+				let path = location.path().trim_start_matches('/');
+				Url::from_file_path(self.disk_path(path)?).ok()?
+			}
+			_ => location.clone(),
+		};
+		Some(Location::new(
+			Uri::from_str(url.as_str()).ok()?,
+			convert::range(&token),
+		))
 	}
 
 	pub(crate) fn references(
