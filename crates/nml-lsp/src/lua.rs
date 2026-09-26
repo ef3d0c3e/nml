@@ -106,7 +106,20 @@ fn pieces<'t>(
 	}
 }
 
-/// The code of the code blocks of a tree, in the file.
+/// The language of the code of a block that is not a code block, by its rule: `:lua`'s, and
+/// that of the blocks rendered when the page is built.
+pub(crate) fn block_language(rule: &str) -> Option<&'static str> {
+	Some(match rule {
+		"lua" => "lua",
+		"graph" => "dot",
+		"tex" => "tex",
+		"typst" => "typst",
+		_ => return None,
+	})
+}
+
+/// The code of the code blocks of a tree, in the file, and that of the blocks rendered when
+/// the page is built (`:graph`, …). The Lua is elsewhere: see [`pieces`].
 fn code_blocks(
 	nodes: &[Node],
 	language: &nml_lang::Language,
@@ -127,6 +140,16 @@ fn code_blocks(
 						language: (m.capture("language"))
 							.map_or("", |language| language.token.content())
 							.into(),
+					});
+				} else if let Some(name) = name.filter(|name| *name != "lua")
+					&& let Some(block) =
+						block_language(name).or((name == "typst_role").then_some("typst"))
+					&& let Some(source) = m.capture("source")
+					&& source.token.root().source().location() == file
+				{
+					out.push(CodeRangeInfo {
+						range: convert::range(&source.token),
+						language: block.into(),
 					});
 				}
 				for capture in &m.captures {

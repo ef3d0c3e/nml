@@ -139,8 +139,12 @@ impl Markers<'_> {
 						Some("quote") => self.quote(m, m.capture("marker"), "Quote"),
 						Some("callout") => self.callout(m),
 						Some("code_block") => self.code_block(m),
-						// Lua stays as written, with `:lua` and its fences.
-						Some("lua" | "lua-role") => true,
+						// The command stays, and its block shows as code in its language.
+						Some(name @ ("lua" | "graph" | "tex" | "typst")) => {
+							self.fenced(m, crate::lua::block_language(name).unwrap())
+						}
+						// A role keeps its fences: `:typst$a$` would read as Typst.
+						Some("lua-role" | "typst_role") => true,
 						_ => false,
 					};
 					for capture in &m.captures {
@@ -283,6 +287,23 @@ impl Markers<'_> {
 			"language": m.capture("language").map_or("", |c| c.token.content()),
 			"name": m.capture("title").map_or("", |c| c.token.content()),
 		});
+		self.token(&line, "code", params);
+		if let Some(close) = m.capture("close") {
+			self.text(&close.token);
+		}
+		true
+	}
+
+	/// The fences of a block of `:lua`, `:graph`, … : shown as a code block's, in `language`.
+	fn fenced(&mut self, m: &RuleMatch, language: &str) -> bool {
+		let (Some(fence), Some(info)) = (m.capture("fence"), m.capture("info")) else {
+			return true;
+		};
+		let line = Token::new(
+			fence.token.source().clone(),
+			fence.token.start()..info.token.end(),
+		);
+		let params = serde_json::json!({ "language": language, "name": "" });
 		self.token(&line, "code", params);
 		if let Some(close) = m.capture("close") {
 			self.text(&close.token);

@@ -973,7 +973,10 @@ fn conceal_and_style() {
 			(12, 14),
 			(17, 19),
 			(20, 21),
-			(22, 23)
+			(22, 23),
+			// The Lua block's fences, as a code block's; the role keeps its own.
+			(0, 3),
+			(0, 3)
 		]
 	);
 	assert_eq!(
@@ -1095,6 +1098,69 @@ fn conceal_tokens() {
 				24,
 				r#"{"language":"rust","name":"The library"}"#.to_string()
 			),
+		]
+	);
+}
+
+#[test]
+fn rendered_blocks_show_as_code() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
+	client.open(
+		&url,
+		":lua\n```\nx = 1\n```\n\n:graph[layout=neato] #g The graph\n````dot\ndigraph {}\n````\n\n:tex\n```\n\\LaTeX\n```\n\n:typst\n```\n#rect[]\n```\n\nA :typst`$a$`.\n",
+	);
+	client.diagnostics();
+	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
+
+	// The fences as a code block's, in the block's language; the command stays.
+	let result = client.request(display::CONCEAL, params.clone());
+	let conceals: Vec<display::ConcealInfo> = serde_json::from_value(result).unwrap();
+	let shown: Vec<_> = (conceals.iter())
+		.map(|c| {
+			let target = match &c.conceal_text {
+				display::ConcealTarget::Text(text) => format!("{text:?}"),
+				display::ConcealTarget::Token { token, params } => format!("{token} {params}"),
+			};
+			(
+				c.range.start.line,
+				c.range.start.character,
+				c.range.end.character,
+				target,
+			)
+		})
+		.collect();
+	let shown: Vec<_> = (shown.iter())
+		.map(|(line, start, end, target)| (*line, *start, *end, target.as_str()))
+		.collect();
+	assert_eq!(
+		shown,
+		[
+			(1, 0, 3, r#"code {"language":"lua","name":""}"#),
+			(3, 0, 3, r#""""#),
+			(6, 0, 7, r#"code {"language":"dot","name":""}"#),
+			(8, 0, 4, r#""""#),
+			(11, 0, 3, r#"code {"language":"tex","name":""}"#),
+			(13, 0, 3, r#""""#),
+			(16, 0, 3, r#"code {"language":"typst","name":""}"#),
+			(18, 0, 3, r#""""#),
+		]
+	);
+
+	// Their code, highlighted in its language.
+	let result = client.request(lua::CODE_RANGE, params);
+	let ranges: Vec<lua::CodeRangeInfo> = serde_json::from_value(result).unwrap();
+	let ranges: Vec<_> = (ranges.iter())
+		.map(|r| (r.range.start, r.range.end, r.language.as_str()))
+		.collect();
+	assert_eq!(
+		ranges,
+		[
+			(position(2, 0), position(3, 0), "lua"),
+			(position(7, 0), position(8, 0), "dot"),
+			(position(12, 0), position(13, 0), "tex"),
+			(position(17, 0), position(18, 0), "typst"),
+			(position(20, 9), position(20, 12), "typst"),
 		]
 	);
 }
