@@ -1,8 +1,25 @@
-:: The navigation menu: `:nav` lists the workspace's pages when the page is linked, so it
-:: follows pages as they are added, removed or renamed. A page sets where it appears with
-:: exported variables: `nav.category` (pages without one come first), `nav.order` (a
-:: number; then by title) and `nav.title` (instead of its title). The current page's item
-:: has the class `current`.
+:: **Navigation menu**: `:nav` lists the workspace's pages, grouped by category. It is made
+:: when the page is linked, so it follows pages as they are added, removed or renamed.
+::
+:: ```nml
+:: :import std.nav
+::
+:: :nav
+:: ```
+::
+:: A page sets where it appears with exported variables:
+::
+:: * `nav.category`: its group. Pages without one come first.
+:: * `nav.order`: a number, to order the pages of a group; then by title.
+:: * `nav.title`: shown instead of the page's title.
+::
+:: ```nml
+:: :export nav.category = Guides
+:: :export nav.order = 2
+:: ```
+::
+:: The menu is a `<nav class="nav">` list; the current page's item has the class `current`,
+:: and a group's item the class `category`.
 
 :lua
 ```
@@ -58,5 +75,8 @@ nml.rule {
 	handler = function(m, out)
 		out:add(nml.defer("std.nav", "menu"))
 	end,
+	doc = "**Navigation menu** of the workspace's pages, by `nav.category`, `nav.order` and "
+		.. "`nav.title`.",
+	snippet = ":nav",
 }
 ```

@@ -1,6 +1,15 @@
-:: The table of contents: `:toc [Title]` lists the document's headings, nested by level,
-:: once the document is parsed. Headings with the class `unlisted` are left out, and those
-:: with `unnumbered` get the class `unnumbered`. Headings without a reference name get an id.
+:: **Table of contents**: `:toc` lists the document's headings, nested by level and
+:: numbered like them.
+::
+:: ```nml
+:: :import std.toc
+::
+:: :toc Contents
+:: ```
+::
+:: The title after `:toc` is optional. Headings with the class `unlisted` (`# Title {.unlisted}`)
+:: are left out, and those with `unnumbered` are listed without a number. The list is made once
+:: the whole document is parsed, so it sees the headings after it too.
 
 :lua
 ```
@@ -82,5 +91,8 @@ nml.rule {
 		local title = m.captures.title
 		out:add(nml.post_parse(function() return build(title) end))
 	end,
+	doc = "**Table of contents** of the document, with an optional title: `:toc Contents`.\n\n"
+		.. "Headings with the class `unlisted` are left out.",
+	snippet = ":toc ${1:Contents}",
 }
 ```

@@ -20,6 +20,7 @@ mod style;
 mod table;
 mod variable;
 
+pub use import::module_doc;
 pub use language::AddRuleError;
 pub use language::Compiled;
 pub use language::Finisher;

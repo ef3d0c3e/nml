@@ -47,3 +47,35 @@ fn empty_table_of_contents() {
 		"<nav class=\"toc\">\n</nav>\n"
 	);
 }
+
+#[test]
+fn modules_are_documented() {
+	for (name, source) in crate::STD {
+		let doc = nml_lang::module_doc(source);
+		assert!(
+			doc.contains(&format!(":import std.{name}")),
+			"std.{name}: {doc}"
+		);
+		// The syntax it adds is documented, and can be written from completion.
+		let compiled = compile(&format!(":import std.{name}\n"));
+		assert_diagnostics!(compiled.diagnostics, []);
+		let language = compiled.language.expect("the module adds syntax");
+		let rules: Vec<_> = (language.rules().iter())
+			.map(|(_, rule)| rule)
+			.filter(|rule| rule.origin.is_some())
+			.collect();
+		assert!(!rules.is_empty(), "std.{name}");
+		for rule in rules {
+			assert!(
+				!rule.doc.is_empty(),
+				"std.{name}: `{}` has no doc",
+				rule.name
+			);
+			assert!(
+				!rule.snippet.is_empty(),
+				"std.{name}: `{}` has no snippet",
+				rule.name
+			);
+		}
+	}
+}

@@ -104,6 +104,19 @@ fn is_module_path(path: &str) -> bool {
 		})
 }
 
+/// The documentation of a module: the `::` comment lines it starts with, without their
+/// markers, as Markdown. A `::` alone is a blank line.
+pub fn module_doc(source: &str) -> String {
+	let mut lines = Vec::new();
+	for line in source.lines() {
+		let Some(comment) = line.trim_start().strip_prefix("::") else {
+			break;
+		};
+		lines.push(comment.strip_prefix(' ').unwrap_or(comment));
+	}
+	lines.join("\n").trim().to_string()
+}
+
 #[cfg(test)]
 mod tests {
 	use nml_diagnostics::assert_diagnostics;
@@ -153,5 +166,17 @@ mod tests {
 			let compiled = compile_with(text, &files());
 			nml_diagnostics::testing::check(&compiled.diagnostics, &[(id, Some(range))]);
 		}
+	}
+
+	#[test]
+	fn module_docs() {
+		assert_eq!(
+			super::module_doc(
+				":: **Title**: what it does.\n::\n::   indented\n:: ```nml\n:: :x\n:: ```\n\n:lua\n:: not this\n"
+			),
+			"**Title**: what it does.\n\n  indented\n```nml\n:x\n```"
+		);
+		assert_eq!(super::module_doc(":lua\n:: late\n"), "");
+		assert_eq!(super::module_doc(""), "");
 	}
 }
