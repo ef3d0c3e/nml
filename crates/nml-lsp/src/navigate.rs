@@ -256,6 +256,20 @@ impl Server {
 			return Ok(None);
 		};
 		let capture = hit.capture.map(|capture| &*capture.name);
+		// The module of an import: its documentation.
+		if let ("import", Some("module")) = (rule.name.as_str(), capture) {
+			let token = hit.capture.unwrap().token.clone();
+			let Some(value) = self.module_hover(analysis, token.content()) else {
+				return Ok(None);
+			};
+			return Ok(Some(Hover {
+				contents: HoverContents::Markup(MarkupContent {
+					kind: MarkupKind::Markdown,
+					value,
+				}),
+				range: Some(convert::range(&token)),
+			}));
+		}
 		let variable = match (rule.name.as_str(), capture) {
 			("substitution", _) | ("set" | "export", Some("name")) => {
 				hit.matched.capture("name").map(|c| c.token.clone())
@@ -321,6 +335,39 @@ impl Server {
 			)),
 			Subject::File(path) => self.location(&path, 0..0),
 		})
+	}
+
+	/// The documentation of a module: its name, its own documentation, and the syntax it
+	/// adds to the document's grammar.
+	fn module_hover(&self, analysis: &Analysis, module: &str) -> Option<String> {
+		let (path, source) = self.resolver().module(module).ok()?;
+		let mut value = format!("**{module}**\n\n`{path}`");
+		let doc = nml_lang::module_doc(source.content());
+		if !doc.is_empty() {
+			value.push_str("\n\n");
+			value.push_str(&doc);
+		}
+		let language = analysis.language.as_deref().unwrap_or(&self.language);
+		let mut syntax = Vec::new();
+		for (_, rule) in language.rules().iter() {
+			let Some(origin) = &rule.origin else {
+				continue;
+			};
+			if origin.root().source().location() != source.location() {
+				continue;
+			}
+			// The first paragraph of its documentation.
+			let summary = rule.doc.split("\n\n").next().unwrap_or_default();
+			syntax.push(match summary.is_empty() {
+				true => format!("* `{}`", rule.name),
+				false => format!("* `{}`: {summary}", rule.name),
+			});
+		}
+		if !syntax.is_empty() {
+			value.push_str("\n\n---\n\n**Syntax**\n\n");
+			value.push_str(&syntax.join("\n"));
+		}
+		Some(value)
 	}
 
 	/// Where the syntax under the cursor is defined: the `nml.rule` call of a rule from a

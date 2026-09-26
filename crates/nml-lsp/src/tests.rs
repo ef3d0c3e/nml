@@ -2096,3 +2096,72 @@ fn definition_of_syntax_and_modules() {
 	assert_eq!(definition(9, 11), None);
 	assert_eq!(definition(9, 2), None);
 }
+
+#[test]
+fn modules_are_documented() {
+	let workspace = Workspace::new(
+		"module-docs",
+		&[
+			(
+				"nml.toml",
+				"exclude = [\"lib/**\"]\n[[module]]\nname = \"lib\"\nroot = \"lib\"\n",
+			),
+			("lib/plain.nml", "No documentation.\n"),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let page = workspace.url("a.nml");
+	client.open(&page, ":import std.toc\n:import lib.plain\n\n:toc\n");
+	client.diagnostics();
+	let hover = |line, character| -> Option<String> {
+		let result = client.request(
+			HoverRequest::METHOD,
+			serde_json::to_value(HoverParams {
+				text_document_position_params: at(&page, line, character),
+				work_done_progress_params: Default::default(),
+			})
+			.unwrap(),
+		);
+		let hover: Option<lsp_types::Hover> = serde_json::from_value(result).unwrap();
+		hover.map(|hover| match hover.contents {
+			lsp_types::HoverContents::Markup(markup) => markup.value,
+			_ => unreachable!(),
+		})
+	};
+	let toc = hover(0, 10).unwrap();
+	let toc_source = nml_lua::STD.iter().find(|(n, _)| *n == "toc").unwrap().1;
+	assert!(
+		toc.starts_with(&format!(
+			"**std.toc**\n\n`std/toc.nml`\n\n{}",
+			nml_lang::module_doc(toc_source)
+		)),
+		"{toc}"
+	);
+	assert!(
+		toc.ends_with("**Syntax**\n\n* `toc`: **Table of contents** of the document, with an optional title: `:toc Contents`."),
+		"{toc}"
+	);
+	// Without documentation or syntax: where it is.
+	assert_eq!(hover(1, 10).unwrap(), "**lib.plain**\n\n`lib/plain.nml`");
+	// The rest of the import is the rule's own documentation.
+	assert!(hover(0, 2).unwrap().contains("**Import**"));
+	// The syntax a module adds is documented too.
+	assert!(hover(3, 1).unwrap().starts_with("**Table of contents**"));
+
+	// Completed modules carry their documentation.
+	client.change(&page, ":import std.");
+	client.diagnostics();
+	let params = lsp_types::CompletionParams {
+		text_document_position: at(&page, 0, 12),
+		work_done_progress_params: Default::default(),
+		partial_result_params: Default::default(),
+		context: None,
+	};
+	let result = client.request(Completion::METHOD, serde_json::to_value(params).unwrap());
+	let items: Vec<lsp_types::CompletionItem> = serde_json::from_value(result).unwrap();
+	let toc = items.iter().find(|item| item.label == "std.toc").unwrap();
+	let Some(lsp_types::Documentation::MarkupContent(doc)) = &toc.documentation else {
+		panic!("{toc:?}");
+	};
+	assert_eq!(doc.value, nml_lang::module_doc(toc_source));
+}

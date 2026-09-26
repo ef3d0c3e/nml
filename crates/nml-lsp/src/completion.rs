@@ -18,6 +18,7 @@ use nml_grammar::Atom;
 use nml_grammar::OptionKind;
 use nml_grammar::OptionSchema;
 use nml_grammar::RuleSet;
+use nml_lang::Resolver;
 use nml_source::Encoding;
 use nml_source::Url;
 
@@ -491,11 +492,18 @@ impl Server {
 			Context::Snippet if self.snippets => snippets(language.rules()),
 			Context::Snippet => Vec::new(),
 			Context::Command { line_start } => commands(language.rules(), line_start),
-			Context::Module => self
-				.module_paths()
-				.into_iter()
-				.map(|path| candidate(path, None, CompletionItemKind::MODULE))
-				.collect(),
+			Context::Module => {
+				let resolver = self.resolver();
+				self.module_paths()
+					.into_iter()
+					.map(|module| {
+						let doc = (resolver.module(&module).ok())
+							.map(|(_, source)| nml_lang::module_doc(source.content()))
+							.unwrap_or_default();
+						candidate(module, None, CompletionItemKind::MODULE).documented(doc)
+					})
+					.collect()
+			}
 			Context::CodeLanguage => code_languages(),
 			Context::Callout => std::iter::once("quote")
 				.chain(nml_document::CalloutKind::ALL.map(|kind| kind.name()))
