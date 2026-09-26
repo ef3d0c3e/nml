@@ -176,10 +176,14 @@ fn same(lua: &Lua, name: String) -> mlua::Result<AnyUserData> {
 	wrap(lua, Atom::same(name))
 }
 
+/// A line of a Lua chunk: its name and the line, from 1.
+type ChunkLine = (String, usize);
+
 /// Rules defined but not yet added to the unit's grammar, and the handlers of those added.
 #[derive(Default)]
 struct LuaRules {
-	pending: Vec<(Rule, Function)>,
+	/// With the chunk and line of the `nml.rule` call that defined them.
+	pending: Vec<(Rule, Function, Option<ChunkLine>)>,
 	handlers: HashMap<String, Function>,
 }
 
@@ -218,13 +222,20 @@ fn rule(
 	let rule = Rule::new(name, atoms(atoms_)?)
 		.with_doc(text("doc")?)
 		.with_snippet(text("snippet")?);
+	// The Lua that called this function.
+	let called_at = lua
+		.inspect_stack(1, |debug| {
+			let chunk = debug.source().short_src?.into_owned();
+			Some((chunk, debug.current_line()?))
+		})
+		.flatten();
 	if lua.app_data_ref::<LuaRules>().is_none() {
 		lua.set_app_data(LuaRules::default());
 	}
 	lua.app_data_mut::<LuaRules>()
 		.unwrap()
 		.pending
-		.push((rule, handler));
+		.push((rule, handler, called_at));
 	Ok(())
 }
 
@@ -236,7 +247,13 @@ pub(crate) fn register(lower: &mut Lower<'_, '_>, token: &Token) {
 		Some(mut rules) => std::mem::take(&mut rules.pending),
 		None => return,
 	};
-	for (rule, function) in pending {
+	for (rule, function, called_at) in pending {
+		let origin =
+			called_at.and_then(|(chunk, line)| unit_lua(lower).chunks.borrow().line(&chunk, line));
+		let rule = match origin {
+			Some(origin) => rule.defined_at(origin),
+			None => rule,
+		};
 		let name = rule.name.clone();
 		let handler_name = name.clone();
 		let result = lower.add_rule(rule, move |lower, m| handle(lower, m, &handler_name));
@@ -415,6 +432,7 @@ fn call(
 #[cfg(test)]
 mod tests {
 	use nml_diagnostics::assert_diagnostics;
+	use nml_lang::Compiled;
 
 	use crate::tests::compile;
 	use crate::tests::compile_with;
@@ -511,6 +529,48 @@ nml.rule { name = "plain", atoms = { ":plain" }, handler = function(m, out) end 
 			":lua\n```\nnml.rule { name = 'x', atoms = { ':x' }, handler = function() end, doc = {} }\n```\n",
 		);
 		assert_diagnostics!(compiled.diagnostics, [4001]);
+	}
+
+	#[test]
+	fn rules_know_where_they_are_defined() {
+		let origin = |compiled: &Compiled, name: &str| {
+			let language = compiled.language.as_ref().unwrap();
+			let (_, rule) = (language.rules().iter())
+				.find(|(_, rule)| rule.name == name)
+				.unwrap();
+			let token = rule.origin.as_ref().expect("an origin").root();
+			(
+				token.source().location().to_string(),
+				token.content().to_string(),
+			)
+		};
+		let text = format!(
+			"{KBD}\n:lua\n```\nlocal function define(name)\n  nml.rule {{ name = name, atoms = {{ ':' .. name }}, handler = function() end }}\nend\ndefine('a')\n```\n\n:kbd{{x}} :a\n"
+		);
+		let compiled = compile(&text);
+		assert_diagnostics!(compiled.diagnostics, []);
+		// The line of the `nml.rule` call, in the page.
+		let (location, content) = origin(&compiled, "kbd");
+		assert!(location.ends_with("page.nml"), "{location}");
+		assert_eq!(content, "nml.rule {");
+		let (_, content) = origin(&compiled, "a");
+		assert!(content.starts_with("nml.rule { name = name"), "{content}");
+
+		// In a module: the module's file.
+		let compiled = compile_with(
+			":import std.kbd\n\nPress :kbd{X}.\n",
+			&[("modules/std/kbd.nml", KBD)],
+		);
+		let (location, content) = origin(&compiled, "kbd");
+		assert!(location.ends_with("modules/std/kbd.nml"), "{location}");
+		assert_eq!(content, "nml.rule {");
+
+		// Built-in rules have none.
+		let language = compiled.language.as_ref().unwrap();
+		let (_, heading) = (language.rules().iter())
+			.find(|(_, rule)| rule.name == "heading")
+			.unwrap();
+		assert!(heading.origin.is_none());
 	}
 
 	#[test]

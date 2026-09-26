@@ -17,6 +17,12 @@ impl Chunks {
 		self.chunks.push((name, source));
 	}
 
+	/// The line `line` (from 1) of the chunk `name`, without its indentation.
+	pub fn line(&self, name: &str, line: usize) -> Option<Token> {
+		self.locate(&format!("{name}:{line}:"))
+			.map(|(token, _)| token)
+	}
+
 	/// The chunk and line a `name:line:` prefix of `text` refers to, and the text after it.
 	fn locate<'t>(&self, text: &'t str) -> Option<(Token, &'t str)> {
 		self.chunks.iter().find_map(|(name, source)| {

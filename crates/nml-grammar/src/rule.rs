@@ -29,6 +29,9 @@ pub struct Rule {
 	/// An LSP snippet that writes the syntax (`${1:placeholder}`), for editors. Empty if the
 	/// rule has none.
 	pub snippet: String,
+	/// Where the rule is defined, for editors: the `nml.rule` call of a rule from Lua. Built-in
+	/// rules have none.
+	pub origin: Option<nml_source::Token>,
 }
 
 impl Rule {
@@ -40,7 +43,14 @@ impl Rule {
 			guard: 0,
 			doc: String::new(),
 			snippet: String::new(),
+			origin: None,
 		}
+	}
+
+	/// Sets where the rule is defined: see [`Rule::origin`].
+	pub fn defined_at(mut self, origin: nml_source::Token) -> Self {
+		self.origin = Some(origin);
+		self
 	}
 
 	/// Sets the documentation: see [`Rule::doc`].
