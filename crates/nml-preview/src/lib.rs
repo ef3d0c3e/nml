@@ -98,7 +98,13 @@ impl HttpResponse {
 impl PreviewServer {
 	/// Starts serving the workspace at `root` on a free port of `127.0.0.1`.
 	pub fn start(root: &Path) -> io::Result<Self> {
-		let listener = TcpListener::bind(("127.0.0.1", 0))?;
+		Self::start_on(root, 0)
+	}
+
+	/// Starts serving the workspace at `root` on `port` of `127.0.0.1`, or on a free one if
+	/// it is 0.
+	pub fn start_on(root: &Path, port: u16) -> io::Result<Self> {
+		let listener = TcpListener::bind(("127.0.0.1", port))?;
 		let address = listener.local_addr()?;
 		let (sender, receiver) = crossbeam_channel::unbounded();
 		// The workspace is opened by the worker, which keeps it: it is not shared.
@@ -165,7 +171,8 @@ impl PreviewServer {
 		let _ = self.sender.send(Message::Edited(overlay));
 	}
 
-	/// Files were saved and the index updated: the pages shown are rendered again.
+	/// Files were saved and the index updated: the configuration is read again, and the
+	/// pages shown are rendered again, with the renders that failed retried.
 	pub fn saved(&self) {
 		let _ = self.sender.send(Message::Saved);
 	}
@@ -324,7 +331,13 @@ impl Worker {
 					self.preview.set_overlay(overlay);
 					self.schedule(DEBOUNCE);
 				}
-				Ok(Message::Saved) => self.schedule(Duration::ZERO),
+				Ok(Message::Saved) => {
+					let _ = self.preview.reload_config();
+					// What a renderer could not do may work now: it may have been installed,
+					// or its configuration changed.
+					self.failed.clear();
+					self.schedule(Duration::ZERO);
+				}
 				Ok(Message::Cursor { page, offset }) => {
 					let data = offset.to_string();
 					self.send(|client| client.page == page, "scroll", &data);

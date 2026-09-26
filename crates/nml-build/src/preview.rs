@@ -16,7 +16,6 @@ use nml_lua::PageInfo;
 use nml_render::Job;
 use nml_render::RenderError;
 use nml_render::recolor;
-use nml_workspace::CONFIG_FILE;
 use nml_workspace::Config;
 use nml_workspace::Index;
 use nml_workspace::Role;
@@ -87,12 +86,7 @@ impl Preview {
 	/// Opens the workspace at `root`. Its configuration must be valid.
 	pub fn open(root: &Path) -> Result<Self, BuildError> {
 		let root = fs::canonicalize(root).map_err(|e| BuildError::Io(root.into(), e))?;
-		let config_path = root.join(CONFIG_FILE);
-		if !config_path.exists() {
-			return Err(BuildError::NoConfig(root));
-		}
-		let config = Config::parse(read(&config_path)?)
-			.map_err(|_| BuildError::InvalidConfig(root.clone()))?;
+		let config = crate::config(&root)?;
 		let index = Index::open(&root.join(&config.database))?;
 		Ok(Self {
 			root,
@@ -106,6 +100,17 @@ impl Preview {
 
 	pub fn root(&self) -> &Path {
 		&self.root
+	}
+
+	/// Reads the configuration again, after `nml.toml` was saved. An invalid one is not
+	/// used: the build reports it.
+	pub fn reload_config(&mut self) -> Result<(), BuildError> {
+		let config = crate::config(&self.root)?;
+		if config.database != self.config.database {
+			self.index = Index::open(&self.root.join(&config.database))?;
+		}
+		self.config = config;
+		Ok(())
 	}
 
 	/// Sets the unsaved contents of files, by workspace path.

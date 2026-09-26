@@ -151,6 +151,16 @@ fn read(path: &Path) -> Result<Arc<Source>, BuildError> {
 	Ok(source(path, content))
 }
 
+/// The configuration of the workspace at `root`, if it is valid: the build reports why it
+/// is not.
+pub fn config(root: &Path) -> Result<Config, BuildError> {
+	let path = root.join(CONFIG_FILE);
+	if !path.exists() {
+		return Err(BuildError::NoConfig(root.into()));
+	}
+	Config::parse(read(&path)?).map_err(|_| BuildError::InvalidConfig(root.into()))
+}
+
 /// Builds the workspace at `root` incrementally: changed files are parsed again, and pages
 /// whose references may resolve differently are relinked from their stored templates.
 pub fn build(root: &Path) -> Result<BuildReport, BuildError> {

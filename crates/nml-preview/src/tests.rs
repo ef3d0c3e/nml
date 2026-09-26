@@ -295,3 +295,33 @@ fn helpers() {
 		"<head><script src=\"/__nml/preview.js\" data-page=\"a&quot;b.nml\" defer></script>\n</head>"
 	);
 }
+
+#[test]
+fn the_configuration_is_read_again() {
+	let workspace = Workspace::new(
+		"config",
+		&[
+			("nml.toml", "[html]\nlanguage = \"en\"\n"),
+			("a.nml", "# A\n"),
+		],
+	);
+	let server = PreviewServer::start(&workspace.0).unwrap();
+	let (_, page) = get(&server, "/a.html");
+	assert!(page.contains("<html lang=\"en\">"), "{page}");
+	let mut events = Events::open(&server, "a.nml");
+
+	// Around the content: the page reloads, in the new language.
+	workspace.write("nml.toml", "[html]\nlanguage = \"fr\"\n");
+	workspace.build();
+	server.saved();
+	assert_eq!(events.next_named("reload"), "");
+	let (_, page) = get(&server, "/a.html");
+	assert!(page.contains("<html lang=\"fr\">"), "{page}");
+
+	// An invalid one is not used.
+	workspace.write("nml.toml", "pages = 1\n");
+	server.saved();
+	let (status, page) = get(&server, "/a.html");
+	assert_eq!(status, 200);
+	assert!(page.contains("<html lang=\"fr\">"), "{page}");
+}
