@@ -728,6 +728,7 @@ dependencies = [
  "nml-diagnostics",
  "nml-lsp",
  "nml-lua",
+ "nml-preview",
  "nml-workspace",
 ]
 

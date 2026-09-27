@@ -6,7 +6,10 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use clap::Subcommand;
+use nml_diagnostics::Diagnostic;
 use nml_diagnostics::Localizer;
+
+mod serve;
 
 #[derive(Debug, Parser)]
 #[command(name = "nml", version, about = "Not a Markup Language")]
@@ -34,12 +37,25 @@ enum Command {
 		#[arg(short, long)]
 		output: Option<PathBuf>,
 	},
+	/// Preview a workspace in the browser, as its files change.
+	Serve {
+		/// The workspace root, which holds `nml.toml`.
+		#[arg(default_value = ".")]
+		root: PathBuf,
+		/// The port on 127.0.0.1; a free one if not given.
+		#[arg(short, long, default_value_t = 0)]
+		port: u16,
+		/// Open the preview in the browser.
+		#[arg(long)]
+		open: bool,
+	},
 }
 
 fn main() -> ExitCode {
 	match Cli::parse().command {
 		Command::Init { root } => init(root),
 		Command::Build { root, output } => build(root, output),
+		Command::Serve { root, port, open } => serve::serve(&root, port, open),
 		Command::Lsp => match nml_lsp::run_stdio() {
 			Ok(()) => ExitCode::SUCCESS,
 			Err(error) => {
@@ -99,13 +115,7 @@ fn build(root: PathBuf, output: Option<PathBuf>) -> ExitCode {
 		}
 	};
 
-	let localizer = Localizer::from_env();
-	let mut stderr = std::io::stderr().lock();
-	let color = stderr.is_terminal();
-	for diagnostic in &report.diagnostics {
-		// A failure to write to stderr leaves nothing to report it on.
-		let _ = nml_diagnostics::render(diagnostic, &localizer, color, &mut stderr);
-	}
+	print_diagnostics(&report.diagnostics);
 	eprintln!(
 		"{} parsed, {} page(s) written, {} failed",
 		report.parsed.len(),
@@ -116,5 +126,16 @@ fn build(root: PathBuf, output: Option<PathBuf>) -> ExitCode {
 		ExitCode::FAILURE
 	} else {
 		ExitCode::SUCCESS
+	}
+}
+
+/// Writes diagnostics to stderr, in color on a terminal.
+fn print_diagnostics(diagnostics: &[Diagnostic]) {
+	let localizer = Localizer::from_env();
+	let mut stderr = std::io::stderr().lock();
+	let color = stderr.is_terminal();
+	for diagnostic in diagnostics {
+		// A failure to write to stderr leaves nothing to report it on.
+		let _ = nml_diagnostics::render(diagnostic, &localizer, color, &mut stderr);
 	}
 }

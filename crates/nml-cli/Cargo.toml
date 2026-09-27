@@ -18,6 +18,7 @@ nml-lua.workspace = true
 nml-workspace.workspace = true
 nml-build.workspace = true
 nml-lsp.workspace = true
+nml-preview.workspace = true
 
 [lints]
 workspace = true
