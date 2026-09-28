@@ -441,6 +441,11 @@ span.rendered {
 	vertical-align: middle;
 }
 
+/* Math knows its baseline: its picture is aligned on it. */
+span.rendered.math {
+	vertical-align: baseline;
+}
+
 div.rendered {
 	margin: 0 0 1rem;
 	overflow-x: auto;
