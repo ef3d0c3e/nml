@@ -104,6 +104,13 @@ impl fmt::Display for RenderError {
 
 impl std::error::Error for RenderError {}
 
+/// The version of what [`Renderers::latex`] makes of `dvisvgm`'s output, in the cache key:
+/// renders cached by an nml that made something else are made again.
+const LATEX_OUTPUT: u32 = 2;
+
+/// The size of LaTeX's text when no environment sets it, in points: the `standalone` class's.
+const LATEX_FONT_SIZE: f64 = 10.0;
+
 impl Renderers {
 	fn environment(&self, name: &str) -> Result<TexEnvironment, RenderError> {
 		match self.tex_environments.iter().find(|(env, _)| env == name) {
@@ -132,7 +139,7 @@ impl Renderers {
 			""
 		};
 		Ok(format!(
-			"{}\0{}\0{}\0{:?}\0{prepend}",
+			"{LATEX_OUTPUT}\0{}\0{}\0{}\0{:?}\0{prepend}",
 			env.latex.as_deref().unwrap_or(&self.latex),
 			self.dvisvgm,
 			env.preamble,
@@ -228,19 +235,45 @@ impl Renderers {
 			return Err(RenderError::Failed { program, message });
 		}
 		log?;
-		run(
+		// The preview package's box keeps the baseline, which inline math is aligned on;
+		// blocks are cut to what they draw.
+		let mut args = vec!["--no-fonts", "--stdout"];
+		if block {
+			args.push("--exact-bbox");
+		}
+		args.push("doc.dvi");
+		let (svg, messages) = run_with_messages(
 			Command::new(&self.dvisvgm)
-				.args(["--no-fonts", "--exact-bbox", "--stdout", "doc.dvi"])
+				.args(args)
 				.current_dir(dir.path()),
 			&self.dvisvgm,
-			b"",
-		)
+		)?;
+		let font_size = env.font_size.map_or(LATEX_FONT_SIZE, f64::from);
+		// A block is not in a line: it has no baseline to align.
+		let messages = if block { "" } else { messages.as_str() };
+		Ok(sized_in_em(&double_quoted(&svg), messages, font_size))
 	}
 }
 
 /// Runs a program with `input` on its standard input, and returns its standard output. Its
 /// standard error (or output) is the message of a failure.
 fn run(command: &mut Command, program: &str, input: &[u8]) -> Result<String, RenderError> {
+	run_full(command, program, input).map(|(out, _)| out)
+}
+
+/// Runs a program without input, and returns its standard output and error.
+fn run_with_messages(
+	command: &mut Command,
+	program: &str,
+) -> Result<(String, String), RenderError> {
+	run_full(command, program, b"")
+}
+
+fn run_full(
+	command: &mut Command,
+	program: &str,
+	input: &[u8],
+) -> Result<(String, String), RenderError> {
 	let mut child = command
 		.stdin(Stdio::piped())
 		.stdout(Stdio::piped())
@@ -292,7 +325,7 @@ fn run(command: &mut Command, program: &str, input: &[u8]) -> Result<String, Ren
 	let out = String::from_utf8_lossy(&reader.join().unwrap_or_default()).into_owned();
 	let errors = String::from_utf8_lossy(&errors.join().unwrap_or_default()).into_owned();
 	if status.success() {
-		Ok(out)
+		Ok((out, errors))
 	} else {
 		let message = if errors.trim().is_empty() {
 			out
@@ -380,6 +413,72 @@ pub fn recolor(svg: &str) -> String {
 		&& !out[start..start + end].contains(" fill=")
 	{
 		out.insert_str(start + 4, " fill=\"currentColor\"");
+	}
+	out
+}
+
+/// `dvisvgm`'s attributes, written `a='v'`, as `a="v"`: as the other programs write them,
+/// and as [`scope_ids`] and [`recolor`] read them.
+fn double_quoted(svg: &str) -> String {
+	let mut out = String::with_capacity(svg.len());
+	let mut rest = svg;
+	while let Some(start) = rest.find("='") {
+		let value = &rest[start + 2..];
+		match value.find('\'') {
+			Some(end) if !value[..end].contains('"') => {
+				out.push_str(&rest[..start]);
+				out.push_str("=\"");
+				out.push_str(&value[..end]);
+				out.push('"');
+				rest = &value[end + 1..];
+			}
+			_ => {
+				out.push_str(&rest[..start + 2]);
+				rest = value;
+			}
+		}
+	}
+	out.push_str(rest);
+	out
+}
+
+/// A number of `dvisvgm`'s messages, in its points: `name=12.5pt`.
+fn measure(messages: &str, name: &str) -> Option<f64> {
+	let start = messages.find(&format!("{name}="))? + name.len() + 1;
+	let value = &messages[start..];
+	value[..value.find("pt")?].parse().ok()
+}
+
+/// A LaTeX SVG sized in `em`, so that it scales with the text around it, and aligned on its
+/// baseline, which is `depth` above its bottom. `dvisvgm`'s points are PostScript's, 1/72 in;
+/// LaTeX's font size is in TeX's, 1/72.27 in.
+fn sized_in_em(svg: &str, messages: &str, font_size: f64) -> String {
+	const TEX_POINTS: f64 = 72.27 / 72.0;
+	let attribute = |name: &str| -> Option<(std::ops::Range<usize>, f64)> {
+		let tag = &svg[svg.find("<svg")?..];
+		let tag = &tag[..tag.find('>')?];
+		let key = format!(" {name}=\"");
+		let start = svg.find("<svg")? + tag.find(&key)? + key.len();
+		let end = start + svg[start..].find('"')?;
+		let value = svg[start..end].strip_suffix("pt")?.parse().ok()?;
+		Some((start..end, value))
+	};
+	let (Some((width_at, width)), Some((height_at, height))) =
+		(attribute("width"), attribute("height"))
+	else {
+		return svg.to_string();
+	};
+	let em = |points: f64| format!("{:.4}em", points * TEX_POINTS / font_size);
+	// Replaced from the end, so that the other range stays valid.
+	let mut out = svg.to_string();
+	let mut ranges = [(width_at, em(width)), (height_at, em(height))];
+	ranges.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
+	for (range, value) in ranges {
+		out.replace_range(range, &value);
+	}
+	if let Some(depth) = measure(messages, "depth").filter(|depth| *depth > 0.0) {
+		let style = format!(" style=\"vertical-align: -{}\"", em(depth));
+		out.insert_str(out.find("<svg").unwrap() + 4, &style);
 	}
 	out
 }
@@ -490,6 +589,69 @@ mod tests {
 		assert!(
 			error.to_string().contains("Undefined control sequence"),
 			"{error}"
+		);
+	}
+
+	/// `dvisvgm`'s output for inline math, cut short, and its messages.
+	const DVISVGM: &str = "<?xml version='1.0' encoding='UTF-8'?>
+<!-- This file was generated by dvisvgm 3.4 -->
+<svg version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='20pt' height='12pt' viewBox='-72 -72 20 12'>
+<defs>
+<path id='g0-101' d='M1 1'/>
+<path id='g0-10' d='M2 2'/>
+</defs>
+<g id='page1'>
+<use x='-72' y='-64' xlink:href='#g0-101'/>
+<use x='-66' y='-64' xlink:href='#g0-10'/>
+</g>
+</svg>";
+	const MESSAGES: &str = "pre-processing DVI file (format version 2)
+processing page 1
+  computing extents based on data set by preview package (version 13.1)
+  width=20pt, height=9pt, depth=3pt
+  graphic size: 20pt x 12pt (7.05556mm x 4.23333mm)
+";
+
+	#[test]
+	fn latex_output() {
+		let svg = double_quoted(strip_prologue(DVISVGM));
+		assert!(svg.starts_with("<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\""));
+		assert!(!svg.contains('\''), "{svg}");
+		// Then its ids are scoped, and its glyphs drawn in the text's color.
+		let svg = recolor(&scope_ids(&svg, "k"));
+		assert!(svg.contains("<path id=\"k-g0-101\""), "{svg}");
+		assert!(svg.contains("<path id=\"k-g0-10\""), "{svg}");
+		assert!(svg.contains("xlink:href=\"#k-g0-101\""), "{svg}");
+		assert!(svg.contains("xlink:href=\"#k-g0-10\""), "{svg}");
+		assert!(svg.starts_with("<svg fill=\"currentColor\""), "{svg}");
+
+		// In em of a 10pt font, and on the baseline, 3pt above its bottom.
+		let svg = sized_in_em(&svg, MESSAGES, 10.0);
+		let tag = &svg[..svg.find('>').unwrap()];
+		assert!(
+			tag.contains(" width=\"2.0075em\" height=\"1.2045em\""),
+			"{tag}"
+		);
+		assert!(
+			tag.starts_with("<svg style=\"vertical-align: -0.3011em\""),
+			"{tag}"
+		);
+		// Other sizes, and no depth: not aligned.
+		let svg = sized_in_em(&double_quoted(DVISVGM), "", 12.0);
+		assert!(
+			svg.contains(" width=\"1.6729em\" height=\"1.0037em\""),
+			"{svg}"
+		);
+		assert!(!svg.contains("vertical-align"), "{svg}");
+		// Sizes that are not in points stay.
+		let svg = "<svg width=\"10px\" height=\"2px\"></svg>";
+		assert_eq!(sized_in_em(svg, MESSAGES, 10.0), svg);
+
+		assert_eq!(measure(MESSAGES, "depth"), Some(3.0));
+		assert_eq!(measure(MESSAGES, "nope"), None);
+		assert_eq!(
+			double_quoted("<a b='it\"s' c='d'>"),
+			"<a b='it\"s' c=\"d\">"
 		);
 	}
 
