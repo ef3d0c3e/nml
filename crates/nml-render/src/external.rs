@@ -442,7 +442,7 @@ fn double_quoted(svg: &str) -> String {
 	out
 }
 
-/// A number of `dvisvgm`'s messages, in its points: `name=12.5pt`.
+/// A number of `dvisvgm`'s messages, in TeX's points: `name=12.5pt`.
 fn measure(messages: &str, name: &str) -> Option<f64> {
 	let start = messages.find(&format!("{name}="))? + name.len() + 1;
 	let value = &messages[start..];
@@ -450,8 +450,8 @@ fn measure(messages: &str, name: &str) -> Option<f64> {
 }
 
 /// A LaTeX SVG sized in `em`, so that it scales with the text around it, and aligned on its
-/// baseline, which is `depth` above its bottom. `dvisvgm`'s points are PostScript's, 1/72 in;
-/// LaTeX's font size is in TeX's, 1/72.27 in.
+/// baseline, which is `depth` above its bottom. The SVG's points are PostScript's, 1/72 in;
+/// the messages' and the font size's are TeX's, 1/72.27 in.
 fn sized_in_em(svg: &str, messages: &str, font_size: f64) -> String {
 	const TEX_POINTS: f64 = 72.27 / 72.0;
 	let attribute = |name: &str| -> Option<(std::ops::Range<usize>, f64)> {
@@ -468,10 +468,13 @@ fn sized_in_em(svg: &str, messages: &str, font_size: f64) -> String {
 	else {
 		return svg.to_string();
 	};
-	let em = |points: f64| format!("{:.4}em", points * TEX_POINTS / font_size);
+	let em = |tex_points: f64| format!("{:.4}em", tex_points / font_size);
 	// Replaced from the end, so that the other range stays valid.
 	let mut out = svg.to_string();
-	let mut ranges = [(width_at, em(width)), (height_at, em(height))];
+	let mut ranges = [
+		(width_at, em(width * TEX_POINTS)),
+		(height_at, em(height * TEX_POINTS)),
+	];
 	ranges.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
 	for (range, value) in ranges {
 		out.replace_range(range, &value);
@@ -607,9 +610,9 @@ mod tests {
 </svg>";
 	const MESSAGES: &str = "pre-processing DVI file (format version 2)
 processing page 1
-  computing extents based on data set by preview package (version 13.1)
-  width=20pt, height=9pt, depth=3pt
-  graphic size: 20pt x 12pt (7.05556mm x 4.23333mm)
+  computing extents based on data set by preview package (version 13.2)
+  width=20.075pt, height=9pt, depth=3pt
+  graphic size: 20.075pt x 12pt (20bp x 11.955bp)
 ";
 
 	#[test]
@@ -633,7 +636,7 @@ processing page 1
 			"{tag}"
 		);
 		assert!(
-			tag.starts_with("<svg style=\"vertical-align: -0.3011em\""),
+			tag.starts_with("<svg style=\"vertical-align: -0.3000em\""),
 			"{tag}"
 		);
 		// Other sizes, and no depth: not aligned.
