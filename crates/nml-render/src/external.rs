@@ -520,6 +520,16 @@ pub fn scope_ids(svg: &str, prefix: &str) -> String {
 mod tests {
 	use super::*;
 
+	/// Skips a test that needs a program which is not installed, unless `NML_REQUIRE_RENDERERS`
+	/// is set, as in CI, where it fails instead.
+	fn skip(missing: &str) {
+		assert!(
+			std::env::var_os("NML_REQUIRE_RENDERERS").is_none(),
+			"no {missing}, but NML_REQUIRE_RENDERERS is set"
+		);
+		eprintln!("skipped: no {missing}");
+	}
+
 	fn has(program: &str) -> bool {
 		Command::new(program)
 			.arg("--version")
@@ -532,7 +542,7 @@ mod tests {
 	#[test]
 	fn graphviz() {
 		if !has("dot") {
-			eprintln!("skipped: no `dot`");
+			skip("`dot`");
 			return;
 		}
 		let renderers = Renderers::default();
@@ -572,7 +582,7 @@ mod tests {
 	#[test]
 	fn latex() {
 		if !has("latex") || !has("dvisvgm") {
-			eprintln!("skipped: no `latex` or `dvisvgm`");
+			skip("`latex` or `dvisvgm`");
 			return;
 		}
 		let renderers = Renderers::default();
@@ -661,7 +671,7 @@ processing page 1
 	#[test]
 	fn typst() {
 		if !has("typst") {
-			eprintln!("skipped: no `typst`");
+			skip("`typst`");
 			return;
 		}
 		let svg = Renderers::default()
@@ -812,7 +822,7 @@ processing page 1
 	#[test]
 	fn graphviz_is_recolored() {
 		if !has("dot") {
-			eprintln!("skipped: no `dot`");
+			skip("`dot`");
 			return;
 		}
 		let svg = Renderers::default()

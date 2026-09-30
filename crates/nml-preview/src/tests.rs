@@ -4,6 +4,16 @@ use std::io::BufReader;
 
 use super::*;
 
+/// Skips a test that needs a program which is not installed, unless `NML_REQUIRE_RENDERERS`
+/// is set, as in CI, where it fails instead.
+fn skip(missing: &str) {
+	assert!(
+		std::env::var_os("NML_REQUIRE_RENDERERS").is_none(),
+		"no {missing}, but NML_REQUIRE_RENDERERS is set"
+	);
+	eprintln!("skipped: no {missing}");
+}
+
 /// A temporary workspace, built, removed when dropped.
 struct Workspace(PathBuf);
 
@@ -245,7 +255,7 @@ fn renders_arrive_later() {
 		.output()
 		.is_err()
 	{
-		eprintln!("skipped: no `dot`");
+		skip("`dot`");
 		return;
 	}
 	let workspace = Workspace::new("render", &[("nml.toml", ""), ("a.nml", "a")]);

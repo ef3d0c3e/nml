@@ -5,6 +5,16 @@ use nml_diagnostics::assert_diagnostics;
 
 use super::*;
 
+/// Skips a test that needs a program which is not installed, unless `NML_REQUIRE_RENDERERS`
+/// is set, as in CI, where it fails instead.
+fn skip(missing: &str) {
+	assert!(
+		std::env::var_os("NML_REQUIRE_RENDERERS").is_none(),
+		"no {missing}, but NML_REQUIRE_RENDERERS is set"
+	);
+	eprintln!("skipped: no {missing}");
+}
+
 /// A temporary workspace, removed when dropped.
 struct Workspace(PathBuf);
 
@@ -1277,7 +1287,7 @@ fn rendered_graphs() {
 		.output()
 		.is_err()
 	{
-		eprintln!("skipped: no `dot`");
+		skip("`dot`");
 		return;
 	}
 	let workspace = Workspace::new(
@@ -1795,7 +1805,7 @@ fn preview_renders_in_the_background() {
 		.output()
 		.is_err()
 	{
-		eprintln!("skipped: no `dot`");
+		skip("`dot`");
 		return;
 	}
 	let workspace = Workspace::new("preview-render", &[("nml.toml", ""), ("a.nml", "a")]);
@@ -1859,7 +1869,7 @@ fn named_graphs_and_listings() {
 	// Without `dot`, the graph is an error of the page; references are the point here.
 	let dot = std::process::Command::new("dot").arg("-V").output().is_ok();
 	if !dot {
-		eprintln!("skipped: no `dot`");
+		skip("`dot`");
 		return;
 	}
 	assert_diagnostics!(report.diagnostics, []);
