@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  TYPST_VERSION: v0.15.1
+
+jobs:
+  check:
+    name: Format and lints
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - name: Install the renderers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends graphviz dvisvgm \
+            texlive-latex-base texlive-latex-extra texlive-pictures preview-latex-style
+          curl -sSfL "https://github.com/typst/typst/releases/download/$TYPST_VERSION/typst-x86_64-unknown-linux-musl.tar.xz" \
+            | sudo tar -xJ --strip-components=1 -C /usr/local/bin typst-x86_64-unknown-linux-musl/typst
+          dot -V && latex --version | head -1 && dvisvgm --version && typst --version
+      - run: cargo test --workspace --locked
+        env:
+          # The renderers are installed: tests that would skip without one fail instead.
+          NML_REQUIRE_RENDERERS: "1"
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - name: Install the renderers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends graphviz dvisvgm \
+            texlive-latex-base texlive-latex-extra texlive-pictures preview-latex-style
+          curl -sSfL "https://github.com/typst/typst/releases/download/$TYPST_VERSION/typst-x86_64-unknown-linux-musl.tar.xz" \
+            | sudo tar -xJ --strip-components=1 -C /usr/local/bin typst-x86_64-unknown-linux-musl/typst
+      - run: cargo build --release --locked -p nml-cli
+      - name: Build the documentation
+        run: ./target/release/nml build docs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docs
+          path: docs/public
