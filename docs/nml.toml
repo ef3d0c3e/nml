@@ -1,0 +1,6 @@
+# The documentation of NML, written in NML.
+pages = ["**/*.nml"]
+exclude = []
+
+[html]
+language = "en"

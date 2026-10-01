@@ -1,3 +1,7 @@
 /target
 # Holds the Lific API key
 .mcp.json
+
+# What nml writes in a workspace
+.nml/
+docs/public/

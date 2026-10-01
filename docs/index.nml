@@ -1,0 +1,12 @@
+# NML
+
+*NML* is a markup language for documents with references, figures, math and scripts. Its pages are written in `.nml` files and built to HTML.
+
+This documentation is being written. Until then, this page checks that the documentation builds: a formula, $e^{i\pi} + 1 = 0$, and a graph.
+
+:graph #pipeline The build
+```
+digraph { rankdir=LR; scan -> parse -> link -> emit }
+```
+
+The build goes through the stages of [[#pipeline]].
