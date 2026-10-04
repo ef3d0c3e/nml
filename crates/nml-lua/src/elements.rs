@@ -188,6 +188,12 @@ fn parse(lua: &Lua, text: String) -> mlua::Result<AnyUserData> {
 }
 
 pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
+	build_with(kind, spec, false)
+}
+
+/// [`build`], for an element whose content a body writes too: a layout's body is one more
+/// part.
+pub(crate) fn build_with(kind: &str, spec: &Table, body: bool) -> mlua::Result<Element> {
 	let text = |name: &str| spec.get::<Option<String>>(name);
 	let required = |name: &str| {
 		text(name)?.ok_or_else(|| {
@@ -348,12 +354,12 @@ pub(crate) fn build(kind: &str, spec: &Table) -> mlua::Result<Element> {
 				.into_iter()
 				.map(|child| wrap(ElementKind::LayoutPart, child))
 				.collect();
+			let parts = children.len() + usize::from(body);
 			if let Some(expected) = kind.parts()
-				&& children.len() != expected
+				&& parts != expected
 			{
 				return Err(mlua::Error::runtime(format!(
-					"the `{name}` layout has {expected} part(s), not {}",
-					children.len()
+					"the `{name}` layout has {expected} part(s), not {parts}"
 				)));
 			}
 			if let Some(title) = text("title")? {
@@ -650,6 +656,8 @@ pub(crate) struct Opened<'e> {
 	anchor: Option<(&'e str, &'e str)>,
 	/// Whether nothing was opened: markup is written as it is parsed.
 	nothing: bool,
+	/// Whether a layout's part is open, for the body.
+	part: bool,
 }
 
 /// A numbered table being written.
@@ -720,6 +728,7 @@ pub(crate) fn open<'e>(
 					table,
 					anchor,
 					nothing: false,
+					part: false,
 				};
 			}
 		}
@@ -744,6 +753,7 @@ pub(crate) fn open<'e>(
 				table,
 				anchor,
 				nothing: true,
+				part: false,
 			};
 		}
 		Content::Anchor { reference, title } => {
@@ -783,11 +793,17 @@ pub(crate) fn open<'e>(
 		}
 	}
 	self::lower(lower, &element.children, token);
+	// A layout's body is one more part.
+	let part = matches!(element.content, Content::Element(ElementKind::Layout(_)));
+	if part {
+		lower.builder.open(ElementKind::LayoutPart, token.clone());
+	}
 	Opened {
 		figure,
 		table,
 		anchor,
 		nothing: false,
+		part,
 	}
 }
 
@@ -815,6 +831,9 @@ fn lower_markup(lower: &mut Lower<'_, '_>, text: &str, token: &Token) {
 pub(crate) fn close(lower: &mut Lower<'_, '_>, opened: Opened<'_>, token: &Token) {
 	if opened.nothing {
 		return;
+	}
+	if opened.part {
+		lower.builder.close();
 	}
 	if let Some((reference, title)) = opened.anchor {
 		let element = lower.builder.close();

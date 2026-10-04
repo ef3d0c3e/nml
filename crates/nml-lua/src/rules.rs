@@ -393,7 +393,7 @@ fn call(
 						Some(spec) => spec,
 						None => lua.create_table()?,
 					};
-					let element = crate::elements::build(&kind, &spec)?;
+					let element = crate::elements::build_with(&kind, &spec, body.is_some())?;
 					let Some(body) = body else {
 						crate::elements::lower(*borrow()?, &[element], token);
 						return Ok(());
@@ -491,6 +491,68 @@ Press :kbd{Ctrl + **C**}.
 			),
 			"{html}"
 		);
+	}
+
+	#[test]
+	fn a_layout_body_is_a_part() {
+		// The source of the blocks, and the blocks.
+		let compiled = compile(
+			r##":lua
+```
+nml.rule {
+	name = "example",
+	atoms = {
+		nml.line_start, ":example", nml.line_end,
+		nml.line_start, nml.capture("fence", nml.run("`", 3)), nml.line_end,
+		nml.capture("body", nml.content),
+		nml.line_start, nml.same("fence"), nml.line_end,
+	},
+	handler = function(m, out)
+		local source = nml.element("code_block", { code = m.captures.body, language = "nml" })
+		out:element("layout", { type = "split", source }, function()
+			out:content(m, "body")
+		end)
+	end,
+}
+```
+
+:example
+```
+ * *One*
+ * Two
+```
+"##,
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let html = html(&compiled);
+		let result = "<div class=\"part\" style=\"flex: 1\">\n<ul>\n\
+			<li><em>One</em></li>\n<li>Two</li>\n</ul>\n</div>\n</div>\n";
+		assert!(html.contains(result), "{html}");
+		assert_eq!(html.matches("<div class=\"part\"").count(), 2, "{html}");
+		assert!(html.contains(" * *One*\n * Two"), "{html}");
+
+		// It counts: a centered layout is all body.
+		let compiled = compile(
+			r#":lua
+```
+nml.rule {
+	name = "center",
+	atoms = { ":center{", nml.capture("x", nml.inline), "}" },
+	handler = function(m, out)
+		out:element("layout", { type = "centered" }, function() out:content(m, "x") end)
+	end,
+}
+```
+
+:center{*x*} and :lua`nml.element("layout", { type = "centered", "a", "b" })`.
+"#,
+		);
+		let centered = crate::tests::html(&compiled);
+		assert!(
+			centered.contains("<div class=\"part\">\n<em>x</em></div>"),
+			"{centered}"
+		);
+		assert_eq!(compiled.diagnostics.len(), 1, "{:?}", compiled.diagnostics);
 	}
 
 	#[test]
