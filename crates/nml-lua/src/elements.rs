@@ -149,7 +149,7 @@ const KINDS: &[(&str, &str)] = &[
 /// | `list_item` | `checkbox` (`unchecked`, `partial`, `checked`), `value` (its number) |
 /// | `quote` | `author`, `cite`, `url` |
 /// | `callout` | `type` (`note`, `tip`, …), `title` |
-/// | `layout` | `type` (`centered`, `split`, `spoiler`), `title`; each child is a part |
+/// | `layout` | `type` (`centered`, `split`, `spoiler`, `sidebar`), `title`; each child is a part |
 /// | `raw` | `content` (HTML, written as is), `block` |
 /// | `table` | `caption`, `ref` (its reference name, and its id), `header` (how many rows are header rows), `align` (each column's: `auto`, `left`, `center`, `right`); children are the rows, each a list of cells. Numbered with the unit's other tables if it has a `ref` or a `caption` |
 /// | `cell` | `hspan`, `vspan`, `align`; a cell of a table's row, for a cell that needs these. Any other value in a row is a cell's content |

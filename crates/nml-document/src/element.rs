@@ -299,16 +299,25 @@ pub enum LayoutKind {
 	Split,
 	/// One part, hidden until the reader opens it.
 	Spoiler,
+	/// One part, beside the page's content: at the top level of a document, the page shell
+	/// writes it in its sidebar.
+	Sidebar,
 }
 
 impl LayoutKind {
-	pub const ALL: [LayoutKind; 3] = [LayoutKind::Centered, LayoutKind::Split, LayoutKind::Spoiler];
+	pub const ALL: [LayoutKind; 4] = [
+		LayoutKind::Centered,
+		LayoutKind::Split,
+		LayoutKind::Spoiler,
+		LayoutKind::Sidebar,
+	];
 
 	pub fn name(self) -> &'static str {
 		match self {
 			LayoutKind::Centered => "centered",
 			LayoutKind::Split => "split",
 			LayoutKind::Spoiler => "spoiler",
+			LayoutKind::Sidebar => "sidebar",
 		}
 	}
 
@@ -319,7 +328,7 @@ impl LayoutKind {
 	/// How many parts the layout has, if it is fixed.
 	pub fn parts(self) -> Option<usize> {
 		match self {
-			LayoutKind::Centered | LayoutKind::Spoiler => Some(1),
+			LayoutKind::Centered | LayoutKind::Spoiler | LayoutKind::Sidebar => Some(1),
 			LayoutKind::Split => None,
 		}
 	}

@@ -86,11 +86,29 @@ pub fn compile(document: &Document, options: &PageOptions) -> Template {
 		out.attribute(icon);
 		out.raw("\">\n");
 	}
-	out.raw("</head>\n<body>\n<div class=\"nml-page\">\n<main class=\"nml-main\">\n");
+	out.raw("</head>\n<body>\n<div class=\"nml-page\">\n");
+	// The sidebars of the document, beside its content.
+	let (sidebars, blocks): (Vec<_>, Vec<_>) = (document.get(document.root()).children())
+		.iter()
+		.partition(|&&child| document.get(child).kind == ElementKind::Layout(LayoutKind::Sidebar));
+	if !sidebars.is_empty() {
+		out.raw("<aside class=\"nml-sidebar\">\n");
+		for sidebar in sidebars {
+			for (part, _) in document.children(sidebar) {
+				if document.get(part).kind == ElementKind::LayoutPart {
+					out.children(document, part);
+				}
+			}
+		}
+		out.raw("</aside>\n");
+	}
+	out.raw("<main class=\"nml-main\">\n");
 	if options.source_offsets {
-		out.blocks_with_offsets(document);
+		out.blocks_with_offsets(document, &blocks);
 	} else {
-		out.element(document, document.root());
+		for block in blocks {
+			out.element(document, block);
+		}
 	}
 	out.raw("</main>\n</div>\n</body>\n</html>\n");
 	Template {
@@ -148,9 +166,9 @@ impl<'a> Output<'a> {
 
 	/// The blocks of the document, each with `data-nml-at` on its first tag if it comes from
 	/// the page's own source.
-	fn blocks_with_offsets(&mut self, document: &Document) {
+	fn blocks_with_offsets(&mut self, document: &Document, blocks: &[ElementId]) {
 		let page = document.source().location();
-		for &child in document.get(document.root()).children() {
+		for &child in blocks {
 			let start = self.content.len();
 			let slots = self.slots.len();
 			self.element(document, child);
@@ -445,6 +463,12 @@ impl<'a> Output<'a> {
 					None => self.text("Spoiler"),
 				}
 				self.raw("</summary>\n");
+				""
+			}
+			// Inside another block, a sidebar is a block like the others.
+			LayoutKind::Sidebar => {
+				self.open_with(document, id, "div", Some(&class), "");
+				self.raw("\n");
 				""
 			}
 			LayoutKind::Centered => {

@@ -269,6 +269,71 @@ fn layouts() {
 	assert!(body(":layout spoiler\n42\n:end").contains("<summary>Spoiler</summary>"));
 }
 
+/// The page around the content of `text`: the part of the body before `<main>`.
+fn page_shell(text: &str, files: &[(&str, &str)], source_offsets: bool) -> String {
+	let source = Source::new(Url::parse("file:///docs/page.nml").unwrap(), text.into(), 0);
+	let mut resolver = MemoryResolver::default();
+	for (path, content) in files {
+		resolver.files.insert(path.to_string(), content.to_string());
+	}
+	let compiled = nml_lang::compile(
+		&Language::builtin(),
+		Arc::new(source),
+		"docs/page.nml",
+		Arc::new(resolver),
+	);
+	assert!(
+		compiled.diagnostics.is_empty(),
+		"{:?}",
+		compiled.diagnostics
+	);
+	let options = PageOptions {
+		source_offsets,
+		..PageOptions::default()
+	};
+	let content = compile(&compiled.unit.document, &options).content;
+	let start = content.find("<body>\n").unwrap() + "<body>\n".len();
+	let end = content.find("</body>").unwrap();
+	content[start..end].to_string()
+}
+
+#[test]
+fn sidebars() {
+	// Beside the content, before it, without the layout's own markup.
+	assert_eq!(
+		page_shell(
+			"# A\n\n:layout sidebar\n * [A](#a)\n:end\n\nText.\n",
+			&[],
+			false
+		),
+		"<div class=\"nml-page\">\n<aside class=\"nml-sidebar\">\n\
+		<ul>\n<li><a href=\"#a\">A</a></li>\n</ul>\n</aside>\n\
+		<main class=\"nml-main\">\n\
+		<h1 id=\"a\"><a class=\"heading-link\" href=\"#a\">🔗</a> \
+		<span class=\"heading-number\">1.</span> A</h1>\n<p>Text.</p>\n</main>\n</div>\n"
+	);
+	// From an included template, several in order; the preview's offsets skip them.
+	let shell = page_shell(
+		":include /sidebar\n\nText.\n\n:layout sidebar\nTwo.\n:end\n",
+		&[("sidebar.nml", ":layout sidebar\nOne.\n:end\n")],
+		true,
+	);
+	assert_eq!(
+		shell,
+		"<div class=\"nml-page\">\n<aside class=\"nml-sidebar\">\n<p>One.</p>\n<p>Two.</p>\n\
+		</aside>\n<main class=\"nml-main\">\n<p data-nml-at=\"19\">Text.</p>\n</main>\n</div>\n"
+	);
+	// Inside another block, a block like the others.
+	assert_eq!(
+		body(":layout split\n:layout sidebar\na\n:end\n:end"),
+		"<div class=\"layout split\" style=\"display: flex; gap: 1em\">\n\
+		<div class=\"part\" style=\"flex: 1\">\n<div class=\"layout sidebar\">\n\
+		<div class=\"part\">\n<p>a</p>\n</div>\n</div>\n</div>\n</div>\n"
+	);
+	// Without one, no sidebar.
+	assert!(!page_shell("Text.\n", &[], false).contains("aside"));
+}
+
 #[test]
 fn tables() {
 	assert_eq!(
