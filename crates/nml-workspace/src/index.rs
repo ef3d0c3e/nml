@@ -22,7 +22,7 @@ use rusqlite::params;
 use serde_json::Value as Json;
 
 /// The version of the schema below. A database with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 9;
+pub const SCHEMA_VERSION: i64 = 10;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value ANY) STRICT;
@@ -84,6 +84,7 @@ CREATE TABLE slots (
 	context TEXT NOT NULL,
 	start INTEGER NOT NULL,
 	end INTEGER NOT NULL,
+	file TEXT,
 	slot TEXT NOT NULL
 ) STRICT;
 CREATE INDEX slots_by_unit ON slots(unit);
@@ -180,8 +181,12 @@ pub struct StoredSlot {
 	/// A byte offset in the template.
 	pub position: usize,
 	pub context: OutputContext,
-	/// Where the slot is written in the unit's file, for diagnostics at relink time.
+	/// Where the slot is written, for diagnostics at relink time: in `file`, or in the
+	/// unit's file if it is `None`.
 	pub range: Range<usize>,
+	/// The workspace path of the file the slot is written in, if it is not the unit's: an
+	/// included file.
+	pub file: Option<String>,
 	pub slot: Slot,
 }
 
@@ -766,23 +771,25 @@ impl Index {
 			return Ok(None);
 		};
 		let mut statement = self.connection.prepare(
-			"SELECT position, context, start, end, slot FROM slots WHERE unit = ?1 ORDER BY position, rowid",
+			"SELECT position, context, start, end, file, slot FROM slots WHERE unit = ?1 ORDER BY position, rowid",
 		)?;
 		let rows = statement.query_map([unit], |row| {
 			Ok((
 				offset(row, 0)?,
 				row.get::<_, String>(1)?,
 				offset(row, 2)?..offset(row, 3)?,
-				row.get::<_, String>(4)?,
+				row.get::<_, Option<String>>(4)?,
+				row.get::<_, String>(5)?,
 			))
 		})?;
 		let mut slots = Vec::new();
 		for row in rows {
-			let (position, context, range, slot) = row?;
+			let (position, context, range, file, slot) = row?;
 			slots.push(StoredSlot {
 				position,
 				context: output_context(&context)?,
 				range,
+				file,
 				slot: decode_slot(&slot)?,
 			});
 		}
@@ -952,8 +959,8 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 			params![id, template.content],
 		)?;
 		let mut statement = tx.prepare(
-			"INSERT INTO slots (unit, position, context, start, end, slot)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+			"INSERT INTO slots (unit, position, context, start, end, file, slot)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
 		)?;
 		for slot in &template.slots {
 			statement.execute(params![
@@ -962,6 +969,7 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 				output_context_name(slot.context),
 				slot.range.start as i64,
 				slot.range.end as i64,
+				slot.file,
 				encode_slot(&slot.slot).to_string(),
 			])?;
 		}
@@ -1287,6 +1295,7 @@ mod tests {
 			position: 11,
 			context: OutputContext::Text,
 			range: 4..20,
+			file: None,
 			slot: Slot::Link(LinkSlot {
 				target: SymbolRef::in_unit("config", "pages"),
 				property,
@@ -1300,6 +1309,7 @@ mod tests {
 					position: 9,
 					context: OutputContext::Attribute,
 					range: 4..20,
+					file: None,
 					slot: Slot::Link(LinkSlot {
 						target: SymbolRef::in_unit("config", "pages"),
 						property: Property::Target,
@@ -1310,6 +1320,8 @@ mod tests {
 					position: 11,
 					context: OutputContext::Markup,
 					range: 30..40,
+					// From an included file.
+					file: Some("parts/menu.nml".into()),
 					slot: Slot::Deferred(DeferredSlot {
 						module: "std.nav".into(),
 						function: "menu".into(),

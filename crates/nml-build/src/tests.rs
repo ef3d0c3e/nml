@@ -451,6 +451,31 @@ fn link_errors_are_reported_until_fixed() {
 }
 
 #[test]
+fn link_errors_of_included_files() {
+	// The included file is longer than the page: its error is in it.
+	let workspace = Workspace::new(
+		"included-link-errors",
+		&[
+			("nml.toml", "exclude = [\"parts/**\"]\n"),
+			("a.nml", ":include parts/menu\n"),
+			(
+				"parts/menu.nml",
+				"A long menu, longer than the page that includes it, then [[#missing]].\n",
+			),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3001 @ 57..69]);
+	let location = report.diagnostics[0].primary().location.source().location();
+	assert!(location.path().ends_with("/parts/menu.nml"), "{location}");
+
+	// Relinked from the index, without parsing.
+	let report = workspace.build();
+	assert!(report.parsed.is_empty());
+	assert_diagnostics!(report.diagnostics, [3001 @ 57..69]);
+}
+
+#[test]
 fn configuration_changes_invalidate_everything() {
 	let workspace = Workspace::new(
 		"config-change",

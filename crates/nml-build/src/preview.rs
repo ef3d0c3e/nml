@@ -231,7 +231,8 @@ impl Preview {
 		let title = title(document).unwrap_or_else(|| basename.to_string());
 		let mut options = page_options(&self.config, &output, document, &title, rendered);
 		options.source_offsets = true;
-		let template = store_template(document, &nml_html::compile(document, &options));
+		let file_of = |url: &nml_source::Url| crate::workspace_path(&self.root, url);
+		let template = store_template(document, &nml_html::compile(document, &options), file_of);
 
 		for asset in &compiled.unit.assets {
 			self.live_assets

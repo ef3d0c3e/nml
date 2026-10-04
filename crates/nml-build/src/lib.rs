@@ -810,7 +810,8 @@ impl Builder {
 		let title = title(document).unwrap_or_else(|| basename.to_string());
 		let template = (file.role == Role::Page).then(|| {
 			let options = page_options(&self.config, &output, document, &title, rendered);
-			store_template(document, &nml_html::compile(document, &options))
+			let file_of = |url: &Url| workspace_path(&self.root, url);
+			store_template(document, &nml_html::compile(document, &options), file_of)
 		});
 		let uses: Vec<_> = unit.uses.iter().map(store_use).collect();
 
@@ -975,6 +976,17 @@ impl PageLink<'_> {
 			.map(|slot| (slot.position, slot.context))
 			.collect();
 		let mut index_error = None;
+		// Where a slot is written: in the page, or in a file it includes.
+		let place = |stored: &StoredSlot| match &stored.file {
+			None => Token::new(source.clone(), stored.range.clone()),
+			Some(file) => match self.resolver.include(path, &format!("/{file}")) {
+				Ok((_, included)) if stored.range.end <= included.content().len() => {
+					Token::new(included, stored.range.clone())
+				}
+				// It changed since: at the start of the page.
+				_ => Token::new(source.clone(), 0..0),
+			},
+		};
 		let diagnostics = nml_html::write(
 			&template.content,
 			&positions,
@@ -990,7 +1002,7 @@ impl PageLink<'_> {
 								path.to_string(),
 							)
 						});
-						let token = Token::new(source.clone(), stored.range.clone());
+						let token = place(stored);
 						return match runtime.fill(slot, &token) {
 							Ok(html) => Resolved::Value(html),
 							Err(diagnostic) => Resolved::Missing(diagnostic),
@@ -1010,8 +1022,7 @@ impl PageLink<'_> {
 						return Resolved::Value(String::new());
 					}
 				};
-				let token = Token::new(source.clone(), stored.range.clone());
-				Resolved::Missing(Diagnostic::new(kind, DiagnosticMessage::new(token)))
+				Resolved::Missing(Diagnostic::new(kind, DiagnosticMessage::new(place(stored))))
 			},
 			out,
 		)
@@ -1397,12 +1408,22 @@ fn store_use(stored: &Use) -> StoredUse {
 	}
 }
 
-/// A compiled template as stored, with the source range of each slot.
-fn store_template(document: &Document, template: &nml_html::Template) -> StoredTemplate {
-	let mut ranges: HashMap<SlotId, std::ops::Range<usize>> = HashMap::new();
+/// A compiled template as stored, with where each slot is written: in the page's file, or
+/// in the file of the workspace `file_of` names, for a slot of an included file.
+fn store_template(
+	document: &Document,
+	template: &nml_html::Template,
+	file_of: impl Fn(&Url) -> Option<String>,
+) -> StoredTemplate {
+	let page = document.source().location();
+	let mut places: HashMap<SlotId, (std::ops::Range<usize>, Option<String>)> = HashMap::new();
 	for (_, element) in document.descendants(document.root()) {
 		if let ElementKind::Slot(id) | ElementKind::Reference { href: id } = element.kind {
-			ranges.insert(id, element.token.range());
+			// Markup a script wrote is where the script is.
+			let token = element.token.root();
+			let location = token.source().location();
+			let file = (location != page).then(|| file_of(location)).flatten();
+			places.insert(id, (token.range(), file));
 		}
 	}
 	StoredTemplate {
@@ -1410,14 +1431,29 @@ fn store_template(document: &Document, template: &nml_html::Template) -> StoredT
 		slots: template
 			.slots
 			.iter()
-			.map(|slot| StoredSlot {
-				position: slot.position,
-				context: slot.context,
-				range: ranges[&slot.slot].clone(),
-				slot: document.slot(slot.slot).clone(),
+			.map(|slot| {
+				let (range, file) = places[&slot.slot].clone();
+				StoredSlot {
+					position: slot.position,
+					context: slot.context,
+					range,
+					file,
+					slot: document.slot(slot.slot).clone(),
+				}
 			})
 			.collect(),
 	}
+}
+
+/// The workspace path of a file of the workspace at `root`, with `/` separators.
+fn workspace_path(root: &Path, url: &Url) -> Option<String> {
+	let path = url.to_file_path().ok()?;
+	let relative = path.strip_prefix(root).ok()?;
+	let parts: Option<Vec<_>> = relative
+		.components()
+		.map(|c| c.as_os_str().to_str())
+		.collect();
+	Some(parts?.join("/"))
 }
 
 #[cfg(test)]
