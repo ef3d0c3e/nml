@@ -60,3 +60,76 @@ jobs:
         with:
           name: docs
           path: docs/public
+
+  # On a version tag, once everything above passed: the executables and the documentation, as
+  # a GitHub release.
+  build-release:
+    name: Executable (${{ matrix.target }})
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check, test, docs]
+    strategy:
+      matrix:
+        include:
+          # The oldest supported Ubuntu, so that the executable runs on older glibc.
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install stable --profile minimal
+      - name: The tag is the version
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | grep -o '"name":"nml-cli","version":"[^"]*"' | grep -o '[0-9][^"]*')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "the tag $GITHUB_REF_NAME is not the version v$version" >&2
+            exit 1
+          fi
+      - run: cargo build --release --locked -p nml-cli
+      - name: Package
+        run: |
+          name="nml-$GITHUB_REF_NAME-${{ matrix.target }}"
+          mkdir "$name"
+          cp LICENSE.md "$name/"
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp target/release/nml.exe "$name/"
+            7z a "$name.zip" "$name" > /dev/null
+          else
+            cp target/release/nml "$name/"
+            tar -czf "$name.tar.gz" "$name"
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            nml-*.tar.gz
+            nml-*.zip
+
+  release:
+    name: Release
+    needs: [build-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: docs
+          path: docs
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tar -czf "nml-$GITHUB_REF_NAME-docs.tar.gz" -C docs .
+          sha256sum nml-* > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" nml-* SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
