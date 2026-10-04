@@ -1056,11 +1056,12 @@ fn dependency(kind: &str, value: &str) -> Result<Dependency> {
 					.and_then(Json::as_str)
 					.ok_or_else(|| corrupt("query without text"))?
 					.into(),
+				// Written signed by `encode_dependency`.
 				fingerprint: map
 					.get("fingerprint")
 					.and_then(Json::as_i64)
-					.ok_or_else(|| corrupt("query without fingerprint"))?
-					as u64,
+					.map(|fingerprint| fingerprint as u64)
+					.ok_or_else(|| corrupt("query without fingerprint"))?,
 			}
 		}
 		"env" => {
