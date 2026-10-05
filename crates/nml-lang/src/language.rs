@@ -370,8 +370,19 @@ impl Lower<'_, '_> {
 			.map_err(AddRuleError::Rule)
 	}
 
+	/// Whether a node keeps the prologue going: a prologue command, or comments, such as
+	/// the `::` lines that document a module.
 	fn is_prologue_node(&self, node: &Node) -> bool {
-		matches!(node, Node::Match(m) if self.language().prologue.contains(&m.rule))
+		match node {
+			Node::Match(m) => self.language().prologue.contains(&m.rule),
+			Node::Comment(_) => true,
+			Node::Paragraph { children, .. } => children.iter().all(|child| match child {
+				Node::Comment(_) => true,
+				Node::Text(token) => token.content().trim().is_empty(),
+				_ => false,
+			}),
+			_ => false,
+		}
 	}
 
 	/// Lowers nodes into the open element. Adjacent text and escapes become one text element,
@@ -740,6 +751,27 @@ mod tests {
 			show(document, document.root()),
 			r#"document[paragraph["a @ b"]]"#
 		);
+	}
+
+	#[test]
+	fn comments_are_part_of_the_prologue() {
+		// A module's documentation comes first.
+		let language = extensible();
+		let compiled = compile_text(&language, ":: The doc.\n:: More.\n\n:enable\n\na @ b\n");
+		let document = &compiled.unit.document;
+		assert_eq!(
+			show(document, document.root()),
+			r#"document[paragraph["a " "AT" " b"]]"#
+		);
+		assert!(
+			compiled.diagnostics.is_empty(),
+			"{:?}",
+			compiled.diagnostics
+		);
+		// Text ends it.
+		let compiled = compile_text(&language, "Text. :: a comment\n\n:enable\n");
+		let document = &compiled.unit.document;
+		assert!(show(document, document.root()).contains("OutsidePrologue"));
 	}
 
 	#[test]
