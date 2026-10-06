@@ -1,0 +1,26 @@
+:: The documentation's own syntax, imported by every page with `:import docs.page`.
+::
+:: `:example`, then a fenced block of NML: its source, and beside it what it makes.
+
+:lua
+```
+-- `:example`, then a fenced block of NML: its source, and beside it what it makes.
+nml.rule {
+	name = "example",
+	atoms = {
+		nml.line_start, ":example", nml.line_end,
+		nml.line_start, nml.capture("fence", nml.run("`", 3)), nml.line_end,
+		nml.capture("body", nml.content),
+		nml.line_start, nml.same("fence"), nml.line_end,
+	},
+	handler = function(m, out)
+		local source = m.captures.body:gsub("\n$", "")
+		local code = nml.element("code_block", { code = source, language = "nml", numbers = false })
+		out:element("layout", { type = "split", classes = { "example" }, code }, function()
+			out:content(m, "body")
+		end)
+	end,
+	doc = "**Example**: NML source, shown beside what it makes.",
+	snippet = ":example\n```\n${0}\n```",
+}
+```

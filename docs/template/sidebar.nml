@@ -1,0 +1,16 @@
+:: The sidebar of every page: the site's name, and the pages by category (`std.nav`).
+:: A page imports `std.nav`, sets its place in the menu, then includes it:
+::
+:: ```nml
+:: :import std.nav
+:: :import docs.page
+:: :export nav.category = Writing
+:: :export nav.order = 1
+:: :include /template/sidebar
+:: ```
+
+:layout sidebar
+**[[index#|NML]]**
+
+:nav
+:end

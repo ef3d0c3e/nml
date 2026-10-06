@@ -1,0 +1,55 @@
+/* The documentation's own styles, after nml.css. */
+
+/* Pages are short: their sections are not numbered. */
+.heading-number {
+	display: none;
+}
+
+.nml-sidebar > p:first-child {
+	font-size: 1.15rem;
+	margin-bottom: 1rem;
+}
+
+/* `:example`: the source, and beside it what it makes. */
+.example {
+	align-items: flex-start;
+	margin: 0 0 1.5rem;
+}
+
+.example > .part {
+	min-width: 0;
+}
+
+/* Long lines of source wrap rather than scroll. */
+.example > .part:first-child pre {
+	white-space: pre-wrap;
+}
+
+.example > .part > :first-child {
+	margin-top: 0;
+}
+
+.example > .part > :last-child {
+	margin-bottom: 0;
+}
+
+.example > .part:last-child {
+	border-left: 3px solid var(--nml-border);
+	padding-left: 1rem;
+}
+
+@media (max-width: 52rem) {
+	.example {
+		flex-direction: column;
+	}
+
+	.example > .part {
+		width: 100%;
+	}
+
+	.example > .part:last-child {
+		border-left: none;
+		border-top: 3px solid var(--nml-border);
+		padding: 0.75rem 0 0;
+	}
+}

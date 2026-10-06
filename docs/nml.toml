@@ -1,6 +1,17 @@
 # The documentation of NML, written in NML.
 pages = ["**/*.nml"]
-exclude = []
+# The template every page includes.
+exclude = ["template/**"]
 
 [html]
 language = "en"
+stylesheets = ["docs.css"]
+static = "static"
+
+[render.tex.main]
+preamble = "\\usepackage{amsmath}"
+
+# The documentation's own syntax: `:import docs.page`.
+[[module]]
+name = "docs"
+root = "template"
