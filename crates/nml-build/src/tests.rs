@@ -1293,10 +1293,30 @@ fn std_modules() {
 	workspace.write("docs/guide.nml", ":export nav.category = Guides\n# Guide\n");
 	let report = workspace.build();
 	assert_eq!(report.written, ["docs/guide.nml", "index.nml"]);
+	let index = workspace.output("index.html");
 	assert!(
-		workspace
-			.output("index.html")
-			.contains("<li class=\"category\">Guides<ul>")
+		index.contains("<li class=\"category\">Guides<ul>"),
+		"{index}"
+	);
+	// Groups in the order of their first page: Docs has one at 1, Guides none.
+	assert!(
+		index.find(">Docs<").unwrap() < index.find(">Guides<").unwrap(),
+		"{index}"
+	);
+	workspace.write(
+		"docs/guide.nml",
+		":export nav.category = Guides\n:export nav.order = 0\n# Guide\n",
+	);
+	workspace.build();
+	let index = workspace.output("index.html");
+	assert!(
+		index.find(">Guides<").unwrap() < index.find(">Docs<").unwrap(),
+		"{index}"
+	);
+	// Pages without a category stay first.
+	assert!(
+		index.find(">Home<").unwrap() < index.find(">Guides<").unwrap(),
+		"{index}"
 	);
 
 	// An unknown module of `std`.

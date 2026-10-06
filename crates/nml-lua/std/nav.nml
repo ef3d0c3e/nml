@@ -10,7 +10,8 @@
 :: A page sets where it appears with exported variables:
 ::
 :: * `nav.category`: its group. Pages without one come first.
-:: * `nav.order`: a number, to order the pages of a group; then by title.
+:: * `nav.order`: a number, to order the pages of a group; then by title. Groups come in
+::   the order of their first page, then by name.
 :: * `nav.title`: shown instead of the page's title.
 ::
 :: ```nml
@@ -33,10 +34,21 @@ function menu()
 		end
 		table.insert(groups[category], page)
 	end
-	table.sort(names)
 	local function order(page)
 		return tonumber(page.variables["nav.order"]) or math.huge
 	end
+	-- Pages without a category first; then the groups in the order of their first page,
+	-- then by name.
+	local function first(name)
+		local least = math.huge
+		for _, page in ipairs(groups[name]) do least = math.min(least, order(page)) end
+		return least
+	end
+	table.sort(names, function(a, b)
+		if (a == "") ~= (b == "") then return a == "" end
+		if first(a) ~= first(b) then return first(a) < first(b) end
+		return a < b
+	end)
 	local items = {}
 	for _, name in ipairs(names) do
 		local pages = groups[name]
