@@ -1,0 +1,67 @@
+:import std.nav
+:import docs.page
+:export nav.category = Getting started
+:export nav.order = 11
+:export nav.title = A first workspace
+:include /template/sidebar
+
+# A first workspace
+
+A *workspace* is a directory of `.nml` files with an `nml.toml` at its root. NML builds it into a site: one HTML page per page file, linked to one another.
+
+## Creating one
+
+```sh
+nml init notes
+cd notes
+```
+
+`nml init` writes a starting `nml.toml`, and in `.nml/` what editors use: the declarations of the Lua API for [LuaLS](https://luals.github.io), and the sources of the standard modules. Running it again in a workspace only refreshes `.nml/`.
+
+## Writing a page
+
+Every `.nml` file is a page unless [[configuration#pages|the configuration]] says otherwise. Write `index.nml`:
+
+:example
+````
+# Notes
+
+Some *notes*, with a [link](https://example.org)
+and a list:
+
+ * First
+ * Second
+````
+
+The [[text#]] page starts the tour of the syntax.
+
+## Building
+
+```sh
+nml build
+```
+
+Pages are written to `public/`: `index.nml` becomes `public/index.html`, `guide/setup.nml` becomes `public/guide/setup.html`. Next to them are `nml.css`, the default style, and the media pages use.
+
+Builds are incremental: only the files that changed are parsed again, and only the pages whose content or links changed are written. Errors are printed with where they are, and make `nml build` fail. See [[building#]].
+
+## Previewing
+
+```sh
+nml serve --open
+```
+
+`nml serve` serves the workspace at `http://127.0.0.1:<port>`, and opens it in the browser with `--open`. It watches the files: the page in the browser follows each saved change. Nothing is written to `public/`.
+
+Editors do better: with the [[editors#|language server]], the preview follows every change before it is saved, and scrolls to where the cursor is.
+
+## One file
+
+A single file needs no workspace:
+
+```sh
+nml build letter.nml
+nml build letter.nml --output letter.html
+```
+
+Its page is written next to it, unless `--output` says where.

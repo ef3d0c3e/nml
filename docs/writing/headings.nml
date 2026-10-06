@@ -1,0 +1,47 @@
+:import std.nav
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 21
+:include /template/sidebar
+
+# Headings
+
+A heading is a line that starts with `#` to `######` and a space: one `#` per level.
+
+:example
+```
+# A title
+## A section
+### A subsection
+```
+
+Headings are numbered by their level, as `1.`, `1.1.`, `1.2.`: the page's style decides whether numbers show. Each one gets a link to itself, and an `id` made from its text.
+
+## Names and classes
+
+After the title, braces give the heading a name, `#name`, and HTML classes, `.class`:
+
+:example
+```
+## Installation {#install .wide}
+
+See [[install]].
+```
+
+A named heading can be [[references#|referenced]]: `[[install]]` shows its title and links to it. The name is also its `id` in the page.
+
+Two classes change how a heading is treated:
+
+| Class | Effect |
+|:------|:-------|
+| `unnumbered` | No number. |
+| `unlisted` | Left out of tables of contents (see [[std#toc]]). |
+
+:example
+```
+## Preface {.unnumbered .unlisted}
+```
+
+## The page's title
+
+The first heading of a page is its title: the browser's tab shows it, and references to the page (`[[page#]]`) show it. A page without a heading is titled with its file's name.

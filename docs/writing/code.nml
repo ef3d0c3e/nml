@@ -1,0 +1,70 @@
+:import std.nav
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 24
+:include /template/sidebar
+
+# Code
+
+## Code blocks {#code-block}
+
+A code block is between fences of three backticks or more. The language follows the opening fence, and highlights the code.
+
+:example
+````
+```rust
+fn main() {
+    println!("Hello");
+}
+```
+````
+
+A title follows the language:
+
+:example
+````
+```python greet.py
+print("Hello")
+```
+````
+
+The code is shown as written: nothing in it is markup. To hold a fence of three backticks, use a longer one around it.
+
+Languages are named by their name in lower case, such as `rust`, `python` or `c++`, or by a file extension, such as `rs` or `py`: editors complete them. Code in an unknown language is shown without highlighting, with a warning. The [[style#code-themes|configuration]] picks the colors.
+
+## Options
+
+Options follow the language, in brackets.
+
+:example
+````
+```rust[line_offset=10, max_lines=3]
+let a = 1;
+let b = 2;
+let c = 3;
+let d = 4;
+```
+````
+
+| Option | |
+|:-------|:-|
+| `line_offset` | The number of the first line. Default: 1. |
+| `numbers` | Whether lines are numbered: `true` or `false`. Default: `true`. |
+| `max_lines` | How many lines show before the rest scrolls. |
+
+## Listings
+
+A name, `#name`, before the title makes the block a numbered listing, which [[references#|references]] can point to.
+
+:example
+````
+```rust #entry The entry point
+fn main() {}
+```
+
+[[entry]] starts the program.
+````
+
+## Inline code
+
+`` `code` `` is code in a line, and ``:code[rust]`…` `` highlights it: see [[text#inline-code]].

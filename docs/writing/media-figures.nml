@@ -1,0 +1,49 @@
+:import std.nav
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 26
+:export nav.title = Media and figures
+:include /template/sidebar
+
+# Media and figures
+
+## Media {#media}
+
+`![text](path)` shows an image, a video or an audio file. The text describes it for those who cannot see it.
+
+:example
+```
+![Two boxes, from .nml to .html](/media/diagram.svg)
+```
+
+The path is relative to the page, or to the workspace's root with a leading `/`. A file of the workspace is copied to the output's `assets/`, and the page points to the copy; a URL is used as it is.
+
+Options follow, in brackets, and a name and classes in braces:
+
+:example
+```
+![The build](/media/diagram.svg)[width=50%]{#build}
+
+[[build]] shows the build.
+```
+
+| Option | |
+|:-------|:-|
+| `width` | A CSS width, such as `50%` or `20rem`. |
+| `type` | `image`, `video` or `audio`; by default, from the file's extension. |
+
+A named medium is numbered with the page's other figures.
+
+## Figures {#figure}
+
+`:figure`, a name and a caption, put the block after it in a numbered figure:
+
+:example
+```
+:figure #pipeline From source to page
+![](/media/diagram.svg)
+
+[[pipeline]] sums it up.
+```
+
+The block can be anything: a code block, a table, a layout of several images. Rendered blocks — `:graph`, `:tex`, `:typst` — take a name and a caption themselves: see [[math-diagrams#figures]].

@@ -1,0 +1,85 @@
+:import std.nav
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 20
+:export nav.title = Text
+:include /template/sidebar
+
+# Text
+
+## Paragraphs {#paragraphs}
+
+Text is written in paragraphs, separated by blank lines. The lines of a paragraph are joined: break them where it suits the source.
+
+:example
+```
+A paragraph, written
+on three lines of
+the source.
+
+Another paragraph.
+```
+
+## Styles {#styles}
+
+:example
+```
+**bold**, *italic*, __underlined__,
+==highlighted== and ~~struck~~.
+
+Styles nest: ***bold and italic***,
+**bold with *italic* inside**.
+```
+
+A style's markers are around its text, in the same paragraph: `*` opens italic, and the next `*` closes it. A marker that is not closed is an error, so a `*` meant as a star is escaped.
+
+## Escapes {#escapes}
+
+A backslash makes the character after it plain text: `\*`, `\[`, `\$`, `\%`, `\\`.
+
+:example
+```
+\*not italic\*, a price of \$5,
+\[brackets], and a backslash: \\.
+```
+
+## Comments {#comments}
+
+`::` starts a comment, to the end of the line, at the start of a line or after a space. Comments are not part of the page.
+
+:example
+```
+Shown. :: not shown
+:: not shown either
+Shown too.
+```
+
+## Inline code {#inline-code}
+
+Code in a line is between backticks, shown as written. Around code that holds backticks, use longer runs of them.
+
+:example
+```
+`let x = 1;`, and ``a `tick` inside``.
+```
+
+`:code` highlights it in a language, named as for [[code#code-block|code blocks]]:
+
+:example
+```
+:code[rust]`let x: u32 = 1;`
+```
+
+## Links {#links}
+
+:example
+```
+[NML on GitHub](https://github.com/ef3d0c3e/nml),
+and a bare one: [](https://example.org).
+```
+
+A link without text shows its URL. Links are for URLs; to point to a heading, a figure or another page of the workspace, use a [[references#|reference]], which follows its target when it moves.
+
+## Line breaks and rules
+
+There is no syntax for a line break inside a paragraph, nor for a horizontal rule. [[blocks#raw|Raw HTML]] gives both: ``:raw`<br>` ``, and a `:raw` block with `<hr>`.

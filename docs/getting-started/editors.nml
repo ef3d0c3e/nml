@@ -1,0 +1,54 @@
+:import std.nav
+:import docs.page
+:export nav.category = Getting started
+:export nav.order = 12
+:include /template/sidebar
+
+# Editors
+
+`nml lsp` is NML's language server. Any editor with a client of the Language Server Protocol can use it, on a workspace or on a single file.
+
+## What it does
+
+ * **Diagnostics** as you type, for the file and for the pages that depend on it.
+ * **Completion** of syntax, references, variables, modules, files, code languages and options, with snippets.
+ * **Hover**: what the syntax under the cursor does, what a reference points to, a variable's value, a module's documentation.
+ * **Go to definition** and **references**: of headings, figures and anchors, of variables, of imported modules and of the syntax they define.
+ * **Semantic highlighting**, inlay hints (the numbers of references) and code actions.
+ * **Lua**: in `:lua` code, completion, hover and diagnostics come from [LuaLS](https://github.com/LuaLS/lua-language-server), with the NML API declared, when it is installed. NML finds it on the `PATH`, or where `NML_LUALS` says.
+ * The **live preview** of the page in the browser.
+
+## Neovim
+
+The [nml-nvim](https://github.com/ef3d0c3e/nml-nvim) plugin registers the server, and draws what it describes beyond the protocol: concealed markup, list bullets and checkboxes, the bars of quotes and callouts, and code blocks in their language's syntax. It needs Neovim 0.11. With [lazy.nvim](https://github.com/folke/lazy.nvim):
+
+```lua
+{
+	"ef3d0c3e/nml-nvim",
+	opts = {},
+}
+```
+
+Concealing needs `conceallevel` set to 2; the line under the cursor is always shown as written. The plugin's README lists its options.
+
+Without the plugin, the server needs only the filetype and a configuration:
+
+```lua
+vim.filetype.add({ extension = { nml = "nml" } })
+vim.lsp.config("nml", {
+	cmd = { "nml", "lsp" },
+	filetypes = { "nml" },
+	root_markers = { "nml.toml", ".git" },
+})
+vim.lsp.enable("nml")
+```
+
+## Other editors
+
+Start `nml lsp` for `.nml` files, on standard input and output, with the directory of `nml.toml` as the root. The extensions nml-nvim uses are requests any client can send: `textDocument/conceal`, `textDocument/style` and `textDocument/codeRange`.
+
+## Live preview
+
+The `nml.preview` command starts the preview of a page, and returns its URL; nml-nvim runs it with `:NmlPreview`. The browser shows the page as it is in the editor: every change, saved or not, is shown once typing pauses, and the other pages follow when files are saved. With the `nml/cursor` notification, which nml-nvim sends, the page scrolls to the block under the cursor.
+
+The preview serves on `127.0.0.1` only. Without an editor, `nml serve` gives the same preview of saved files.

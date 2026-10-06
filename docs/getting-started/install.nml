@@ -1,0 +1,57 @@
+:import std.nav
+:import docs.page
+:export nav.category = Getting started
+:export nav.order = 10
+:include /template/sidebar
+
+# Installation
+
+NML is one program, `nml`: it builds documents, serves their live preview, and is the language server of editors.
+
+## From a release
+
+Each release of NML on [GitHub](https://github.com/ef3d0c3e/nml/releases) has archives of `nml` for Linux (x86-64 and ARM), macOS (Apple silicon) and Windows. Extract the archive, and put `nml` in a directory of your `PATH`:
+
+```sh
+tar -xzf nml-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
+cp nml-v0.1.0-x86_64-unknown-linux-gnu/nml ~/.local/bin/
+nml --version
+```
+
+The `SHA256SUMS` file of the release checks the archives: `sha256sum -c --ignore-missing SHA256SUMS`.
+
+## From source
+
+Building NML needs [Rust](https://www.rust-lang.org/tools/install) and a C compiler: Lua and SQLite are built with it, and nothing else is needed at run time.
+
+```sh
+git clone https://github.com/ef3d0c3e/nml
+cd nml
+cargo install --locked --path crates/nml-cli
+```
+
+`cargo install` puts `nml` in `~/.cargo/bin`.
+
+## Renderers {#renderers}
+
+Math, LaTeX, graphs and Typst are drawn by programs NML runs when a page is built. Each is needed only by the pages that use it; a page that needs a missing one fails to build, and says which.
+
+| Writing | Needs |
+|:--------|:------|
+| `$math$`, `:tex` | `latex` and `dvisvgm` from a TeX distribution, with the `standalone` and `preview` packages |
+| `:graph` | `dot`, from [Graphviz](https://graphviz.org) |
+| `:typst` | [`typst`](https://github.com/typst/typst) |
+
+On Debian or Ubuntu:
+
+```sh
+sudo apt install texlive-latex-extra texlive-pictures dvisvgm graphviz
+```
+
+`texlive-pictures` brings TikZ. Typst is one program, from its releases.
+
+The programs are found on the `PATH`; [[configuration#render|the configuration]] can name others. Their results are cached: a formula is drawn again only when its source or its environment changes.
+
+## Editors
+
+`nml lsp` is the language server, for any editor that speaks the Language Server Protocol: see [[editors#]].

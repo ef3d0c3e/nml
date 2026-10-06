@@ -1,0 +1,70 @@
+:import std.nav
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 30
+:export nav.title = Documents and modules
+:include /template/sidebar
+
+# Documents and modules
+
+## The prologue {#prologue}
+
+A document starts with its *prologue*: the commands before its first content. Imports, variables, and the Lua that defines syntax go there. The prologue ends at the first other block.
+
+```
+:import std.toc
+:set author = Ada
+:export nav.category = Guides
+
+# The title
+```
+
+Comments do not end the prologue, so a file can start with a comment that says what it is.
+
+## Including {#include}
+
+`:include` puts another file's content where it is, as part of this document:
+
+```
+:include parts/intro
+```
+
+The path is relative to the document, or to the workspace's root with a leading `/`; `.nml` may be left out. The included file sees the document's grammar and variables, and what it names belongs to the document: its headings are numbered with the document's, and referenced as the document's.
+
+Includes are for parts of one document, and for what many pages share: this documentation's pages each include a file with their sidebar.
+
+## Pages and libraries {#libraries}
+
+Every `.nml` file of the workspace is a *page*, written to the output, unless the [[configuration#pages|configuration]] says otherwise. The other files are *libraries*: they are checked, but have no page. Files that are only included, and modules, are libraries:
+
+```
+pages = ["**/*.nml"]
+exclude = ["parts/**", "lib/**"]
+```
+
+## Modules {#import}
+
+A module is a library whose syntax, Lua and exported variables a document takes with `:import`, in its prologue:
+
+```
+:import std.toc
+:import lib.glossary as g
+```
+
+The module's Lua runs in its own namespace, `g` here (by default, the module's last name), and its exported variables are `%g.name%`. The rules it defines — its syntax — become part of the document's grammar. Unlike an include, an import puts no content in the document.
+
+Modules are found in the roots the configuration names: `:import lib.glossary` is `<root of lib>/glossary.nml`.
+
+```
+[[module]]
+name = "lib"
+root = "lib"
+```
+
+`std` is NML's standard library, built into `nml`: [[std#]] describes its modules.
+
+A module documents itself with the comments it starts with, in Markdown: editors show them when the import is hovered or completed.
+
+## Building again {#dependencies}
+
+A page is built again when a file it includes or imports changes, and relinked when what its references point to changes. See [[building#]].

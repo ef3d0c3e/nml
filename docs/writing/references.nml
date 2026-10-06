@@ -1,0 +1,58 @@
+:import std.nav
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 27
+:include /template/sidebar
+
+# References
+
+A reference is a link to something named in the workspace: a heading, a figure, a table, a listing, an anchor, or a page. It shows what it points to — a number, a title — and follows it: when the target is renumbered, renamed or moved, the reference changes with it.
+
+:example
+```
+## Setup {#setup}
+
+:figure #plan The plan
+![](/media/diagram.svg)
+
+[[setup]] and [[plan]].
+```
+
+## Forms
+
+| Reference | Points to |
+|:----------|:----------|
+| `[[name]]` | `name` in this page, or else the only one of the workspace with that name. |
+| `[[page#name]]` | `name` in the page `page`. |
+| `[[page#]]` | The page `page` itself. |
+| `[[#name]]` | `name` anywhere in the workspace: it must be unique. |
+
+A page is named by its file's name without `.nml`: `writing/references.nml` is `references`. A page can choose another name with the variable `nml.reference_key` (see [[variables#]]).
+
+A reference to nothing, or to a name several pages use, is an error that says which.
+
+## Captions
+
+Without a caption, a reference shows its target's label: *Figure 2* for a figure, the title for a heading or a page. A caption, after `|`, replaces it, and can show the target's `{title}`, `{number}` and `{label}`:
+
+:example
+```
+:figure #cell A cell
+![](/media/diagram.svg)
+
+See [[cell|figure {number}]], or
+[[cell|the one titled “{title}”]].
+```
+
+## Anchors {#anchor}
+
+`:anchor` marks a place to refer to, with an optional title, where there is nothing else to name:
+
+:example
+```
+:anchor defaults The default settings
+
+The defaults are below.
+
+[[defaults]] links here.
+```

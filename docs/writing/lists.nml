@@ -1,0 +1,71 @@
+:import std.nav
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 22
+:include /template/sidebar
+
+# Lists
+
+An entry of a list is a line that starts with a space, a marker and a space: `*` for a bulleted list, `-` for a numbered one. Consecutive entries make one list.
+
+:example
+```
+ * Apples
+ * Pears
+
+ - Wash
+ - Peel
+ - Eat
+```
+
+## Nesting
+
+The run of markers is the entry's depth: one more marker puts it in a list inside the entry above, and the last marker says what kind that list is.
+
+:example
+```
+ * Fruits
+ ** Apples
+ ** Pears
+ *- First, wash them
+ *- Then, eat them
+ * Vegetables
+```
+
+An entry continues on the next lines, indented as far as its text:
+
+:example
+```
+ * An entry that goes on
+   for a few lines.
+ * The next one.
+```
+
+## Checkboxes
+
+A checkbox comes after the markers: `[ ]` unchecked, `[-]` partly, `[x]` checked.
+
+:example
+```
+ * [x] Write the draft
+ * [-] Review it
+ * [ ] Publish
+```
+
+## Options
+
+Options, in brackets right after the markers, change the list from that entry on.
+
+:example
+```
+ -[offset=4] Starts at four
+ - Five
+
+ *[bullet=square] Square
+ * bullets
+```
+
+| Option | Values |
+|:-------|:-------|
+| `offset` | The entry's number. On the first entry, where the list starts. |
+| `bullet` | Numbered lists: `1`, `a`, `A`, `i`, `I`. Bulleted lists: `disc`, `circle`, `square`, `none`. |

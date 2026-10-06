@@ -15,7 +15,7 @@ nml.rule {
 	},
 	handler = function(m, out)
 		local source = m.captures.body:gsub("\n$", "")
-		local code = nml.element("code_block", { code = source, language = "nml", numbers = false })
+		local code = nml.element("code_block", { code = source, numbers = false })
 		out:element("layout", { type = "split", classes = { "example" }, code }, function()
 			out:content(m, "body")
 		end)

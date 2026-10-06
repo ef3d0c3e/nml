@@ -5,3 +5,36 @@
 :include /template/sidebar
 
 # NML
+
+*NML* is a markup language for documents that need more than text: references that follow what they point to, numbered figures and tables, math, diagrams and code, and Lua scripts that compute content or add syntax. It builds a directory of documents into a site of HTML pages.
+
+:example
+````
+# Orbits {#orbits}
+
+A planet's period $T$ and its orbit's
+semi-major axis $a$ follow
+
+$$T^2 \propto a^3$$
+
+:graph #bodies The two bodies
+```
+digraph { rankdir=LR; Sun -> Earth }
+```
+
+[[bodies]] shows them; [[orbits]] is
+the section.
+````
+
+## What it is like
+
+ * **Plain text first.** Paragraphs, `**bold**`, lists with `*` and `-`, `# headings`: what the eye expects.
+ * **Everything has a name.** Headings, figures, tables and anchors are referenced with `[[name]]`, in the page or across the workspace. A reference shows its target's number or title, and follows it when it changes.
+ * **Rendered at build time.** LaTeX math, TikZ, Graphviz and Typst become SVG in the page, cached between builds. Pages need no script to show them.
+ * **Programmable.** Lua runs as the document is parsed: it computes text, builds elements, and defines new syntax that editors then complete and document.
+ * **Incremental.** A workspace's index remembers what each page uses, so a build parses only what changed, and relinks the pages that depend on it.
+ * **Edited live.** The language server checks as you type, completes references, and drives a browser preview that follows the cursor.
+
+## Where to start
+
+[[install#]], then [[first-workspace#]]. [[text#]] begins the syntax.

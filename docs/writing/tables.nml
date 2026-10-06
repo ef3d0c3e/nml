@@ -1,0 +1,77 @@
+:import std.nav
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 25
+:include /template/sidebar
+
+# Tables
+
+A table is rows of cells between pipes. A separator row of dashes makes the rows above it the header, and `:` in it aligns the columns: on the left, on the right, or on both sides to center.
+
+:example
+```
+| Fruit  | Price | Stock |
+|:-------|------:|:-----:|
+| Apples |  2.50 |  yes  |
+| Pears  |  3.10 |  no   |
+```
+
+Cells hold inline markup. A table without a separator row has no header.
+
+## Spans and cell options
+
+A cell's options come right after its pipe.
+
+:example
+```
+| Name |[hspan=2] Contact   |
+|------|---------|---------|
+| Ada  | ada@example.org | London |
+|[vspan=2] Both | a | b |
+| c | d |
+```
+
+| Option | |
+|:-------|:-|
+| `hspan` | How many columns the cell covers. |
+| `vspan` | How many rows the cell covers. |
+| `align` | The cell's alignment: `left`, `center`, `right`. |
+
+## Numbered tables
+
+`:table`, a name and a caption, before a table, number it and make it a target of [[references#|references]].
+
+:example
+```
+:table #prices Prices in 2026
+| Tea | 3 |
+| Coffee | 4 |
+
+[[prices]] lists them.
+```
+
+## Tables for scripts
+
+`:table[lua=name]` gives the table's cells to the page's [[lua#|Lua]], as `nml.tables.name`: a list of rows, each a list of the cells' text.
+
+:example
+````
+:table[lua=sales]
+| Month | Sales |
+|-------|------:|
+| May   |    12 |
+| June  |    30 |
+
+:lua
+```
+local total = 0
+for i = 2, #nml.tables.sales do
+  total = total + tonumber(nml.tables.sales[i][2])
+end
+SALES = total
+```
+
+In all: :lua`SALES`.
+````
+
+With only options, the table is not numbered; `:table[lua=sales] #sales Sales` does both.

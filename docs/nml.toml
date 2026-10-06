@@ -9,7 +9,7 @@ stylesheets = ["docs.css"]
 static = "static"
 
 [render.tex.main]
-preamble = "\\usepackage{amsmath}"
+preamble = "\\usepackage{amsmath}\\usepackage{tikz}"
 
 # The documentation's own syntax: `:import docs.page`.
 [[module]]

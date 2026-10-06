@@ -1,0 +1,104 @@
+:import std.nav
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 23
+:export nav.title = Quotes and blocks
+:include /template/sidebar
+
+# Quotes and blocks
+
+## Quotes {#quote}
+
+Lines that start with `> ` are a quote. Its content is blocks, as anywhere else.
+
+:example
+```
+> A quote, on two lines,
+> with **markup**.
+>
+> > And a quote inside.
+```
+
+To say whose words they are, write the quote as a `quote` callout, with options:
+
+:example
+```
+> [!quote][author=Ada Lovelace, cite=Notes]
+> The Analytical Engine weaves
+> algebraical patterns.
+```
+
+`author`, `cite` (the work) and `url` (where it is) are all optional.
+
+## Callouts {#callout}
+
+A callout is a quote that starts with its kind, `[!kind]`, and an optional title.
+
+:example
+```
+> [!warning] Before you start
+> Back up your files.
+
+> [!tip]
+> Callouts hold any blocks:
+> * lists,
+> * code, tables…
+```
+
+| Kind | For |
+|:-----|:----|
+| `note` | Something to know. |
+| `tip` | A better way. |
+| `important` | Something not to miss. |
+| `warning` | A risk. |
+| `caution` | A danger. |
+| `todo` | What is left to do. |
+| `quote` | A quotation, with its source. |
+
+## Layouts {#layout}
+
+A layout arranges blocks: `:layout` and its name, the parts separated by `:next`, and `:end`.
+
+:example
+```
+:layout split
+The left part.
+:next
+ * The right
+ * part.
+:end
+```
+
+:example
+```
+:layout spoiler The answer
+42.
+:end
+```
+
+| Layout | Parts | |
+|:-------|:------|:-|
+| `split` | Any number | Side by side. |
+| `centered` | One | Centered. |
+| `spoiler` | One | Hidden until the reader opens it; the title is what shows. |
+| `sidebar` | One | Beside the page's content, in its sidebar, when it is not inside another block. |
+
+`:end layout` may close a layout too, to make clear what ends where.
+
+The sidebar is how a site adds navigation: this documentation's pages include a file with a `:layout sidebar` that holds a [[std#nav|menu]].
+
+## Raw HTML {#raw}
+
+`:raw` and a fenced block writes HTML to the page as it is; ``:raw`…` `` does it in a line.
+
+:example
+````
+:raw
+```
+<hr>
+```
+
+A line:raw`<br>`break.
+````
+
+NML does not check raw HTML: it is for what NML cannot write. Text that a [[lua#|script]] returns is always escaped; scripts write HTML with a `raw` element.

@@ -1,0 +1,61 @@
+:import std.nav
+:import docs.page
+:set version = 2.1
+:set product = **NML** :: markup, parsed where it is used
+:path logo = /media/diagram.svg
+:export nav.category = Writing
+:export nav.order = 29
+:include /template/sidebar
+
+# Variables
+
+A variable is a name for a piece of markup. It is set in the [[documents#prologue|prologue]], before the page's content, and used as `%name%`:
+
+```
+:set version = 2.1
+:set product = **NML**
+```
+
+:example
+```
+%product% %version% is out.
+```
+
+The value is parsed as markup where the variable is used, as if it were written there: `**NML**` is bold.
+
+## Paths {#path}
+
+`:path` sets a variable to a file. The path is resolved from the file that sets it, so the variable names the same file wherever it is used: in text, and in the paths of media, links and includes.
+
+```
+:path logo = /media/diagram.svg
+```
+
+:example
+```
+![The logo](%logo%)[width=30%]
+```
+
+## Exported variables {#export}
+
+`:export` sets a variable as `:set` does, and makes it part of what the page offers others:
+
+ * Pages that [[documents#import|import]] it as a module see it as `%namespace.name%`.
+ * Scripts that list the workspace's pages see it, as [[std#nav|std.nav]] reads `nav.category`.
+
+```
+:export nav.category = Writing
+```
+
+`:export-path` exports a path variable.
+
+## Built-in variables
+
+| Variable | |
+|:---------|:-|
+| `nml.reference_key` | The page's name in references, instead of its file's name: `[[name#]]`. |
+| `nml.output` | Where the page is written in the output directory, instead of its path with `.html`. |
+
+```
+:set nml.output = about/index.html
+```
