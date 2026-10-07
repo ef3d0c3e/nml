@@ -53,3 +53,13 @@
 		padding: 0.75rem 0 0;
 	}
 }
+
+/* On narrow screens the sidebar is above the content: a short, scrolling box. */
+@media (max-width: 52rem) {
+	.nml-sidebar {
+		max-height: 14rem;
+		overflow-y: auto;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--nml-border);
+	}
+}

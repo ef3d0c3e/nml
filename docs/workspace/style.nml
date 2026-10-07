@@ -1,0 +1,62 @@
+:import std.nav
+:import docs.page
+:export nav.category = Workspace
+:export nav.order = 52
+:include /template/sidebar
+
+# Style
+
+Pages link `nml.css`, NML's default style: readable text in a centered column, in a light or a dark color scheme as the reader's system prefers, on screens of any width.
+
+## Changing it {#own}
+
+Stylesheets in the [[configuration#html|configuration]] come after `nml.css`, so they change what they need:
+
+```
+[html]
+stylesheets = ["site.css"]
+static = "static"
+```
+
+`static/site.css` is copied to the output as `site.css`. Most changes need only the variables of `nml.css`:
+
+```css
+:root {
+	--nml-font: "Iowan Old Style", Georgia, serif;
+	--nml-measure: 80ch;
+	--nml-link: #8a2be2;
+}
+```
+
+| Variable | |
+|:---------|:-|
+| `--nml-font`, `--nml-font-mono` | The fonts of text, and of code. |
+| `--nml-text`, `--nml-muted`, `--nml-background` | The colors of text, of secondary text, and of the page. |
+| `--nml-surface`, `--nml-border` | The background of code and tables, and lines. |
+| `--nml-link`, `--nml-mark` | Links, and highlighted text. |
+| `--nml-note`, `--nml-tip`, `--nml-important`, `--nml-warning`, `--nml-caution`, `--nml-todo` | The colors of callouts. |
+| `--nml-measure` | The width of the text column. |
+| `--nml-sidebar-width` | The width of the sidebar. |
+| `--nml-radius` | Rounded corners. |
+
+The dark scheme sets the colors again in a `prefers-color-scheme: dark` media query: a stylesheet that changes colors sets both.
+
+`default_style = false` drops `nml.css`, for a style of one's own.
+
+## The page {#shell}
+
+A page's body is a `div.nml-page` around `main.nml-main`, the content, and `aside.nml-sidebar` when the page has a [[blocks#layout|sidebar]]. Elements carry classes a stylesheet can use: `heading-number`, `listing-number`, `callout note`, `layout split`, `rendered math`… Classes given in braces, `{.wide}`, are added to them.
+
+## Code themes {#code-themes}
+
+`code_theme` and `code_theme_dark` color highlighted code, in the light and the dark scheme. The themes are `InspiredGitHub`, `Solarized (light)`, `Solarized (dark)`, `base16-ocean.light`, `base16-ocean.dark`, `base16-eighties.dark` and `base16-mocha.dark`.
+
+```
+[html]
+code_theme = "Solarized (light)"
+code_theme_dark = "Solarized (dark)"
+```
+
+## Math and diagrams
+
+[[math-diagrams#|Rendered images]] are drawn in the text's color, `currentColor`, so they follow the scheme and the stylesheet. Colors given in their source stay.

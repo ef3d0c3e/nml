@@ -1,0 +1,71 @@
+:import std.nav
+:import docs.page
+:export nav.category = Workspace
+:export nav.order = 50
+:include /template/sidebar
+
+# Configuration
+
+`nml.toml`, at the root of a workspace, configures it. Every key has a default: an empty file is a valid workspace. A key NML does not know is an error, so a typo does not go unnoticed. This documentation's:
+
+:lua`nml.element("code_block", { code = nml.read("/nml.toml"), numbers = false })`
+
+## Pages {#pages}
+
+| Key | Default | |
+|:----|:--------|:-|
+| `pages` | `["**/*.nml"]` | Patterns of the files that are pages, relative to the root. |
+| `exclude` | `[]` | Patterns of files that are not pages, even if `pages` matches them. |
+| `output` | `"public"` | Where pages are written, relative to the root. |
+| `database` | `".nml/index.db"` | The workspace's [[building#index|index]], relative to the root. |
+
+The other `.nml` files are libraries: see [[documents#libraries]]. Patterns are globs: `*` matches within a directory, `**` across directories.
+
+## HTML {#html}
+
+The `[html]` section configures the pages around the content.
+
+| Key | Default | |
+|:----|:--------|:-|
+| `language` | none | The `lang` of every page, such as `"en"`. |
+| `stylesheets` | `[]` | Stylesheets every page links to, after the default one. A relative URL is relative to the output directory. |
+| `icon` | none | The URL of the pages' icon. |
+| `default_style` | `true` | Whether pages link `nml.css`, the default style. |
+| `code_theme` | `"InspiredGitHub"` | The colors of highlighted code. |
+| `code_theme_dark` | `"base16-ocean.dark"` | The colors of highlighted code in a dark color scheme. |
+| `static` | none | A directory whose files are copied as they are to the output directory, at the same paths. |
+
+See [[style#]].
+
+## Renderers {#render}
+
+The `[render]` section names the programs that draw [[math-diagrams#|math and diagrams]], when they are not those on the `PATH`.
+
+| Key | Default |
+|:----|:--------|
+| `latex` | `"latex"` |
+| `dvisvgm` | `"dvisvgm"` |
+| `dot` | `"dot"` |
+| `typst` | `"typst"` |
+
+`[render.tex.<name>]` sections are LaTeX environments: `main` is the default one, and `:tex[env=name]` picks another.
+
+| Key | |
+|:----|:-|
+| `preamble` | What comes before `\begin{document}`: packages, macros. |
+| `font_size` | The font size, in points. Default: 10. |
+| `block_prepend` | What comes before the source of `:tex` blocks, but not math. |
+| `latex` | The LaTeX program of this environment, such as `"lualatex"`. |
+
+## Modules {#modules}
+
+Each `[[module]]` section is a root of [[documents#import|modules]]:
+
+| Key | |
+|:----|:-|
+| `name` | The first part of the modules' names: `name.a.b`. A workspace's own `std` replaces the standard library. |
+| `root` | The directory, relative to the workspace's root: `name.a.b` is `<root>/a/b.nml`. |
+
+## When it changes
+
+A change of the configuration builds every page again: it can change any of them.

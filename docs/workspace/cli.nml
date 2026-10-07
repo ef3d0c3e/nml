@@ -1,0 +1,50 @@
+:import std.nav
+:import docs.page
+:export nav.category = Workspace
+:export nav.order = 53
+:export nav.title = Command line
+:include /template/sidebar
+
+# Command line
+
+`nml` has four commands. `nml help <command>` describes each.
+
+## nml init {#init}
+
+```sh
+nml init [root]
+```
+
+Makes `root`, the current directory by default, a workspace: writes an `nml.toml` if there is none, and in `.nml/` the declarations of the Lua API and the sources of the standard library, for editors.
+
+## nml build {#build}
+
+```sh
+nml build [root]
+nml build file.nml [--output page.html]
+```
+
+Builds the workspace at `root`, the current directory by default: see [[building#]]. With a file instead, builds that one file without a workspace, next to it or to `--output`. Fails if there are errors. Errors are in color on a terminal.
+
+## nml serve {#serve}
+
+```sh
+nml serve [root] [--port 8080] [--open]
+```
+
+Serves the workspace's pages at `http://127.0.0.1:<port>`, a free port by default, and opens the browser with `--open`. It watches the workspace: on each saved change, it builds again — without writing the output — and the pages in the browser follow. Errors are printed as they come. It stops with `Ctrl-C`.
+
+## nml lsp {#lsp}
+
+```sh
+nml lsp
+```
+
+Runs the language server on standard input and output, for [[editors#|editors]].
+
+## Environment
+
+| Variable | |
+|:---------|:-|
+| `NML_LUALS` | Where the language server finds [LuaLS](https://luals.github.io). |
+| `SOURCE_DATE_EPOCH` | The time scripts see, for [[building#reproducible|reproducible builds]]. |

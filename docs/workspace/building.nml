@@ -1,0 +1,65 @@
+:import std.nav
+:import docs.page
+:export nav.category = Workspace
+:export nav.order = 51
+:include /template/sidebar
+
+# Building
+
+`nml build` builds the workspace, in steps:
+
+:graph #steps The steps of a build
+```
+digraph {
+  rankdir=LR
+  node [shape=box]
+  scan -> parse -> link -> write
+}
+```
+
+ * **Scan** finds what changed since the last build: files added, removed, or with new content.
+ * **Parse** reads the files that changed, and those that depend on them: the documents that include or import them, read them with `nml.read`, or call deferred functions whose pages changed.
+ * **Link** fills each page's references and later content, from what every page names.
+ * **Write** writes the pages whose output changed, copies the media they use, and removes the outputs of pages that are gone.
+
+## The index {#index}
+
+The *index*, `.nml/index.db`, is a SQLite database that keeps, for each file, what it names, what it refers to, and what it depends on: so that a build parses only what it must, and relinks only the pages whose links can change. It also caches rendered math and diagrams.
+
+The index can be deleted at any time: the next build rebuilds it from the files. A new version of `nml`, or a change of the [[configuration#|configuration]], builds everything again.
+
+## Errors {#errors}
+
+Errors are printed with the file, the line and what is wrong, and make `nml build` exit with a failure. A page with errors keeps its last good output, and a link error — a reference to nothing — is reported again at each build until it is fixed.
+
+Warnings, such as a code block in an unknown language, are printed but do not fail the build.
+
+## Output {#output}
+
+The output directory, `public/` by default, holds:
+
+ * the pages, at the paths of their files, with `.html`, unless they set [[variables#|nml.output]];
+ * `nml.css`, the default style, and `nml-code.css`, the colors of highlighted code;
+ * `assets/`, the media pages show;
+ * the files of the [[configuration#html|static directory]].
+
+Everything in it is written by `nml build`, and may be removed by it: do not keep other files there.
+
+## Reproducible builds {#reproducible}
+
+The same files build the same pages. Scripts that read the time read `SOURCE_DATE_EPOCH` instead when it is set, as most packaging tools do.
+
+## In CI
+
+A workflow builds the pages and keeps them, here with GitHub Actions:
+
+```yaml
+- run: sudo apt-get install -y graphviz
+- run: nml build docs
+- uses: actions/upload-artifact@v7
+  with:
+    name: site
+    path: docs/public
+```
+
+`nml build` fails on errors, so a broken reference fails the check.
