@@ -1,0 +1,103 @@
+:import std.nav
+:import docs.page
+:export nav.category = Scripting
+:export nav.order = 41
+:include /template/sidebar
+
+# Elements
+
+## Building elements {#element}
+
+`nml.element(kind, spec)` builds an element. The list part of `spec` holds its children — text, numbers, other elements — and its fields the element's properties.
+
+:example
+````
+:lua
+```
+function badge(text)
+  return nml.element("bold", {
+    classes = { "badge" },
+    "[", text, "]",
+  })
+end
+```
+
+Status: :lua`badge("stable")`.
+````
+
+Every kind takes `id` and `classes`. The others, by kind:
+
+| Kind | Fields |
+|:-----|:-------|
+| `paragraph`, `bold`, `italic`, `underline`, `highlight`, `strikethrough` | |
+| `heading` | `level`, 1 to 6 |
+| `link` | `url` |
+| `reference` | `target`: `name`, `page#name`, `page#` or `#name`; children are the caption |
+| `code` | `code`, `language` |
+| `code_block` | `code`, `language`, `line_offset`, `numbers`, `max_lines`; children are the title |
+| `media` | `url`, `type`, `alt`, `width` |
+| `figure` | `caption`, `ref`; children are the body |
+| `list` | `numbered`, `start`, `bullet`; children are its items |
+| `list_item` | `checkbox` (`unchecked`, `partial`, `checked`), `value` |
+| `quote` | `author`, `cite`, `url` |
+| `callout` | `type`, `title` |
+| `layout` | `type`, `title`; each child is a part |
+| `raw` | `content`, HTML written as it is; `block` |
+| `table` | `caption`, `ref`, `header` (how many header rows), `align`; children are rows, each a list of cells |
+| `cell` | `hspan`, `vspan`, `align`: a table cell that needs them |
+| `anchor` | `ref`, `title` |
+| `math` | `source`, `block` |
+| `tex` | `source`, `env` |
+| `graph` | `source`, `layout`, `width` |
+| `typst` | `source`, `block` |
+
+:example
+````
+:lua
+```
+local rows = { { "Lua", "5.4" }, { "NML", "0.1" } }
+TABLE = nml.element("table", {
+  header = 1,
+  { "Name", "Version" },
+  table.unpack(rows),
+})
+```
+
+:lua`TABLE`
+````
+
+## Markup {#parse}
+
+A string a script returns is text. `nml.parse(text)` parses it as inline markup instead, with the document's syntax and variables:
+
+:example
+```
+:lua`nml.parse("**" .. ("ab"):upper() .. "**, [[parse]]")`
+```
+
+## Raw HTML {#raw}
+
+Text from scripts is always escaped. HTML that NML cannot write is a `raw` element:
+
+:example
+```
+:lua`nml.element("raw", { content = "<kbd>Esc</kbd>" })`
+```
+
+## Events {#events}
+
+`nml.on(kind, listener)` calls `listener` with every element of that kind that comes after it, before the page is written. The listener reads the element, and can change its `id` and `classes`. To see all of a document's elements, listen from its prologue or from a module, as [[std#toc|std.toc]] does.
+
+:example
+````
+:lua
+```
+nml.on("heading", function(h)
+  if h.text:find("Draft") then
+    table.insert(h.classes, "draft")
+  end
+end)
+```
+````
+
+A listener sees the element's `kind`, its `text` without markup, its `id` and `classes`, and what its kind has: a heading's `level`, a list's `numbered` and `start`, an item's `checkbox`, a table's `cells`.

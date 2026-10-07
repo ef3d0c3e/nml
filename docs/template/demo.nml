@@ -1,0 +1,19 @@
+:: Examples of the Scripting pages: a rule, and a function run when pages are linked.
+
+:lua
+```
+nml.rule {
+	name = "kbd",
+	atoms = { ":kbd{", nml.capture("keys", nml.text, "string"), "}" },
+	handler = function(m, out)
+		out:element("code", { code = m.captures.keys, classes = { "kbd" } })
+	end,
+	doc = "**Keys** to press: `:kbd{Ctrl + C}`.",
+	snippet = ":kbd{${1:keys}}",
+}
+
+-- How many pages the workspace has, when the page is linked.
+function count()
+	return tostring(#nml.pages())
+end
+```

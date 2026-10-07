@@ -1,0 +1,55 @@
+:import std.nav
+:import docs.page
+:import docs.demo
+:export nav.category = Scripting
+:export nav.order = 43
+:export nav.title = Later content
+:include /template/sidebar
+
+# Later content
+
+A script runs as the document is parsed, so it sees what comes before it. Two functions give content that needs more: the whole document, or the whole workspace.
+
+## After the document {#post-parse}
+
+`nml.post_parse(callback)` returns a placeholder; once the whole document is parsed, it becomes what `callback` returns, in the same Lua state. A summary before what it sums up is the typical use:
+
+:example
+````
+:lua
+```
+HEADINGS = {}
+nml.on("heading", function(h)
+  table.insert(HEADINGS, h.text)
+end)
+```
+
+Headings from here on:
+:lua`nml.post_parse(function()
+  return table.concat(HEADINGS, ", ")
+end)`.
+````
+
+## When the page is linked {#defer}
+
+`nml.defer(module, name, args)` returns a placeholder that becomes what the function `name` of the imported `module` returns when the page is *linked*: after every page is parsed, and again in later builds when what it reads changes. The function runs in a new Lua state, with `nml.pages()`: the workspace's pages, with their titles, URLs and exported variables.
+
+:example
+```
+The workspace has :lua`nml.defer("docs.demo", "count")` pages.
+```
+
+The count follows pages as they are added and removed, without parsing this page again. [[std#nav|std.nav]] makes its menu this way. `args` must be data — numbers, strings, booleans, tables of them — as the call is stored with the page.
+
+| `nml.pages()` field | |
+|:--------------------|:-|
+| `path` | The page's file, in the workspace. |
+| `name` | Its name in references. |
+| `title` | Its title. |
+| `url` | Its URL, relative to the page being linked. |
+| `current` | Whether it is the page being linked. |
+| `variables` | The variables it [[variables#export|exports]], as written. |
+
+## What they can return {#limits}
+
+Content made after parsing cannot hold what needs parsing: references, numbered figures and tables, anchors, rendered math and graphs, and `nml.parse`. Text, links, styles, lists and the other elements are fine.

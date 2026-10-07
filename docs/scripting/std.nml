@@ -1,0 +1,52 @@
+:import std.nav
+:import std.toc
+:import docs.page
+:export nav.category = Scripting
+:export nav.order = 44
+:export nav.title = Standard library
+:include /template/sidebar
+
+# Standard library
+
+`std` is built into `nml`: its modules are imported as `std.name`, with no configuration. `nml init` and the language server write their sources to `.nml/std/`, for editors to show.
+
+## std.toc {#toc}
+
+`:toc` lists the document's headings, nested by level and numbered like them, with an optional title.
+
+```
+:import std.toc
+
+:toc Contents
+```
+
+Here is this page's:
+
+:toc On this page
+
+Headings with the class `unlisted` are left out, and those with `unnumbered` are listed without a number. The list is made once the whole document is parsed, so it can come before the headings.
+
+## std.nav {#nav}
+
+`:nav` lists the workspace's pages, grouped by category. It is made when the page is linked, so it follows pages as they are added, removed or renamed. This documentation's sidebar is a `:nav`.
+
+```
+:import std.nav
+
+:nav
+```
+
+A page says where it goes with exported variables:
+
+| Variable | |
+|:---------|:-|
+| `nav.category` | Its group. Pages without one come first. |
+| `nav.order` | A number that orders the pages of a group, which are then ordered by title. Groups come in the order of their first page, then by name. |
+| `nav.title` | What the menu shows, instead of the page's title. |
+
+```
+:export nav.category = Guides
+:export nav.order = 2
+```
+
+The menu is a `<nav class="nav">` of nested lists; the current page's item has the class `current`, and a group's the class `category`.

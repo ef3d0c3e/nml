@@ -1,0 +1,27 @@
+:import std.nav
+:import docs.page
+:export nav.category = Scripting
+:export nav.order = 45
+:export nav.title = API reference
+:include /template/sidebar
+
+# API reference
+
+Everything a script reaches outside plain Lua is in the `nml` table.
+
+## By use
+
+| For | |
+|:----|:-|
+| Content | `nml.element`, `nml.parse` — [[elements#]] |
+| Reacting to elements | `nml.on` — [[elements#events]] |
+| Later content | `nml.post_parse`, `nml.defer`, `nml.pages` — [[deferred#]] |
+| Syntax | `nml.rule` and its atoms — [[rules#]] |
+| The outside | `nml.read`, `nml.env`, `nml.time`, `nml.date`, `nml.variable` — [[lua#sandbox]] |
+| Tables | `nml.tables` — [[tables#scripts|tables for scripts]] |
+
+## Declarations
+
+The declarations of the API, as [LuaLS](https://luals.github.io) reads them: `nml init` writes them to `.nml/types/nml.lua`, for editors. They are made from NML's own bindings, so they are always those of the `nml` that built this page.
+
+:lua`nml.element("code_block", { code = nml.read("/.nml/types/nml.lua"), language = "lua", numbers = false })`

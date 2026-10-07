@@ -1,0 +1,71 @@
+:import std.nav
+:import docs.page
+:export nav.category = Scripting
+:export nav.order = 40
+:export nav.title = Lua in documents
+:include /template/sidebar
+
+# Lua in documents
+
+Documents run [Lua 5.4](https://www.lua.org/manual/5.4/) as they are parsed. A script computes text, builds elements, reacts to the document's elements, or defines new syntax.
+
+## Blocks and roles {#blocks}
+
+`:lua` and a fenced block runs code. ``:lua`…` `` in a line shows the value of an expression, or runs statements and shows nothing.
+
+:example
+````
+:lua
+```
+function greet(name)
+  return "Hello, " .. name
+end
+```
+
+:lua`greet("you")`, and two plus two
+is :lua`2 + 2`.:lua`x = 1`
+````
+
+What a role shows depends on the value:
+
+| Value | Shows |
+|:------|:------|
+| A string or a number | Text. It is never markup: `"**"` shows two stars. |
+| An element, from [[elements#|nml.element]] | That element. |
+| A list | Each of its values, in order. |
+| `nil` | Nothing. |
+
+To write markup, a script parses it with `nml.parse`: see [[elements#parse]].
+
+## The state of a document {#state}
+
+Each document has one Lua state: what a script defines, the scripts after it see, in the document and in the files it [[documents#include|includes]]. Documents do not share state; [[documents#import|modules]] share code.
+
+A script runs where it is, as the document is parsed: it sees what comes before it, not after. [[deferred#]] shows how to compute content from the whole document, or from the whole workspace.
+
+## The sandbox {#sandbox}
+
+Scripts get Lua's base functions, and the `string`, `table`, `math`, `utf8` and `coroutine` libraries. There is no `io`, `os`, `require` or `load`: what a script reads from outside goes through the `nml` table, which records it, so that the page is built again when it changes.
+
+| Function | |
+|:---------|:-|
+| `nml.read(path)` | A file of the workspace, as text. |
+| `nml.env(name)` | An environment variable of the build. |
+| `nml.time()` | When the build started, in seconds since 1970. `SOURCE_DATE_EPOCH` sets it, for reproducible builds. |
+| `nml.date(time)` | The calendar fields of a time, in UTC. |
+| `nml.variable(name)` | The value of a [[variables#|variable]], as written. |
+
+:example
+```
+Built in :lua`nml.date().year`.
+```
+
+A document's scripts may run 100 million Lua instructions and use 64 MiB together: a script that loops forever is an error, not a hung build.
+
+## Errors {#errors}
+
+A Lua error is an error of the document, where the script is, with Lua's message and the line in the script. Editors show it as you type.
+
+## In editors
+
+The language server completes and documents Lua when [LuaLS](https://github.com/LuaLS/lua-language-server) is installed: it sees a document's scripts together, with the `nml` API declared (see [[api#]]). `nml init` writes the declarations to `.nml/types/`.

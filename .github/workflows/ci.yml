@@ -55,7 +55,10 @@ jobs:
             | sudo tar -xJ --strip-components=1 -C /usr/local/bin typst-x86_64-unknown-linux-musl/typst
       - run: cargo build --release --locked -p nml-cli
       - name: Build the documentation
-        run: ./target/release/nml build docs
+        # `init` writes the API declarations, which the API reference shows.
+        run: |
+          ./target/release/nml init docs
+          ./target/release/nml build docs
       - uses: actions/upload-artifact@v7
         with:
           name: docs

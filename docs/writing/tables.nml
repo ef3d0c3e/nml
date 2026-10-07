@@ -50,7 +50,7 @@ A cell's options come right after its pipe.
 [[prices]] lists them.
 ```
 
-## Tables for scripts
+## Tables for scripts {#scripts}
 
 `:table[lua=name]` gives the table's cells to the page's [[lua#|Lua]], as `nml.tables.name`: a list of rows, each a list of the cells' text.
 

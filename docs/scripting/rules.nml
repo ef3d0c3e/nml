@@ -1,0 +1,63 @@
+:import std.nav
+:import docs.page
+:import docs.demo
+:export nav.category = Scripting
+:export nav.order = 42
+:export nav.title = Defining syntax
+:include /template/sidebar
+
+# Defining syntax
+
+`nml.rule` adds syntax to the language: what to match, and the elements to make of it. Rules are defined in a document's [[documents#prologue|prologue]], for that document, or in a [[documents#import|module]], for every document that imports it. Editors complete and document them like the built-in syntax, and go to their definition.
+
+This module defines `:kbd{…}`:
+
+:lua`nml.element("code_block", {
+  code = nml.read("/template/demo.nml"):match("```\n(.-)\n```"),
+  language = "lua",
+  numbers = false,
+})`
+
+A document that imports it can write:
+
+:example
+```
+Press :kbd{Ctrl + C}.
+```
+
+## Atoms {#atoms}
+
+A rule matches its atoms in order. A string is matched as it is; the others come from `nml`:
+
+| Atom | Matches |
+|:-----|:--------|
+| `"text"` | The text, as written. |
+| `nml.inline` | Parsed markup in the line, up to what follows. |
+| `nml.content` | Parsed blocks, up to what follows at the start of a line. |
+| `nml.text` | Text as written, up to what follows. |
+| `nml.rest_of_line` | Text to the end of the line. |
+| `nml.word` | A letter or `_`, then letters, digits, `_` and `-`. |
+| `nml.number` | A decimal number. |
+| `nml.line_start`, `nml.line_end` | The start, the end of a line. |
+| `nml.run(char, min)` | At least `min` times `char`, such as a fence of backticks. |
+| `nml.same(name)` | Exactly what the capture `name` matched. |
+| `nml.optional(atoms)` | The atoms, or nothing. |
+| `nml.many(atoms, min, max)` | The atoms, repeated. |
+| `nml.one_of(alternatives)` | The first alternative that matches. |
+| `nml.capture(name, atom, class)` | The atom, named for the handler; `class` colors it in editors. |
+
+A rule that starts with `nml.line_start` and ends with `nml.line_end` is a block; others are found within paragraphs.
+
+## The handler {#handler}
+
+`handler(m, out)` gets the match and writes what it makes:
+
+ * `m.text` is the matched text, and `m.captures.name` the text of each capture. A capture inside `nml.many` is a list of texts.
+ * `out:text(text)` writes text; `out:add(value)` writes what a role would show.
+ * `out:element(kind, spec, body)` writes an element (see [[elements#element]]); `body`, a function, writes its content. A layout's body is one more part.
+ * `out:content(m, name)` writes a capture's parsed markup, from `nml.inline` or `nml.content`.
+ * `out:style(name, body)`, `out:paragraph(body)` and `out:heading(level, body)` are shortcuts.
+
+## Documentation {#doc}
+
+`doc`, in Markdown, is what editors show when the syntax is hovered or completed; `snippet`, a snippet in the Language Server Protocol's format, is what completing it inserts. This documentation's `:example` blocks are a rule too.
