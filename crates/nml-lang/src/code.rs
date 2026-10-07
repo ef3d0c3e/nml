@@ -4,6 +4,7 @@ use nml_diagnostics::Diagnostic;
 use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
 use nml_document::Attributes;
+use nml_document::ElementId;
 use nml_document::ElementKind;
 use nml_document::Export;
 use nml_document::SymbolKind;
@@ -144,9 +145,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 				Some(Value::Nodes(nodes)) => plain_text(nodes),
 				_ => String::new(),
 			};
-			let export = Export::new(reference.content(), SymbolKind::Listing, Some(element))
-				.with("title", title)
-				.with("number", number.to_string());
+			let export = listing_export(reference.content(), element, number, title);
 			lower.export(export, reference);
 		}
 	})?;
@@ -157,11 +156,19 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 #[derive(Default)]
 struct Listings(u32);
 
-/// Takes the next number of the unit's listings, in the order they are written.
-fn next_listing(lower: &mut Lower<'_, '_>) -> u32 {
+/// Takes the next number of the unit's listings, in the order they are written, by markup or
+/// by scripts.
+pub fn next_listing(lower: &mut Lower<'_, '_>) -> u32 {
 	let listings = lower.extension(Listings::default);
 	listings.0 += 1;
 	listings.0
+}
+
+/// The symbol of a listing: its title's text is its title.
+pub fn listing_export(name: &str, element: ElementId, number: u32, title: String) -> Export {
+	Export::new(name, SymbolKind::Listing, Some(element))
+		.with("title", title)
+		.with("number", number.to_string())
 }
 
 /// Warns about a language syntect does not know: the code is shown plain.

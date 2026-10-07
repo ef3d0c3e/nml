@@ -1,6 +1,7 @@
 use nml_diagnostics::Diagnostic;
 use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
+use nml_document::ElementId;
 use nml_document::ElementKind;
 use nml_document::Export;
 use nml_document::SymbolKind;
@@ -63,12 +64,16 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 				Some(nml_grammar::Value::Nodes(nodes)) => plain_text(nodes),
 				_ => String::new(),
 			};
-			let export = Export::new(reference.content(), SymbolKind::Heading, Some(element))
-				.with("title", title);
+			let export = heading_export(reference.content(), element, title);
 			lower.export(export, reference);
 		}
 	})?;
 	Ok(())
+}
+
+/// The symbol of a named heading.
+pub fn heading_export(name: &str, element: ElementId, title: String) -> Export {
+	Export::new(name, SymbolKind::Heading, Some(element)).with("title", title)
 }
 
 #[cfg(test)]

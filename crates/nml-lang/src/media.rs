@@ -186,18 +186,7 @@ fn lower_media(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 	lower.builder.open_with(media, m.token.clone(), attributes);
 	let element = lower.builder.close();
 	if let (Some(reference), Some(number)) = (reference, number) {
-		// Its asset, which an earlier medium may have added.
-		let output = lower.output_path();
-		let medium = (lower.assets.iter())
-			.find(|asset| relative_output_url(&output, &asset.output) == url)
-			.map(|asset| asset.path.clone());
-		let export = Export::new(reference.content(), SymbolKind::Media, Some(element))
-			.with("title", alt)
-			.with("number", number.to_string());
-		let export = match medium {
-			Some(medium) => export.with("media", medium),
-			None => export,
-		};
+		let export = media_export(lower, reference.content(), element, number, alt, &url);
 		lower.export(export, reference);
 	}
 }
@@ -206,8 +195,31 @@ fn lower_media(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 #[derive(Default)]
 struct Media(u32);
 
-/// Takes the next number of the unit's named media.
-fn next_media(lower: &mut Lower<'_, '_>) -> u32 {
+/// The symbol of a named medium shown from `url`: its alternative text is its title.
+pub fn media_export(
+	lower: &Lower<'_, '_>,
+	name: &str,
+	element: ElementId,
+	number: u32,
+	alt: String,
+	url: &str,
+) -> Export {
+	// Its asset, which an earlier medium may have added.
+	let output = lower.output_path();
+	let medium = (lower.assets.iter())
+		.find(|asset| relative_output_url(&output, &asset.output) == url)
+		.map(|asset| asset.path.clone());
+	let export = Export::new(name, SymbolKind::Media, Some(element))
+		.with("title", alt)
+		.with("number", number.to_string());
+	match medium {
+		Some(medium) => export.with("media", medium),
+		None => export,
+	}
+}
+
+/// Takes the next number of the unit's named media, by markup or by scripts.
+pub fn next_media(lower: &mut Lower<'_, '_>) -> u32 {
 	let media = lower.extension(Media::default);
 	media.0 += 1;
 	media.0

@@ -42,6 +42,8 @@ pub(crate) struct Element {
 	content: Content,
 	attributes: Attributes,
 	children: Vec<Element>,
+	/// The reference name of a heading, or of a numbered code block (a listing) or medium.
+	reference: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -107,15 +109,15 @@ const KINDS: &[(&str, &str)] = &[
 	("underline", ""),
 	("highlight", ""),
 	("strikethrough", ""),
-	("heading", "level"),
+	("heading", "level, ref"),
 	("link", "url"),
 	("reference", "target"),
 	("code", "code, language"),
 	(
 		"code_block",
-		"code, language, line_offset, numbers, max_lines",
+		"code, language, line_offset, numbers, max_lines, ref",
 	),
-	("media", "url, type, alt, width"),
+	("media", "url, type, alt, width, ref"),
 	("figure", "caption, ref"),
 	("list", "numbered, start, bullet"),
 	("list_item", "checkbox, value"),
@@ -138,12 +140,12 @@ const KINDS: &[(&str, &str)] = &[
 /// | Kind | Fields |
 /// |---|---|
 /// | `paragraph`, `bold`, `italic`, `underline`, `highlight`, `strikethrough` | |
-/// | `heading` | `level` (1 to 6) |
+/// | `heading` | `level` (1 to 6), `ref` (its reference name, and its id) |
 /// | `link` | `url` |
 /// | `reference` | `target` (`name`, `doc#name`, `doc#`, `#name`); children are the caption |
 /// | `code` | `code`, `language` (highlighted in it) |
-/// | `code_block` | `code`, `language`, `line_offset`, `numbers`, `max_lines`; children are the title |
-/// | `media` | `url` (a path in the workspace, copied with the page, or an external URL), `type` (`image`, `video`, `audio`), `alt`, `width` |
+/// | `code_block` | `code`, `language`, `line_offset`, `numbers`, `max_lines`, `ref` (its reference name, and its id: a numbered listing); children are the title |
+/// | `media` | `url` (a path in the workspace, copied with the page, or an external URL), `type` (`image`, `video`, `audio`), `alt`, `width`, `ref` (its reference name, and its id: numbered with the unit's other named media) |
 /// | `figure` | `caption`, `ref` (its reference name, and its id); children are the body. Numbered with the unit's other figures |
 /// | `list` | `numbered`, `start`, `bullet` (`1`, `a`, `A`, `i`, `I` if numbered; `disc`, `circle`, `square`, `none` if not); children that are not items become items |
 /// | `list_item` | `checkbox` (`unchecked`, `partial`, `checked`), `value` (its number) |
@@ -159,8 +161,8 @@ const KINDS: &[(&str, &str)] = &[
 /// | `graph` | `source` (Graphviz DOT), `layout` (`dot` by default), `width` |
 /// | `typst` | `source`, `block` |
 ///
-/// Every kind takes `id` and `classes`. References, figures, numbered tables, anchors and
-/// rendered images (`math`, `tex`, `graph`, `typst`) only work where the element goes into
+/// Every kind takes `id` and `classes`. References, figures, numbered tables, listings and
+/// media, anchors and rendered images (`math`, `tex`, `graph`, `typst`) only work where the element goes into
 /// the document as it is parsed (roles and rules), not in post-parse or deferred output;
 /// nor do media with paths in deferred output.
 #[api(returns = "nml.Node")]
@@ -184,6 +186,7 @@ fn parse(lua: &Lua, text: String) -> mlua::Result<AnyUserData> {
 		content: Content::Markup(text),
 		attributes: Attributes::default(),
 		children: Vec::new(),
+		reference: None,
 	})
 }
 
@@ -465,9 +468,14 @@ pub(crate) fn build_with(kind: &str, spec: &Table, body: bool) -> mlua::Result<E
 			)));
 		}
 	};
+	let reference = match kind {
+		"heading" | "code_block" | "media" => reference_name(kind, spec)?,
+		_ => None,
+	};
 	let id = match &content {
 		Content::Figure { reference, .. } | Content::Table { reference, .. } => reference.clone(),
 		Content::Anchor { reference, .. } => Some(reference.clone()),
+		_ if reference.is_some() => reference.clone(),
 		_ => text("id")?,
 	};
 	let attributes = Attributes {
@@ -480,10 +488,11 @@ pub(crate) fn build_with(kind: &str, spec: &Table, body: bool) -> mlua::Result<E
 		content,
 		attributes,
 		children,
+		reference,
 	})
 }
 
-/// The reference name in `ref` of a figure or table, which is also its id.
+/// The reference name in `ref` of a figure, table, listing or medium, which is also its id.
 fn reference_name(kind: &str, spec: &Table) -> mlua::Result<Option<String>> {
 	let Some(name) = spec.get::<Option<String>>("ref")? else {
 		return Ok(None);
@@ -585,6 +594,7 @@ fn leaf(kind: ElementKind) -> Element {
 		content: Content::Element(kind),
 		attributes: Attributes::default(),
 		children: Vec::new(),
+		reference: None,
 	}
 }
 
@@ -658,6 +668,27 @@ pub(crate) struct Opened<'e> {
 	nothing: bool,
 	/// Whether a layout's part is open, for the body.
 	part: bool,
+	/// A heading's, listing's or medium's symbol, declared when it closes.
+	named: Option<Named<'e>>,
+}
+
+/// A named heading, listing or medium being written.
+enum Named<'e> {
+	Heading {
+		name: &'e str,
+		title: &'e [Element],
+	},
+	Listing {
+		name: &'e str,
+		number: u32,
+		title: &'e [Element],
+	},
+	Media {
+		name: &'e str,
+		number: u32,
+		alt: &'e str,
+		url: String,
+	},
 }
 
 /// A numbered table being written.
@@ -686,6 +717,7 @@ pub(crate) fn open<'e>(
 	let mut figure = None;
 	let mut table = None;
 	let mut anchor = None;
+	let mut named = None;
 	match &element.content {
 		Content::Element(ElementKind::Media {
 			kind,
@@ -703,18 +735,66 @@ pub(crate) fn open<'e>(
 					url.clone()
 				}
 			};
+			let number = element
+				.reference
+				.as_ref()
+				.map(|_| nml_lang::next_media(lower));
+			if let (Some(name), Some(number)) = (&element.reference, number) {
+				named = Some(Named::Media {
+					name,
+					number,
+					alt,
+					url: url.clone(),
+				});
+			}
 			let kind = ElementKind::Media {
 				kind: *kind,
 				url,
 				alt: alt.clone(),
 				width: width.clone(),
-				number: None,
+				number,
+			};
+			lower
+				.builder
+				.open_with(kind, token.clone(), element.attributes.clone());
+		}
+		Content::Element(ElementKind::CodeBlock {
+			language,
+			code,
+			first_line,
+			max_lines,
+			..
+		}) => {
+			let number = element
+				.reference
+				.as_ref()
+				.map(|_| nml_lang::next_listing(lower));
+			if let (Some(name), Some(number)) = (&element.reference, number) {
+				// A code block's children are its title.
+				named = Some(Named::Listing {
+					name,
+					number,
+					title: &element.children,
+				});
+			}
+			let kind = ElementKind::CodeBlock {
+				language: language.clone(),
+				code: code.clone(),
+				first_line: *first_line,
+				max_lines: *max_lines,
+				number,
 			};
 			lower
 				.builder
 				.open_with(kind, token.clone(), element.attributes.clone());
 		}
 		Content::Element(kind) => {
+			if let (ElementKind::Heading { .. }, Some(name)) = (kind, &element.reference) {
+				named = Some(Named::Heading {
+					name,
+					title: &element.children,
+				});
+			}
 			lower
 				.builder
 				.open_with(kind.clone(), token.clone(), element.attributes.clone());
@@ -729,6 +809,7 @@ pub(crate) fn open<'e>(
 					anchor,
 					nothing: false,
 					part: false,
+					named,
 				};
 			}
 		}
@@ -754,6 +835,7 @@ pub(crate) fn open<'e>(
 				anchor,
 				nothing: true,
 				part: false,
+				named,
 			};
 		}
 		Content::Anchor { reference, title } => {
@@ -804,6 +886,7 @@ pub(crate) fn open<'e>(
 		anchor,
 		nothing: false,
 		part,
+		named,
 	}
 }
 
@@ -851,7 +934,25 @@ pub(crate) fn close(lower: &mut Lower<'_, '_>, opened: Opened<'_>, token: &Token
 		return;
 	}
 	let Some(figure) = opened.figure else {
-		lower.builder.close();
+		let element = lower.builder.close();
+		let export = match opened.named {
+			Some(Named::Listing {
+				name,
+				number,
+				title,
+			}) => nml_lang::listing_export(name, element, number, plain_text(title)),
+			Some(Named::Media {
+				name,
+				number,
+				alt,
+				url,
+			}) => nml_lang::media_export(lower, name, element, number, alt.into(), &url),
+			Some(Named::Heading { name, title }) => {
+				nml_lang::heading_export(name, element, plain_text(title))
+			}
+			None => return,
+		};
+		lower.export(export, token.clone());
 		return;
 	};
 	if !figure.caption.is_empty() {
@@ -915,6 +1016,12 @@ pub(crate) fn html(
 		token: &Token,
 	) -> mlua::Result<()> {
 		for element in elements {
+			if element.reference.is_some() {
+				return Err(mlua::Error::runtime(
+					"a heading, code block or medium with a `ref` is declared during the parse: \
+					 it cannot be made after it",
+				));
+			}
 			let kind = match &element.content {
 				Content::Element(ElementKind::Media {
 					kind,
@@ -1005,6 +1112,7 @@ mod tests {
 
 	use nml_document::Dependency;
 	use nml_document::ElementKind;
+	use nml_document::SymbolKind;
 
 	use crate::tests::compile;
 	use crate::tests::compile_with;
@@ -1111,6 +1219,78 @@ mod tests {
 			":lua`nml.post_parse(function() return nml.element('media', {url = 'no.png'}) end)`\n",
 		);
 		assert_diagnostics!(compiled.diagnostics, [4001]);
+	}
+
+	#[test]
+	fn listings_and_media() {
+		let compiled = compile_with(
+			"```rust #a A\nx\n```\n\n:lua`nml.element('code_block', {ref = 'b', code = 'y', 'B ', nml.element('bold', {'b'})})`\n\n```rust #c\nz\n```\n\n![M](m.png){#m} :lua`nml.element('media', {ref = 'n', url = 'n.png', alt = 'N'})` ![](m.png){#o}\n\n[[b]] [[n]]\n",
+			&[("m.png", "m"), ("n.png", "n")],
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let exports: Vec<_> = (compiled.unit.exports.iter())
+			.map(|e| {
+				(
+					e.name.as_str(),
+					e.kind,
+					e.property("title"),
+					e.property("number"),
+					e.property("media"),
+				)
+			})
+			.collect();
+		assert_eq!(
+			exports,
+			[
+				("a", SymbolKind::Listing, Some("A"), Some("1"), None),
+				("b", SymbolKind::Listing, Some("B b"), Some("2"), None),
+				("c", SymbolKind::Listing, Some(""), Some("3"), None),
+				("m", SymbolKind::Media, Some("M"), Some("1"), Some("m.png")),
+				("n", SymbolKind::Media, Some("N"), Some("2"), Some("n.png")),
+				("o", SymbolKind::Media, Some(""), Some("3"), Some("m.png")),
+			]
+		);
+		let page = html(&compiled);
+		assert!(page.contains("id=\"b\""), "{page}");
+		assert!(page.contains("Listing 2:"), "{page}");
+		assert!(
+			page.contains(&format!("<img id=\"n\" src=\"{}\"", copy_of("n.png", "n"))),
+			"{page}"
+		);
+
+		// Headings too, with markup ones.
+		let compiled = compile(
+			"# A {#a}\n\n:lua`nml.element('heading', {level = 2, ref = 'b', classes = {'unnumbered'}, 'B ', nml.element('code', {code = 'x'})})`\n\n[[b]]\n",
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let exports: Vec<_> = (compiled.unit.exports.iter())
+			.map(|e| (e.name.as_str(), e.kind, e.property("title")))
+			.collect();
+		assert_eq!(
+			exports,
+			[
+				("a", SymbolKind::Heading, Some("A")),
+				("b", SymbolKind::Heading, Some("B x")),
+			]
+		);
+		let page = html(&compiled);
+		assert!(
+			page.contains("<h2 id=\"b\" class=\"unnumbered\">"),
+			"{page}"
+		);
+
+		// The name is the id, and must be one.
+		let compiled =
+			compile(":lua`nml.element('code_block', {ref = 'a', id = 'b', code = 'x'})`\n");
+		assert_diagnostics!(compiled.diagnostics, [4001 @ 0..66]);
+		let compiled =
+			compile(":lua`nml.element('media', {ref = 'a b', url = 'https://e.org/a.png'})`\n");
+		assert_diagnostics!(compiled.diagnostics, [4001 @ 0..70]);
+		// Numbered during the parse.
+		let compiled = compile(
+			":lua`nml.post_parse(function() return nml.element('code_block', {ref = 'a', code = 'x'}) end)`\n",
+		);
+		assert_diagnostics!(compiled.diagnostics, [4001 @ 0..94]);
 	}
 
 	#[test]
