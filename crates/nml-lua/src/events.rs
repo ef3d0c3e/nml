@@ -18,7 +18,8 @@ const KINDS: &[&str] = ElementKind::NAMES;
 #[derive(Default)]
 struct Listeners(Vec<(String, Function)>);
 
-/// Calls `listener` with every element of `kind` before it is written.
+/// Calls `listener` with every element of `kind` that comes after this call, before it is
+/// written. To see all of a document's elements, listen from its prologue or from a module.
 ///
 /// The listener receives the element (see `nml.Element`). Changing its `id` and `classes`
 /// changes the element.
