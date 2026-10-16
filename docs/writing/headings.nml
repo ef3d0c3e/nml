@@ -42,6 +42,21 @@ Two classes change how a heading is treated:
 ## Preface {.unnumbered .unlisted}
 ```
 
+## In Lua
+
+[[elements#element|`nml.element`]] builds a `heading` of a `level`, 1 to 6, whose children are its title. `ref` names it, as `{#name}` does, and `classes` gives it classes:
+
+:example
+```
+:lua`nml.element("heading", {
+  level = 3, ref = "lua-heading",
+  classes = { "unnumbered" },
+  "Built in Lua",
+})`
+
+See [[lua-heading]].
+```
+
 ## The page's title
 
 The first heading of a page is its title: the browser's tab shows it, and references to the page (`[[page#]]`) show it. A page without a heading is titled with its file's name.

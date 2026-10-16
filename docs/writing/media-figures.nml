@@ -32,7 +32,21 @@ Options follow, in brackets, and a name and classes in braces:
 | `width` | A CSS width, such as `50%` or `20rem`. |
 | `type` | `image`, `video` or `audio`; by default, from the file's extension. |
 
-A named medium is numbered with the page's other figures.
+A named medium is numbered with the page's other named media, apart from figures.
+
+In Lua, [[elements#element|`nml.element`]] builds `media`, with the same `url`, `alt`, `type` and `width`; `ref` names it:
+
+:example
+```
+:lua`nml.element("media", {
+  url = "/media/diagram.svg",
+  width = "40%",
+  alt = "The build",
+  ref = "lua-build",
+})`
+
+[[lua-build]] is numbered.
+```
 
 ## Figures {#figure}
 
@@ -47,3 +61,18 @@ A named medium is numbered with the page's other figures.
 ```
 
 The block can be anything: a code block, a table, a layout of several images. Rendered blocks — `:graph`, `:tex`, `:typst` — take a name and a caption themselves: see [[math-diagrams#figures]].
+
+In Lua, a `figure` has a `caption` and a `ref`; its children are its body:
+
+:example
+```
+:lua`nml.element("figure", {
+  ref = "lua-figure",
+  caption = "Built in Lua",
+  nml.element("media", {
+    url = "/media/diagram.svg",
+  }),
+})`
+
+[[lua-figure]] sums it up too.
+```

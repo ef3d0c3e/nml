@@ -23,6 +23,16 @@ A variable is a name for a piece of markup. It is set in the [[documents#prologu
 
 The value is parsed as markup where the variable is used, as if it were written there: `**NML**` is bold.
 
+In Lua, `nml.variable(name)` gives a variable's value, as written: its markup is not parsed. [[elements#parse|`nml.parse`]] parses it.
+
+:example
+```
+:lua`nml.variable("version")`,
+and :lua`nml.parse(
+  nml.variable("product")
+)`.
+```
+
 ## Paths {#path}
 
 `:path` sets a variable to a file. The path is resolved from the file that sets it, so the variable names the same file wherever it is used: in text, and in the paths of media, links and includes.

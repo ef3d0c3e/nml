@@ -65,6 +65,22 @@ fn main() {}
 [[entry]] starts the program.
 ````
 
+## In Lua
+
+[[elements#element|`nml.element`]] builds a `code_block`: `code` is the code, `language` its language, and its children are its title. The options are fields, and `ref` names a listing, as `#name` does:
+
+:example
+```
+:lua`nml.element("code_block", {
+  code = "print('Hi')",
+  language = "lua",
+  ref = "hi", numbers = false,
+  "Built in Lua",
+})`
+
+[[hi]] greets.
+```
+
 ## Inline code
 
 `` `code` `` is code in a line, and ``:code[rust]`…` `` highlights it: see [[text#inline-code]].

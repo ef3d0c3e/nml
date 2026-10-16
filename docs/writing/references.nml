@@ -31,6 +31,21 @@ A page is named by its file's name without `.nml`: `writing/references.nml` is `
 
 A reference to nothing, or to a name several pages use, is an error that says which.
 
+In Lua, [[elements#element|`nml.element`]] builds a `reference`: `target` is written as between the brackets, and its children, if any, are its caption.
+
+:example
+```
+## Lua {#lua-target}
+
+:lua`nml.element("reference", {
+  target = "lua-target",
+})`, and
+:lua`nml.element("reference", {
+  target = "references#",
+  "this page",
+})`.
+```
+
 ## Captions
 
 Without a caption, a reference shows its target's label: *Figure 2* for a figure, the title for a heading or a page. A caption, after `|`, replaces it, and can show the target's `{title}`, `{number}` and `{label}`:
@@ -55,4 +70,16 @@ See [[cell|figure {number}]], or
 The defaults are below.
 
 [[defaults]] links here.
+```
+
+In Lua, an `anchor` has its name as `ref`, and a `title`:
+
+:example
+```
+:lua`nml.element("anchor", {
+  ref = "lua-anchor",
+  title = "From Lua",
+})`
+
+[[lua-anchor]] links here.
 ```

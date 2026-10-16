@@ -37,6 +37,33 @@ A cell's options come right after its pipe.
 | `vspan` | How many rows the cell covers. |
 | `align` | The cell's alignment: `left`, `center`, `right`. |
 
+## In Lua
+
+[[elements#element|`nml.element`]] builds a `table`, whose children are its rows, each a list of cells. A cell is any content, or a `cell` element for one that needs options.
+
+| Kind | Fields |
+|:-----|:-------|
+| `table` | `header`, how many rows are header rows; `align`, each column's alignment (`auto`, `left`, `center`, `right`); `caption` and `ref`, as `:table` gives them. |
+| `cell` | `hspan`, `vspan`, `align`, as the options. |
+
+:example
+```
+:lua`nml.element("table", {
+  header = 1,
+  align = { "left", "right" },
+  ref = "lua-table",
+  caption = "Built in Lua",
+  { "Fruit", "Price" },
+  { "Apples", 2.5 },
+  { nml.element("cell", {
+    hspan = 2, align = "center",
+    "Sold out",
+  }) },
+})`
+
+[[lua-table]] is numbered.
+```
+
 ## Numbered tables
 
 `:table`, a name and a caption, before a table, number it and make it a target of [[references#|references]].

@@ -69,3 +69,33 @@ Options, in brackets right after the markers, change the list from that entry on
 |:-------|:-------|
 | `offset` | The entry's number. On the first entry, where the list starts. |
 | `bullet` | Numbered lists: `1`, `a`, `A`, `i`, `I`. Bulleted lists: `disc`, `circle`, `square`, `none`. |
+
+## In Lua
+
+[[elements#element|`nml.element`]] builds a `list`. Its children are its entries: `list_item` elements, or anything else, which becomes an entry.
+
+| Kind | Fields |
+|:-----|:-------|
+| `list` | `numbered` (`false` by default), `start`, the first number, and `bullet`, as the option. |
+| `list_item` | `checkbox`: `unchecked`, `partial` or `checked`; `value`, its number. |
+
+An entry's list inside it is one of its children:
+
+:example
+```
+:lua`nml.element("list", {
+  numbered = true, start = 3,
+  bullet = "i",
+  "Three",
+  nml.element("list_item", {
+    "Four, with",
+    nml.element("list", {
+      "a list", "inside",
+    }),
+  }),
+  nml.element("list_item", {
+    checkbox = "checked",
+    "Done",
+  }),
+})`
+```

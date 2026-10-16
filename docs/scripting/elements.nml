@@ -25,17 +25,17 @@ end
 Status: :lua`badge("stable")`.
 ````
 
-Every kind takes `id` and `classes`. The others, by kind:
+Every kind takes `id` and `classes`. `ref` is a name for [[references#|references]], and the element's `id`. The others, by kind:
 
 | Kind | Fields |
 |:-----|:-------|
 | `paragraph`, `bold`, `italic`, `underline`, `highlight`, `strikethrough` | |
-| `heading` | `level`, 1 to 6 |
+| `heading` | `level`, 1 to 6; `ref` |
 | `link` | `url` |
 | `reference` | `target`: `name`, `page#name`, `page#` or `#name`; children are the caption |
 | `code` | `code`, `language` |
-| `code_block` | `code`, `language`, `line_offset`, `numbers`, `max_lines`; children are the title |
-| `media` | `url`, `type`, `alt`, `width` |
+| `code_block` | `code`, `language`, `line_offset`, `numbers`, `max_lines`, `ref`; children are the title |
+| `media` | `url`, `type`, `alt`, `width`, `ref` |
 | `figure` | `caption`, `ref`; children are the body |
 | `list` | `numbered`, `start`, `bullet`; children are its items |
 | `list_item` | `checkbox` (`unchecked`, `partial`, `checked`), `value` |
@@ -50,6 +50,8 @@ Every kind takes `id` and `classes`. The others, by kind:
 | `tex` | `source`, `env` |
 | `graph` | `source`, `layout`, `width` |
 | `typst` | `source`, `block` |
+
+The [[text#|Writing]] pages show each kind beside the syntax it stands for.
 
 :example
 ````

@@ -20,6 +20,15 @@ the source.
 Another paragraph.
 ```
 
+In Lua, [[elements#element|`nml.element`]] builds a `paragraph`; its children are its content:
+
+:example
+```
+:lua`nml.element("paragraph", {
+  "Built ", "in Lua.",
+})`
+```
+
 ## Styles {#styles}
 
 :example
@@ -33,6 +42,18 @@ Styles nest: ***bold and italic***,
 
 A style's markers are around its text, in the same paragraph: `*` opens italic, and the next `*` closes it. A marker that is not closed is an error, so a `*` meant as a star is escaped.
 
+In Lua, the styles are the kinds `bold`, `italic`, `underline`, `highlight` and `strikethrough`; their children are the styled content:
+
+:example
+```
+:lua`nml.element("bold", {
+  "bold ",
+  nml.element("italic", {
+    "and italic",
+  }),
+})`
+```
+
 ## Escapes {#escapes}
 
 A backslash makes the character after it plain text: `\*`, `\[`, `\$`, `\%`, `\\`.
@@ -42,6 +63,8 @@ A backslash makes the character after it plain text: `\*`, `\[`, `\$`, `\%`, `\\
 \*not italic\*, a price of \$5,
 \[brackets], and a backslash: \\.
 ```
+
+Text from a script is never markup, so it needs no escapes: `"*"` is a star. To write markup from a script, see [[elements#parse|`nml.parse`]].
 
 ## Comments {#comments}
 
@@ -70,6 +93,16 @@ Code in a line is between backticks, shown as written. Around code that holds ba
 :code[rust]`let x: u32 = 1;`
 ```
 
+In Lua, it is a `code` element: `code` is the code, and `language`, if any, highlights it.
+
+:example
+```
+:lua`nml.element("code", {
+  code = "let x = 1;",
+  language = "rust",
+})`
+```
+
 ## Links {#links}
 
 :example
@@ -79,6 +112,16 @@ and a bare one: [](https://example.org).
 ```
 
 A link without text shows its URL. Links are for URLs; to point to a heading, a figure or another page of the workspace, use a [[references#|reference]], which follows its target when it moves.
+
+In Lua, a `link` has a `url`; its children are its text.
+
+:example
+```
+:lua`nml.element("link", {
+  url = "https://example.org",
+  "An example",
+})`
+```
 
 ## Line breaks and rules
 

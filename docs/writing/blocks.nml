@@ -30,6 +30,16 @@ To say whose words they are, write the quote as a `quote` callout, with options:
 
 `author`, `cite` (the work) and `url` (where it is) are all optional.
 
+In Lua, [[elements#element|`nml.element`]] builds a `quote`, with the same three fields; its children are its content:
+
+:example
+```
+:lua`nml.element("quote", {
+  author = "Ada Lovelace",
+  "Built in Lua.",
+})`
+```
+
 ## Callouts {#callout}
 
 A callout is a quote that starts with its kind, `[!kind]`, and an optional title.
@@ -41,8 +51,8 @@ A callout is a quote that starts with its kind, `[!kind]`, and an optional title
 
 > [!tip]
 > Callouts hold any blocks:
-> * lists,
-> * code, tables…
+>  * lists,
+>  * code, tables…
 ```
 
 | Kind | For |
@@ -54,6 +64,17 @@ A callout is a quote that starts with its kind, `[!kind]`, and an optional title
 | `caution` | A danger. |
 | `todo` | What is left to do. |
 | `quote` | A quotation, with its source. |
+
+In Lua, a `callout` has its kind as `type`, and a `title`:
+
+:example
+```
+:lua`nml.element("callout", {
+  type = "note",
+  title = "From Lua",
+  "A callout built by a script.",
+})`
+```
 
 ## Layouts {#layout}
 
@@ -87,6 +108,21 @@ The left part.
 
 The sidebar is how a site adds navigation: this documentation's pages include a file with a `:layout sidebar` that holds a [[std#nav|menu]].
 
+In Lua, a `layout` has its name as `type`, and a `title`; each child is a part:
+
+:example
+```
+:lua`nml.element("layout", {
+  type = "split",
+  "The left part.",
+  nml.element("bold", {
+    "The right part.",
+  }),
+})`
+```
+
+A [[rules#|rule]] that writes a layout with `out:element` can write its last part with a function, as this documentation's `:example` does.
+
 ## Raw HTML {#raw}
 
 `:raw` and a fenced block writes HTML to the page as it is; ``:raw`…` `` does it in a line.
@@ -102,3 +138,12 @@ A line:raw`<br>`break.
 ````
 
 NML does not check raw HTML: it is for what NML cannot write. Text that a [[lua#|script]] returns is always escaped; scripts write HTML with a `raw` element.
+
+In Lua, a `raw` element's `content` is the HTML; `block` writes it as a block rather than in a line:
+
+:example
+```
+:lua`nml.element("raw", {
+  content = "<kbd>Ctrl</kbd>",
+})`
+```
