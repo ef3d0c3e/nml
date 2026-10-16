@@ -33,6 +33,8 @@ pub struct Config {
 	pub html: HtmlConfig,
 	/// The external renderers: their programs and LaTeX environments.
 	pub render: nml_render::Renderers,
+	/// The runners of `:run` blocks, by name: `[run.<name>]`.
+	pub runners: std::collections::BTreeMap<String, nml_render::Runner>,
 	pub modules: Vec<Module>,
 }
 
@@ -80,6 +82,17 @@ struct RawTexEnvironment {
 	latex: Option<String>,
 }
 
+/// A `[run.<name>]` section.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawRunner {
+	command: Spanned<Vec<String>>,
+	extension: Option<String>,
+	timeout: Option<u64>,
+	#[serde(default)]
+	env: std::collections::BTreeMap<String, String>,
+}
+
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawHtml {
@@ -115,6 +128,8 @@ struct Raw {
 	html: RawHtml,
 	#[serde(default)]
 	render: RawRender,
+	#[serde(default)]
+	run: std::collections::BTreeMap<String, RawRunner>,
 	#[serde(default, rename = "module")]
 	modules: Vec<RawModule>,
 }
@@ -236,6 +251,25 @@ impl Config {
 				.collect(),
 		};
 
+		let mut runners = std::collections::BTreeMap::new();
+		for (name, runner) in raw.run {
+			if runner.command.get_ref().is_empty() {
+				let kind = DiagnosticKind::ConfigError {
+					message: format!("the command of runner `{name}` is empty"),
+				};
+				let location = DiagnosticMessage::new(token(runner.command.span()));
+				diagnostics.push(Diagnostic::new(kind, location));
+				continue;
+			}
+			let runner = nml_render::Runner {
+				extension: runner.extension.unwrap_or_else(|| name.clone()),
+				command: runner.command.into_inner(),
+				timeout: runner.timeout.unwrap_or(nml_render::DEFAULT_RUN_TIMEOUT),
+				env: runner.env,
+			};
+			runners.insert(name, runner);
+		}
+
 		if !diagnostics.is_empty() {
 			return Err(diagnostics);
 		}
@@ -248,6 +282,7 @@ impl Config {
 			database: raw.database.unwrap_or_else(|| ".nml/index.db".into()),
 			html,
 			render,
+			runners,
 			modules: modules.into_iter().map(|(module, _)| module).collect(),
 		})
 	}
@@ -408,6 +443,35 @@ root = "lib/nav"
 		let diagnostics =
 			parse("[html]\ncode_theme = \"no\"\ncode_theme_dark = \"nope\"\n").unwrap_err();
 		assert_diagnostics!(diagnostics, [3011 @ 20..24, 3011 @ 43..49]);
+	}
+
+	#[test]
+	fn runners() {
+		let config = parse(
+			"[run.R]\ncommand = [\"Rscript\", \"{file}\"]\ntimeout = 60\n\
+			env = { R_LIBS = \"lib\" }\n\
+			[run.python]\ncommand = [\"python3\", \"-\"]\nextension = \"py\"\n",
+		)
+		.unwrap();
+		assert_eq!(
+			config.runners.get("R"),
+			Some(&nml_render::Runner {
+				command: vec!["Rscript".into(), "{file}".into()],
+				extension: "R".into(),
+				timeout: 60,
+				env: [("R_LIBS".to_string(), "lib".to_string())].into(),
+			})
+		);
+		let python = &config.runners["python"];
+		assert_eq!(python.extension, "py");
+		assert_eq!(python.timeout, nml_render::DEFAULT_RUN_TIMEOUT);
+		assert!(python.env.is_empty());
+		assert!(parse("").unwrap().runners.is_empty());
+
+		let diagnostics = parse("[run.sh]\ncommand = []\n").unwrap_err();
+		assert_diagnostics!(diagnostics, [3002 @ 19..21]);
+		let diagnostics = parse("[run.sh]\nprogram = \"sh\"\n").unwrap_err();
+		assert_diagnostics!(diagnostics, [3002]);
 	}
 
 	#[test]

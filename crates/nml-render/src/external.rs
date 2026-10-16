@@ -1,13 +1,9 @@
 //! External renderers: programs that turn LaTeX, Graphviz or Typst source into SVG.
 
 use std::fmt;
-use std::io::Read;
-use std::io::Write;
 use std::path::Path;
 use std::process::Command;
-use std::process::Stdio;
 use std::time::Duration;
-use std::time::Instant;
 
 /// How long a renderer may run.
 const TIME_LIMIT: Duration = Duration::from_secs(60);
@@ -274,56 +270,18 @@ fn run_full(
 	program: &str,
 	input: &[u8],
 ) -> Result<(String, String), RenderError> {
-	let mut child = command
-		.stdin(Stdio::piped())
-		.stdout(Stdio::piped())
-		.stderr(Stdio::piped())
-		.spawn()
-		.map_err(|error| RenderError::Missing {
+	let finished =
+		crate::process::wait(command, input, TIME_LIMIT).map_err(|error| RenderError::Missing {
 			program: program.into(),
 			message: error.to_string(),
 		})?;
-	let mut stdin = child.stdin.take().unwrap();
-	let input = input.to_vec();
-	// Written and read on threads of their own, so that full pipes cannot block the child.
-	let writer = std::thread::spawn(move || {
-		let _ = stdin.write_all(&input);
-	});
-	let mut stdout = child.stdout.take().unwrap();
-	let reader = std::thread::spawn(move || {
-		let mut out = Vec::new();
-		let _ = stdout.read_to_end(&mut out);
-		out
-	});
-	let mut stderr = child.stderr.take().unwrap();
-	let errors = std::thread::spawn(move || {
-		let mut out = Vec::new();
-		let _ = stderr.read_to_end(&mut out);
-		out
-	});
-	let start = Instant::now();
-	let status = loop {
-		match child.try_wait() {
-			Ok(Some(status)) => break status,
-			Ok(None) if start.elapsed() > TIME_LIMIT => {
-				let _ = child.kill();
-				let _ = child.wait();
-				return Err(RenderError::TimedOut {
-					program: program.into(),
-				});
-			}
-			Ok(None) => std::thread::sleep(Duration::from_millis(5)),
-			Err(error) => {
-				return Err(RenderError::Failed {
-					program: program.into(),
-					message: error.to_string(),
-				});
-			}
-		}
+	let Some(status) = finished.status else {
+		return Err(RenderError::TimedOut {
+			program: program.into(),
+		});
 	};
-	let _ = writer.join();
-	let out = String::from_utf8_lossy(&reader.join().unwrap_or_default()).into_owned();
-	let errors = String::from_utf8_lossy(&errors.join().unwrap_or_default()).into_owned();
+	let out = String::from_utf8_lossy(&finished.out).into_owned();
+	let errors = String::from_utf8_lossy(&finished.err).into_owned();
 	if status.success() {
 		Ok((out, errors))
 	} else {
@@ -518,6 +476,8 @@ pub fn scope_ids(svg: &str, prefix: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+	use std::process::Stdio;
+
 	use super::*;
 
 	/// Skips a test that needs a program which is not installed, unless `NML_REQUIRE_RENDERERS`
