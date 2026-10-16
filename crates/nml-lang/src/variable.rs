@@ -126,7 +126,7 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 				continue;
 			}
 			let name = m.capture("name").unwrap().token.clone();
-			let mut value = m.capture("value").unwrap().token.clone();
+			let mut value = value_of(&rules, &m.capture("value").unwrap().token);
 			if path {
 				// Resolved from the module's file; its errors are the module's.
 				let Some(resolved) = resolved_path(&import.path, &value) else {
@@ -189,7 +189,8 @@ pub(crate) fn expand_paths(lower: &Lower<'_, '_>, text: &str) -> String {
 
 fn set(lower: &mut Lower<'_, '_>, m: &RuleMatch, export: bool, path: bool) {
 	let name = m.capture("name").unwrap().token.clone();
-	let mut value = m.capture("value").unwrap().token.clone();
+	let rules = lower.language().rules().clone();
+	let mut value = value_of(&rules, &m.capture("value").unwrap().token);
 	let error = |kind| Diagnostic::new(kind, DiagnosticMessage::new(name.clone()));
 	let text = name.content();
 	if !is_variable_name(text) {
@@ -259,6 +260,29 @@ fn set(lower: &mut Lower<'_, '_>, m: &RuleMatch, export: bool, path: bool) {
 	lower
 		.variables
 		.insert(text.into(), Variable { name, value, path });
+}
+
+/// A variable's value as written at `token`, the rest of its line: without the comment that
+/// may end it, as the value's markup is parsed, nor the blanks around it.
+fn value_of(rules: &nml_grammar::RuleSet, token: &nml_source::Token) -> nml_source::Token {
+	fn first_comment(nodes: &[Node]) -> Option<usize> {
+		nodes.iter().find_map(|node| match node {
+			Node::Comment(token) => Some(token.start()),
+			Node::Paragraph { children, .. } => first_comment(children),
+			Node::Match(m) => m.captures.iter().find_map(|capture| match &capture.value {
+				nml_grammar::Value::Nodes(nodes) => first_comment(nodes),
+				_ => None,
+			}),
+			Node::Text(_) | Node::Escape(_) => None,
+		})
+	}
+	let parsed = nml_grammar::parse_inline(rules, value_source(token));
+	let content = token.content();
+	// The value's source holds only its text.
+	let content = &content[..first_comment(&parsed.nodes).unwrap_or(content.len())];
+	let trimmed = content.trim();
+	let start = token.start() + (content.len() - content.trim_start().len());
+	nml_source::Token::new(token.source().clone(), start..start + trimmed.len())
 }
 
 /// The variables being substituted, innermost last: a variable whose value refers to itself
@@ -345,6 +369,40 @@ mod tests {
 				("nml.output", "nml.output", "x.html"),
 			]
 		);
+	}
+
+	#[test]
+	fn values_are_trimmed() {
+		let compiled = compile_with(
+			":import std.lib\n:set name = **Bob**   :: a comment\n:set tab = a\t\n\n(%name%) (%tab%) (%lib.site%)\n",
+			&[("modules/std/lib.nml", ":export site = Docs :: comment\n")],
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let name = &compiled.variables["name"].value;
+		assert_eq!((name.content(), name.range()), ("**Bob**", 28..35));
+		assert_eq!(compiled.variables["tab"].value.content(), "a");
+		assert_eq!(compiled.variables["lib.site"].value.content(), "Docs");
+		check(
+			":set name = **Bob**   :: a comment\n\n(%name%)\n",
+			r#"document[paragraph["(" Bold["Bob"] ")"]]"#,
+		);
+		// Only a comment ends it: not `::` in code, nor without a blank before.
+		let compiled = compile_text(
+			":set a = `x :: y` z :: c\n:set b = a::b\n:set c = :: all comment\n\n%a% %b%\n",
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let value = |name: &str| compiled.variables[name].value.content().to_string();
+		assert_eq!(
+			[value("a"), value("b"), value("c")],
+			["`x :: y` z", "a::b", ""]
+		);
+		// A path too.
+		let compiled = compile_with(
+			":path logo = a.png :: the logo\n\n![](%logo%)\n",
+			&[("a.png", "png")],
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		assert_eq!(compiled.variables["logo"].value.content(), "/a.png");
 	}
 
 	#[test]
