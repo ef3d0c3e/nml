@@ -96,6 +96,24 @@ pub enum DiagnosticKind {
 	InvalidOutputPath { path: String },
 	#[diag(id = 2022, message = "diagnostic-duplicate-table-name")]
 	DuplicateTableName { name: String },
+	/// A `:run` block whose fence does not name its runner.
+	#[diag(id = 2023, message = "diagnostic-missing-runner")]
+	MissingRunner,
+	#[diag(id = 2024, message = "diagnostic-duplicate-run-name")]
+	DuplicateRunName { name: String },
+	/// `run:name` in a URL, without an earlier run of that name.
+	#[diag(id = 2025, message = "diagnostic-unknown-run")]
+	UnknownRun { name: String },
+	#[diag(id = 2026, message = "diagnostic-missing-run-output")]
+	MissingRunOutput { name: String, file: String },
+	/// `run:name` for a run that did not write exactly one file; `files` lists those it
+	/// wrote.
+	#[diag(id = 2027, message = "diagnostic-ambiguous-run-output")]
+	AmbiguousRunOutput {
+		name: String,
+		count: usize,
+		files: String,
+	},
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]
@@ -146,6 +164,12 @@ pub enum DiagnosticKind {
 	ReservedStaticFile { path: String },
 	#[diag(id = 3015, message = "diagnostic-missing-static-directory")]
 	MissingStaticDirectory { path: String },
+	/// A `:run` block's runner is not in the configuration; `runners` lists those that are.
+	#[diag(id = 3016, message = "diagnostic-unknown-runner")]
+	UnknownRunner { runner: String, runners: String },
+	/// A `:run` block failed: the message is its program's own, untranslated.
+	#[diag(id = 3017, message = "diagnostic-run-failed")]
+	RunFailed { message: String },
 	#[diag(id = 3011, message = "diagnostic-unknown-code-theme")]
 	UnknownCodeTheme { theme: String, themes: String },
 

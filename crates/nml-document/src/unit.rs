@@ -246,6 +246,9 @@ pub enum Dependency {
 	Env { name: String, hash: String },
 	/// The clock, read by a script: the unit is parsed again on every build.
 	Clock,
+	/// The result of a `:run` block, by key, and whether it had completed. The unit is
+	/// parsed again when that changes, and by a build that runs blocks when it had not.
+	Run { key: String, completed: bool },
 }
 
 /// Everything a parse produces for a unit.

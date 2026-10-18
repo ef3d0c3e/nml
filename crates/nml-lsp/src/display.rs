@@ -143,6 +143,11 @@ impl Markers<'_> {
 						Some(name @ ("lua" | "graph" | "tex" | "typst")) => {
 							self.fenced(m, crate::lua::block_language(name).unwrap())
 						}
+						// A run's code is in its runner's language, as its fence names it.
+						Some("run") => {
+							let runner = m.capture("info").map_or("", |i| i.token.content().trim());
+							self.fenced(m, runner)
+						}
 						// A role keeps its fences: `:typst$a$` would read as Typst.
 						Some("lua-role" | "typst_role") => true,
 						_ => false,

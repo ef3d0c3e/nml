@@ -22,11 +22,13 @@ use nml_grammar::Value;
 
 use crate::Language;
 use crate::Lower;
-use crate::ResolveError;
 use crate::attributes;
 use crate::language::plain_text;
 use crate::resolve::asset_output_path;
 use crate::resolve::relative_output_url;
+use crate::run::RUN_SCHEME;
+use crate::run::RunUrlError;
+use crate::run::run_file;
 
 /// Media `![alt](path)[options]` and figures `:figure #ref Caption`, which apply to the
 /// next block.
@@ -100,15 +102,67 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 	Ok(())
 }
 
+/// Why a medium's URL cannot be shown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MediaUrlError {
+	/// No such file in the workspace.
+	NotFound { path: String },
+	/// A `run:` URL that names no file.
+	Run(RunUrlError),
+}
+
+impl std::fmt::Display for MediaUrlError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			MediaUrlError::NotFound { path } => {
+				write!(f, "`{path}` does not exist in the workspace")
+			}
+			MediaUrlError::Run(error) => error.fmt(f),
+		}
+	}
+}
+
+impl MediaUrlError {
+	/// Its diagnostic, if it has one of its own: a run without a result says so itself.
+	pub fn diagnostic(&self) -> Option<DiagnosticKind> {
+		match self {
+			MediaUrlError::NotFound { path } => {
+				Some(DiagnosticKind::FileNotFound { path: path.clone() })
+			}
+			MediaUrlError::Run(error) => error.diagnostic(),
+		}
+	}
+}
+
 /// The URL of a medium written `written` in the file being lowered. An external URL is
-/// kept; a path is resolved in the workspace, its file recorded as an asset of the page and a
-/// dependency, and the URL goes from the page to the asset's copy.
-pub fn media_url(lower: &mut Lower<'_, '_>, written: &str) -> Result<String, ResolveError> {
+/// kept; a path is resolved in the workspace, and `run:name/file` among the files of the
+/// unit's runs. The file is recorded as an asset of the page (and a workspace file as a
+/// dependency), and the URL goes from the page to the asset's copy.
+pub fn media_url(lower: &mut Lower<'_, '_>, written: &str) -> Result<String, MediaUrlError> {
+	if let Some(rest) = written.strip_prefix(RUN_SCHEME) {
+		let file = run_file(&lower.runs, rest).map_err(MediaUrlError::Run)?;
+		let asset = Asset {
+			output: asset_output_path(&file.name, &file.hash),
+			path: file.path.clone(),
+		};
+		// The run's dependency covers its files.
+		let url = relative_output_url(&lower.output_path(), &asset.output);
+		if !lower.assets.contains(&asset) {
+			lower.assets.push(asset);
+		}
+		return Ok(url);
+	}
 	if is_external(written) {
 		return Ok(written.to_string());
 	}
 	let from = lower.files.last().unwrap().clone();
-	let (path, hash) = lower.resolver.asset(&from, written)?;
+	let (path, hash) =
+		lower
+			.resolver
+			.asset(&from, written)
+			.map_err(|_| MediaUrlError::NotFound {
+				path: written.into(),
+			})?;
 	let asset = Asset {
 		output: asset_output_path(&path, &hash),
 		path: path.clone(),
@@ -119,6 +173,17 @@ pub fn media_url(lower: &mut Lower<'_, '_>, written: &str) -> Result<String, Res
 		lower.assets.push(asset);
 	}
 	Ok(url)
+}
+
+/// The name a medium's kind is told from: the file a `run:` URL names, or the URL.
+pub fn media_file_name(lower: &Lower<'_, '_>, written: &str) -> String {
+	match written.strip_prefix(RUN_SCHEME) {
+		Some(rest) => match run_file(&lower.runs, rest) {
+			Ok(file) => file.name.clone(),
+			Err(_) => written.to_string(),
+		},
+		None => written.to_string(),
+	}
 }
 
 /// Whether a URL leaves the workspace: it has a scheme (`https:`, `data:`) or a host.
@@ -144,11 +209,21 @@ fn lower_media(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 		Some(OptionValue::Text(text)) if !text.is_empty() => Some(text.clone()),
 		_ => None,
 	};
+	let url = match media_url(lower, written) {
+		Ok(url) => url,
+		Err(error) => {
+			if let Some(kind) = error.diagnostic() {
+				let message = DiagnosticMessage::new(url_token);
+				lower.diagnostics.push(Diagnostic::new(kind, message));
+			}
+			return;
+		}
+	};
 	let kind = match option("type").as_deref() {
 		Some("image") => Some(MediaKind::Image),
 		Some("video") => Some(MediaKind::Video),
 		Some("audio") => Some(MediaKind::Audio),
-		_ => MediaKind::from_path(written),
+		_ => MediaKind::from_path(&media_file_name(lower, written)),
 	};
 	let Some(kind) = kind else {
 		let kind = DiagnosticKind::UnknownMediaType {
@@ -159,17 +234,6 @@ fn lower_media(lower: &mut Lower<'_, '_>, m: &nml_grammar::RuleMatch) {
 		return;
 	};
 
-	let url = match media_url(lower, written) {
-		Ok(url) => url,
-		Err(_) => {
-			let kind = DiagnosticKind::FileNotFound {
-				path: written.into(),
-			};
-			let message = DiagnosticMessage::new(url_token);
-			lower.diagnostics.push(Diagnostic::new(kind, message));
-			return;
-		}
-	};
 	let alt = match m.capture("alt").map(|capture| &capture.value) {
 		Some(Value::Nodes(nodes)) => plain_text(nodes),
 		_ => String::new(),

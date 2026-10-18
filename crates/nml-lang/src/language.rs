@@ -162,6 +162,8 @@ pub struct Compiled {
 	/// The variables set while compiling, the built-in ones included, and those of the
 	/// imported modules (`namespace.name`). For editors.
 	pub variables: HashMap<String, Variable>,
+	/// The `:run` blocks, in order. For editors and the build.
+	pub runs: Vec<crate::RunBlock>,
 	/// Parse errors and errors found while lowering. A unit with errors is not committed to
 	/// the workspace.
 	pub diagnostics: Vec<Diagnostic>,
@@ -196,6 +198,7 @@ pub fn compile(
 		placeholders: None,
 		extensions: HashMap::new(),
 		finishers: Vec::new(),
+		runs: Vec::new(),
 	};
 	let mut parse_diagnostics = parsed.diagnostics;
 	let mut nodes = parsed.nodes;
@@ -240,6 +243,7 @@ pub fn compile(
 		mut variables,
 		extended,
 		module_exports,
+		runs,
 		..
 	} = lower;
 	let mut diagnostics = parse_diagnostics;
@@ -263,6 +267,7 @@ pub fn compile(
 		language: extended,
 		module_exports,
 		variables: all_variables,
+		runs,
 		diagnostics,
 	}
 }
@@ -303,6 +308,8 @@ pub struct Lower<'a, 'l> {
 	extensions: HashMap<TypeId, Box<dyn Any>>,
 	/// Run when the lowering ends, in the order they were added.
 	finishers: Vec<Finisher>,
+	/// The `:run` blocks so far.
+	pub runs: Vec<crate::RunBlock>,
 }
 
 /// A table as scripts see it: the text of its cells, in a rectangular grid.

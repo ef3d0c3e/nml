@@ -10,7 +10,6 @@ use mlua::UserData;
 use mlua::UserDataFields;
 use mlua::Value;
 use nml_diagnostics::Diagnostic;
-use nml_diagnostics::DiagnosticKind;
 use nml_diagnostics::DiagnosticMessage;
 use nml_document::Alignment;
 use nml_document::Attributes;
@@ -728,10 +727,11 @@ pub(crate) fn open<'e>(
 		}) => {
 			let url = match nml_lang::media_url(lower, url) {
 				Ok(url) => url,
-				Err(_) => {
-					let kind = DiagnosticKind::FileNotFound { path: url.clone() };
-					let message = DiagnosticMessage::new(token.clone());
-					lower.diagnostics.push(Diagnostic::new(kind, message));
+				Err(error) => {
+					if let Some(kind) = error.diagnostic() {
+						let message = DiagnosticMessage::new(token.clone());
+						lower.diagnostics.push(Diagnostic::new(kind, message));
+					}
 					url.clone()
 				}
 			};
@@ -1031,9 +1031,8 @@ pub(crate) fn html(
 					..
 				}) => {
 					let url = match lower {
-						Some(lower) => nml_lang::media_url(lower, url).map_err(|_| {
-							mlua::Error::runtime(format!("`{url}` does not exist in the workspace"))
-						})?,
+						Some(lower) => nml_lang::media_url(lower, url)
+							.map_err(|error| mlua::Error::runtime(error.to_string()))?,
 						None if nml_lang::is_external(url) => url.clone(),
 						None => {
 							return Err(mlua::Error::runtime(format!(

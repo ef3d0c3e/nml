@@ -1108,7 +1108,7 @@ fn rendered_blocks_show_as_code() {
 	let url = Url::parse("file:///tmp/nml-lsp-none/a.nml").unwrap();
 	client.open(
 		&url,
-		":lua\n```\nx = 1\n```\n\n:graph[layout=neato] #g The graph\n````dot\ndigraph {}\n````\n\n:tex\n```\n\\LaTeX\n```\n\n:typst\n```\n#rect[]\n```\n\nA :typst`$a$`.\n",
+		":lua\n```\nx = 1\n```\n\n:graph[layout=neato] #g The graph\n````dot\ndigraph {}\n````\n\n:tex\n```\n\\LaTeX\n```\n\n:typst\n```\n#rect[]\n```\n\nA :typst`$a$`.\n\n:run #p\n```R\nplot(x)\n```\n",
 	);
 	client.diagnostics();
 	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
@@ -1144,6 +1144,8 @@ fn rendered_blocks_show_as_code() {
 			(13, 0, 3, r#""""#),
 			(16, 0, 3, r#"code {"language":"typst","name":""}"#),
 			(18, 0, 3, r#""""#),
+			(23, 0, 4, r#"code {"language":"R","name":""}"#),
+			(25, 0, 3, r#""""#),
 		]
 	);
 
@@ -1161,6 +1163,7 @@ fn rendered_blocks_show_as_code() {
 			(position(12, 0), position(13, 0), "tex"),
 			(position(17, 0), position(18, 0), "typst"),
 			(position(20, 9), position(20, 12), "typst"),
+			(position(24, 0), position(25, 0), "R"),
 		]
 	);
 }

@@ -141,6 +141,16 @@ fn code_blocks(
 							.map_or("", |language| language.token.content())
 							.into(),
 					});
+				} else if name == Some("run")
+					&& let Some(code) = m.capture("source")
+					&& code.token.root().source().location() == file
+				{
+					out.push(CodeRangeInfo {
+						range: convert::range(&code.token),
+						language: (m.capture("info"))
+							.map_or("", |info| info.token.content().trim())
+							.into(),
+					});
 				} else if let Some(name) = name.filter(|name| *name != "lua")
 					&& let Some(block) =
 						block_language(name).or((name == "typst_role").then_some("typst"))

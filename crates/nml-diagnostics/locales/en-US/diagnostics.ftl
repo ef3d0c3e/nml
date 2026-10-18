@@ -49,6 +49,15 @@ diagnostic-duplicate-table-name = a table is already named `{ $name }` for scrip
     .first = first named here
 diagnostic-fence-language = `{ $language }` is not the language of this command: write `{ $expected }`, or nothing
 diagnostic-render-error = { $message }
+diagnostic-missing-runner = a `:run` block names its runner after its fence: ```R
+diagnostic-duplicate-run-name = a run is already named `{ $name }`
+    .first = first named here
+diagnostic-unknown-run = no run before this is named `{ $name }`: name one with `:run #{ $name }`
+diagnostic-missing-run-output = the run `{ $name }` wrote no file `{ $file }`
+diagnostic-ambiguous-run-output = { $count ->
+    [0] the run `{ $name }` wrote no file
+   *[other] the run `{ $name }` wrote { $count } files: write `run:{ $name }/<file>` with one of { $files }
+}
 diagnostic-invalid-reference = `{ $target }` is not a reference: write `name`, `doc#name`, `doc#` or `#name`
 diagnostic-invalid-variable-name = `{ $name }` is not a variable name
 diagnostic-unknown-variable = `{ $name }` is not a variable of NML
@@ -77,6 +86,11 @@ diagnostic-invalid-module-name = `{ $name }` is not a valid module name: it must
 diagnostic-output-conflict = `{ $output }` is also the output of `{ $other }`: set `nml.output` to write one of them elsewhere
 diagnostic-reserved-static-file = `{ $path }` in the static directory would replace a file of the build: `assets/` and `nml-code.css` are the build's
 diagnostic-missing-static-directory = the static directory `{ $path }` does not exist
+diagnostic-unknown-runner = `{ $runner }` is not a runner of nml.toml: declare it in `[run.{ $runner }]`{ $runners ->
+    [none] {""}
+   *[other] , or use one of { $runners }
+}
+diagnostic-run-failed = the run failed: { $message }
 diagnostic-unknown-code-theme = `{ $theme }` is not a code theme: use one of { $themes }
 diagnostic-duplicate-module = module `{ $name }` is declared twice
     .first = first declared here

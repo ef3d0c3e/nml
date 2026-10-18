@@ -494,6 +494,18 @@ impl Index {
 			.collect())
 	}
 
+	/// Every run result used by units: (unit path, run key, whether it had completed).
+	pub fn run_dependencies(&self) -> Result<Vec<(String, String, bool)>> {
+		let dependencies = self.dependencies_of_kind("run")?;
+		Ok(dependencies
+			.into_iter()
+			.filter_map(|(unit, dependency)| match dependency {
+				Dependency::Run { key, completed } => Some((unit, key, completed)),
+				_ => None,
+			})
+			.collect())
+	}
+
 	/// The dependencies of a kind, with the path of the unit that has each.
 	fn dependencies_of_kind(&self, kind: &str) -> Result<Vec<(String, Dependency)>> {
 		let mut statement = self.connection.prepare(
@@ -1045,6 +1057,10 @@ fn encode_dependency(dependency: &Dependency) -> (&'static str, String) {
 			serde_json::json!({ "name": name, "hash": hash }).to_string(),
 		),
 		Dependency::Clock => ("clock", String::new()),
+		Dependency::Run { key, completed } => (
+			"run",
+			serde_json::json!({ "key": key, "completed": completed }).to_string(),
+		),
 		_ => unreachable!("dependency kinds are listed here"),
 	}
 }
@@ -1098,6 +1114,20 @@ fn dependency(kind: &str, value: &str) -> Result<Dependency> {
 			}
 		}
 		"clock" => Dependency::Clock,
+		"run" => {
+			let map = object(value)?;
+			Dependency::Run {
+				key: map
+					.get("key")
+					.and_then(Json::as_str)
+					.ok_or_else(|| corrupt("run dependency without key"))?
+					.into(),
+				completed: map
+					.get("completed")
+					.and_then(Json::as_bool)
+					.ok_or_else(|| corrupt("run dependency without status"))?,
+			}
+		}
 		_ => return Err(corrupt(format!("unknown dependency kind `{kind}`"))),
 	})
 }
@@ -1391,6 +1421,10 @@ mod tests {
 				hash: String::new(),
 			},
 			Dependency::Clock,
+			Dependency::Run {
+				key: "ab".into(),
+				completed: true,
+			},
 		];
 		let template = template();
 		index
@@ -1519,7 +1553,11 @@ mod tests {
 		assert_eq!(record.name, "a");
 		assert_eq!(record.title, "A");
 		let dependencies = index.dependencies(id).unwrap();
-		assert_eq!(dependencies.len(), 8);
+		assert_eq!(dependencies.len(), 9);
+		assert_eq!(
+			index.run_dependencies().unwrap(),
+			[("docs/a.nml".to_string(), "ab".to_string(), true)]
+		);
 		assert_eq!(
 			index.file_dependencies().unwrap(),
 			[(
