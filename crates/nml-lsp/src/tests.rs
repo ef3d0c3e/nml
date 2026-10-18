@@ -2234,3 +2234,137 @@ fn modules_are_documented() {
 	};
 	assert_eq!(doc.value, nml_lang::module_doc(toc_source));
 }
+
+#[test]
+fn run_blocks_on_request() {
+	let workspace = Workspace::new(
+		"runs",
+		&[
+			("nml.toml", "[run.sh]\ncommand = [\"sh\"]\n"),
+			(
+				"a.nml",
+				"Intro.\n\n:run #plot\n```sh\necho hello\nprintf x > \"$NML_OUT/p.svg\"\n```\n\n\
+				![Plot](run:plot)\n\n:run\n```sh\necho bad >&2\nexit 2\n```\n",
+			),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let a = workspace.url("a.nml");
+	// Saving builds, without running.
+	client.save(&a);
+	client.open(&a, &fs::read_to_string(workspace.0.join("a.nml")).unwrap());
+	let diagnostics = client.diagnostics();
+	assert!(diagnostics.diagnostics.is_empty(), "{diagnostics:?}");
+	assert!(!workspace.0.join(".nml/runs").exists());
+
+	let lenses = |client: &Client| -> Vec<(u32, String, String)> {
+		let params = serde_json::json!({ "textDocument": { "uri": a.as_str() } });
+		let result = client.request(lsp_types::request::CodeLensRequest::METHOD, params);
+		let lenses: Vec<lsp_types::CodeLens> = serde_json::from_value(result).unwrap();
+		(lenses.into_iter())
+			.map(|lens| {
+				let command = lens.command.unwrap();
+				(lens.range.start.line, command.title, command.command)
+			})
+			.collect()
+	};
+	let shown = |lenses: Vec<(u32, String, String)>| -> Vec<(u32, String, String)> {
+		// Durations vary.
+		(lenses.into_iter())
+			.map(|(line, title, command)| {
+				let title = match title.split_once(" in ").or(title.split_once(" after ")) {
+					Some((status, _)) => status.to_string(),
+					None => title,
+				};
+				(line, title, command)
+			})
+			.collect()
+	};
+	let lens =
+		|line: u32, title: &str, command: &str| (line, title.to_string(), command.to_string());
+	assert_eq!(
+		lenses(&client),
+		[
+			lens(2, "▶ Run", "nml.run"),
+			lens(2, "▶ Run all (2 not run)", "nml.runAll"),
+			lens(10, "▶ Run", "nml.run"),
+		]
+	);
+
+	// One block, then the document is diagnosed again with its result.
+	let params = serde_json::json!({ "command": "nml.run", "arguments": [a.as_str(), 2] });
+	client.request(ExecuteCommand::METHOD, params);
+	let diagnostics = client.diagnostics();
+	assert!(diagnostics.diagnostics.is_empty(), "{diagnostics:?}");
+	assert_eq!(
+		shown(lenses(&client)),
+		[
+			lens(2, "✓ Completed", ""),
+			lens(2, "▶ Run again", "nml.run"),
+			lens(2, "▶ Run all (1 not run)", "nml.runAll"),
+			lens(10, "▶ Run", "nml.run"),
+		]
+	);
+	let hover = |line, character| {
+		let result = client.request(
+			HoverRequest::METHOD,
+			serde_json::to_value(lsp_types::HoverParams {
+				text_document_position_params: at(&a, line, character),
+				work_done_progress_params: Default::default(),
+			})
+			.unwrap(),
+		);
+		let hover: Option<lsp_types::Hover> = serde_json::from_value(result).unwrap();
+		hover.map(|hover| {
+			let lsp_types::HoverContents::Markup(markup) = hover.contents else {
+				unreachable!()
+			};
+			markup.value
+		})
+	};
+	let value = hover(2, 7).unwrap();
+	assert!(
+		value.starts_with("**Run** `#plot` with `sh`: completed in "),
+		"{value}"
+	);
+	assert!(
+		value.ends_with("\n\nFiles: `p.svg`\n\nOutput:\n```text\nhello\n```"),
+		"{value}"
+	);
+
+	// The others: the failure is an error of the document.
+	let params = serde_json::json!({ "command": "nml.runAll", "arguments": [a.as_str()] });
+	client.request(ExecuteCommand::METHOD, params);
+	let diagnostics = client.diagnostics();
+	assert_eq!(diagnostics.diagnostics.len(), 1, "{diagnostics:?}");
+	assert_eq!(
+		diagnostics.diagnostics[0].code,
+		Some(NumberOrString::String("NML3017".into()))
+	);
+	assert_eq!(diagnostics.diagnostics[0].message, "the run failed: bad");
+	assert_eq!(
+		shown(lenses(&client)),
+		[
+			lens(2, "✓ Completed", ""),
+			lens(2, "▶ Run again", "nml.run"),
+			lens(2, "▶ Run all (1 failed)", "nml.runAll"),
+			lens(10, "✗ Failed", ""),
+			lens(10, "▶ Run again", "nml.run"),
+		]
+	);
+	let value = hover(10, 2).unwrap();
+	assert!(
+		value.starts_with("**Run** with `sh`: failed after "),
+		"{value}"
+	);
+	assert!(value.ends_with("Errors:\n```text\nbad\n```"), "{value}");
+	// Only on the first line of a block: the fence has the syntax's documentation.
+	let value = hover(11, 2).unwrap();
+	assert!(value.starts_with("**Run** code with a runner"), "{value}");
+
+	let error = client.request_error(
+		ExecuteCommand::METHOD,
+		serde_json::json!({ "command": "nml.run", "arguments": [a.as_str(), 5] }),
+	);
+	assert_eq!(error, "no `:run` block starts on line 6");
+}

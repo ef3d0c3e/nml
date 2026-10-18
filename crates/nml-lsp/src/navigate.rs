@@ -198,6 +198,18 @@ impl Server {
 	}
 
 	pub(crate) fn hover(&self, position: &TextDocumentPositionParams) -> Result<Option<Hover>> {
+		// A `:run` block's first line: its result.
+		if let Some((_, offset, url)) = self.analysis(position)?
+			&& let Some((value, token)) = self.run_hover(&url, offset)
+		{
+			return Ok(Some(Hover {
+				contents: HoverContents::Markup(MarkupContent {
+					kind: MarkupKind::Markdown,
+					value,
+				}),
+				range: Some(convert::range(&token)),
+			}));
+		}
 		let Some(Subject::Reference(target, token)) = self.subject(position)? else {
 			return self.syntax_hover(position);
 		};

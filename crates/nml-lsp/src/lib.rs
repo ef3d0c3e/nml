@@ -9,6 +9,7 @@ mod lua;
 mod luals;
 mod navigate;
 mod proxy;
+mod runs;
 mod semantic;
 
 use std::collections::BTreeSet;
@@ -135,7 +136,12 @@ pub fn run(connection: Connection) -> Result<()> {
 		}),
 		inlay_hint_provider: Some(OneOf::Left(true)),
 		execute_command_provider: Some(ExecuteCommandOptions {
-			commands: vec![INCLUDE_CONTEXT_COMMAND.into(), PREVIEW_COMMAND.into()],
+			commands: vec![
+				INCLUDE_CONTEXT_COMMAND.into(),
+				PREVIEW_COMMAND.into(),
+				runs::RUN_COMMAND.into(),
+				runs::RUN_ALL_COMMAND.into(),
+			],
 			..ExecuteCommandOptions::default()
 		}),
 		signature_help_provider: Some(SignatureHelpOptions {
@@ -143,6 +149,9 @@ pub fn run(connection: Connection) -> Result<()> {
 			..SignatureHelpOptions::default()
 		}),
 		code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+		code_lens_provider: Some(lsp_types::CodeLensOptions {
+			resolve_provider: Some(false),
+		}),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
 		definition_provider: Some(OneOf::Left(true)),
 		references_provider: Some(OneOf::Left(true)),
@@ -175,6 +184,10 @@ pub fn run(connection: Connection) -> Result<()> {
 		.and_then(|document| document.completion.as_ref())
 		.and_then(|completion| completion.completion_item.as_ref())
 		.and_then(|item| item.snippet_support)
+		.unwrap_or(false);
+	server.code_lens_refresh = (params.capabilities.workspace.as_ref())
+		.and_then(|workspace| workspace.code_lens.as_ref())
+		.and_then(|lens| lens.refresh_support)
 		.unwrap_or(false);
 	server.run()
 }
@@ -222,6 +235,15 @@ struct Server {
 	snippets: bool,
 	/// The live preview, once a client asks for it.
 	preview: Option<nml_preview::PreviewServer>,
+	/// The `:run` blocks running, by key, and since when.
+	running: HashMap<String, std::time::Instant>,
+	/// Where worker threads tell that a run ended.
+	run_sender: crossbeam_channel::Sender<runs::RunDone>,
+	run_receiver: crossbeam_channel::Receiver<runs::RunDone>,
+	/// Whether the client can be asked to refresh its code lenses.
+	code_lens_refresh: bool,
+	/// How many requests the server sent the client: their ids.
+	requests: u64,
 }
 
 /// What the server knows of an open document, from its last compilation.
@@ -244,6 +266,8 @@ struct Analysis {
 	variables: HashMap<String, nml_lang::Variable>,
 	/// The includer it was analysed in, for an included file.
 	context: Option<IncludeContext>,
+	/// Its `:run` blocks.
+	runs: Vec<nml_lang::RunBlock>,
 }
 
 /// An includer an included file is analysed in.
@@ -264,6 +288,7 @@ impl Server {
 			let url = Url::from_file_path(&path).ok()?;
 			Config::parse(Arc::new(Source::new(url, content, 0))).ok()
 		});
+		let (run_sender, run_receiver) = crossbeam_channel::unbounded();
 		let mut server = Self {
 			connection,
 			root,
@@ -283,6 +308,11 @@ impl Server {
 			lua_diagnostics: HashMap::new(),
 			snippets: false,
 			preview: None,
+			running: HashMap::new(),
+			run_sender,
+			run_receiver,
+			code_lens_refresh: false,
+			requests: 0,
 		};
 		// Editors open the modules that come with NML from there.
 		if let (Some(root), Some(_)) = (&server.root, &server.config)
@@ -348,6 +378,12 @@ impl Server {
 					Ok(message) => message,
 					Err(_) => return Ok(()),
 				},
+				recv(self.run_receiver.clone()) -> done => {
+					if let Ok(done) = done {
+						self.run_done(done)?;
+					}
+					continue;
+				}
 				recv(lua) -> message => {
 					match message {
 						Ok(message) => self.lua_message(message)?,
@@ -458,6 +494,13 @@ impl Server {
 			}
 			ExecuteCommand::METHOD => {
 				let params: ExecuteCommandParams = serde_json::from_value(request.params)?;
+				if matches!(
+					params.command.as_str(),
+					runs::RUN_COMMAND | runs::RUN_ALL_COMMAND
+				) {
+					self.run_command(&params.command, &params.arguments)?;
+					return Ok(serde_json::Value::Null);
+				}
 				if params.command == PREVIEW_COMMAND {
 					return Ok(serde_json::Value::String(self.preview(&params.arguments)?));
 				}
@@ -477,6 +520,10 @@ impl Server {
 				self.contexts.insert(path, includer.to_string());
 				self.diagnose(&url)?;
 				Ok(serde_json::Value::Null)
+			}
+			lsp_types::request::CodeLensRequest::METHOD => {
+				let params: lsp_types::CodeLensParams = serde_json::from_value(request.params)?;
+				Ok(serde_json::to_value(self.code_lenses(&params)?)?)
 			}
 			CodeActionRequest::METHOD => {
 				let params: CodeActionParams = serde_json::from_value(request.params)?;
@@ -693,6 +740,7 @@ impl Server {
 				module_exports: compiled.module_exports.clone(),
 				variables: compiled.variables.clone(),
 				context: include_context,
+				runs: compiled.runs.clone(),
 			},
 		);
 
