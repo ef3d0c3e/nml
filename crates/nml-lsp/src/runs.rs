@@ -83,26 +83,20 @@ impl Server {
 				}),
 				data: None,
 			};
-			let run = vec![uri.clone(), line];
-			if self.running.contains_key(&block.key) {
-				lenses.push(lens("⏳ Running…".into(), "", Vec::new()));
-			} else {
-				let (status, action) = match &block.result {
-					None => (None, "▶ Run"),
-					Some(result) if result.status == RunStatus::Completed => (
-						Some(format!("✓ Completed in {}", duration(result.duration))),
-						"▶ Run again",
-					),
-					Some(result) => (
-						Some(format!("✗ Failed after {}", duration(result.duration))),
-						"▶ Run again",
-					),
-				};
-				if let Some(status) = status {
-					lenses.push(lens(status, "", Vec::new()));
+			// One lens a block, its status and its command: a lens without a command
+			// cannot be clicked in every editor.
+			let title = match (&block.result, self.running.contains_key(&block.key)) {
+				(_, true) => "⏳ Running…".to_string(),
+				(None, false) => "▶ Run".to_string(),
+				(Some(result), false) => {
+					let status = match result.status {
+						RunStatus::Completed => "✓ Completed in",
+						RunStatus::Failed => "✗ Failed after",
+					};
+					format!("{status} {} · ▶ Run again", duration(result.duration))
 				}
-				lenses.push(lens(action.into(), RUN_COMMAND, run));
-			}
+			};
+			lenses.push(lens(title, RUN_COMMAND, vec![uri.clone(), line]));
 			if index == 0 && blocks.len() > 1 && !pending.is_empty() {
 				let title = format!("▶ Run all ({})", pending.join(", "));
 				lenses.push(lens(title, RUN_ALL_COMMAND, vec![uri.clone()]));

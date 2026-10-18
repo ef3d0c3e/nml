@@ -2273,7 +2273,9 @@ fn run_blocks_on_request() {
 		(lenses.into_iter())
 			.map(|(line, title, command)| {
 				let title = match title.split_once(" in ").or(title.split_once(" after ")) {
-					Some((status, _)) => status.to_string(),
+					Some((status, rest)) => {
+						format!("{status} ·{}", rest.split_once(" ·").unwrap().1)
+					}
 					None => title,
 				};
 				(line, title, command)
@@ -2299,8 +2301,7 @@ fn run_blocks_on_request() {
 	assert_eq!(
 		shown(lenses(&client)),
 		[
-			lens(2, "✓ Completed", ""),
-			lens(2, "▶ Run again", "nml.run"),
+			lens(2, "✓ Completed · ▶ Run again", "nml.run"),
 			lens(2, "▶ Run all (1 not run)", "nml.runAll"),
 			lens(10, "▶ Run", "nml.run"),
 		]
@@ -2345,11 +2346,9 @@ fn run_blocks_on_request() {
 	assert_eq!(
 		shown(lenses(&client)),
 		[
-			lens(2, "✓ Completed", ""),
-			lens(2, "▶ Run again", "nml.run"),
+			lens(2, "✓ Completed · ▶ Run again", "nml.run"),
 			lens(2, "▶ Run all (1 failed)", "nml.runAll"),
-			lens(10, "✗ Failed", ""),
-			lens(10, "▶ Run again", "nml.run"),
+			lens(10, "✗ Failed · ▶ Run again", "nml.run"),
 		]
 	);
 	let value = hover(10, 2).unwrap();
