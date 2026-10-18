@@ -89,6 +89,7 @@ CREATE TABLE slots (
 ) STRICT;
 CREATE INDEX slots_by_unit ON slots(unit);
 CREATE TABLE renders (key TEXT PRIMARY KEY, output TEXT NOT NULL) STRICT;
+-- The keys of the renders and the runs each unit uses.
 CREATE TABLE unit_renders (
 	unit INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
 	key TEXT NOT NULL
@@ -748,6 +749,17 @@ impl Index {
 		}
 		tx.commit()?;
 		Ok(())
+	}
+
+	/// The keys of the renders and runs units use.
+	pub fn used_keys(&self) -> Result<std::collections::BTreeSet<String>> {
+		let mut statement = self
+			.connection
+			.prepare("SELECT DISTINCT key FROM unit_renders")?;
+		let keys = statement
+			.query_map([], |row| row.get(0))?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(keys)
 	}
 
 	/// Deletes the renders no unit uses, and returns how many.
@@ -1459,6 +1471,10 @@ mod tests {
 			.set_unit_renders(a, &["k1".into(), "k2".into()])
 			.unwrap();
 		index.set_unit_renders(b, &["k2".into()]).unwrap();
+		assert_eq!(
+			index.used_keys().unwrap(),
+			["k1".to_string(), "k2".to_string()].into()
+		);
 		assert_eq!(index.prune_renders().unwrap(), 1);
 		assert_eq!(index.render("k1").unwrap().as_deref(), Some("<svg>1</svg>"));
 		assert_eq!(index.render("k3").unwrap(), None);

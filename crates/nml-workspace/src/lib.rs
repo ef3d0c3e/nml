@@ -2,6 +2,7 @@
 
 mod config;
 mod index;
+mod runs;
 mod scan;
 
 pub use config::CONFIG_FILE;
@@ -20,6 +21,8 @@ pub use index::StoredUse;
 pub use index::SymbolChange;
 pub use index::SymbolChangeKind;
 pub use index::UnitRecord;
+pub use runs::RunCache;
+pub use runs::runs_dir;
 pub use scan::Change;
 pub use scan::Scan;
 pub use scan::ScanError;
