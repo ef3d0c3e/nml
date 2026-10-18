@@ -34,6 +34,17 @@ impl Client {
 	}
 
 	fn start_with(root: Option<&Path>, options: serde_json::Value) -> Self {
+		let capabilities = serde_json::json!({
+			"textDocument": { "completion": { "completionItem": { "snippetSupport": true } } },
+		});
+		Self::start_full(root, options, capabilities)
+	}
+
+	fn start_full(
+		root: Option<&Path>,
+		options: serde_json::Value,
+		capabilities: serde_json::Value,
+	) -> Self {
 		let (server, connection) = Connection::memory();
 		let server = std::thread::spawn(move || run(server).unwrap());
 		let client = Self {
@@ -49,10 +60,7 @@ impl Client {
 				}]
 			}),
 			initialization_options: Some(options),
-			capabilities: serde_json::from_value(serde_json::json!({
-				"textDocument": { "completion": { "completionItem": { "snippetSupport": true } } },
-			}))
-			.unwrap(),
+			capabilities: serde_json::from_value(capabilities).unwrap(),
 			..InitializeParams::default()
 		};
 		client.request("initialize", serde_json::to_value(params).unwrap());
@@ -71,6 +79,10 @@ impl Client {
 				}
 				Message::Notification(notification) => {
 					self.pending.borrow_mut().push_back(notification.into());
+				}
+				// Requests of the server, such as `window/showDocument`.
+				Message::Request(request) => {
+					self.pending.borrow_mut().push_back(request.into());
 				}
 				_ => {}
 			}
@@ -93,6 +105,10 @@ impl Client {
 				Message::Notification(notification) => {
 					self.pending.borrow_mut().push_back(notification.into());
 				}
+				// Requests of the server, such as `window/showDocument`.
+				Message::Request(request) => {
+					self.pending.borrow_mut().push_back(request.into());
+				}
 				_ => {}
 			}
 		}
@@ -108,6 +124,19 @@ impl Client {
 			.receiver
 			.recv_timeout(Duration::from_secs(10))
 			.expect("the server answers")
+	}
+
+	/// The next request of the server with this method, among what it sent.
+	fn server_request(&self, method: &str) -> Request {
+		loop {
+			let message = self.pending.borrow_mut().pop_front();
+			let message = message.unwrap_or_else(|| self.receive());
+			if let Message::Request(request) = message
+				&& request.method == method
+			{
+				return request;
+			}
+		}
 	}
 
 	/// The next diagnostics the server publishes.
@@ -2248,7 +2277,11 @@ fn run_blocks_on_request() {
 			),
 		],
 	);
-	let client = Client::start(Some(&workspace.0));
+	let client = Client::start_full(
+		Some(&workspace.0),
+		serde_json::json!({ "luals": false }),
+		serde_json::json!({ "window": { "showDocument": { "support": true } } }),
+	);
 	let a = workspace.url("a.nml");
 	// Saving builds, without running.
 	client.save(&a);
@@ -2302,6 +2335,7 @@ fn run_blocks_on_request() {
 		shown(lenses(&client)),
 		[
 			lens(2, "✓ Completed · ▶ Run again", "nml.run"),
+			lens(2, "≡ Output", "nml.showRunOutput"),
 			lens(2, "▶ Run all (1 not run)", "nml.runAll"),
 			lens(10, "▶ Run", "nml.run"),
 		]
@@ -2347,8 +2381,10 @@ fn run_blocks_on_request() {
 		shown(lenses(&client)),
 		[
 			lens(2, "✓ Completed · ▶ Run again", "nml.run"),
+			lens(2, "≡ Output", "nml.showRunOutput"),
 			lens(2, "▶ Run all (1 failed)", "nml.runAll"),
 			lens(10, "✗ Failed · ▶ Run again", "nml.run"),
+			lens(10, "≡ Output", "nml.showRunOutput"),
 		]
 	);
 	let value = hover(10, 2).unwrap();
@@ -2361,9 +2397,66 @@ fn run_blocks_on_request() {
 	let value = hover(11, 2).unwrap();
 	assert!(value.starts_with("**Run** code with a runner"), "{value}");
 
+	// The whole output, for clients that show it themselves.
+	let output = client.request(
+		ExecuteCommand::METHOD,
+		serde_json::json!({ "command": "nml.runOutput", "arguments": [a.as_str(), 10] }),
+	);
+	assert_eq!(output["status"], "failed");
+	assert_eq!(output["runner"], "sh");
+	assert_eq!(output["name"], serde_json::Value::Null);
+	assert_eq!(output["stdout"], "");
+	assert_eq!(output["stderr"], "bad\n");
+	assert_eq!(output["message"], "bad");
+	let stderr = Url::parse(output["stderr_uri"].as_str().unwrap()).unwrap();
+	assert_eq!(
+		fs::read_to_string(stderr.to_file_path().unwrap()).unwrap(),
+		"bad\n"
+	);
+	let output = client.request(
+		ExecuteCommand::METHOD,
+		serde_json::json!({ "command": "nml.runOutput", "arguments": [a.as_str(), 2] }),
+	);
+	assert_eq!(output["status"], "completed");
+	assert_eq!(output["name"], "plot");
+	assert_eq!(output["stdout"], "hello\n");
+	assert_eq!(output["files"], serde_json::json!(["p.svg"]));
+
+	// Or the client opens the files: only those with something in them.
+	client.request(
+		ExecuteCommand::METHOD,
+		serde_json::json!({ "command": "nml.showRunOutput", "arguments": [a.as_str(), 2] }),
+	);
+	let request = client.server_request("window/showDocument");
+	let params: lsp_types::ShowDocumentParams = serde_json::from_value(request.params).unwrap();
+	assert!(
+		params.uri.as_str().ends_with("/stdout.txt"),
+		"{:?}",
+		params.uri
+	);
+	let stdout = Url::parse(params.uri.as_str())
+		.unwrap()
+		.to_file_path()
+		.unwrap();
+	assert_eq!(fs::read_to_string(stdout).unwrap(), "hello\n");
+
 	let error = client.request_error(
 		ExecuteCommand::METHOD,
 		serde_json::json!({ "command": "nml.run", "arguments": [a.as_str(), 5] }),
 	);
 	assert_eq!(error, "no `:run` block starts on line 6");
+	drop(client);
+
+	// A client that cannot open documents is told to use `nml.runOutput`.
+	let client = Client::start(Some(&workspace.0));
+	client.open(&a, &fs::read_to_string(workspace.0.join("a.nml")).unwrap());
+	client.diagnostics();
+	let error = client.request_error(
+		ExecuteCommand::METHOD,
+		serde_json::json!({ "command": "nml.showRunOutput", "arguments": [a.as_str(), 2] }),
+	);
+	assert_eq!(
+		error,
+		"the editor cannot open documents: `nml.runOutput` gives the output"
+	);
 }

@@ -37,6 +37,15 @@ struct Stored {
 
 const RESULT_FILE: &str = "result.json";
 const OUT_DIR: &str = "out";
+const STDOUT_FILE: &str = "stdout.txt";
+const STDERR_FILE: &str = "stderr.txt";
+
+/// What a run printed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stream {
+	Stdout,
+	Stderr,
+}
 
 impl RunCache {
 	pub fn new(dir: PathBuf) -> Self {
@@ -46,6 +55,16 @@ impl RunCache {
 	/// The directory of the files of the run `key`.
 	pub fn out_dir(&self, key: &str) -> PathBuf {
 		self.dir.join(key).join(OUT_DIR)
+	}
+
+	/// The file holding what the run `key` printed on a stream, for editors to open. It
+	/// exists if the run has a result.
+	pub fn log(&self, key: &str, stream: Stream) -> PathBuf {
+		let file = match stream {
+			Stream::Stdout => STDOUT_FILE,
+			Stream::Stderr => STDERR_FILE,
+		};
+		self.dir.join(key).join(file)
 	}
 
 	/// The result of the run `key`, if it ran.
@@ -89,6 +108,8 @@ impl RunCache {
 		};
 		let json = serde_json::to_string(&stored).expect("a result is serializable");
 		let stored = std::fs::create_dir_all(&staging)
+			.and_then(|()| std::fs::write(staging.join(STDOUT_FILE), &result.stdout))
+			.and_then(|()| std::fs::write(staging.join(STDERR_FILE), &result.stderr))
 			.and_then(|()| std::fs::write(staging.join(RESULT_FILE), json))
 			.and_then(|()| {
 				let target = self.dir.join(key);
@@ -174,6 +195,9 @@ mod tests {
 		});
 		assert_eq!(ran.files, ["sub/plot.svg"]);
 		assert_eq!(cache.get("abc"), Some(ran));
+		let log = |stream| std::fs::read_to_string(cache.log("abc", stream)).unwrap();
+		assert_eq!(log(Stream::Stdout), "out");
+		assert_eq!(log(Stream::Stderr), "err");
 		assert_eq!(
 			std::fs::read_to_string(cache.out_dir("abc").join("sub/plot.svg")).unwrap(),
 			"<svg/>"

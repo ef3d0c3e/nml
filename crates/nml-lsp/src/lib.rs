@@ -141,6 +141,8 @@ pub fn run(connection: Connection) -> Result<()> {
 				PREVIEW_COMMAND.into(),
 				runs::RUN_COMMAND.into(),
 				runs::RUN_ALL_COMMAND.into(),
+				runs::RUN_OUTPUT_COMMAND.into(),
+				runs::SHOW_RUN_OUTPUT_COMMAND.into(),
 			],
 			..ExecuteCommandOptions::default()
 		}),
@@ -185,6 +187,9 @@ pub fn run(connection: Connection) -> Result<()> {
 		.and_then(|completion| completion.completion_item.as_ref())
 		.and_then(|item| item.snippet_support)
 		.unwrap_or(false);
+	server.show_document = (params.capabilities.window.as_ref())
+		.and_then(|window| window.show_document.as_ref())
+		.is_some_and(|show| show.support);
 	server.code_lens_refresh = (params.capabilities.workspace.as_ref())
 		.and_then(|workspace| workspace.code_lens.as_ref())
 		.and_then(|lens| lens.refresh_support)
@@ -242,6 +247,8 @@ struct Server {
 	run_receiver: crossbeam_channel::Receiver<runs::RunDone>,
 	/// Whether the client can be asked to refresh its code lenses.
 	code_lens_refresh: bool,
+	/// Whether the client can be asked to open a document.
+	show_document: bool,
 	/// How many requests the server sent the client: their ids.
 	requests: u64,
 }
@@ -312,6 +319,7 @@ impl Server {
 			run_sender,
 			run_receiver,
 			code_lens_refresh: false,
+			show_document: false,
 			requests: 0,
 		};
 		// Editors open the modules that come with NML from there.
@@ -494,6 +502,13 @@ impl Server {
 			}
 			ExecuteCommand::METHOD => {
 				let params: ExecuteCommandParams = serde_json::from_value(request.params)?;
+				if params.command == runs::RUN_OUTPUT_COMMAND {
+					return self.run_output(&params.arguments);
+				}
+				if params.command == runs::SHOW_RUN_OUTPUT_COMMAND {
+					self.show_run_output(&params.arguments)?;
+					return Ok(serde_json::Value::Null);
+				}
 				if matches!(
 					params.command.as_str(),
 					runs::RUN_COMMAND | runs::RUN_ALL_COMMAND

@@ -22,6 +22,7 @@ pub use index::SymbolChange;
 pub use index::SymbolChangeKind;
 pub use index::UnitRecord;
 pub use runs::RunCache;
+pub use runs::Stream;
 pub use runs::runs_dir;
 pub use scan::Change;
 pub use scan::Scan;
