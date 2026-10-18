@@ -121,10 +121,12 @@ A run that fails — the program exits with an error, takes too long, or cannot 
 The [[editors#|language server]] never runs a block on its own: as you type, blocks show the result they have. Above each `:run`, a code lens tells whether it completed, failed or has not run, and how long it took:
 
 ```
-✓ Completed in 1.2 s · ▶ Run again   ▶ Run all (1 not run)
+✓ Completed in 1.2 s · ▶ Run again   ≡ Output   ▶ Run all (1 not run)
 ```
 
 `▶ Run` runs the block, and `▶ Run all` those that have not completed; they are the commands `nml.run` (with the document's URI and the line of the `:run`) and `nml.runAll` (with the URI). When a run ends, the document is checked again with its result. Hovering the `:run` line shows the result: the files, and the end of what the program printed.
+
+`≡ Output` shows everything it printed: the editor opens the files of its standard output and error, kept with its result (`nml.showRunOutput`, with the document's URI and the line of the `:run`). `nml.runOutput`, with the same arguments, answers the block's status, what it printed and its files, for editors that show them their own way; nml-nvim shows them in a split, with `:NmlRunOutput`.
 
 ## In Lua
 
