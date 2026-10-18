@@ -16,6 +16,7 @@
  * **Go to definition** and **references**: of headings, figures and anchors, of variables, of imported modules and of the syntax they define.
  * **Semantic highlighting**, inlay hints (the numbers of references) and code actions.
  * **Lua**: in `:lua` code, completion, hover and diagnostics come from [LuaLS](https://github.com/LuaLS/lua-language-server), with the NML API declared, when it is installed. NML finds it on the `PATH`, or where `NML_LUALS` says.
+ * **Code lenses** on [[runners#editor|`:run` blocks]]: whether each completed, failed or has not run, and the commands that run them.
  * The **live preview** of the page in the browser.
 
 ## Neovim

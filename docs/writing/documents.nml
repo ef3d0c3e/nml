@@ -1,7 +1,7 @@
 :import std.nav
 :import docs.page
 :export nav.category = Writing
-:export nav.order = 30
+:export nav.order = 31
 :export nav.title = Documents and modules
 :include /template/sidebar
 

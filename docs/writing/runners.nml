@@ -1,0 +1,139 @@
+:import std.nav
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 29
+:export nav.title = Running code
+:include /template/sidebar
+
+# Running code
+
+A `:run` block runs code with a program of the workspace, such as R, Python or gnuplot, when the page is built. What the program prints can be shown, and the files it writes, such as plots, can be shown by the [[media-figures#|media]] after it.
+
+## Runners {#runners}
+
+The programs are *runners*, declared in the [[configuration#run|configuration]]: a document only names one, so building a workspace runs no other program. Each `[run.<name>]` section is one:
+
+```
+[run.R]
+command = ["Rscript", "{file}"]
+
+[run.python]
+command = ["python3", "{file}"]
+extension = "py"
+
+[run.gnuplot]
+command = ["gnuplot", "{file}"]
+timeout = 60
+```
+
+| Key | |
+|:----|:-|
+| `command` | The program and its arguments. `{file}` is replaced by a file holding the code; without it, the code is the program's standard input. |
+| `extension` | The extension of that file. Default: the runner's name. |
+| `timeout` | How many seconds a run may take. Default: 300. |
+| `env` | Variables added to the program's environment, such as `{ R_LIBS = "lib" }`. |
+
+Building a workspace runs the code of its documents: build only workspaces you trust.
+
+## Blocks {#blocks}
+
+`:run`, then a fence that names the runner, then the code:
+
+````
+:run[show=output] #hello
+```python
+print("Hello from Python")
+```
+````
+
+The code runs in the directory of its document, with two variables in its environment:
+
+| Variable | |
+|:---------|:-|
+| `NML_OUT` | An empty directory: the files the code writes there are its *outputs*. |
+| `NML_ROOT` | The root of the workspace. |
+
+Options:
+
+| Option | Default | |
+|:-------|:--------|:-|
+| `show` | `none` | What the block shows: `none`, its `code`, its `output` (what it printed), or `both`. |
+| `inputs` | none | The files the code reads, separated by spaces, relative to the document or, with a leading `/`, to the workspace root. |
+
+`#name` names the run, for its files. A run is not a figure: a medium in a [[media-figures#figure|`:figure`]] makes one.
+
+## Showing its files {#files}
+
+`run:name/file` is the file `file` the run `name` wrote, wherever a [[media-figures#|medium]] takes a URL; `run:name` is its only file. The run must come before, in the same document. The file is copied with the page, as the workspace's images are.
+
+This page draws a chart from `sales.csv` with Python:
+
+:run[show=both, inputs=sales.csv] #sales
+```python
+import csv, os
+
+rows = list(csv.DictReader(open("sales.csv")))
+shapes = []
+for i, row in enumerate(rows):
+    x, value = i * 50 + 10, int(row["sales"])
+    shapes.append(
+        f'<rect x="{x}" y="{80 - value}" width="40" '
+        f'height="{value}" fill="#3a8fd8"/>'
+        f'<text x="{x + 20}" y="96" font-size="12" '
+        f'text-anchor="middle" fill="#888">{row["quarter"]}</text>'
+    )
+width = len(rows) * 50 + 20
+svg = (
+    '<svg xmlns="http://www.w3.org/2000/svg" '
+    f'width="{width}" height="100">' + "".join(shapes) + "</svg>"
+)
+path = os.path.join(os.environ["NML_OUT"], "sales.svg")
+with open(path, "w") as out:
+    out.write(svg)
+total = sum(int(row["sales"]) for row in rows)
+print(f"{len(rows)} quarters, {total} sales")
+```
+
+:figure #sales-chart Sales by quarter
+![Sales by quarter](run:sales)
+
+It is written:
+
+````
+:run[show=both, inputs=sales.csv] #sales
+```python
+import csv, os
+…
+```
+
+:figure #sales-chart Sales by quarter
+![Sales by quarter](run:sales)
+````
+
+## When blocks run {#when}
+
+A run's result is kept in `.nml/runs/`, by what it depends on: its runner's settings, its code, and its inputs' content. `nml build` and `nml serve` run the blocks that have no result yet: an unchanged block does not run again, and one whose code or inputs changed does. Files the code reads without naming them in `inputs` do not make it run again.
+
+A run that fails — the program exits with an error, takes too long, or cannot start — is an error of its page, with what the program wrote on its standard error. It runs again on the next build. The media that show its files show nothing until it completes.
+
+## In the editor {#editor}
+
+The [[editors#|language server]] never runs a block on its own: as you type, blocks show the result they have. Above each `:run`, a code lens tells whether it completed, failed or has not run, and how long it took:
+
+```
+✓ Completed in 1.2 s   ▶ Run again   ▶ Run all (1 not run)
+```
+
+`▶ Run` runs the block, and `▶ Run all` those that have not completed; they are the commands `nml.run` (with the document's URI and the line of the `:run`) and `nml.runAll` (with the URI). When a run ends, the document is checked again with its result. Hovering the `:run` line shows the result: the files, and the end of what the program printed.
+
+## In Lua
+
+A [[elements#element|`media`]] element takes a run's file as its `url`, as markup does. Its `type` is told from the URL's extension, so `run:sales/sales.svg` needs none, while `run:sales` needs one:
+
+```lua
+nml.element("media", {
+  url = "run:sales",
+  type = "image",
+  alt = "Sales",
+})
+```

@@ -57,6 +57,17 @@ The `[render]` section names the programs that draw [[math-diagrams#|math and di
 | `block_prepend` | What comes before the source of `:tex` blocks, but not math. |
 | `latex` | The LaTeX program of this environment, such as `"lualatex"`. |
 
+## Runners {#run}
+
+Each `[run.<name>]` section is a runner of [[runners#|`:run` blocks]], named by their fence:
+
+| Key | |
+|:----|:-|
+| `command` | The program and its arguments: `["Rscript", "{file}"]`. `{file}` is a file holding the code; without it, the code is the standard input. |
+| `extension` | The extension of that file. Default: the runner's name. |
+| `timeout` | How many seconds a run may take. Default: 300. |
+| `env` | Variables added to the program's environment. |
+
 ## Modules {#modules}
 
 Each `[[module]]` section is a root of [[documents#import|modules]]:

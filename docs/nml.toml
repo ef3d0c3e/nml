@@ -15,3 +15,8 @@ preamble = "\\usepackage{amsmath}\\usepackage{tikz}"
 [[module]]
 name = "docs"
 root = "template"
+
+# The programs of `:run` blocks: `writing/runners.nml` runs Python.
+[run.python]
+command = ["python3", "{file}"]
+extension = "py"
