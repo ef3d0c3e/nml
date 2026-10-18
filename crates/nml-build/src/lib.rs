@@ -42,6 +42,10 @@ use nml_lang::Compiled;
 use nml_lang::Language;
 use nml_lang::ResolveError;
 use nml_lang::Resolver;
+use nml_lang::RunError;
+use nml_lang::RunFile;
+use nml_lang::RunLookup;
+use nml_lang::RunRequest;
 use nml_lang::output_path;
 use nml_lang::resolve_file;
 use nml_lang::resolve_path;
@@ -49,6 +53,8 @@ use nml_lua::DeferredRuntime;
 use nml_lua::PageInfo;
 use nml_render::Job;
 use nml_render::RenderError;
+use nml_render::RunResult;
+use nml_render::RunStatus;
 use nml_render::recolor;
 use nml_render::scope_ids;
 use nml_source::Source;
@@ -173,12 +179,24 @@ pub struct BuildOptions {
 	/// Write the pages and delete the outputs of removed ones. The language server builds
 	/// without writing: it only needs the index and the diagnostics.
 	pub write: bool,
+	/// Run the `:run` blocks that have no completed result. Without it, blocks use the
+	/// results they have, and those that never ran show nothing: the language server runs
+	/// them on request.
+	pub run: bool,
 }
 
 impl Default for BuildOptions {
 	fn default() -> Self {
-		Self { write: true }
+		Self {
+			write: true,
+			run: true,
+		}
 	}
+}
+
+/// The results of the workspace's `:run` blocks, beside its database.
+pub fn run_cache(root: &Path, config: &Config) -> nml_workspace::RunCache {
+	nml_workspace::RunCache::new(nml_workspace::runs_dir(&root.join(&config.database)))
 }
 
 /// Builds the workspace at `root` incrementally, with options.
@@ -200,11 +218,19 @@ pub fn build_with(root: &Path, options: BuildOptions) -> Result<BuildReport, Bui
 	};
 	let config_hash = config_hash(config_source.content());
 	let index = Index::open(&root.join(&config.database))?;
-	let resolver: Arc<dyn Resolver> =
-		Arc::new(WorkspaceResolver::new(root.clone(), config.modules.clone()));
+	let runs = run_cache(&root, &config);
+	let resolver: Arc<dyn Resolver> = Arc::new(
+		WorkspaceResolver::new(root.clone(), config.modules.clone()).with_runs(
+			config.runners.clone(),
+			runs.clone(),
+			options.run,
+		),
+	);
 	let scan = nml_workspace::scan(&root, &config, &index)?;
 	let mut builder = Builder {
 		write: options.write,
+		runs: Some((runs, options.run)),
+		run_keys: BTreeSet::new(),
 		single_file: false,
 		config_source,
 		output: root.join(&config.output),
@@ -268,6 +294,8 @@ pub fn build_file(file: &Path, output: Option<&Path>) -> Result<BuildReport, Bui
 	let resolver: Arc<dyn Resolver> = Arc::new(WorkspaceResolver::new(root.clone(), Vec::new()));
 	let mut builder = Builder {
 		write: true,
+		runs: None,
+		run_keys: BTreeSet::new(),
 		single_file: true,
 		config_source,
 		output: output_dir,
@@ -300,6 +328,11 @@ pub fn build_file(file: &Path, output: Option<&Path>) -> Result<BuildReport, Bui
 struct Builder {
 	/// Whether outputs are written; see [`BuildOptions::write`].
 	write: bool,
+	/// The results of `:run` blocks, and whether blocks run (see [`BuildOptions::run`]).
+	/// A single file has none.
+	runs: Option<(nml_workspace::RunCache, bool)>,
+	/// The keys of the runs of the units parsed in this build, those that failed included.
+	run_keys: BTreeSet<String>,
 	/// Whether one file is built without a workspace: the output directory may hold the
 	/// files of other builds, which are left alone.
 	single_file: bool,
@@ -363,6 +396,18 @@ impl Builder {
 		for unit in self.index.dependents(&Dependency::Clock)? {
 			if existing.contains(unit.as_str()) {
 				invalid.insert(unit);
+			}
+		}
+		// Units whose runs have another result now (run by the language server, or
+		// pruned), or none that completed, in a build that runs them.
+		if let Some((runs, run)) = &self.runs {
+			for (unit, key, completed) in self.index.run_dependencies()? {
+				let now = runs
+					.get(&key)
+					.is_some_and(|result| result.status == nml_render::RunStatus::Completed);
+				if (now != completed || (*run && !now)) && existing.contains(unit.as_str()) {
+					invalid.insert(unit);
+				}
 			}
 		}
 		let seeds = invalid.iter().chain(&scan.removed).cloned().collect();
@@ -439,6 +484,11 @@ impl Builder {
 		}
 		// Renders no unit uses any more, since a unit changed or went away.
 		self.index.prune_renders()?;
+		if let Some((runs, _)) = &self.runs {
+			let mut keep = self.index.used_keys()?;
+			keep.extend(std::mem::take(&mut self.run_keys));
+			runs.prune(&keep);
+		}
 		self.sync_assets()?;
 		self.sync_static(&statics)?;
 		self.write_default_stylesheet()?;
@@ -779,7 +829,10 @@ impl Builder {
 		self.sources.insert(file.path.clone(), source);
 		self.report.parsed.push(file.path.clone());
 		let mut compiled = compiled;
-		let (rendered, render_keys) =
+		let run_keys: Vec<String> = compiled.runs.iter().map(|run| run.key.clone()).collect();
+		// Kept even if the unit fails: its other runs' results are still good.
+		self.run_keys.extend(run_keys.iter().cloned());
+		let (rendered, mut render_keys) =
 			if file.role == Role::Page && !has_errors(&compiled.diagnostics) {
 				self.render(&compiled.unit.document, &mut compiled.diagnostics)?
 			} else {
@@ -842,6 +895,7 @@ impl Builder {
 				&[]
 			},
 		})?;
+		render_keys.extend(run_keys);
 		self.index.set_unit_renders(id, &render_keys)?;
 		for change in changes {
 			self.affected.insert((name.to_string(), change.name));
@@ -1061,6 +1115,11 @@ pub fn language() -> Language {
 pub struct WorkspaceResolver {
 	root: PathBuf,
 	modules: Vec<nml_workspace::Module>,
+	/// The runners of `:run` blocks, their results, and whether blocks without a completed
+	/// result run.
+	runners: std::collections::BTreeMap<String, nml_render::Runner>,
+	runs: Option<nml_workspace::RunCache>,
+	execute: bool,
 	/// Contents by workspace path.
 	overlay: HashMap<String, String>,
 	/// When the resolver was created: the start of the build.
@@ -1072,11 +1131,28 @@ impl WorkspaceResolver {
 		Self {
 			root,
 			modules,
+			runners: Default::default(),
+			runs: None,
+			execute: false,
 			overlay: HashMap::new(),
 			time: std::time::SystemTime::now()
 				.duration_since(std::time::UNIX_EPOCH)
 				.map_or(0, |elapsed| elapsed.as_secs() as i64),
 		}
+	}
+
+	/// The runners of `:run` blocks and their results. With `execute`, blocks without a
+	/// completed result run, during the parse.
+	pub fn with_runs(
+		mut self,
+		runners: std::collections::BTreeMap<String, nml_render::Runner>,
+		runs: nml_workspace::RunCache,
+		execute: bool,
+	) -> Self {
+		self.runners = runners;
+		self.runs = Some(runs);
+		self.execute = execute;
+		self
 	}
 
 	/// Files whose content is taken from memory instead of the disk.
@@ -1170,6 +1246,64 @@ impl Resolver for WorkspaceResolver {
 
 	fn time(&self) -> i64 {
 		self.time
+	}
+
+	fn run(&self, from: &str, request: &RunRequest) -> Result<RunLookup, RunError> {
+		let (Some(runner), Some(runs)) = (self.runners.get(&request.runner), &self.runs) else {
+			return Err(RunError::UnknownRunner {
+				runners: self.runners.keys().cloned().collect(),
+			});
+		};
+		let mut inputs = Vec::new();
+		for input in &request.inputs {
+			let input = self
+				.asset(from, input)
+				.map_err(|_| RunError::InputNotFound {
+					path: input.clone(),
+				})?;
+			inputs.push(input);
+		}
+		let key = nml_lang::run_key(&runner.key(), &request.code, &inputs);
+		let completed = |result: &Option<RunResult>| {
+			(result.as_ref()).is_some_and(|result| result.status == RunStatus::Completed)
+		};
+		let mut result = runs.get(&key);
+		if self.execute && !completed(&result) {
+			let cwd = match from.rsplit_once('/') {
+				Some((dir, _)) => self.root.join(dir),
+				None => self.root.clone(),
+			};
+			result = Some(runs.run(&key, |out| runner.run(&request.code, &cwd, &self.root, out)));
+		}
+		let mut files = Vec::new();
+		if let Some(result) = result.as_ref().filter(|_| completed(&result)) {
+			let dir = runs.out_dir(&key);
+			for name in &result.files {
+				let absolute = dir.join(name);
+				let Ok(bytes) = fs::read(&absolute) else {
+					continue;
+				};
+				// Relative to the workspace when it is in it, as other assets are.
+				let path = match absolute.strip_prefix(&self.root) {
+					Ok(relative) => (relative.components())
+						.map(|c| c.as_os_str().to_string_lossy())
+						.collect::<Vec<_>>()
+						.join("/"),
+					Err(_) => absolute.to_string_lossy().into_owned(),
+				};
+				files.push(RunFile {
+					name: name.clone(),
+					path,
+					hash: hex(&nml_workspace::hash(&bytes)),
+				});
+			}
+		}
+		Ok(RunLookup {
+			key,
+			inputs,
+			result,
+			files,
+		})
 	}
 }
 

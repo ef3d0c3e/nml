@@ -71,7 +71,13 @@ struct Watched {
 /// Builds the workspace without writing, and reports its diagnostics. `None` if it cannot be
 /// built, such as when its configuration is invalid: the error is reported.
 fn build(root: &Path) -> Option<Watched> {
-	match nml_build::build_with(root, BuildOptions { write: false }) {
+	match nml_build::build_with(
+		root,
+		BuildOptions {
+			write: false,
+			run: true,
+		},
+	) {
 		Ok(report) => {
 			crate::print_diagnostics(&report.diagnostics);
 			let errors = report.has_errors();

@@ -191,7 +191,13 @@ impl Preview {
 		};
 		let resolver: Arc<dyn Resolver> = Arc::new(
 			WorkspaceResolver::new(self.root.clone(), self.config.modules.clone())
-				.with_overlay(self.overlay.clone()),
+				.with_overlay(self.overlay.clone())
+				// Blocks run when the workspace is built, not on every edit.
+				.with_runs(
+					self.config.runners.clone(),
+					crate::run_cache(&self.root, &self.config),
+					false,
+				),
 		);
 		let compiled = nml_lang::compile(&self.language, source.clone(), path, resolver.clone());
 		let document = &compiled.unit.document;

@@ -617,12 +617,14 @@ impl Server {
 	fn resolver(&self) -> WorkspaceResolver {
 		let overlay = self.overlay();
 		let root = self.root.clone().unwrap_or_else(|| PathBuf::from("/"));
-		let modules = self
-			.config
-			.as_ref()
-			.map(|config| config.modules.clone())
-			.unwrap_or_default();
-		WorkspaceResolver::new(root, modules).with_overlay(overlay)
+		let Some(config) = &self.config else {
+			return WorkspaceResolver::new(root, Vec::new()).with_overlay(overlay);
+		};
+		let runs = nml_build::run_cache(&root, config);
+		// Blocks run only on request.
+		WorkspaceResolver::new(root, config.modules.clone())
+			.with_overlay(overlay)
+			.with_runs(config.runners.clone(), runs, false)
 	}
 
 	/// Compiles an open document from its buffer, with the other open documents as an
@@ -744,7 +746,13 @@ impl Server {
 		let Some(root) = self.root.clone() else {
 			return Ok(());
 		};
-		let report = match nml_build::build_with(&root, BuildOptions { write: false }) {
+		let report = match nml_build::build_with(
+			&root,
+			BuildOptions {
+				write: false,
+				run: false,
+			},
+		) {
 			Ok(report) => report,
 			// No workspace: open documents are still diagnosed on their own.
 			Err(_) => return Ok(()),

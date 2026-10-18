@@ -618,7 +618,14 @@ fn includes_and_imports_invalidate_their_users() {
 
 /// A build that does not write, as the language server's.
 fn editor_build(workspace: &Workspace) -> BuildReport {
-	build_with(&workspace.0, BuildOptions { write: false }).unwrap()
+	build_with(
+		&workspace.0,
+		BuildOptions {
+			write: false,
+			run: false,
+		},
+	)
+	.unwrap()
 }
 
 #[test]
@@ -872,14 +879,28 @@ fn builds_without_writing() {
 			("b.nml", "# B\n"),
 		],
 	);
-	let report = build_with(&workspace.0, BuildOptions { write: false }).unwrap();
+	let report = build_with(
+		&workspace.0,
+		BuildOptions {
+			write: false,
+			run: false,
+		},
+	)
+	.unwrap();
 	assert_eq!(report.written, ["a.nml", "b.nml"]);
 	assert_diagnostics!(report.diagnostics, [3001]);
 	assert!(!workspace.0.join("public").exists());
 
 	// The index is up to date: a build that writes only writes what is relinked.
 	workspace.remove("b.nml");
-	let report = build_with(&workspace.0, BuildOptions { write: false }).unwrap();
+	let report = build_with(
+		&workspace.0,
+		BuildOptions {
+			write: false,
+			run: false,
+		},
+	)
+	.unwrap();
 	assert!(report.deleted.is_empty());
 	assert!(!workspace.0.join("public").exists());
 }
@@ -1621,7 +1642,14 @@ fn default_stylesheet() {
 
 	// A build that does not write leaves it alone.
 	workspace.remove("public/nml.css");
-	let report = build_with(&workspace.0, BuildOptions { write: false }).unwrap();
+	let report = build_with(
+		&workspace.0,
+		BuildOptions {
+			write: false,
+			run: false,
+		},
+	)
+	.unwrap();
 	assert_diagnostics!(report.diagnostics, []);
 	assert!(!workspace.0.join("public/nml.css").exists());
 }
@@ -1941,4 +1969,113 @@ fn named_graphs_and_listings() {
 		"<p><a href=\"a.html#pipeline\">Figure 2</a>, <a href=\"a.html#main\">Listing 1</a>, \
 		<a href=\"a.html#main\">Listing 1: The entry point</a>, <a href=\"a.html#pipeline\">see 2</a>.</p>\n"
 	);
+}
+
+#[test]
+fn run_blocks() {
+	let page = |code: &str| {
+		format!(
+			":run[show=both, inputs=data.csv] #plot\n```sh\n{code}\n```\n\n![A plot](run:plot)\n"
+		)
+	};
+	let code =
+		"cat data.csv\nprintf '<svg/>' > \"$NML_OUT/plot.svg\"\necho ran >> \"$NML_ROOT/.count\"";
+	let workspace = Workspace::new(
+		"run",
+		&[
+			("nml.toml", "[run.sh]\ncommand = [\"sh\", \"{file}\"]\n"),
+			("docs/data.csv", "1,2"),
+			("docs/a.nml", &page(code)),
+		],
+	);
+	let runs = |workspace: &Workspace| {
+		fs::read_to_string(workspace.0.join(".count"))
+			.unwrap_or_default()
+			.lines()
+			.count()
+	};
+	let results = |workspace: &Workspace| {
+		fs::read_dir(workspace.0.join(".nml/runs"))
+			.unwrap()
+			.filter(|entry| {
+				!entry
+					.as_ref()
+					.unwrap()
+					.file_name()
+					.to_string_lossy()
+					.starts_with('.')
+			})
+			.count()
+	};
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(runs(&workspace), 1);
+	let hash = hex(&nml_workspace::hash(b"<svg/>"));
+	let html = workspace.output("docs/a.html");
+	let body = body(&html);
+	assert!(body.contains("data-language=\"sh\""), "{body}");
+	assert!(body.contains("run-output"), "{body}");
+	assert!(body.contains("1,2"), "{body}");
+	let image = format!("<img src=\"../assets/{}.svg\" alt=\"A plot\"", &hash[..16]);
+	assert!(body.contains(&image), "{body}");
+	assert_eq!(
+		fs::read_to_string(
+			workspace
+				.0
+				.join(format!("public/assets/{}.svg", &hash[..16]))
+		)
+		.unwrap(),
+		"<svg/>"
+	);
+
+	// Cached: nothing runs again.
+	workspace.build();
+	assert_eq!(runs(&workspace), 1);
+	// An input changed.
+	workspace.write("docs/data.csv", "3,4");
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(runs(&workspace), 2);
+	assert!(body_of(&workspace).contains("3,4"));
+
+	// A build that does not run leaves a new block without result, and shows nothing of it.
+	workspace.write("docs/a.nml", &page(&format!("{code}\n# new")));
+	let options = BuildOptions {
+		write: true,
+		run: false,
+	};
+	let report = build_with(&workspace.0, options).unwrap();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(runs(&workspace), 2);
+	assert!(!body_of(&workspace).contains("<img"));
+	// The next build that runs it parses the page again, though it did not change.
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(runs(&workspace), 3);
+	assert!(body_of(&workspace).contains(&image));
+	// The results no unit uses are pruned.
+	assert_eq!(results(&workspace), 1);
+
+	// A failure is an error of the page, and runs again on the next build.
+	workspace.write(
+		"docs/a.nml",
+		&page("echo ran >> \"$NML_ROOT/.count\"\necho broken >&2\nexit 3"),
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3017 @ 0..4]);
+	assert_eq!(runs(&workspace), 4);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3017]);
+	assert_eq!(runs(&workspace), 5);
+	// The result of the failed page's run is kept.
+	assert_eq!(results(&workspace), 2);
+
+	// An unknown runner.
+	workspace.write("docs/a.nml", ":run\n```python\nx\n```\n");
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3016 @ 8..14]);
+}
+
+fn body_of(workspace: &Workspace) -> String {
+	body(&workspace.output("docs/a.html")).to_string()
 }

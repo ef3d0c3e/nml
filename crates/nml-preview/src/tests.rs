@@ -43,7 +43,10 @@ impl Workspace {
 
 	/// Built as the language server does: without writing.
 	fn build(&self) {
-		let options = nml_build::BuildOptions { write: false };
+		let options = nml_build::BuildOptions {
+			write: false,
+			run: false,
+		};
 		nml_build::build_with(&self.0, options).unwrap();
 	}
 }

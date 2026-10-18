@@ -367,6 +367,24 @@ figure.code-block {
 	border-radius: 0 0 var(--nml-radius) var(--nml-radius);
 }
 
+/* What a `:run` block printed: under its code, if it shows it. */
+.code-block.run-output .code {
+	border-style: dashed;
+	color: var(--nml-muted);
+}
+
+:where(.code-block.run-output .code) {
+	background: transparent;
+}
+
+.code-block:not(.run-output):has(+ .code-block.run-output) {
+	margin-bottom: 0;
+}
+
+.code-block:not(.run-output) + .code-block.run-output {
+	margin-top: 0.25rem;
+}
+
 /*** Figures, media and tables ***/
 
 figure {
