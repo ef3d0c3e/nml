@@ -1003,9 +1003,9 @@ fn conceal_and_style() {
 			(17, 19),
 			(20, 21),
 			(22, 23),
-			// The Lua block's fences, as a code block's; the role keeps its own.
-			(0, 3),
-			(0, 3)
+			// After the Lua block's opening fence, as a code block's (the fences stay); the
+			// role keeps its own.
+			(3, 3)
 		]
 	);
 	assert_eq!(
@@ -1069,8 +1069,8 @@ fn conceal_tokens() {
 		(7, 0, 1, r#"block {"name":"Warning"}"#),
 		(8, 0, 1, r#"block {"name":"Warning"}"#),
 		(7, 2, 12, r#"block_name {"name":"Warning"}"#),
-		(10, 0, 12, r#"code {"language":"rust","name":"Main"}"#),
-		(12, 0, 3, r#""""#),
+		// The fences stay: the header is drawn over what follows the opening one.
+		(10, 3, 12, r#"code {"language":"rust","name":"Main"}"#),
 		// An unknown callout: its markers are text.
 		(14, 0, 4, r#""""#),
 		(14, 8, 9, r#""""#),
@@ -1142,7 +1142,8 @@ fn rendered_blocks_show_as_code() {
 	client.diagnostics();
 	let params = serde_json::json!({ "textDocument": { "uri": url.as_str() } });
 
-	// The fences as a code block's, in the block's language; the command stays.
+	// After the opening fence, a code block's header in the block's language; the fences
+	// and the command stay.
 	let result = client.request(display::CONCEAL, params.clone());
 	let conceals: Vec<display::ConcealInfo> = serde_json::from_value(result).unwrap();
 	let shown: Vec<_> = (conceals.iter())
@@ -1165,16 +1166,11 @@ fn rendered_blocks_show_as_code() {
 	assert_eq!(
 		shown,
 		[
-			(1, 0, 3, r#"code {"language":"lua","name":""}"#),
-			(3, 0, 3, r#""""#),
-			(6, 0, 7, r#"code {"language":"dot","name":""}"#),
-			(8, 0, 4, r#""""#),
-			(11, 0, 3, r#"code {"language":"tex","name":""}"#),
-			(13, 0, 3, r#""""#),
-			(16, 0, 3, r#"code {"language":"typst","name":""}"#),
-			(18, 0, 3, r#""""#),
-			(23, 0, 4, r#"code {"language":"R","name":""}"#),
-			(25, 0, 3, r#""""#),
+			(1, 3, 3, r#"code {"language":"lua","name":""}"#),
+			(6, 4, 7, r#"code {"language":"dot","name":""}"#),
+			(11, 3, 3, r#"code {"language":"tex","name":""}"#),
+			(16, 3, 3, r#"code {"language":"typst","name":""}"#),
+			(23, 3, 4, r#"code {"language":"R","name":""}"#),
 		]
 	);
 

@@ -287,32 +287,25 @@ impl Markers<'_> {
 			.or(m.capture("options"))
 			.or(m.capture("language")))
 		.map_or(fence.token.end(), |capture| capture.token.end());
-		let line = Token::new(fence.token.source().clone(), fence.token.start()..end);
+		// The fences stay: the header is drawn over what follows the opening one.
+		let info = Token::new(fence.token.source().clone(), fence.token.end()..end);
 		let params = serde_json::json!({
 			"language": m.capture("language").map_or("", |c| c.token.content()),
 			"name": m.capture("title").map_or("", |c| c.token.content()),
 		});
-		self.token(&line, "code", params);
-		if let Some(close) = m.capture("close") {
-			self.text(&close.token);
-		}
+		self.token(&info, "code", params);
 		true
 	}
 
-	/// The fences of a block of `:lua`, `:graph`, … : shown as a code block's, in `language`.
+	/// The fence's info of a block of `:lua`, `:graph`, … : shown as a code block's, in
+	/// `language`.
 	fn fenced(&mut self, m: &RuleMatch, language: &str) -> bool {
-		let (Some(fence), Some(info)) = (m.capture("fence"), m.capture("info")) else {
+		let Some(info) = m.capture("info") else {
 			return true;
 		};
-		let line = Token::new(
-			fence.token.source().clone(),
-			fence.token.start()..info.token.end(),
-		);
+		// The fences stay, as a code block's.
 		let params = serde_json::json!({ "language": language, "name": "" });
-		self.token(&line, "code", params);
-		if let Some(close) = m.capture("close") {
-			self.text(&close.token);
-		}
+		self.token(&info.token, "code", params);
 		true
 	}
 }
