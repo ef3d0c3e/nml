@@ -13,6 +13,7 @@
  * **Diagnostics** as you type, for the file and for the pages that depend on it.
  * **Completion** of syntax, references, variables, modules, files, code languages and options, with snippets.
  * **Hover**: what the syntax under the cursor does, what a reference points to, a variable's value, a module's documentation.
+ * **Workspace symbols**: the files, what references can point to, and the exported variables of the workspace, for pickers (`workspace/symbol`); nml-nvim picks among them with `:NmlSymbols`.
  * **Go to definition** and **references**: of headings, figures and anchors, of variables, of imported modules and of the syntax they define.
  * **Semantic highlighting**, inlay hints (the numbers of references) and code actions.
  * **Lua**: in `:lua` code, completion, hover and diagnostics come from [LuaLS](https://github.com/LuaLS/lua-language-server), with the NML API declared, when it is installed. NML finds it on the `PATH`, or where `NML_LUALS` says.
