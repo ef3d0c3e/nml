@@ -2568,3 +2568,114 @@ fn folding_ranges() {
 		]
 	);
 }
+
+/// Applies the edits of a `workspace/applyEdit` to an ASCII text.
+fn apply_edits(text: &str, request: Request) -> String {
+	let params: lsp_types::ApplyWorkspaceEditParams =
+		serde_json::from_value(request.params).unwrap();
+	let edits = params.edit.changes.unwrap().into_values().next().unwrap();
+	let offset = |position: lsp_types::Position| {
+		let start: usize = text
+			.split_inclusive('\n')
+			.take(position.line as usize)
+			.map(str::len)
+			.sum();
+		start + position.character as usize
+	};
+	let mut edits: Vec<_> = (edits.into_iter())
+		.map(|edit| {
+			(
+				offset(edit.range.start)..offset(edit.range.end),
+				edit.new_text,
+			)
+		})
+		.collect();
+	edits.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
+	let mut out = text.to_string();
+	for (range, new) in edits {
+		out.replace_range(range, &new);
+	}
+	out
+}
+
+#[test]
+fn section_structure() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/outline.nml").unwrap();
+	let text = "# A\n\na\n\n## A1\n\n```\n# not a heading\n```\n\n## A2\n\n### A2x\n\n# B\n\nb";
+	client.open(&url, text);
+	client.diagnostics();
+	let run = |command: &str, line: u32| -> String {
+		let params = serde_json::json!({ "command": command, "arguments": [url.as_str(), line] });
+		client.request(ExecuteCommand::METHOD, params);
+		apply_edits(text, client.server_request("workspace/applyEdit"))
+	};
+	// From inside a section: the heading above. The code block's `#` is not a heading.
+	assert_eq!(
+		run("nml.demote", 5),
+		"# A\n\na\n\n### A1\n\n```\n# not a heading\n```\n\n## A2\n\n### A2x\n\n# B\n\nb"
+	);
+	assert_eq!(
+		run("nml.promote", 10),
+		"# A\n\na\n\n## A1\n\n```\n# not a heading\n```\n\n# A2\n\n## A2x\n\n# B\n\nb"
+	);
+	assert_eq!(
+		run("nml.moveDown", 4),
+		"# A\n\na\n\n## A2\n\n### A2x\n\n## A1\n\n```\n# not a heading\n```\n\n# B\n\nb"
+	);
+	assert_eq!(
+		run("nml.moveUp", 10),
+		"# A\n\na\n\n## A2\n\n### A2x\n\n## A1\n\n```\n# not a heading\n```\n\n# B\n\nb"
+	);
+	// The last section, without a final line break.
+	// The last section, without a final line break: the blank lines between sections stay.
+	assert_eq!(
+		run("nml.moveUp", 14),
+		"# B\n\nb\n\n# A\n\na\n\n## A1\n\n```\n# not a heading\n```\n\n## A2\n\n### A2x"
+	);
+	let error = |command: &str, line: u32| {
+		let params = serde_json::json!({ "command": command, "arguments": [url.as_str(), line] });
+		client.request_error(ExecuteCommand::METHOD, params)
+	};
+	assert_eq!(
+		error("nml.promote", 0),
+		"a level 1 heading cannot be promoted"
+	);
+	assert_eq!(
+		error("nml.moveUp", 4),
+		"no section of the same level before this one"
+	);
+	assert_eq!(
+		error("nml.moveDown", 12),
+		"no section of the same level after this one"
+	);
+
+	// Code actions on a heading's line, those that apply.
+	let actions = |line: u32| -> Vec<String> {
+		let result = client.request(
+			CodeActionRequest::METHOD,
+			serde_json::json!({
+				"textDocument": { "uri": url.as_str() },
+				"range": { "start": { "line": line, "character": 0 }, "end": { "line": line, "character": 0 } },
+				"context": { "diagnostics": [] },
+			}),
+		);
+		let actions: Vec<lsp_types::CodeActionOrCommand> = serde_json::from_value(result).unwrap();
+		(actions.into_iter())
+			.map(|action| match action {
+				lsp_types::CodeActionOrCommand::CodeAction(action) => action.title,
+				lsp_types::CodeActionOrCommand::Command(command) => command.title,
+			})
+			.collect()
+	};
+	assert_eq!(
+		actions(4),
+		[
+			"Promote the section",
+			"Demote the section",
+			"Move the section down"
+		]
+		.map(String::from)
+	);
+	assert!(actions(5).is_empty());
+}

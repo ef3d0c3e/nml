@@ -70,6 +70,7 @@ impl Server {
 				}));
 			}
 		}
+		actions.extend(self.structure_actions(&url, params.range.start.line));
 		Ok(actions)
 	}
 }

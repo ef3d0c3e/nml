@@ -12,6 +12,7 @@ mod navigate;
 mod proxy;
 mod runs;
 mod semantic;
+mod structure;
 mod symbols;
 
 use std::collections::BTreeSet;
@@ -145,6 +146,10 @@ pub fn run(connection: Connection) -> Result<()> {
 				runs::RUN_ALL_COMMAND.into(),
 				runs::RUN_OUTPUT_COMMAND.into(),
 				runs::SHOW_RUN_OUTPUT_COMMAND.into(),
+				structure::PROMOTE_COMMAND.into(),
+				structure::DEMOTE_COMMAND.into(),
+				structure::MOVE_UP_COMMAND.into(),
+				structure::MOVE_DOWN_COMMAND.into(),
 			],
 			..ExecuteCommandOptions::default()
 		}),
@@ -506,6 +511,10 @@ impl Server {
 			}
 			ExecuteCommand::METHOD => {
 				let params: ExecuteCommandParams = serde_json::from_value(request.params)?;
+				if structure::COMMANDS.contains(&params.command.as_str()) {
+					self.structure_command(&params.command, &params.arguments)?;
+					return Ok(serde_json::Value::Null);
+				}
 				if params.command == runs::RUN_OUTPUT_COMMAND {
 					return self.run_output(&params.arguments);
 				}
