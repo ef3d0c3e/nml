@@ -2525,3 +2525,46 @@ fn workspace_symbols() {
 		[symbol("lib/parts.nml (Parts)", K::FILE, "parts.nml", 0)]
 	);
 }
+
+#[test]
+fn folding_ranges() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/fold.nml").unwrap();
+	client.open(
+		&url,
+		"# One\n\nText.\n\n## Two\n\n * a\n * b\n ** c\n\n:: x\n:: y\n\n\
+		```rust\nfn f() {}\n```\n\n\
+		> quoted\n> more\n\n\
+		# Three\n\nA **bold\nline**.\n\n\n",
+	);
+	client.diagnostics();
+	let result = client.request(
+		lsp_types::request::FoldingRangeRequest::METHOD,
+		serde_json::json!({ "textDocument": { "uri": url.as_str() } }),
+	);
+	let folds: Vec<lsp_types::FoldingRange> = serde_json::from_value(result).unwrap();
+	let folds: Vec<_> = (folds.iter())
+		.map(|fold| {
+			let kind = match &fold.kind {
+				Some(lsp_types::FoldingRangeKind::Region) => "section",
+				Some(lsp_types::FoldingRangeKind::Comment) => "comment",
+				_ => "block",
+			};
+			(fold.start_line, fold.end_line, kind)
+		})
+		.collect();
+	assert_eq!(
+		folds,
+		[
+			// Up to the next heading of its level, without the blank lines.
+			(0, 18, "section"),
+			(4, 18, "section"),
+			(6, 8, "block"),
+			(10, 11, "comment"),
+			(13, 15, "block"),
+			(17, 18, "block"),
+			// To the last line with content; bold across lines does not fold.
+			(20, 23, "section"),
+		]
+	);
+}

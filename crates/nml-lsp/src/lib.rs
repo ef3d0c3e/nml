@@ -5,6 +5,7 @@ mod completion;
 mod convert;
 mod display;
 mod find;
+mod folding;
 mod lua;
 mod luals;
 mod navigate;
@@ -153,6 +154,7 @@ pub fn run(connection: Connection) -> Result<()> {
 		}),
 		code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
 		workspace_symbol_provider: Some(OneOf::Left(true)),
+		folding_range_provider: Some(lsp_types::FoldingRangeProviderCapability::Simple(true)),
 		code_lens_provider: Some(lsp_types::CodeLensOptions {
 			resolve_provider: Some(false),
 		}),
@@ -537,6 +539,11 @@ impl Server {
 				self.contexts.insert(path, includer.to_string());
 				self.diagnose(&url)?;
 				Ok(serde_json::Value::Null)
+			}
+			lsp_types::request::FoldingRangeRequest::METHOD => {
+				let params: lsp_types::FoldingRangeParams = serde_json::from_value(request.params)?;
+				let url = Url::parse(params.text_document.uri.as_str())?;
+				Ok(serde_json::to_value(self.folding_ranges(&url)?)?)
 			}
 			lsp_types::request::WorkspaceSymbolRequest::METHOD => {
 				let params: lsp_types::WorkspaceSymbolParams =
