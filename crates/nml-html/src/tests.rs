@@ -526,8 +526,15 @@ fn the_default_style_has_both_color_schemes() {
 
 	let light = properties(&css[css.find(":root {").unwrap()..]);
 	let dark_media = css.find("@media (prefers-color-scheme: dark) {").unwrap();
-	let dark_root = dark_media + css[dark_media..].find(":root {").unwrap();
+	let dark_root =
+		dark_media + (css[dark_media..].find(":root:not([data-theme=\"light\"]) {")).unwrap();
 	let dark = properties(&css[dark_root..]);
+	// A page that chose the dark scheme gets the same colors, and one that chose either
+	// gets its `color-scheme`.
+	let chosen = &css[css.find(":root[data-theme=\"dark\"] {").unwrap()..];
+	assert!(chosen.starts_with(":root[data-theme=\"dark\"] {\n\tcolor-scheme: dark;"));
+	assert_eq!(properties(chosen), dark);
+	assert!(css.contains(":root[data-theme=\"light\"] {\n\tcolor-scheme: light;\n}"));
 	let colors: Vec<_> = (light.iter())
 		.filter(|(_, value)| value.starts_with('#'))
 		.map(|(name, _)| *name)

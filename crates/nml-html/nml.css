@@ -2,7 +2,8 @@
  * The default style of NML pages.
  *
  * Every color is a custom property: a stylesheet linked after this one retheme pages by
- * setting them on `:root`, for the light scheme and in the dark media query.
+ * setting them on `:root`, for the light scheme, and for the dark one in the dark media query
+ * and on `:root[data-theme="dark"]`, the scheme a page chose.
  */
 
 /*** Properties ***/
@@ -35,7 +36,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-	:root {
+	:root:not([data-theme="light"]) {
 		--nml-background: #16181d;
 		--nml-text: #e3e5e8;
 		--nml-muted: #9aa3ad;
@@ -51,6 +52,30 @@
 		--nml-caution: #f2665c;
 		--nml-todo: #e5843d;
 	}
+}
+
+/* A choice of the page, over the system's: `data-theme="light"` or `"dark"` on `html`. */
+:root[data-theme="light"] {
+	color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+	color-scheme: dark;
+
+	--nml-background: #16181d;
+	--nml-text: #e3e5e8;
+	--nml-muted: #9aa3ad;
+	--nml-border: #363c45;
+	--nml-surface: #20242b;
+	--nml-link: #5ba3f5;
+	--nml-mark: #5c4d0a;
+
+	--nml-note: #5ba3f5;
+	--nml-tip: #46b95c;
+	--nml-important: #a98af5;
+	--nml-warning: #d4a12a;
+	--nml-caution: #f2665c;
+	--nml-todo: #e5843d;
 }
 
 /*** Page ***/
