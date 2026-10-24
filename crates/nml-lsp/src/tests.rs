@@ -2456,3 +2456,72 @@ fn run_blocks_on_request() {
 		"the editor cannot open documents: `nml.runOutput` gives the output"
 	);
 }
+
+#[test]
+fn workspace_symbols() {
+	let workspace = Workspace::new(
+		"symbols",
+		&[
+			("nml.toml", ""),
+			(
+				"guide.nml",
+				"# Getting started {#start}\n\nText.\n\n:export version = 1.2\n",
+			),
+			(
+				"lib/parts.nml",
+				":set nml.reference_key = parts\n# Parts {#parts}\n\n:anchor here\n",
+			),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let guide = workspace.url("guide.nml");
+	client.save(&guide);
+	// Unsaved: a new heading, and the old one renamed.
+	client.open(
+		&guide,
+		"# Getting started {#begin}\n\n## Install {#install}\n\n:export version = 1.2\n",
+	);
+	client.diagnostics();
+	let symbols = |query: &str| -> Vec<(String, lsp_types::SymbolKind, String, u32)> {
+		let result = client.request(
+			lsp_types::request::WorkspaceSymbolRequest::METHOD,
+			serde_json::json!({ "query": query }),
+		);
+		let symbols: Vec<lsp_types::SymbolInformation> = serde_json::from_value(result).unwrap();
+		(symbols.into_iter())
+			.map(|symbol| {
+				let uri = symbol.location.uri.as_str().to_string();
+				let file = uri.rsplit('/').next().unwrap().to_string();
+				(
+					symbol.name,
+					symbol.kind,
+					file,
+					symbol.location.range.start.line,
+				)
+			})
+			.collect()
+	};
+	use lsp_types::SymbolKind as K;
+	let symbol =
+		|name: &str, kind, file: &str, line| (name.to_string(), kind, file.to_string(), line);
+	assert_eq!(
+		symbols(""),
+		[
+			symbol("guide.nml (Getting started)", K::FILE, "guide.nml", 0),
+			symbol("lib/parts.nml (Parts)", K::FILE, "parts.nml", 0),
+			symbol("Getting started (guide#begin)", K::STRING, "guide.nml", 0),
+			symbol("Install (guide#install)", K::STRING, "guide.nml", 2),
+			symbol("guide.version = 1.2", K::VARIABLE, "guide.nml", 4),
+			symbol("Parts (parts#parts)", K::STRING, "parts.nml", 1),
+			symbol("here (parts#here)", K::KEY, "parts.nml", 3),
+		]
+	);
+	assert_eq!(
+		symbols("install"),
+		[symbol("Install (guide#install)", K::STRING, "guide.nml", 2)]
+	);
+	assert_eq!(
+		symbols("parts.nml"),
+		[symbol("lib/parts.nml (Parts)", K::FILE, "parts.nml", 0)]
+	);
+}

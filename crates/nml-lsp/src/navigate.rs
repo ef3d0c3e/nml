@@ -135,7 +135,7 @@ impl Server {
 		Some(Arc::new(Source::new(url, content, 0)))
 	}
 
-	fn location(&self, path: &str, range: std::ops::Range<usize>) -> Option<Location> {
+	pub(crate) fn location(&self, path: &str, range: std::ops::Range<usize>) -> Option<Location> {
 		let source = self.file(path)?;
 		let token = Token::new(
 			source.clone(),

@@ -11,6 +11,7 @@ mod navigate;
 mod proxy;
 mod runs;
 mod semantic;
+mod symbols;
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -151,6 +152,7 @@ pub fn run(connection: Connection) -> Result<()> {
 			..SignatureHelpOptions::default()
 		}),
 		code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+		workspace_symbol_provider: Some(OneOf::Left(true)),
 		code_lens_provider: Some(lsp_types::CodeLensOptions {
 			resolve_provider: Some(false),
 		}),
@@ -535,6 +537,14 @@ impl Server {
 				self.contexts.insert(path, includer.to_string());
 				self.diagnose(&url)?;
 				Ok(serde_json::Value::Null)
+			}
+			lsp_types::request::WorkspaceSymbolRequest::METHOD => {
+				let params: lsp_types::WorkspaceSymbolParams =
+					serde_json::from_value(request.params)?;
+				let symbols = self.workspace_symbols(&params.query)?;
+				Ok(serde_json::to_value(
+					lsp_types::WorkspaceSymbolResponse::Flat(symbols),
+				)?)
 			}
 			lsp_types::request::CodeLensRequest::METHOD => {
 				let params: lsp_types::CodeLensParams = serde_json::from_value(request.params)?;
