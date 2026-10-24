@@ -12,5 +12,40 @@
 :layout sidebar
 **[[index#|NML]]**
 
+:: The color scheme: the system's, light or dark, kept for the next pages. It runs before the
+:: content is drawn, which comes after the sidebar.
+:raw
+```
+<button type="button" class="theme-toggle"></button>
+<script>
+(() => {
+	const root = document.documentElement;
+	const button = document.currentScript.previousElementSibling;
+	const modes = ["auto", "light", "dark"];
+	const labels = { auto: "◐ Auto", light: "☀ Light", dark: "☾ Dark" };
+	let mode = "auto";
+	try {
+		mode = localStorage.getItem("nml-theme") || "auto";
+	} catch {}
+	if (!modes.includes(mode)) mode = "auto";
+	const apply = () => {
+		if (mode === "auto") root.removeAttribute("data-theme");
+		else root.dataset.theme = mode;
+		button.textContent = labels[mode];
+		button.title = "Color scheme: " + mode;
+	};
+	button.addEventListener("click", () => {
+		mode = modes[(modes.indexOf(mode) + 1) % modes.length];
+		try {
+			if (mode === "auto") localStorage.removeItem("nml-theme");
+			else localStorage.setItem("nml-theme", mode);
+		} catch {}
+		apply();
+	});
+	apply();
+})();
+</script>
+```
+
 :nav
 :end

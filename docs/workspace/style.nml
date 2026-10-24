@@ -39,7 +39,7 @@ static = "static"
 | `--nml-sidebar-width` | The width of the sidebar. |
 | `--nml-radius` | Rounded corners. |
 
-The dark scheme sets the colors again in a `prefers-color-scheme: dark` media query: a stylesheet that changes colors sets both.
+The dark scheme sets the colors again, in a `prefers-color-scheme: dark` media query for `:root:not([data-theme="light"])`, and for `:root[data-theme="dark"]`: a stylesheet that changes colors sets them for both schemes. A script can choose the scheme over the system's by setting `data-theme` to `light` or `dark` on `html`, as the toggle of this documentation does; the colors of highlighted code follow it too.
 
 `default_style = false` drops `nml.css`, for a style of one's own.
 

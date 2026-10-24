@@ -10,6 +10,23 @@
 	margin-bottom: 1rem;
 }
 
+/* The color scheme's toggle, under the site's name. */
+.theme-toggle {
+	margin: 0 0 1rem;
+	padding: 0.2rem 0.6rem;
+	border: 1px solid var(--nml-border);
+	border-radius: var(--nml-radius);
+	background: var(--nml-surface);
+	color: var(--nml-text);
+	font: inherit;
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+
+.theme-toggle:hover {
+	border-color: var(--nml-muted);
+}
+
 /* `:example`: the source, and beside it what it makes. */
 .example {
 	align-items: flex-start;
