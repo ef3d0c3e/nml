@@ -83,9 +83,38 @@ pub fn stylesheet(light: &str, dark: &str) -> Option<String> {
 		css_for_theme_with_class_style(theme, CLASS_STYLE).ok()
 	};
 	let (light, dark) = (colors(light)?, colors(dark)?);
+	// The dark colors in the dark scheme, unless the page chose the light one, and when it
+	// chose the dark one: `data-theme` on `html`, as the default style reads it.
+	let system = scoped(&dark, ":root:not([data-theme=\"light\"])");
+	let chosen = scoped(&dark, ":root[data-theme=\"dark\"]");
 	Some(format!(
-		"{LAYOUT}\n{light}\n@media (prefers-color-scheme: dark) {{\n{dark}}}\n"
+		"{LAYOUT}\n{light}\n@media (prefers-color-scheme: dark) {{\n{system}}}\n{chosen}"
 	))
+}
+
+/// The rules of a stylesheet without nesting, each selector under `scope`: `.a, .b { … }`
+/// becomes `scope .a, scope .b { … }`. Comments are dropped.
+fn scoped(css: &str, scope: &str) -> String {
+	let mut out = String::with_capacity(css.len() * 2);
+	let mut rest = css;
+	while !rest.is_empty() {
+		if let Some(comment) = rest.trim_start().strip_prefix("/*") {
+			rest = comment.split_once("*/").map_or("", |(_, after)| after);
+			continue;
+		}
+		let Some((selectors, after)) = rest.split_once('{') else {
+			break;
+		};
+		let Some((body, after)) = after.split_once('}') else {
+			break;
+		};
+		let selectors: Vec<_> = (selectors.split(','))
+			.map(|selector| format!("{scope} {}", selector.trim()))
+			.collect();
+		out.push_str(&format!("{} {{{body}}}\n", selectors.join(", ")));
+		rest = after;
+	}
+	out
 }
 
 /// The layout of code blocks: line numbers in a gutter that is not selected with the code.
@@ -140,17 +169,46 @@ mod tests {
 	}
 
 	#[test]
+	fn scoped_rules() {
+		assert_eq!(
+			scoped("/* x */\n.a, .b { color: red; }\n.c{x:1}\n", "S"),
+			"S .a, S .b { color: red; }\nS .c {x:1}\n"
+		);
+	}
+
+	#[test]
 	fn stylesheets() {
 		let css = stylesheet(DEFAULT_THEME, DEFAULT_DARK_THEME).unwrap();
 		assert!(css.contains(".hl-"), "{css}");
 		assert!(css.contains(".line-numbers"));
-		// The dark colors come after the light ones, for the dark scheme only.
+		// The dark colors come after the light ones, for the dark scheme unless the page
+		// chose the light one, then for the page that chose the dark one.
 		let (light, dark) = css
 			.split_once("@media (prefers-color-scheme: dark) {")
 			.unwrap();
 		assert!(light.contains(".hl-"), "{css}");
-		assert!(dark.contains(".hl-"), "{css}");
-		assert!(dark.trim_end().ends_with('}'));
+		assert!(
+			dark.contains(":root:not([data-theme=\"light\"]) .hl-"),
+			"{css}"
+		);
+		let (system, chosen) = dark.split_at(dark.find(":root[data-theme=\"dark\"]").unwrap());
+		// Without the media query's brace.
+		let system = system.trim_end().strip_suffix('}').unwrap().trim_start();
+		assert!(
+			chosen.starts_with(":root[data-theme=\"dark\"] .hl-"),
+			"{chosen}"
+		);
+		// The same rules.
+		assert_eq!(
+			system
+				.trim_end()
+				.replace(":root:not([data-theme=\"light\"]) ", ""),
+			chosen.trim_end().replace(":root[data-theme=\"dark\"] ", "")
+		);
+		assert!(
+			!chosen.contains(", .") && !chosen.contains(",."),
+			"every selector is scoped"
+		);
 		assert_eq!(
 			css.matches('{').count(),
 			css.matches('}').count(),
