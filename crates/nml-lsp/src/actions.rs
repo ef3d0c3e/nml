@@ -71,6 +71,7 @@ impl Server {
 			}
 		}
 		actions.extend(self.structure_actions(&url, params.range.start.line));
+		actions.extend(self.table_actions(&url, params.range));
 		Ok(actions)
 	}
 }

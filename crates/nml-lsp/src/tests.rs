@@ -2679,3 +2679,46 @@ fn section_structure() {
 	);
 	assert!(actions(5).is_empty());
 }
+
+#[test]
+fn tables_are_aligned() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/tables.nml").unwrap();
+	let text = "Text | not a table.\n\n:table #t Prices\n|Tea|3|\n|Coffee|4|\n\n\
+		| a |[hspan=2] b |\n| c | d | e |\n\n> quoted:\n> |x|yy|\n\n|done   |ok |\n";
+	client.open(&url, text);
+	client.diagnostics();
+	let result = client.request(
+		lsp_types::request::Formatting::METHOD,
+		serde_json::json!({
+			"textDocument": { "uri": url.as_str() },
+			"options": { "tabSize": 4, "insertSpaces": false },
+		}),
+	);
+	let edits: Vec<lsp_types::TextEdit> = serde_json::from_value(result).unwrap();
+	let params = serde_json::json!({
+		"edit": { "changes": { url.as_str(): edits } },
+	});
+	let formatted = apply_edits(
+		text,
+		Request::new(RequestId::from(0), String::new(), params),
+	);
+	assert_eq!(
+		formatted,
+		"Text | not a table.\n\n:table #t Prices\n| Tea    | 3   |\n| Coffee | 4   |\n\n\
+		| a |[hspan=2] b |\n| c | d | e |\n\n> quoted:\n> | x   | yy  |\n\n| done | ok  |\n"
+	);
+
+	// Only the table in the range.
+	let result = client.request(
+		lsp_types::request::RangeFormatting::METHOD,
+		serde_json::json!({
+			"textDocument": { "uri": url.as_str() },
+			"range": { "start": { "line": 12, "character": 0 }, "end": { "line": 12, "character": 2 } },
+			"options": { "tabSize": 4, "insertSpaces": false },
+		}),
+	);
+	let edits: Vec<lsp_types::TextEdit> = serde_json::from_value(result).unwrap();
+	assert_eq!(edits.len(), 1);
+	assert_eq!(edits[0].new_text, "| done | ok  |");
+}

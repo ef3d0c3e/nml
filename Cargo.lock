@@ -811,6 +811,7 @@ dependencies = [
  "nml-workspace",
  "serde",
  "serde_json",
+ "unicode-width",
 ]
 
 [[package]]
