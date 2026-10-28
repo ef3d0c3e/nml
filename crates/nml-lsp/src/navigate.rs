@@ -13,6 +13,7 @@ use lsp_types::Uri;
 use nml_build::LinkError;
 use nml_build::Target;
 use nml_diagnostics::DiagnosticKind;
+use nml_document::ElementKind;
 use nml_document::Scope;
 use nml_document::SymbolRef;
 use nml_lang::Resolver;
@@ -501,6 +502,33 @@ impl Server {
 			hints.push(lsp_types::InlayHint {
 				position: range.end,
 				label: lsp_types::InlayHintLabel::String(format!(": {label}")),
+				kind: None,
+				text_edits: None,
+				tooltip: None,
+				padding_left: Some(true),
+				padding_right: None,
+				data: None,
+			});
+		}
+		// Progress cookies: their count.
+		let document = &analysis.document;
+		for (id, element) in document.descendants(document.root()) {
+			let ElementKind::Progress { percent } = element.kind else {
+				continue;
+			};
+			let root = element.token.root();
+			if root.source().location() != &url {
+				continue;
+			}
+			let range = convert::range(&root);
+			if range.end < params.range.start || params.range.end < range.start {
+				continue;
+			}
+			let (done, total) = document.progress(id).unwrap_or((0, 0));
+			let label = nml_document::progress_label(done, total, percent);
+			hints.push(lsp_types::InlayHint {
+				position: range.end,
+				label: lsp_types::InlayHintLabel::String(label),
 				kind: None,
 				text_edits: None,
 				tooltip: None,

@@ -58,6 +58,7 @@ diagnostic-ambiguous-run-output = { $count ->
     [0] the run `{ $name }` wrote no file
    *[other] the run `{ $name }` wrote { $count } files: write `run:{ $name }/<file>` with one of { $files }
 }
+diagnostic-progress-outside = `[/]` and `[%]` count the tasks of their list item or heading, and this is in neither
 diagnostic-invalid-reference = `{ $target }` is not a reference: write `name`, `doc#name`, `doc#` or `#name`
 diagnostic-invalid-variable-name = `{ $name }` is not a variable name
 diagnostic-unknown-variable = `{ $name }` is not a variable of NML

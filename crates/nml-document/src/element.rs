@@ -139,6 +139,11 @@ pub enum ElementKind {
 		/// The item's number, where a numbered list's count changes.
 		value: Option<u64>,
 	},
+	/// How many of the tasks of its list item or heading are done: see
+	/// [`Document::progress`](crate::Document::progress). Shown as a count, or a percentage.
+	Progress {
+		percent: bool,
+	},
 }
 
 impl ElementKind {
@@ -169,6 +174,7 @@ impl ElementKind {
 		"raw",
 		"list",
 		"list_item",
+		"progress",
 	];
 
 	/// Whether elements of the kind are blocks, which a paragraph cannot hold. A paragraph
@@ -217,6 +223,7 @@ impl ElementKind {
 			ElementKind::Raw { .. } => "raw",
 			ElementKind::List(_) => "list",
 			ElementKind::ListItem { .. } => "list_item",
+			ElementKind::Progress { .. } => "progress",
 		}
 	}
 }
@@ -518,7 +525,8 @@ mod tests {
 
 	#[test]
 	fn names() {
-		assert_eq!(ElementKind::NAMES.len(), 25);
+		assert_eq!(ElementKind::NAMES.len(), 26);
+		assert!(ElementKind::NAMES.contains(&ElementKind::Progress { percent: false }.name()));
 		assert!(ElementKind::NAMES.contains(&ElementKind::Caption.name()));
 	}
 }

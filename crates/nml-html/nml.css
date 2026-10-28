@@ -410,6 +410,20 @@ figure.code-block {
 	margin-top: 0.25rem;
 }
 
+/*** Tasks ***/
+
+/* `[/]` and `[%]`: how many tasks are done. */
+.progress {
+	color: var(--nml-muted);
+	font-size: 0.85em;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.progress.done {
+	color: var(--nml-tip);
+}
+
 /*** Figures, media and tables ***/
 
 figure {

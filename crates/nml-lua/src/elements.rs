@@ -131,6 +131,7 @@ const KINDS: &[(&str, &str)] = &[
 	("tex", "source, env"),
 	("graph", "source, layout, width"),
 	("typst", "source, block"),
+	("progress", "percent"),
 ];
 
 /// Builds an element. The list part of `spec` holds its children (strings, numbers,
@@ -159,6 +160,7 @@ const KINDS: &[(&str, &str)] = &[
 /// | `tex` | `source` (a LaTeX document body), `env` (an environment of `[render.tex]`, `main` by default) |
 /// | `graph` | `source` (Graphviz DOT), `layout` (`dot` by default), `width` |
 /// | `typst` | `source`, `block` |
+/// | `progress` | `percent`: how many tasks of its list item or heading are done, `[2/5]`, or as a percentage, `[40%]` |
 ///
 /// Every kind takes `id` and `classes`. References, figures, numbered tables, listings and
 /// media, anchors and rendered images (`math`, `tex`, `graph`, `typst`) only work where the element goes into
@@ -398,6 +400,9 @@ pub(crate) fn build_with(kind: &str, spec: &Table, body: bool) -> mlua::Result<E
 				header,
 			}
 		}
+		"progress" => Content::Element(ElementKind::Progress {
+			percent: spec.get::<Option<bool>>("percent")?.unwrap_or(false),
+		}),
 		"anchor" => Content::Anchor {
 			reference: reference_name(kind, spec)?
 				.ok_or_else(|| mlua::Error::runtime("an `anchor` element needs the field `ref`"))?,
@@ -1161,6 +1166,18 @@ mod tests {
 		assert_eq!(
 			body(":lua`nml.element('callout', {type = 'tip', title = 'T', 'x'})`"),
 			"<aside class=\"callout tip\">\n<p class=\"callout-title\">T</p>\nx</aside>\n"
+		);
+	}
+
+	#[test]
+	fn progress() {
+		let html = body(
+			":lua`nml.element('list', {nml.element('list_item', {'Ship ', nml.element('progress', {percent = true}), \
+			nml.element('list', {nml.element('list_item', {checkbox = 'checked', 'a'}), nml.element('list_item', {checkbox = 'unchecked', 'b'})})})})`",
+		);
+		assert!(
+			html.contains("<span class=\"progress\" data-done=\"1\" data-total=\"2\">[50%]</span>"),
+			"{html}"
 		);
 	}
 

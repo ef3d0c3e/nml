@@ -2722,3 +2722,73 @@ fn tables_are_aligned() {
 	assert_eq!(edits.len(), 1);
 	assert_eq!(edits[0].new_text, "| done | ok  |");
 }
+
+#[test]
+fn progress_and_checkboxes() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/tasks.nml").unwrap();
+	let text = "# Plan [%]\n\n * Ship [/]\n ** [x] a\n ** [ ] b\n ** [X] c\n";
+	client.open(&url, text);
+	client.diagnostics();
+	let params = lsp_types::InlayHintParams {
+		text_document: TextDocumentIdentifier::new(uri(&url)),
+		range: lsp_types::Range::new(position(0, 0), position(9, 0)),
+		work_done_progress_params: Default::default(),
+	};
+	let result = client.request(
+		InlayHintRequest::METHOD,
+		serde_json::to_value(params).unwrap(),
+	);
+	let hints: Vec<lsp_types::InlayHint> = serde_json::from_value(result).unwrap();
+	let hints: Vec<_> = (hints.into_iter())
+		.map(|hint| {
+			let lsp_types::InlayHintLabel::String(label) = hint.label else {
+				unreachable!()
+			};
+			(hint.position, label)
+		})
+		.collect();
+	assert_eq!(
+		hints,
+		[
+			(position(0, 10), "[66%]".to_string()),
+			(position(2, 11), "[2/3]".to_string())
+		]
+	);
+
+	// Toggling a checkbox: done if it was not, not done if it was.
+	let toggle = |line: u32| -> Vec<(lsp_types::Range, String)> {
+		let result = client.request(
+			CodeActionRequest::METHOD,
+			serde_json::json!({
+				"textDocument": { "uri": url.as_str() },
+				"range": { "start": { "line": line, "character": 3 }, "end": { "line": line, "character": 3 } },
+				"context": { "diagnostics": [] },
+			}),
+		);
+		let actions: Vec<lsp_types::CodeActionOrCommand> = serde_json::from_value(result).unwrap();
+		(actions.into_iter())
+			.filter_map(|action| match action {
+				lsp_types::CodeActionOrCommand::CodeAction(action)
+					if action.title == "Toggle the checkbox" =>
+				{
+					let edits = action
+						.edit
+						.unwrap()
+						.changes
+						.unwrap()
+						.into_values()
+						.next()
+						.unwrap();
+					Some((edits[0].range, edits[0].new_text.clone()))
+				}
+				_ => None,
+			})
+			.collect()
+	};
+	let range = |line| lsp_types::Range::new(position(line, 4), position(line, 7));
+	assert_eq!(toggle(3), [(range(3), "[ ]".to_string())]);
+	assert_eq!(toggle(4), [(range(4), "[x]".to_string())]);
+	assert_eq!(toggle(5), [(range(5), "[ ]".to_string())]);
+	assert!(toggle(2).is_empty());
+}

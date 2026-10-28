@@ -114,6 +114,9 @@ pub enum DiagnosticKind {
 		count: usize,
 		files: String,
 	},
+	/// `[/]` or `[%]` outside of a list item and a heading.
+	#[diag(id = 2028, message = "diagnostic-progress-outside", severity = warning)]
+	ProgressOutside,
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]

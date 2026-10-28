@@ -871,6 +871,19 @@ impl<'a> Output<'a> {
 			ElementKind::ListItem { checkbox, value } => {
 				self.list_item(document, id, *checkbox, *value)
 			}
+			ElementKind::Progress { percent } => {
+				let (done, total) = document.progress(id).unwrap_or((0, 0));
+				let label = nml_document::progress_label(done, total, *percent);
+				let extra = format!(" data-done=\"{done}\" data-total=\"{total}\"");
+				let class = if total > 0 && done == total {
+					"progress done"
+				} else {
+					"progress"
+				};
+				self.open_with(document, id, "span", Some(class), &extra);
+				self.text(&label);
+				self.raw("</span>");
+			}
 			kind => unimplemented!("HTML for `{}`", kind.name()),
 		}
 	}

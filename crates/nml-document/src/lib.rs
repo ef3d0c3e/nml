@@ -9,6 +9,7 @@ pub use document::Document;
 pub use document::DocumentBuilder;
 pub use document::Draft;
 pub use document::Listener;
+pub use document::progress_label;
 pub use element::Alignment;
 pub use element::Attributes;
 pub use element::BulletStyle;

@@ -625,3 +625,23 @@ fn source_offsets() {
 	let built = compile(document, &PageOptions::default());
 	assert!(!built.content.contains("data-nml-at"));
 }
+
+#[test]
+fn progress() {
+	let html = body("# Plan [/]\n\n * [x] a\n * [ ] b [%]\n\n# Done [%]\n\n * [x] c\n");
+	assert!(
+		html.contains("<span class=\"progress\" data-done=\"1\" data-total=\"2\">[1/2]</span>"),
+		"{html}"
+	);
+	// An item without subitems: nothing to do.
+	assert!(
+		html.contains("data-done=\"0\" data-total=\"0\">[0%]</span>"),
+		"{html}"
+	);
+	assert!(
+		html.contains(
+			"<span class=\"progress done\" data-done=\"1\" data-total=\"1\">[100%]</span>"
+		),
+		"{html}"
+	);
+}

@@ -94,6 +94,38 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		.with_snippet(snippet);
 		language.add_grouped(rule, |_| "list".into(), list)?;
 	}
+
+	// Progress cookies: how many of the item's or heading's tasks are done.
+	for (name, literal, percent) in [
+		("progress", "[/]", false),
+		("progress_percent", "[%]", true),
+	] {
+		let rule = Rule::new(
+			name,
+			vec![Atom::capture("cookie", Atom::literal(literal)).with_class("keyword")],
+		)
+		.with_doc(
+			"**Progress**: how many tasks of the list item or heading it is in are done, as \
+			`[2/5]` for `[/]` or `[40%]` for `[%]`. An item counts its subitems with a \
+			checkbox; a heading, the items with a checkbox in its section.",
+		);
+		language.add(rule, move |lower, m| {
+			let inside = lower.builder.open_kinds().any(|kind| {
+				matches!(
+					kind,
+					ElementKind::ListItem { .. } | ElementKind::Heading { .. }
+				)
+			});
+			if !inside {
+				let message = DiagnosticMessage::new(m.token.clone());
+				let diagnostic = Diagnostic::new(DiagnosticKind::ProgressOutside, message);
+				lower.diagnostics.push(diagnostic);
+			}
+			lower
+				.builder
+				.leaf(ElementKind::Progress { percent }, m.token.clone());
+		})?;
+	}
 	Ok(())
 }
 
@@ -397,5 +429,59 @@ mod tests {
 			" * a\n   ```\n   code\n   ```\n * b",
 			r#"document[list[list_item[paragraph["a"] code_block[]] list_item[paragraph["b"]]]]"#,
 		);
+	}
+}
+
+#[cfg(test)]
+mod progress_tests {
+	use nml_diagnostics::assert_diagnostics;
+	use nml_document::ElementKind;
+
+	use crate::tests::compile_text;
+
+	/// The progress of each cookie, in order: `(done, total, percent)`.
+	fn progress(text: &str) -> Vec<(usize, usize, bool)> {
+		let compiled = compile_text(text);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let document = &compiled.unit.document;
+		(document.descendants(document.root()))
+			.filter_map(|(id, element)| match element.kind {
+				ElementKind::Progress { percent } => {
+					let (done, total) = document.progress(id).unwrap();
+					Some((done, total, percent))
+				}
+				_ => None,
+			})
+			.collect()
+	}
+
+	#[test]
+	fn items_count_their_subitems() {
+		assert_eq!(
+			progress(
+				" * Release [/]\n ** [x] Changelog\n ** [ ] Tag [%]\n *** [x] a\n *** [-] b\n *** [ ] c\n \
+				** [-] Announce\n ** Not a task\n * [x] Other [/]\n"
+			),
+			// Partly done counts as not done; deeper items are their item's.
+			[(1, 3, false), (1, 3, true), (0, 0, false)]
+		);
+	}
+
+	#[test]
+	fn headings_count_their_section() {
+		assert_eq!(
+			progress(
+				"# Plan [%]\n\n * [x] a\n * [ ] b\n\n## Part [/]\n\n * [x] c\n ** [x] d\n\n\
+				# Other [/]\n\n * [ ] e\n"
+			),
+			// A section holds its subsections, at any depth.
+			[(3, 4, true), (2, 2, false), (0, 1, false)]
+		);
+	}
+
+	#[test]
+	fn outside_of_tasks() {
+		let compiled = compile_text("Done [/] here.\n");
+		assert_diagnostics!(compiled.diagnostics, [2028 @ 5..8]);
 	}
 }

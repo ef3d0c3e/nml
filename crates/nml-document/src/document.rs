@@ -5,6 +5,7 @@ use nml_source::Source;
 use nml_source::Token;
 
 use crate::Attributes;
+use crate::Checkbox;
 use crate::Element;
 use crate::ElementId;
 use crate::ElementKind;
@@ -69,6 +70,94 @@ impl Document {
 		let mut text = String::new();
 		collect_text(&self.elements, &self.get(id).children, &mut text);
 		text
+	}
+
+	/// The elements from the root to `id`, both included, or `None` if it is not below the
+	/// root.
+	pub fn path(&self, id: ElementId) -> Option<Vec<ElementId>> {
+		fn find(
+			document: &Document,
+			at: ElementId,
+			id: ElementId,
+			path: &mut Vec<ElementId>,
+		) -> bool {
+			path.push(at);
+			if at == id
+				|| document
+					.get(at)
+					.children
+					.iter()
+					.any(|child| find(document, *child, id, path))
+			{
+				return true;
+			}
+			path.pop();
+			false
+		}
+		let mut path = Vec::new();
+		find(self, self.root, id, &mut path).then_some(path)
+	}
+
+	/// The tasks a progress element counts, `(done, total)`: in a list item, its subitems with
+	/// a checkbox; in a heading, the items with a checkbox in its section, at any depth.
+	/// Partly done items are not done. `None` outside of both.
+	pub fn progress(&self, id: ElementId) -> Option<(usize, usize)> {
+		let path = self.path(id)?;
+		let (at, owner) = (path.iter().enumerate().rev())
+			.skip(1)
+			.find(|(_, ancestor)| {
+				matches!(
+					self.get(**ancestor).kind,
+					ElementKind::ListItem { .. } | ElementKind::Heading { .. }
+				)
+			})?;
+		let count = |items: &mut dyn Iterator<Item = &Element>| {
+			let checkboxes: Vec<_> = items
+				.filter_map(|element| match element.kind {
+					ElementKind::ListItem {
+						checkbox: Some(checkbox),
+						..
+					} => Some(checkbox),
+					_ => None,
+				})
+				.collect();
+			let done = (checkboxes.iter())
+				.filter(|checkbox| **checkbox == Checkbox::Checked)
+				.count();
+			(done, checkboxes.len())
+		};
+		match self.get(*owner).kind {
+			ElementKind::ListItem { .. } => {
+				let lists = self
+					.children(*owner)
+					.filter(|(_, child)| matches!(child.kind, ElementKind::List(_)));
+				let mut items =
+					lists.flat_map(|(list, _)| self.children(list).map(|(_, item)| item));
+				Some(count(&mut items))
+			}
+			ElementKind::Heading { level } => {
+				// The heading's section: the elements after it, up to a heading of its level
+				// or above.
+				let parent = path[at - 1];
+				let siblings: Vec<_> = self.get(parent).children.clone();
+				let start = siblings.iter().position(|child| child == owner)? + 1;
+				let section = siblings[start..].iter().take_while(|sibling| {
+					!matches!(self.get(**sibling).kind, ElementKind::Heading { level: other } if other <= level)
+				});
+				let mut items = section
+					.flat_map(|sibling| self.descendants(*sibling).map(|(_, element)| element));
+				Some(count(&mut items))
+			}
+			_ => None,
+		}
+	}
+}
+
+/// How a progress element shows its count: `[2/5]`, or `[40%]` (rounded down).
+pub fn progress_label(done: usize, total: usize, percent: bool) -> String {
+	match percent {
+		true => format!("[{}%]", (done * 100).checked_div(total).unwrap_or(0)),
+		false => format!("[{done}/{total}]"),
 	}
 }
 
@@ -250,6 +339,11 @@ impl<'l> DocumentBuilder<'l> {
 		let mut text = String::new();
 		collect_text(&self.elements, &self.get(id).children, &mut text);
 		text
+	}
+
+	/// The kinds of the open elements, the innermost first.
+	pub fn open_kinds(&self) -> impl Iterator<Item = &ElementKind> {
+		self.open.iter().rev().map(|open| &open.kind)
 	}
 
 	/// The number of open elements, the document root included.
