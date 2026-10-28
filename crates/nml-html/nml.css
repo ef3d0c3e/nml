@@ -424,6 +424,43 @@ figure.code-block {
 	color: var(--nml-tip);
 }
 
+/*** Footnotes ***/
+
+.footnote-ref {
+	font-size: 0.75em;
+	line-height: 0;
+}
+
+.footnote-ref a {
+	text-decoration: none;
+}
+
+.footnotes {
+	margin-top: 3rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--nml-border);
+	font-size: 0.9em;
+	color: var(--nml-muted);
+}
+
+.footnotes li > p {
+	margin: 0.25rem 0;
+}
+
+.footnotes p.footnote-back {
+	display: inline;
+}
+
+.footnotes p.footnote-back a {
+	text-decoration: none;
+	margin-left: 0.25rem;
+}
+
+/* The note before its back-links, on the same line. */
+.footnotes li > p:nth-last-child(2) {
+	display: inline;
+}
+
 /*** Figures, media and tables ***/
 
 figure {

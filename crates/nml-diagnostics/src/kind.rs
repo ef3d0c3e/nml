@@ -117,6 +117,12 @@ pub enum DiagnosticKind {
 	/// `[/]` or `[%]` outside of a list item and a heading.
 	#[diag(id = 2028, message = "diagnostic-progress-outside", severity = warning)]
 	ProgressOutside,
+	#[diag(id = 2029, message = "diagnostic-undefined-footnote")]
+	UndefinedFootnote { name: String },
+	#[diag(id = 2030, message = "diagnostic-unused-footnote", severity = warning)]
+	UnusedFootnote { name: String },
+	#[diag(id = 2031, message = "diagnostic-duplicate-footnote")]
+	DuplicateFootnote { name: String },
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]

@@ -3,6 +3,7 @@
 mod anchor;
 mod attributes;
 mod code;
+mod footnote;
 mod heading;
 mod import;
 mod include;
@@ -77,6 +78,7 @@ impl Language {
 		style::add(&mut language).expect("built-in rules are valid");
 		heading::add(&mut language).expect("built-in rules are valid");
 		list::add(&mut language).expect("built-in rules are valid");
+		footnote::add(&mut language).expect("built-in rules are valid");
 		code::add(&mut language).expect("built-in rules are valid");
 		media::add(&mut language).expect("built-in rules are valid");
 		raw::add(&mut language).expect("built-in rules are valid");

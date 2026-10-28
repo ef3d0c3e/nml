@@ -43,7 +43,7 @@ enum Subject {
 }
 
 impl Server {
-	fn analysis(
+	pub(crate) fn analysis(
 		&self,
 		position: &TextDocumentPositionParams,
 	) -> Result<Option<(&Analysis, usize, Url)>> {
@@ -199,6 +199,16 @@ impl Server {
 	}
 
 	pub(crate) fn hover(&self, position: &TextDocumentPositionParams) -> Result<Option<Hover>> {
+		// A footnote's reference: its note.
+		if let Some((value, token)) = self.footnote_hover(position)? {
+			return Ok(Some(Hover {
+				contents: HoverContents::Markup(MarkupContent {
+					kind: MarkupKind::Markdown,
+					value,
+				}),
+				range: Some(convert::range(&token)),
+			}));
+		}
 		// A `:run` block's first line: its result.
 		if let Some((_, offset, url)) = self.analysis(position)?
 			&& let Some((value, token)) = self.run_hover(&url, offset)
@@ -327,6 +337,9 @@ impl Server {
 		&self,
 		position: &TextDocumentPositionParams,
 	) -> Result<Option<Location>> {
+		if let Some(location) = self.footnote_definition(position)? {
+			return Ok(Some(location));
+		}
 		let Some(subject) = self.subject(position)? else {
 			return self.syntax_definition(position);
 		};

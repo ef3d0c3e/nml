@@ -871,6 +871,42 @@ impl<'a> Output<'a> {
 			ElementKind::ListItem { checkbox, value } => {
 				self.list_item(document, id, *checkbox, *value)
 			}
+			ElementKind::FootnoteRef {
+				name,
+				number,
+				occurrence,
+			} => {
+				let back = footnote_ref_id(name, *occurrence);
+				self.raw("<sup class=\"footnote-ref\"><a id=\"");
+				self.text(&back);
+				self.raw("\" href=\"#");
+				self.text(&format!("fn-{name}"));
+				self.raw(&format!("\">{number}</a></sup>"));
+			}
+			ElementKind::Footnotes => {
+				self.open_with(document, id, "section", Some("footnotes"), "");
+				self.raw("\n<ol>\n");
+				self.children(document, id);
+				self.raw("</ol>\n</section>\n");
+			}
+			ElementKind::Footnote {
+				name,
+				number,
+				references,
+			} => {
+				self.raw("<li id=\"");
+				self.text(&format!("fn-{name}"));
+				self.raw(&format!("\" value=\"{number}\">\n"));
+				self.children(document, id);
+				// Back to each reference.
+				self.raw("<p class=\"footnote-back\">");
+				for occurrence in 1..=*references {
+					self.raw("<a href=\"#");
+					self.text(&footnote_ref_id(name, occurrence));
+					self.raw("\" aria-label=\"Back to the text\">↩</a>");
+				}
+				self.raw("</p>\n</li>\n");
+			}
 			ElementKind::Progress { percent } => {
 				let (done, total) = document.progress(id).unwrap_or((0, 0));
 				let label = nml_document::progress_label(done, total, *percent);
@@ -886,6 +922,14 @@ impl<'a> Output<'a> {
 			}
 			kind => unimplemented!("HTML for `{}`", kind.name()),
 		}
+	}
+}
+
+/// The id of a reference to a footnote: `fnref-name`, then `fnref-name-2`, … for the others.
+fn footnote_ref_id(name: &str, occurrence: u32) -> String {
+	match occurrence {
+		1 => format!("fnref-{name}"),
+		n => format!("fnref-{name}-{n}"),
 	}
 }
 

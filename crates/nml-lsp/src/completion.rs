@@ -424,6 +424,9 @@ impl Server {
 		let line = source.line_range(cursor.line).unwrap();
 		let prefix = &source.content()[line.start..offset];
 		let suffix = &source.content()[offset..line.end];
+		if let Some(items) = self.footnote_completion(analysis, prefix) {
+			return Ok(items);
+		}
 		let Some((context, typed)) = context(prefix) else {
 			return Ok(Vec::new());
 		};

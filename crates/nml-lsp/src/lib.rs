@@ -6,6 +6,7 @@ mod convert;
 mod display;
 mod find;
 mod folding;
+mod footnotes;
 mod formatting;
 mod lua;
 mod luals;

@@ -645,3 +645,23 @@ fn progress() {
 		"{html}"
 	);
 }
+
+#[test]
+fn footnotes() {
+	let html = body("A[^n] and B[^n].\n\n[^n]: The *note*.\n");
+	assert!(
+		html.starts_with(
+			"<p>A<sup class=\"footnote-ref\"><a id=\"fnref-n\" href=\"#fn-n\">1</a></sup> and B\
+			<sup class=\"footnote-ref\"><a id=\"fnref-n-2\" href=\"#fn-n\">1</a></sup>.</p>\n"
+		),
+		"{html}"
+	);
+	assert!(
+		html.ends_with(
+			"<section class=\"footnotes\">\n<ol>\n<li id=\"fn-n\" value=\"1\">\n<p>The <em>note</em>.</p>\n\
+			<p class=\"footnote-back\"><a href=\"#fnref-n\" aria-label=\"Back to the text\">↩</a>\
+			<a href=\"#fnref-n-2\" aria-label=\"Back to the text\">↩</a></p>\n</li>\n</ol>\n</section>\n"
+		),
+		"{html}"
+	);
+}

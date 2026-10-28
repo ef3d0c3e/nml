@@ -2792,3 +2792,53 @@ fn progress_and_checkboxes() {
 	assert_eq!(toggle(5), [(range(5), "[ ]".to_string())]);
 	assert!(toggle(2).is_empty());
 }
+
+#[test]
+fn footnotes_in_the_editor() {
+	let client = Client::start(None);
+	let url = Url::parse("file:///tmp/nml-lsp-none/notes.nml").unwrap();
+	client.open(
+		&url,
+		"Text[^src] and [^\n\n[^src]: From *the* book.\n[^other]: Another.\n",
+	);
+	client.diagnostics();
+	let result = client.request(
+		HoverRequest::METHOD,
+		serde_json::to_value(lsp_types::HoverParams {
+			text_document_position_params: at(&url, 0, 7),
+			work_done_progress_params: Default::default(),
+		})
+		.unwrap(),
+	);
+	let hover: lsp_types::Hover = serde_json::from_value(result).unwrap();
+	let lsp_types::HoverContents::Markup(markup) = hover.contents else {
+		unreachable!()
+	};
+	assert_eq!(markup.value, "**Note** `[^src]`\n\nFrom *the* book.");
+
+	let result = client.request(
+		GotoDefinition::METHOD,
+		serde_json::to_value(GotoDefinitionParams {
+			text_document_position_params: at(&url, 0, 7),
+			work_done_progress_params: Default::default(),
+			partial_result_params: Default::default(),
+		})
+		.unwrap(),
+	);
+	let location: lsp_types::Location = serde_json::from_value(result).unwrap();
+	assert_eq!(
+		location.range,
+		lsp_types::Range::new(position(2, 2), position(2, 5))
+	);
+
+	let result = client.request(
+		Completion::METHOD,
+		serde_json::json!({
+			"textDocument": { "uri": url.as_str() },
+			"position": { "line": 0, "character": 17 },
+		}),
+	);
+	let items: Vec<lsp_types::CompletionItem> = serde_json::from_value(result).unwrap();
+	let labels: Vec<_> = items.iter().map(|item| item.label.as_str()).collect();
+	assert_eq!(labels, ["other", "src"]);
+}

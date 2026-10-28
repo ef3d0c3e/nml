@@ -59,6 +59,10 @@ diagnostic-ambiguous-run-output = { $count ->
    *[other] the run `{ $name }` wrote { $count } files: write `run:{ $name }/<file>` with one of { $files }
 }
 diagnostic-progress-outside = `[/]` and `[%]` count the tasks of their list item or heading, and this is in neither
+diagnostic-undefined-footnote = no note is defined for `[^{ $name }]`: write `[^{ $name }]: text` at the start of a line
+diagnostic-unused-footnote = the note `{ $name }` is never referred to: write `[^{ $name }]` where it applies
+diagnostic-duplicate-footnote = the note `{ $name }` is already defined
+    .first = first defined here
 diagnostic-invalid-reference = `{ $target }` is not a reference: write `name`, `doc#name`, `doc#` or `#name`
 diagnostic-invalid-variable-name = `{ $name }` is not a variable name
 diagnostic-unknown-variable = `{ $name }` is not a variable of NML

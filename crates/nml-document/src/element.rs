@@ -144,6 +144,20 @@ pub enum ElementKind {
 	Progress {
 		percent: bool,
 	},
+	/// A reference to a footnote: its number, and which reference to the note it is (from 1).
+	FootnoteRef {
+		name: String,
+		number: u32,
+		occurrence: u32,
+	},
+	/// The notes of a page, at its end; its children are [`Footnote`](Self::Footnote)s.
+	Footnotes,
+	/// A note; its children are blocks. `references` is how many references it has.
+	Footnote {
+		name: String,
+		number: u32,
+		references: u32,
+	},
 }
 
 impl ElementKind {
@@ -175,6 +189,9 @@ impl ElementKind {
 		"list",
 		"list_item",
 		"progress",
+		"footnote_ref",
+		"footnotes",
+		"footnote",
 	];
 
 	/// Whether elements of the kind are blocks, which a paragraph cannot hold. A paragraph
@@ -189,7 +206,8 @@ impl ElementKind {
 			| ElementKind::Callout(_)
 			| ElementKind::Layout(_)
 			| ElementKind::Table { .. }
-			| ElementKind::List(_) => true,
+			| ElementKind::List(_)
+			| ElementKind::Footnotes => true,
 			ElementKind::Raw { block, .. } | ElementKind::Rendered { block, .. } => *block,
 			_ => false,
 		}
@@ -224,6 +242,9 @@ impl ElementKind {
 			ElementKind::List(_) => "list",
 			ElementKind::ListItem { .. } => "list_item",
 			ElementKind::Progress { .. } => "progress",
+			ElementKind::FootnoteRef { .. } => "footnote_ref",
+			ElementKind::Footnotes => "footnotes",
+			ElementKind::Footnote { .. } => "footnote",
 		}
 	}
 }
@@ -525,7 +546,7 @@ mod tests {
 
 	#[test]
 	fn names() {
-		assert_eq!(ElementKind::NAMES.len(), 26);
+		assert_eq!(ElementKind::NAMES.len(), 29);
 		assert!(ElementKind::NAMES.contains(&ElementKind::Progress { percent: false }.name()));
 		assert!(ElementKind::NAMES.contains(&ElementKind::Caption.name()));
 	}
