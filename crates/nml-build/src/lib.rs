@@ -1329,19 +1329,34 @@ impl Resolver for WorkspaceResolver {
 				})?;
 			inputs.push(input);
 		}
-		let key = nml_lang::run_key(&runner.key(), &request.code, &inputs, &request.data);
+		let key = nml_lang::run_key(
+			&runner.key(),
+			&request.code,
+			&inputs,
+			&request.data,
+			request.session.as_ref(),
+		);
 		let completed = |result: &Option<RunResult>| {
 			(result.as_ref()).is_some_and(|result| result.status == RunStatus::Completed)
 		};
 		let mut result = runs.get(&key);
-		if self.execute && !completed(&result) {
+		// A block of a session runs once the earlier ones completed.
+		let ready = (request.session.as_ref()).is_none_or(|session| session.complete);
+		if self.execute && !completed(&result) && ready {
 			let cwd = match from.rsplit_once('/') {
 				Some((dir, _)) => self.root.join(dir),
 				None => self.root.clone(),
 			};
-			result = Some(runs.run(&key, |out| {
-				runner.run(&request.code, &request.data, &cwd, &self.root, out)
-			}));
+			result = Some(run_block(
+				runs,
+				runner,
+				&key,
+				&request.code,
+				&request.data,
+				request.session.as_ref(),
+				&cwd,
+				&self.root,
+			));
 		}
 		let mut files = Vec::new();
 		if let Some(result) = result.as_ref().filter(|_| completed(&result)) {
@@ -1373,6 +1388,31 @@ impl Resolver for WorkspaceResolver {
 			files,
 		})
 	}
+}
+
+/// Runs a block into the cache, as the run `key`: in a session, after the session's earlier
+/// code and with its data, keeping only what the block's own code printed and wrote.
+#[allow(clippy::too_many_arguments)]
+pub fn run_block(
+	runs: &nml_workspace::RunCache,
+	runner: &nml_render::Runner,
+	key: &str,
+	code: &str,
+	data: &[(String, String)],
+	session: Option<&nml_render::SessionPrefix>,
+	cwd: &Path,
+	root: &Path,
+) -> RunResult {
+	let Some(prefix) = session else {
+		return runs.run(key, |out| runner.run(code, data, cwd, root, out));
+	};
+	let code = format!("{}{code}", prefix.code);
+	let mut all = prefix.data.clone();
+	for (name, content) in data {
+		all.retain(|(other, _)| other != name);
+		all.push((name.clone(), content.clone()));
+	}
+	runs.run_in_session(key, prefix, |out| runner.run(&code, &all, cwd, root, out))
 }
 
 /// The diagnostic of a renderer that failed on the element at `token`.

@@ -47,6 +47,10 @@ pub struct RunBlock {
 	pub code: String,
 	/// The files of `$NML_IN` it is given, by name.
 	pub data: Vec<(String, String)>,
+	/// Its session, whose earlier blocks run before it.
+	pub session: Option<String>,
+	/// What the session's earlier blocks give it, as it was looked up.
+	pub prefix: Option<nml_render::SessionPrefix>,
 	/// The workspace path of the file it is written in: it runs in that file's directory.
 	pub file: String,
 	/// The block, from `:run` to the closing fence.
@@ -77,6 +81,12 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			.with_doc(
 				"Data for the code, separated by spaces: a table named with `:table[lua=name]` \
 				is `$NML_IN/name.csv`, a variable is `$NML_IN/name.txt`, its value as written.",
+			),
+		OptionSpec::new("session", OptionKind::Text)
+			.with_default(OptionValue::Text(String::new()))
+			.with_doc(
+				"A session: the code of its earlier blocks, of the same runner, runs before \
+				this block's, which sees what they defined.",
 			),
 		OptionSpec::new("inputs", OptionKind::Text)
 			.with_default(OptionValue::Text(String::new()))
@@ -163,11 +173,16 @@ fn lower_run(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 		};
 		data.push(file);
 	}
+	let session = Some(option("session")).filter(|session| !session.is_empty());
+	let prefix = session
+		.as_ref()
+		.map(|session| session_prefix(&lower.runs, &runner, session));
 	let request = RunRequest {
 		runner: runner.clone(),
 		code: code.clone(),
 		inputs: inputs.split_whitespace().map(String::from).collect(),
 		data: data.clone(),
+		session: prefix.clone(),
 	};
 	let command = m.capture("command").unwrap().token.clone();
 	let lookup = match lower.resolver.run(&file, &request) {
@@ -270,6 +285,8 @@ fn lower_run(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 		runner,
 		code,
 		data,
+		session,
+		prefix,
 		file,
 		token: m.token.clone(),
 		command,
@@ -277,6 +294,37 @@ fn lower_run(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 		result: lookup.result,
 		files: lookup.files,
 	});
+}
+
+/// What the earlier blocks of a session give the next: their code and data, what they
+/// printed and wrote, and the key of the last.
+pub fn session_prefix(runs: &[RunBlock], runner: &str, session: &str) -> nml_render::SessionPrefix {
+	let mut prefix = nml_render::SessionPrefix {
+		complete: true,
+		..Default::default()
+	};
+	let earlier =
+		(runs.iter()).filter(|run| run.runner == runner && run.session.as_deref() == Some(session));
+	for run in earlier {
+		prefix.code.push_str(&run.code);
+		prefix.code.push('\n');
+		for (name, content) in &run.data {
+			prefix.data.retain(|(other, _)| other != name);
+			prefix.data.push((name.clone(), content.clone()));
+		}
+		match &run.result {
+			Some(result) if result.status == RunStatus::Completed => {
+				prefix.stdout.push_str(&result.stdout);
+				for file in &run.files {
+					prefix.files.retain(|(name, _)| *name != file.name);
+					prefix.files.push((file.name.clone(), file.hash.clone()));
+				}
+			}
+			_ => prefix.complete = false,
+		}
+		prefix.key = run.key.clone();
+	}
+	prefix
 }
 
 /// Rows as CSV: fields with a comma, a quote or a line break are quoted, quotes doubled.

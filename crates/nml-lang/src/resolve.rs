@@ -62,6 +62,8 @@ pub struct RunRequest {
 	pub inputs: Vec<String>,
 	/// The files of `$NML_IN`, by name: the tables and variables given with `vars`.
 	pub data: Vec<(String, String)>,
+	/// For a block of a session: what its earlier blocks give it.
+	pub session: Option<nml_render::SessionPrefix>,
 }
 
 /// A run, as a resolver finds it.
@@ -99,14 +101,19 @@ pub enum RunError {
 }
 
 /// The key of a run: its runner's settings (see `nml_render::Runner::key`), its code, its
-/// inputs' paths and hashes, and its data.
+/// inputs' paths and hashes, its data, and, in a session, the key of the block before.
 pub fn run_key(
 	runner: &str,
 	code: &str,
 	inputs: &[(String, String)],
 	data: &[(String, String)],
+	session: Option<&nml_render::SessionPrefix>,
 ) -> String {
 	let mut hasher = blake3::Hasher::new();
+	if let Some(session) = session {
+		hasher.update(b"session\0");
+		hasher.update(session.key.as_bytes());
+	}
 	for part in [runner, code] {
 		hasher.update(&(part.len() as u64).to_le_bytes());
 		hasher.update(part.as_bytes());
@@ -303,7 +310,13 @@ impl Resolver for MemoryResolver {
 				})?;
 			inputs.push((path, hash));
 		}
-		let key = run_key(&request.runner, &request.code, &inputs, &request.data);
+		let key = run_key(
+			&request.runner,
+			&request.code,
+			&inputs,
+			&request.data,
+			request.session.as_ref(),
+		);
 		let result = results.get(&request.code).cloned();
 		let files = match &result {
 			Some(result) if result.status == nml_render::RunStatus::Completed => (result.files)

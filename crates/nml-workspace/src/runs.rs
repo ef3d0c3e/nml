@@ -123,6 +123,52 @@ impl RunCache {
 		result
 	}
 
+	/// Runs a block of a session, as [`run`](Self::run) does a block: `run` runs the
+	/// session's earlier code with the block's. What the earlier blocks printed is cut off
+	/// the front of its output, if it is there, and the files they wrote, by name and
+	/// content, are left out.
+	pub fn run_in_session(
+		&self,
+		key: &str,
+		prefix: &nml_render::SessionPrefix,
+		run: impl FnOnce(&Path) -> RunResult,
+	) -> RunResult {
+		self.run(key, |out| {
+			let mut result = run(out);
+			if let Some(own) = result.stdout.strip_prefix(prefix.stdout.as_str()) {
+				result.stdout = own.to_string();
+			}
+			result.files.retain(|name| {
+				let earlier = (prefix.files.iter()).find(|(file, _)| file == name);
+				let Some((_, hash)) = earlier else {
+					return true;
+				};
+				let path = out.join(name);
+				let same =
+					std::fs::read(&path).is_ok_and(|bytes| hex(&crate::hash(&bytes)) == *hash);
+				if same {
+					let _ = std::fs::remove_file(&path);
+				}
+				!same
+			});
+			result
+		})
+	}
+
+	/// The files of the run `key`, by name, with the hash of their content.
+	pub fn file_hashes(&self, key: &str) -> Vec<(String, String)> {
+		let Some(result) = self.get(key) else {
+			return Vec::new();
+		};
+		let dir = self.out_dir(key);
+		(result.files.iter())
+			.filter_map(|name| {
+				let bytes = std::fs::read(dir.join(name)).ok()?;
+				Some((name.clone(), hex(&crate::hash(&bytes))))
+			})
+			.collect()
+	}
+
 	/// Deletes the results that are not in `keep`, and unfinished ones. Returns how many
 	/// results were deleted.
 	pub fn prune(&self, keep: &BTreeSet<String>) -> usize {
@@ -145,6 +191,11 @@ impl RunCache {
 		}
 		pruned
 	}
+}
+
+/// Bytes in lowercase hexadecimal.
+fn hex(bytes: &[u8]) -> String {
+	bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// Whether `key` can be a run's key: hexadecimal, so that it is a plain directory name.
@@ -210,6 +261,47 @@ mod tests {
 
 		// Keys are directory names.
 		assert_eq!(cache.get("../abc"), None);
+	}
+
+	#[test]
+	fn sessions_keep_their_own_output() {
+		let dir = Dir::new("session");
+		let cache = RunCache::new(dir.0.clone());
+		let hash = |text: &str| hex(&crate::hash(text.as_bytes()));
+		let prefix = nml_render::SessionPrefix {
+			stdout: "one\n".into(),
+			files: vec![("a.txt".into(), hash("A")), ("b.txt".into(), hash("B"))],
+			complete: true,
+			..Default::default()
+		};
+		let ran = cache.run_in_session("ab", &prefix, |out| {
+			std::fs::create_dir_all(out).unwrap();
+			// The earlier block's again, one of them changed, and a new one.
+			std::fs::write(out.join("a.txt"), "A").unwrap();
+			std::fs::write(out.join("b.txt"), "changed").unwrap();
+			std::fs::write(out.join("c.txt"), "C").unwrap();
+			RunResult {
+				stdout: "one\ntwo\n".into(),
+				files: vec!["a.txt".into(), "b.txt".into(), "c.txt".into()],
+				..result(RunStatus::Completed, &[])
+			}
+		});
+		assert_eq!(ran.stdout, "two\n");
+		assert_eq!(ran.files, ["b.txt", "c.txt"]);
+		assert!(!cache.out_dir("ab").join("a.txt").exists());
+		assert_eq!(
+			cache.file_hashes("ab"),
+			[
+				("b.txt".to_string(), hash("changed")),
+				("c.txt".to_string(), hash("C"))
+			]
+		);
+		// Output that does not start with the earlier blocks' is kept whole.
+		let other = cache.run_in_session("cd", &prefix, |_| RunResult {
+			stdout: "other\n".into(),
+			..result(RunStatus::Completed, &[])
+		});
+		assert_eq!(other.stdout, "other\n");
 	}
 
 	#[test]

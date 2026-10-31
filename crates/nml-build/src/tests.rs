@@ -2320,3 +2320,51 @@ fn agenda_pages() {
 	);
 	assert!(workspace.output("agenda.html").contains("Nothing to do."));
 }
+
+#[test]
+fn run_sessions() {
+	let page = |first: &str| {
+		format!(
+			":run[session=s, show=output]\n```sh\n{first}\necho ran >> \"$NML_ROOT/.count\"\n```\n\n\
+			:run[session=s, show=output]\n```sh\necho \"x is $x\"\necho ran >> \"$NML_ROOT/.count\"\n```\n\n\
+			:run[show=output]\n```sh\necho \"alone: $x\"\n```\n"
+		)
+	};
+	let workspace = Workspace::new(
+		"sessions",
+		&[
+			("nml.toml", "[run.sh]\ncommand = [\"sh\"]\n"),
+			("a.nml", &page("x=5\necho one")),
+		],
+	);
+	let runs = |workspace: &Workspace| {
+		fs::read_to_string(workspace.0.join(".count"))
+			.unwrap_or_default()
+			.lines()
+			.count()
+	};
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	let html = body(&workspace.output("a.html")).to_string();
+	// Each block shows what it printed itself; the second sees the first's state; a block
+	// out of the session does not.
+	let outputs: Vec<_> = html
+		.match_indices("<pre><code>")
+		.map(|(at, _)| &html[at + 11..at + 11 + html[at + 11..].find("</code>").unwrap()])
+		.collect();
+	assert_eq!(outputs, ["one", "x is 5", "alone:"], "{html}");
+	// The second ran the first's code again: three runs.
+	assert_eq!(runs(&workspace), 3);
+
+	// The first block changes: both run again.
+	workspace.write("a.nml", &page("x=6\necho one"));
+	workspace.build();
+	assert!(workspace.output("a.html").contains("x is 6"));
+	assert_eq!(runs(&workspace), 6);
+
+	// The first fails: the second does not run.
+	workspace.write("a.nml", &page("echo broken >&2\nexit 1"));
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, [3017]);
+	assert_eq!(runs(&workspace), 6);
+}

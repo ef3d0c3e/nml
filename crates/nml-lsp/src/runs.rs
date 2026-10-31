@@ -265,7 +265,10 @@ impl Server {
 		let Some(analysis) = self.analyses.get(&url) else {
 			return Err(format!("`{url}` is not open").into());
 		};
-		let blocks: Vec<RunBlock> = match command {
+		// What to run: a block, or those of the document that have not completed. A block
+		// of a session runs after the earlier ones, which run first if they have not
+		// completed: the blocks of a session run in order, on one thread.
+		let targets: Vec<RunBlock> = match command {
 			RUN_COMMAND => {
 				let line = arguments
 					.get(1)
@@ -278,40 +281,120 @@ impl Server {
 				.cloned()
 				.collect(),
 		};
-		for block in &blocks {
-			self.start_run(block)?;
+		let forced = command == RUN_COMMAND;
+		let mut jobs: Vec<(Vec<RunBlock>, Vec<String>)> = Vec::new();
+		for target in targets {
+			let Some(session) = &target.session else {
+				jobs.push((vec![target.clone()], vec![target.key.clone()]));
+				continue;
+			};
+			let same = |block: &RunBlock| {
+				block.runner == target.runner && block.session.as_ref() == Some(session)
+			};
+			// One job by session: up to its last block to run.
+			if let Some((chain, run)) =
+				(jobs.iter_mut()).find(|(chain, _)| chain.first().is_some_and(same))
+			{
+				let upto = analysis
+					.runs
+					.iter()
+					.position(|block| block.key == target.key)
+					.unwrap();
+				*chain = analysis.runs[..=upto]
+					.iter()
+					.filter(|b| same(b))
+					.cloned()
+					.collect();
+				run.push(target.key.clone());
+				continue;
+			}
+			let upto = analysis
+				.runs
+				.iter()
+				.position(|block| block.key == target.key)
+				.unwrap();
+			let chain: Vec<RunBlock> = analysis.runs[..=upto]
+				.iter()
+				.filter(|b| same(b))
+				.cloned()
+				.collect();
+			jobs.push((chain, vec![target.key.clone()]));
+		}
+		for (chain, run) in jobs {
+			self.start_job(chain, run, forced)?;
 		}
 		self.refresh_code_lenses();
 		Ok(())
 	}
 
-	/// Runs a block on a worker thread, unless it is running already.
-	fn start_run(&mut self, block: &RunBlock) -> Result<()> {
-		if self.running.contains_key(&block.key) {
+	/// Runs blocks on a worker thread, in order: the blocks of `run`, and the blocks of the
+	/// chain before them that have not completed. A chain is one block, or the blocks of a
+	/// session up to the last to run. With `forced`, the blocks of `run` run even if they
+	/// completed. Blocks already running are left to their run.
+	fn start_job(&mut self, chain: Vec<RunBlock>, run: Vec<String>, forced: bool) -> Result<()> {
+		if chain
+			.iter()
+			.any(|block| self.running.contains_key(&block.key))
+		{
 			return Ok(());
 		}
 		let (Some(root), Some(config)) = (&self.root, &self.config) else {
 			return Err("runs need a workspace with an `nml.toml`".into());
 		};
-		let runner = (config.runners.get(&block.runner))
-			.ok_or_else(|| format!("`{}` is not a runner of nml.toml", block.runner))?
+		let first = chain.first().ok_or("nothing to run")?;
+		let runner = (config.runners.get(&first.runner))
+			.ok_or_else(|| format!("`{}` is not a runner of nml.toml", first.runner))?
 			.clone();
 		let cache = nml_build::run_cache(root, config);
 		let root = root.clone();
-		let cwd = match block.file.rsplit_once('/') {
-			Some((dir, _)) => root.join(dir),
-			None => root.clone(),
-		};
-		let code = block.code.clone();
-		let data = block.data.clone();
-		let key = block.key.clone();
 		let sender = self.run_sender.clone();
-		self.running.insert(key.clone(), Instant::now());
+		for block in &chain {
+			self.running.insert(block.key.clone(), Instant::now());
+		}
 		std::thread::Builder::new()
 			.name("nml-run".into())
 			.spawn(move || {
-				cache.run(&key, |out| runner.run(&code, &data, &cwd, &root, out));
-				let _ = sender.send(RunDone(key));
+				let mut done: Vec<RunBlock> = Vec::new();
+				for mut block in chain {
+					let prefix = (block.session.as_ref())
+						.map(|session| nml_lang::session_prefix(&done, &block.runner, session));
+					let cached = cache.get(&block.key);
+					let completed = cached
+						.as_ref()
+						.is_some_and(|r| r.status == RunStatus::Completed);
+					let wanted = run.contains(&block.key) && (forced || !completed);
+					let result = match (wanted || !completed, &prefix) {
+						// An earlier block of the session did not complete.
+						(true, Some(prefix)) if !prefix.complete => cached,
+						(true, _) => {
+							let cwd = match block.file.rsplit_once('/') {
+								Some((dir, _)) => root.join(dir),
+								None => root.clone(),
+							};
+							Some(nml_build::run_block(
+								&cache,
+								&runner,
+								&block.key,
+								&block.code,
+								&block.data,
+								prefix.as_ref(),
+								&cwd,
+								&root,
+							))
+						}
+						(false, _) => cached,
+					};
+					block.files = (cache.file_hashes(&block.key).into_iter())
+						.map(|(name, hash)| nml_lang::RunFile {
+							name,
+							path: String::new(),
+							hash,
+						})
+						.collect();
+					block.result = result;
+					let _ = sender.send(RunDone(block.key.clone()));
+					done.push(block);
+				}
 			})?;
 		Ok(())
 	}

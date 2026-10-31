@@ -70,6 +70,7 @@ pub use run::OUTPUT_CLASS;
 pub use run::RUN_SCHEME;
 pub use run::RunBlock;
 pub use run::RunUrlError;
+pub use run::session_prefix;
 pub use table::next_table;
 pub use table::table_export;
 pub use timestamp::date_weekday;

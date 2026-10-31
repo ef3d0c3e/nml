@@ -26,3 +26,4 @@ pub use runner::ROOT_VARIABLE;
 pub use runner::RunResult;
 pub use runner::RunStatus;
 pub use runner::Runner;
+pub use runner::SessionPrefix;

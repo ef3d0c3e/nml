@@ -164,6 +164,24 @@ impl Runner {
 	}
 }
 
+/// What the earlier blocks of a session give a block: their code and data, which run
+/// before its own, and what they printed and wrote, which is left out of its result.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SessionPrefix {
+	/// Their code, in order, each followed by a line break.
+	pub code: String,
+	/// Their data, by file name; a later block's file replaces an earlier one's.
+	pub data: Vec<(String, String)>,
+	/// What they printed, in order.
+	pub stdout: String,
+	/// The files they wrote, by name, with the hash of their content.
+	pub files: Vec<(String, String)>,
+	/// The key of the block before.
+	pub key: String,
+	/// Whether every earlier block completed: otherwise the block does not run.
+	pub complete: bool,
+}
+
 /// Whether a run completed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RunStatus {

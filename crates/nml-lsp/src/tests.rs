@@ -2963,3 +2963,38 @@ fn agenda() {
 	);
 	assert_eq!(error, "no task on line 2");
 }
+
+#[test]
+fn run_sessions_on_request() {
+	let workspace = Workspace::new(
+		"sessions",
+		&[
+			("nml.toml", "[run.sh]\ncommand = [\"sh\"]\n"),
+			(
+				"a.nml",
+				":run[session=s]\n```sh\nx=5\necho one\n```\n\n:run[session=s]\n```sh\necho \"x is $x\"\n```\n",
+			),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let a = workspace.url("a.nml");
+	client.open(&a, &fs::read_to_string(workspace.0.join("a.nml")).unwrap());
+	client.diagnostics();
+	// The second block: the first runs before it, on the same thread.
+	let params = serde_json::json!({ "command": "nml.run", "arguments": [a.as_str(), 6] });
+	client.request(ExecuteCommand::METHOD, params);
+	let output = |line: u32| loop {
+		let output = client.request(
+			ExecuteCommand::METHOD,
+			serde_json::json!({ "command": "nml.runOutput", "arguments": [a.as_str(), line] }),
+		);
+		if output["status"] != "running" && output["status"] != "not run" {
+			break output;
+		}
+		std::thread::sleep(Duration::from_millis(20));
+	};
+	assert_eq!(output(0)["stdout"], "one\n");
+	let second = output(6);
+	assert_eq!(second["status"], "completed");
+	assert_eq!(second["stdout"], "x is 5\n");
+}
