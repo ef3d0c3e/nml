@@ -2079,3 +2079,34 @@ fn run_blocks() {
 fn body_of(workspace: &Workspace) -> String {
 	body(&workspace.output("docs/a.html")).to_string()
 }
+
+#[test]
+fn listings_follow_their_file() {
+	let workspace = Workspace::new(
+		"listing",
+		&[
+			("nml.toml", "exclude = [\"src/**\"]\n"),
+			(
+				"src/lib.rs",
+				"fn a() {}\n// nml:begin b\nfn b() {}\n// nml:end b\n",
+			),
+			("doc.nml", ":listing[file=src/lib.rs, region=b]\n"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(
+		workspace
+			.output("doc.html")
+			.contains("<span class=\"hl-entity hl-name hl-function hl-rust\">b</span>")
+	);
+	// The page is built again when the file changes, though it did not.
+	workspace.write(
+		"src/lib.rs",
+		"// nml:begin b\nfn renamed() {}\n// nml:end b\n",
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(report.parsed, ["doc.nml"]);
+	assert!(workspace.output("doc.html").contains("renamed"));
+}

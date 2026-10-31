@@ -15,6 +15,7 @@ use nml_grammar::OptionSpec;
 use nml_grammar::OptionValue;
 use nml_grammar::Rule;
 use nml_grammar::RuleError;
+use nml_grammar::RuleMatch;
 use nml_grammar::Value;
 
 use crate::Language;
@@ -149,7 +150,220 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			lower.export(export, reference);
 		}
 	})?;
+	listing(language)
+}
+
+/// `:listing[file=…, lines=…]` or `[file=…, region=…]`: code from a file of the workspace,
+/// shown as a code block. The page depends on the file.
+fn listing(language: &mut Language) -> Result<(), RuleError> {
+	let text = |name: &str, doc: &str| {
+		OptionSpec::new(name, OptionKind::Text)
+			.with_default(OptionValue::Text(String::new()))
+			.with_doc(doc)
+	};
+	let schema = OptionSchema::new([
+		OptionSpec::new("file", OptionKind::Text).with_doc(
+			"The file, relative to the document, or to the workspace root with a leading `/`.",
+		),
+		text(
+			"lines",
+			"The lines shown: `10-20`, `10-` or `-20`, from 1. Default: all.",
+		),
+		text(
+			"region",
+			"The lines between those holding `nml:begin <region>` and `nml:end <region>`, \
+			in any comment.",
+		),
+		text(
+			"language",
+			"The language of the code. Default: the file's extension.",
+		),
+		OptionSpec::new("numbers", OptionKind::Bool)
+			.with_default(OptionValue::Bool(true))
+			.with_doc("Whether lines are numbered, from their number in the file."),
+		OptionSpec::new("max_lines", OptionKind::Integer)
+			.with_default(OptionValue::Integer(0))
+			.with_doc("How many lines are shown before the rest scrolls; `0` shows them all."),
+	]);
+	let rule = Rule::new(
+		"listing",
+		vec![
+			Atom::LineStart,
+			Atom::capture("command", Atom::literal(":listing")).with_class("keyword"),
+			Atom::capture("options", Atom::Options(Arc::new(schema))),
+			Atom::optional(vec![
+				Atom::literal(" #"),
+				Atom::capture("ref", Atom::Word).with_class("variable"),
+			]),
+			Atom::optional(vec![
+				Atom::literal(" "),
+				Atom::capture("title", Atom::InlineContent),
+			]),
+			Atom::LineEnd,
+		],
+	)
+	.with_doc(
+		"**Listing from a file**: code from a file of the workspace, kept in sync with it.\n\n\
+		```nml\n:listing[file=src/main.rs, lines=10-20] #main The entry point\n```\n\n\
+		`region=name` shows the lines between `nml:begin name` and `nml:end name` instead. \
+		Lines are numbered from their number in the file; `language`, `numbers` and \
+		`max_lines` are as a code block's.",
+	)
+	.with_snippet(":listing[file=${1:path}] ${0}");
+	language.add(rule, lower_listing)?;
 	Ok(())
+}
+
+/// The lines `start..end` (from 0) that `lines` selects among `count`.
+fn line_range(lines: &str, count: usize) -> Option<std::ops::Range<usize>> {
+	let (start, end) = match lines.split_once('-') {
+		Some((start, end)) => (start.trim(), end.trim()),
+		None => (lines.trim(), lines.trim()),
+	};
+	let number = |text: &str, default: usize| match text {
+		"" => Some(default),
+		text => text.parse::<usize>().ok(),
+	};
+	let start = number(start, 1)?;
+	let end = number(end, count)?;
+	(1 <= start && start <= end && end <= count).then(|| start - 1..end)
+}
+
+/// The lines of a region: those between the line holding `nml:begin <name>` and the one
+/// holding `nml:end <name>`.
+fn region(lines: &[&str], name: &str) -> Option<std::ops::Range<usize>> {
+	let marks = |marker: &str| {
+		let marker = format!("nml:{marker} {name}");
+		move |line: &&str| {
+			line.find(&marker).is_some_and(|at| {
+				let after = &line[at + marker.len()..];
+				after
+					.chars()
+					.next()
+					.is_none_or(|c| !c.is_alphanumeric() && c != '_' && c != '-')
+			})
+		}
+	};
+	let begin = lines.iter().position(marks("begin"))?;
+	let end = begin + 1 + lines[begin + 1..].iter().position(marks("end"))?;
+	Some(begin + 1..end)
+}
+
+/// Lines without the indentation they share.
+fn dedent(lines: &[&str]) -> String {
+	let indent = (lines.iter())
+		.filter(|line| !line.trim().is_empty())
+		.map(|line| line.len() - line.trim_start().len())
+		.min()
+		.unwrap_or(0);
+	(lines.iter())
+		.map(|line| line.get(indent..).unwrap_or(line.trim_start()))
+		.collect::<Vec<_>>()
+		.join("\n")
+}
+
+fn lower_listing(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
+	let options = match m.capture("options").map(|capture| &capture.value) {
+		Some(Value::Options(options)) => options,
+		_ => return,
+	};
+	let options_token = m.capture("options").unwrap().token.clone();
+	let text = |name| match options.get(name) {
+		Some(OptionValue::Text(text)) => text.clone(),
+		_ => String::new(),
+	};
+	let error = |lower: &mut Lower<'_, '_>, kind| {
+		let message = DiagnosticMessage::new(options_token.clone());
+		lower.diagnostics.push(Diagnostic::new(kind, message));
+	};
+	// Without `file`, the options are in error already.
+	if text("file").is_empty() {
+		return;
+	}
+	let path = crate::variable::expand_paths(lower, &text("file"));
+	let from = lower.files.last().unwrap().clone();
+	let (resolved, content) = match lower.resolver.read(&from, &path) {
+		Ok(file) => file,
+		Err(_) => return error(lower, DiagnosticKind::FileNotFound { path }),
+	};
+	let hash = blake3::hash(content.as_bytes()).to_hex().to_string();
+	lower.depend(nml_document::Dependency::File {
+		path: resolved.clone(),
+		hash,
+	});
+	let all: Vec<&str> = content.lines().collect();
+	let (lines, region_name) = (text("lines"), text("region"));
+	let selected = match (lines.is_empty(), region_name.is_empty()) {
+		(false, false) => return error(lower, DiagnosticKind::ListingSelection),
+		(true, true) => 0..all.len(),
+		(false, true) => match line_range(&lines, all.len()) {
+			Some(range) => range,
+			None => {
+				let count = all.len();
+				return error(lower, DiagnosticKind::ListingLines { lines, count });
+			}
+		},
+		(true, false) => match region(&all, &region_name) {
+			Some(range) => range,
+			None => {
+				let kind = DiagnosticKind::UnknownRegion {
+					region: region_name,
+					path: resolved,
+				};
+				return error(lower, kind);
+			}
+		},
+	};
+	let first_line = selected.start as i64 + 1;
+	let code = dedent(&all[selected]);
+	let language = match text("language") {
+		language if !language.is_empty() => Some(language),
+		_ => (resolved.rsplit('/').next())
+			.and_then(|name| name.rsplit_once('.'))
+			.map(|(_, extension)| extension.to_string()),
+	};
+	if let Some(language) = &language
+		&& !nml_render::is_known_language(language)
+	{
+		let kind = DiagnosticKind::UnknownCodeLanguage {
+			language: language.clone(),
+		};
+		lower.diagnostics.push(Diagnostic::new(
+			kind,
+			DiagnosticMessage::new(options_token.clone()),
+		));
+	}
+	let numbered = !matches!(options.get("numbers"), Some(OptionValue::Bool(false)));
+	let max_lines = match options.get("max_lines") {
+		Some(OptionValue::Integer(lines)) if *lines > 0 => {
+			Some(u32::try_from(*lines).unwrap_or(u32::MAX))
+		}
+		_ => None,
+	};
+	let reference = m.capture("ref").map(|capture| capture.token.clone());
+	let number = reference.as_ref().map(|_| next_listing(lower));
+	let kind = ElementKind::CodeBlock {
+		language,
+		code,
+		first_line: numbered.then_some(first_line),
+		max_lines,
+		number,
+	};
+	let attributes = Attributes {
+		id: reference.as_ref().map(|r| r.content().to_string()),
+		classes: Vec::new(),
+	};
+	lower.builder.open_with(kind, m.token.clone(), attributes);
+	lower.capture(m, "title");
+	let element = lower.builder.close();
+	if let (Some(reference), Some(number)) = (reference, number) {
+		let title = match m.capture("title").map(|capture| &capture.value) {
+			Some(Value::Nodes(nodes)) => plain_text(nodes),
+			_ => String::new(),
+		};
+		let export = listing_export(reference.content(), element, number, title);
+		lower.export(export, reference);
+	}
 }
 
 /// The number of the last listing of a unit.
@@ -333,5 +547,96 @@ mod tests {
 				..
 			}
 		));
+	}
+}
+
+#[cfg(test)]
+mod listing_tests {
+	use nml_diagnostics::assert_diagnostics;
+	use nml_document::Dependency;
+	use nml_document::ElementKind;
+
+	use crate::tests::compile_with;
+
+	const MAIN: &str = "use std::io;\n\nfn main() {\n    // nml:begin body\n    let x = 1;\n    if x > 0 {\n        println!(\"{x}\");\n    }\n    // nml:end body\n}\n";
+
+	fn listing(text: &str) -> (Option<String>, String, Option<i64>) {
+		let compiled = compile_with(text, &[("src/main.rs", MAIN)]);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let document = &compiled.unit.document;
+		(document.descendants(document.root()))
+			.find_map(|(_, element)| match &element.kind {
+				ElementKind::CodeBlock {
+					language,
+					code,
+					first_line,
+					..
+				} => Some((language.clone(), code.clone(), *first_line)),
+				_ => None,
+			})
+			.unwrap()
+	}
+
+	#[test]
+	fn lines_and_regions() {
+		assert_eq!(
+			listing(":listing[file=src/main.rs, lines=3-3]\n"),
+			(Some("rs".into()), "fn main() {".into(), Some(3))
+		);
+		assert_eq!(
+			listing(":listing[file=src/main.rs, lines=9-]\n").1,
+			"    // nml:end body\n}"
+		);
+		assert_eq!(
+			listing(":listing[file=/src/main.rs, lines=-1]\n").1,
+			"use std::io;"
+		);
+		// A region, without its markers and the indentation its lines share.
+		assert_eq!(
+			listing(":listing[file=src/main.rs, region=body, numbers=false, language=rust]\n"),
+			(
+				Some("rust".into()),
+				"let x = 1;\nif x > 0 {\n    println!(\"{x}\");\n}".into(),
+				None
+			)
+		);
+		let (_, all, first) = listing(":listing[file=src/main.rs]\n");
+		assert_eq!(all, MAIN.trim_end());
+		assert_eq!(first, Some(1));
+	}
+
+	#[test]
+	fn named_and_dependent() {
+		let compiled = compile_with(
+			":listing[file=src/main.rs, lines=3] #entry The *entry* point\n\n[[entry]]\n",
+			&[("src/main.rs", MAIN)],
+		);
+		assert_diagnostics!(compiled.diagnostics, []);
+		let export = &compiled.unit.exports[0];
+		assert_eq!(export.name, "entry");
+		assert_eq!(export.property("title"), Some("The entry point"));
+		assert_eq!(export.property("number"), Some("1"));
+		assert_eq!(
+			compiled.unit.dependencies,
+			[Dependency::File {
+				path: "src/main.rs".into(),
+				hash: blake3::hash(MAIN.as_bytes()).to_hex().to_string(),
+			}]
+		);
+	}
+
+	#[test]
+	fn errors() {
+		let errors = |text: &str| compile_with(text, &[("src/main.rs", MAIN)]).diagnostics;
+		assert_diagnostics!(errors(":listing[file=nope.rs]\n"), [3008 @ 8..22]);
+		assert_diagnostics!(errors(":listing[file=src/main.rs, lines=8-30]\n"), [2032]);
+		assert_diagnostics!(errors(":listing[file=src/main.rs, lines=x]\n"), [2032]);
+		assert_diagnostics!(errors(":listing[file=src/main.rs, region=nope]\n"), [2033]);
+		assert_diagnostics!(
+			errors(":listing[file=src/main.rs, region=body, lines=1]\n"),
+			[2034]
+		);
+		// `file` is required.
+		assert_diagnostics!(errors(":listing[lines=1]\n"), [1008]);
 	}
 }

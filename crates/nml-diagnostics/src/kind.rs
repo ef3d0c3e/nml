@@ -123,6 +123,14 @@ pub enum DiagnosticKind {
 	UnusedFootnote { name: String },
 	#[diag(id = 2031, message = "diagnostic-duplicate-footnote")]
 	DuplicateFootnote { name: String },
+	/// `lines` of a `:listing` outside of its file, which has `count` lines.
+	#[diag(id = 2032, message = "diagnostic-listing-lines")]
+	ListingLines { lines: String, count: usize },
+	/// No `nml:begin` / `nml:end` pair for a `:listing`'s region.
+	#[diag(id = 2033, message = "diagnostic-unknown-region")]
+	UnknownRegion { region: String, path: String },
+	#[diag(id = 2034, message = "diagnostic-listing-selection")]
+	ListingSelection,
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]
