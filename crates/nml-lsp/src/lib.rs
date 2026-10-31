@@ -1,6 +1,7 @@
 //! The NML language server.
 
 mod actions;
+mod agenda;
 mod completion;
 mod convert;
 mod display;
@@ -157,6 +158,7 @@ pub fn run(connection: Connection) -> Result<()> {
 				structure::MOVE_UP_COMMAND.into(),
 				structure::MOVE_DOWN_COMMAND.into(),
 				TANGLE_COMMAND.into(),
+				agenda::TOGGLE_TASK_COMMAND.into(),
 			],
 			..ExecuteCommandOptions::default()
 		}),
@@ -509,6 +511,7 @@ impl Server {
 				let params = serde_json::from_value(request.params)?;
 				Ok(serde_json::to_value(self.lua_document(params)?)?)
 			}
+			agenda::AGENDA => Ok(serde_json::to_value(self.agenda()?)?),
 			INCLUDE_CONTEXTS => {
 				let params: lua::LuaParams = serde_json::from_value(request.params)?;
 				let url = Url::parse(params.text_document.uri.as_str())?;
@@ -520,6 +523,10 @@ impl Server {
 			}
 			ExecuteCommand::METHOD => {
 				let params: ExecuteCommandParams = serde_json::from_value(request.params)?;
+				if params.command == agenda::TOGGLE_TASK_COMMAND {
+					self.toggle_task(&params.arguments)?;
+					return Ok(serde_json::Value::Null);
+				}
 				if params.command == TANGLE_COMMAND {
 					let Some(root) = &self.root else {
 						return Err("tangling needs a workspace with an `nml.toml`".into());

@@ -2866,3 +2866,100 @@ fn tangle_command() {
 		"echo hi\n"
 	);
 }
+
+#[test]
+fn agenda() {
+	let workspace = Workspace::new(
+		"agenda",
+		&[
+			("nml.toml", "exclude = [\"lib/**\"]\n"),
+			(
+				"plan.nml",
+				"# TODO Release DEADLINE <2026-11-20>\n\n:include /lib/more\n",
+			),
+			("lib/more.nml", " * [x] Old <2026-01-01>\n"),
+			("notes.nml", " * [ ] Saved\n"),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let notes = workspace.url("notes.nml");
+	client.save(&notes);
+	// Unsaved: another task.
+	client.open(
+		&notes,
+		" * [ ] Saved\n * [ ] Unsaved SCHEDULED <2026-11-02>\n",
+	);
+	client.diagnostics();
+	let result = client.request("nml/agenda", serde_json::Value::Null);
+	let tasks: Vec<_> = (result.as_array().unwrap().iter())
+		.map(|task| {
+			let file = task["uri"]
+				.as_str()
+				.unwrap()
+				.rsplit('/')
+				.next()
+				.unwrap()
+				.to_string();
+			let line = task["range"]["start"]["line"].as_u64().unwrap();
+			let when = (task["deadline"].as_str())
+				.or(task["scheduled"].as_str())
+				.or(task["date"].as_str())
+				.unwrap_or("-")
+				.to_string();
+			(
+				task["unit"].as_str().unwrap().to_string(),
+				task["state"].as_str().unwrap().to_string(),
+				task["title"].as_str().unwrap().to_string(),
+				when,
+				file,
+				line,
+			)
+		})
+		.collect();
+	let task = |unit: &str, state: &str, title: &str, when: &str, file: &str, line| {
+		(
+			unit.to_string(),
+			state.to_string(),
+			title.to_string(),
+			when.to_string(),
+			file.to_string(),
+			line,
+		)
+	};
+	assert_eq!(
+		tasks,
+		[
+			// The included file's task, once.
+			task("lib/more.nml", "done", "Old", "2026-01-01", "more.nml", 0),
+			task("notes.nml", "todo", "Saved", "-", "notes.nml", 0),
+			task("notes.nml", "todo", "Unsaved", "2026-11-02", "notes.nml", 1),
+			task("plan.nml", "TODO", "Release", "2026-11-20", "plan.nml", 0),
+		]
+	);
+
+	// Toggling: a checkbox, and a heading's state.
+	let toggle = |url: &Url, text: &str, line: u32| {
+		let params =
+			serde_json::json!({ "command": "nml.toggleTask", "arguments": [url.as_str(), line] });
+		client.request(ExecuteCommand::METHOD, params);
+		apply_edits(text, client.server_request("workspace/applyEdit"))
+	};
+	assert_eq!(
+		toggle(
+			&notes,
+			" * [ ] Saved\n * [ ] Unsaved SCHEDULED <2026-11-02>\n",
+			1
+		),
+		" * [ ] Saved\n * [x] Unsaved SCHEDULED <2026-11-02>\n"
+	);
+	let plan = workspace.url("plan.nml");
+	let text = "# TODO Release DEADLINE <2026-11-20>\n\n:include /lib/more\n";
+	client.open(&plan, text);
+	client.diagnostics();
+	assert_eq!(toggle(&plan, text, 0), text.replace("TODO", "DONE"));
+	let error = client.request_error(
+		ExecuteCommand::METHOD,
+		serde_json::json!({ "command": "nml.toggleTask", "arguments": [plan.as_str(), 1] }),
+	);
+	assert_eq!(error, "no task on line 2");
+}
