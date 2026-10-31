@@ -66,6 +66,7 @@ diagnostic-duplicate-footnote = the note `{ $name }` is already defined
 diagnostic-listing-lines = `{ $lines }` is not a range of lines of the file, which has { $count } lines: write `10-20`, `10-` or `-20`
 diagnostic-unknown-region = `{ $path }` has no region `{ $region }`: mark it with lines holding `nml:begin { $region }` and `nml:end { $region }`
 diagnostic-listing-selection = a listing takes `lines` or `region`, not both
+diagnostic-unknown-run-data = `{ $name }` is neither a table named with `:table[lua={ $name }]` before this, nor a variable
 diagnostic-invalid-reference = `{ $target }` is not a reference: write `name`, `doc#name`, `doc#` or `#name`
 diagnostic-invalid-variable-name = `{ $name }` is not a variable name
 diagnostic-unknown-variable = `{ $name }` is not a variable of NML

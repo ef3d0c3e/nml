@@ -20,6 +20,7 @@ pub use highlight::stylesheet;
 pub use highlight::theme_names;
 pub use runner::DEFAULT_RUN_TIMEOUT;
 pub use runner::FILE_PLACEHOLDER;
+pub use runner::IN_VARIABLE;
 pub use runner::OUT_VARIABLE;
 pub use runner::ROOT_VARIABLE;
 pub use runner::RunResult;

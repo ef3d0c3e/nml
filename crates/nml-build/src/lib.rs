@@ -1263,7 +1263,7 @@ impl Resolver for WorkspaceResolver {
 				})?;
 			inputs.push(input);
 		}
-		let key = nml_lang::run_key(&runner.key(), &request.code, &inputs);
+		let key = nml_lang::run_key(&runner.key(), &request.code, &inputs, &request.data);
 		let completed = |result: &Option<RunResult>| {
 			(result.as_ref()).is_some_and(|result| result.status == RunStatus::Completed)
 		};
@@ -1273,7 +1273,9 @@ impl Resolver for WorkspaceResolver {
 				Some((dir, _)) => self.root.join(dir),
 				None => self.root.clone(),
 			};
-			result = Some(runs.run(&key, |out| runner.run(&request.code, &cwd, &self.root, out)));
+			result = Some(runs.run(&key, |out| {
+				runner.run(&request.code, &request.data, &cwd, &self.root, out)
+			}));
 		}
 		let mut files = Vec::new();
 		if let Some(result) = result.as_ref().filter(|_| completed(&result)) {

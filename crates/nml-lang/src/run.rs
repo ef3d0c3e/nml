@@ -45,6 +45,8 @@ pub struct RunBlock {
 	/// Its runner, of `[run.<name>]`.
 	pub runner: String,
 	pub code: String,
+	/// The files of `$NML_IN` it is given, by name.
+	pub data: Vec<(String, String)>,
 	/// The workspace path of the file it is written in: it runs in that file's directory.
 	pub file: String,
 	/// The block, from `:run` to the closing fence.
@@ -70,6 +72,12 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			"What the block shows: `none`, its `code`, its `output` (what it printed), or \
 				`both`.",
 		),
+		OptionSpec::new("vars", OptionKind::Text)
+			.with_default(OptionValue::Text(String::new()))
+			.with_doc(
+				"Data for the code, separated by spaces: a table named with `:table[lua=name]` \
+				is `$NML_IN/name.csv`, a variable is `$NML_IN/name.txt`, its value as written.",
+			),
 		OptionSpec::new("inputs", OptionKind::Text)
 			.with_default(OptionValue::Text(String::new()))
 			.with_doc(
@@ -136,10 +144,30 @@ fn lower_run(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 	let source = m.capture("source").unwrap().token.content();
 	let code = source.strip_suffix('\n').unwrap_or(source).to_string();
 	let file = lower.files.last().unwrap().clone();
+	let mut data = Vec::new();
+	for name in option("vars").split_whitespace() {
+		let file = match lower.tables.get(name) {
+			Some(table) => (format!("{name}.csv"), csv(&table.rows)),
+			None => match lower.variables.get(name) {
+				Some(variable) => (format!("{name}.txt"), variable.value.content().to_string()),
+				None => {
+					let location = m
+						.capture("options")
+						.map_or(info.clone(), |c| c.token.clone());
+					let kind = DiagnosticKind::UnknownRunData { name: name.into() };
+					let diagnostic = Diagnostic::new(kind, DiagnosticMessage::new(location));
+					lower.diagnostics.push(diagnostic);
+					return;
+				}
+			},
+		};
+		data.push(file);
+	}
 	let request = RunRequest {
 		runner: runner.clone(),
 		code: code.clone(),
 		inputs: inputs.split_whitespace().map(String::from).collect(),
+		data: data.clone(),
 	};
 	let command = m.capture("command").unwrap().token.clone();
 	let lookup = match lower.resolver.run(&file, &request) {
@@ -241,6 +269,7 @@ fn lower_run(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 		name,
 		runner,
 		code,
+		data,
 		file,
 		token: m.token.clone(),
 		command,
@@ -248,6 +277,22 @@ fn lower_run(lower: &mut Lower<'_, '_>, m: &RuleMatch) {
 		result: lookup.result,
 		files: lookup.files,
 	});
+}
+
+/// Rows as CSV: fields with a comma, a quote or a line break are quoted, quotes doubled.
+fn csv(rows: &[Vec<String>]) -> String {
+	let mut out = String::new();
+	for row in rows {
+		let fields: Vec<String> = (row.iter())
+			.map(|field| match field.contains([',', '"', '\n', '\r']) {
+				true => format!("\"{}\"", field.replace('"', "\"\"")),
+				false => field.clone(),
+			})
+			.collect();
+		out.push_str(&fields.join(","));
+		out.push('\n');
+	}
+	out
 }
 
 /// Why a `run:` URL shows nothing.
@@ -540,6 +585,36 @@ mod tests {
 			[2023 @ 5..8, 3016 @ 23..29, 3008 @ 40..69, 2024 @ 108..109]
 		);
 		assert_eq!(compiled.runs.len(), 2);
+	}
+
+	#[test]
+	fn data_from_tables_and_variables() {
+		let block = |table: &str| {
+			let text = format!(
+				":set version = 1.2\n:table[lua=sales]\n{table}\n\n:run[vars=sales version]\n```sh\nx\n```\n"
+			);
+			let compiled = compile(&text, &[], &[]);
+			assert_diagnostics!(compiled.diagnostics, []);
+			compiled.runs[0].clone()
+		};
+		let run = block("| Q1 | 4,2 |\n| \"Q2\" | 5 |");
+		assert_eq!(
+			run.data,
+			[
+				(
+					"sales.csv".to_string(),
+					"Q1,\"4,2\"\n\"\"\"Q2\"\"\",5\n".to_string()
+				),
+				("version.txt".to_string(), "1.2".to_string()),
+			]
+		);
+		// The data is in the key.
+		assert_ne!(run.key, block("| Q1 | 4 |").key);
+		assert_eq!(run.key, block("| Q1 | 4,2 |\n| \"Q2\" | 5 |").key);
+
+		let compiled = compile(":run[vars=nope]\n```sh\nx\n```\n", &[], &[]);
+		assert_diagnostics!(compiled.diagnostics, [2035 @ 4..15]);
+		assert!(compiled.runs.is_empty());
 	}
 
 	#[test]

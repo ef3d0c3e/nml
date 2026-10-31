@@ -131,6 +131,9 @@ pub enum DiagnosticKind {
 	UnknownRegion { region: String, path: String },
 	#[diag(id = 2034, message = "diagnostic-listing-selection")]
 	ListingSelection,
+	/// A name in a `:run`'s `vars` that is neither a table for scripts nor a variable.
+	#[diag(id = 2035, message = "diagnostic-unknown-run-data")]
+	UnknownRunData { name: String },
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]

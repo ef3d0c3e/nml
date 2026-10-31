@@ -55,6 +55,8 @@ pub struct RunRequest {
 	/// The files the code reads, as written: relative to the file, or to the workspace root
 	/// with a leading `/`.
 	pub inputs: Vec<String>,
+	/// The files of `$NML_IN`, by name: the tables and variables given with `vars`.
+	pub data: Vec<(String, String)>,
 }
 
 /// A run, as a resolver finds it.
@@ -91,9 +93,14 @@ pub enum RunError {
 	InputNotFound { path: String },
 }
 
-/// The key of a run: its runner's settings (see `nml_render::Runner::key`), its code and
-/// its inputs' paths and hashes.
-pub fn run_key(runner: &str, code: &str, inputs: &[(String, String)]) -> String {
+/// The key of a run: its runner's settings (see `nml_render::Runner::key`), its code, its
+/// inputs' paths and hashes, and its data.
+pub fn run_key(
+	runner: &str,
+	code: &str,
+	inputs: &[(String, String)],
+	data: &[(String, String)],
+) -> String {
 	let mut hasher = blake3::Hasher::new();
 	for part in [runner, code] {
 		hasher.update(&(part.len() as u64).to_le_bytes());
@@ -101,6 +108,13 @@ pub fn run_key(runner: &str, code: &str, inputs: &[(String, String)]) -> String 
 	}
 	for (path, hash) in inputs {
 		hasher.update(format!("\0{path}\0{hash}").as_bytes());
+	}
+	hasher.update(b"\0\0");
+	for (name, content) in data {
+		for part in [name, content] {
+			hasher.update(&(part.len() as u64).to_le_bytes());
+			hasher.update(part.as_bytes());
+		}
 	}
 	hasher.finalize().to_hex().to_string()
 }
@@ -284,7 +298,7 @@ impl Resolver for MemoryResolver {
 				})?;
 			inputs.push((path, hash));
 		}
-		let key = run_key(&request.runner, &request.code, &inputs);
+		let key = run_key(&request.runner, &request.code, &inputs, &request.data);
 		let result = results.get(&request.code).cloned();
 		let files = match &result {
 			Some(result) if result.status == nml_render::RunStatus::Completed => (result.files)

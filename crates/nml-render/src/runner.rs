@@ -14,6 +14,10 @@ pub const FILE_PLACEHOLDER: &str = "{file}";
 /// The environment variable of the directory where a run writes its output files.
 pub const OUT_VARIABLE: &str = "NML_OUT";
 
+/// The environment variable of the directory holding the data a run is given: tables and
+/// variables, as files.
+pub const IN_VARIABLE: &str = "NML_IN";
+
 /// The environment variable of the workspace root, for a run.
 pub const ROOT_VARIABLE: &str = "NML_ROOT";
 
@@ -46,9 +50,17 @@ impl Runner {
 		key
 	}
 
-	/// Runs `code`, in the directory `cwd`, with the workspace at `root`. The program
-	/// writes its files into `out`, an empty directory, which is created if needed.
-	pub fn run(&self, code: &str, cwd: &Path, root: &Path, out: &Path) -> RunResult {
+	/// Runs `code`, in the directory `cwd`, with the workspace at `root`. `data` are the
+	/// files of `$NML_IN`, by name. The program writes its files into `out`, an empty
+	/// directory, which is created if needed.
+	pub fn run(
+		&self,
+		code: &str,
+		data: &[(String, String)],
+		cwd: &Path,
+		root: &Path,
+		out: &Path,
+	) -> RunResult {
 		let failed = |message: String, duration: Duration| RunResult {
 			status: RunStatus::Failed,
 			stdout: String::new(),
@@ -70,6 +82,18 @@ impl Runner {
 			Ok(dir) => dir,
 			Err(error) => return failed(error, Duration::ZERO),
 		};
+		let data_dir = scratch.join("in");
+		let written = std::fs::create_dir_all(&data_dir).and_then(|()| {
+			(data.iter())
+				.try_for_each(|(name, content)| std::fs::write(data_dir.join(name), content))
+		});
+		if let Err(error) = written {
+			let _ = std::fs::remove_dir_all(&scratch);
+			return failed(
+				format!("cannot write the run's data: {error}"),
+				Duration::ZERO,
+			);
+		}
 		let file = scratch.join(format!("code.{}", self.extension));
 		let uses_file = self
 			.command
@@ -93,6 +117,7 @@ impl Runner {
 			.current_dir(cwd)
 			.envs(&self.env)
 			.env(OUT_VARIABLE, absolute(out))
+			.env(IN_VARIABLE, &data_dir)
 			.env(ROOT_VARIABLE, absolute(root));
 		let input = if uses_file { "" } else { code };
 		let finished = crate::process::wait(
@@ -290,7 +315,7 @@ mod tests {
 			printf a > \"$NML_OUT/b.txt\"\nprintf c > \"$NML_OUT/sub/c.svg\"\n\
 			ln -s b.txt \"$NML_OUT/link\"\npwd > \"$NML_OUT/cwd\"\n\
 			printf %s \"$NML_ROOT\" > \"$NML_OUT/root\"";
-		let result = runner.run(code, &dirs.base, Path::new("/w"), &dirs.out());
+		let result = runner.run(code, &[], &dirs.base, Path::new("/w"), &dirs.out());
 		assert_eq!(result.status, RunStatus::Completed, "{result:?}");
 		assert_eq!(result.stdout, "hello\n");
 		assert_eq!(result.stderr, "warn\n");
@@ -307,6 +332,27 @@ mod tests {
 	}
 
 	#[test]
+	fn data_in_files() {
+		let dirs = Dirs::new();
+		let data = [
+			("sales.csv".to_string(), "a,1\n".to_string()),
+			("version.txt".to_string(), "1.2".to_string()),
+		];
+		let result = sh("cat \"$NML_IN/sales.csv\" \"$NML_IN/version.txt\"").run(
+			"",
+			&data,
+			&dirs.base,
+			&dirs.base,
+			&dirs.out(),
+		);
+		assert_eq!(result.stdout, "a,1\n1.2", "{result:?}");
+		// Without data, the directory is empty.
+		let result =
+			sh("ls -A \"$NML_IN\" | wc -l").run("", &[], &dirs.base, &dirs.base, &dirs.out());
+		assert_eq!(result.stdout.trim(), "0");
+	}
+
+	#[test]
 	fn code_in_a_file() {
 		let dirs = Dirs::new();
 		let runner = Runner {
@@ -320,7 +366,7 @@ mod tests {
 			timeout: 10,
 			env: BTreeMap::new(),
 		};
-		let result = runner.run("plot(x)\n", &dirs.base, &dirs.base, &dirs.out());
+		let result = runner.run("plot(x)\n", &[], &dirs.base, &dirs.base, &dirs.out());
 		assert_eq!(result.status, RunStatus::Completed, "{result:?}");
 		let mut lines = result.stdout.lines();
 		assert_eq!(lines.next(), Some("plot(x)"));
@@ -335,6 +381,7 @@ mod tests {
 		let dirs = Dirs::new();
 		let result = sh("echo out; echo first >&2; echo second >&2; exit 3").run(
 			"",
+			&[],
 			&dirs.base,
 			&dirs.base,
 			&dirs.out(),
@@ -344,12 +391,12 @@ mod tests {
 		assert_eq!(result.message.as_deref(), Some("first\nsecond"));
 		assert!(result.files.is_empty());
 
-		let result = sh("exit 2").run("", &dirs.base, &dirs.base, &dirs.out());
+		let result = sh("exit 2").run("", &[], &dirs.base, &dirs.base, &dirs.out());
 		assert_eq!(result.message.as_deref(), Some("`sh` exited with 2"));
 
 		let mut slow = sh("sleep 5");
 		slow.timeout = 0;
-		let result = slow.run("", &dirs.base, &dirs.base, &dirs.out());
+		let result = slow.run("", &[], &dirs.base, &dirs.base, &dirs.out());
 		assert_eq!(result.status, RunStatus::Failed);
 		assert_eq!(result.message.as_deref(), Some("`sh` took longer than 0 s"));
 		assert!(result.duration < Duration::from_secs(4));
@@ -358,7 +405,7 @@ mod tests {
 			command: vec!["nml-no-such-program".into()],
 			..sh("")
 		};
-		let result = missing.run("", &dirs.base, &dirs.base, &dirs.out());
+		let result = missing.run("", &[], &dirs.base, &dirs.base, &dirs.out());
 		assert_eq!(result.status, RunStatus::Failed);
 		assert!(
 			(result.message.as_deref().unwrap()).starts_with("cannot run `nml-no-such-program`"),

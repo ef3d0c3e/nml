@@ -303,13 +303,14 @@ impl Server {
 			None => root.clone(),
 		};
 		let code = block.code.clone();
+		let data = block.data.clone();
 		let key = block.key.clone();
 		let sender = self.run_sender.clone();
 		self.running.insert(key.clone(), Instant::now());
 		std::thread::Builder::new()
 			.name("nml-run".into())
 			.spawn(move || {
-				cache.run(&key, |out| runner.run(&code, &cwd, &root, out));
+				cache.run(&key, |out| runner.run(&code, &data, &cwd, &root, out));
 				let _ = sender.send(RunDone(key));
 			})?;
 		Ok(())

@@ -2110,3 +2110,34 @@ fn listings_follow_their_file() {
 	assert_eq!(report.parsed, ["doc.nml"]);
 	assert!(workspace.output("doc.html").contains("renamed"));
 }
+
+#[test]
+fn run_data() {
+	let workspace = Workspace::new(
+		"run-data",
+		&[
+			("nml.toml", "[run.sh]\ncommand = [\"sh\"]\n"),
+			(
+				"a.nml",
+				":set unit = kg\n:table[lua=weights]\n| apple | 2 |\n| pear | 3 |\n\n\
+				:run[show=output, vars=weights unit]\n```sh\nawk -F, '{ s += $2 } END { print s }' \"$NML_IN/weights.csv\"\ncat \"$NML_IN/unit.txt\"\n```\n",
+			),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(
+		workspace.output("a.html").contains("5\nkg"),
+		"{}",
+		workspace.output("a.html")
+	);
+	// New data, new run.
+	workspace.write(
+		"a.nml",
+		&fs::read_to_string(workspace.0.join("a.nml"))
+			.unwrap()
+			.replace("| 3 |", "| 4 |"),
+	);
+	workspace.build();
+	assert!(workspace.output("a.html").contains("6\nkg"));
+}
