@@ -38,6 +38,12 @@ enum Command {
 		output: Option<PathBuf>,
 	},
 	/// Preview a workspace in the browser, as its files change.
+	/// Write the code blocks that have `tangle=path` to their files.
+	Tangle {
+		/// The workspace root, which holds `nml.toml`.
+		#[arg(default_value = ".")]
+		root: PathBuf,
+	},
 	Serve {
 		/// The workspace root, which holds `nml.toml`.
 		#[arg(default_value = ".")]
@@ -56,6 +62,7 @@ fn main() -> ExitCode {
 		Command::Init { root } => init(root),
 		Command::Build { root, output } => build(root, output),
 		Command::Serve { root, port, open } => serve::serve(&root, port, open),
+		Command::Tangle { root } => tangle(root),
 		Command::Lsp => match nml_lsp::run_stdio() {
 			Ok(()) => ExitCode::SUCCESS,
 			Err(error) => {
@@ -121,6 +128,30 @@ fn build(root: PathBuf, output: Option<PathBuf>) -> ExitCode {
 		report.parsed.len(),
 		report.written.len(),
 		report.failed.len()
+	);
+	if report.has_errors() {
+		ExitCode::FAILURE
+	} else {
+		ExitCode::SUCCESS
+	}
+}
+
+fn tangle(root: PathBuf) -> ExitCode {
+	let report = match nml_build::tangle(&root) {
+		Ok(report) => report,
+		Err(error) => {
+			eprintln!("error: {error}");
+			return ExitCode::FAILURE;
+		}
+	};
+	print_diagnostics(&report.diagnostics);
+	for path in &report.written {
+		eprintln!("wrote {path}");
+	}
+	eprintln!(
+		"{} file(s) written, {} unchanged",
+		report.written.len(),
+		report.unchanged.len()
 	);
 	if report.has_errors() {
 		ExitCode::FAILURE

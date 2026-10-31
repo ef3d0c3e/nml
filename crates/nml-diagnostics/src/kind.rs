@@ -134,6 +134,11 @@ pub enum DiagnosticKind {
 	/// A name in a `:run`'s `vars` that is neither a table for scripts nor a variable.
 	#[diag(id = 2035, message = "diagnostic-unknown-run-data")]
 	UnknownRunData { name: String },
+	#[diag(id = 2036, message = "diagnostic-invalid-tangle-path")]
+	InvalidTanglePath { path: String },
+	/// Two files tangle code to the same file: `other` is the other.
+	#[diag(id = 3018, message = "diagnostic-tangle-conflict")]
+	TangleConflict { path: String, other: String },
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]

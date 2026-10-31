@@ -67,6 +67,8 @@ diagnostic-listing-lines = `{ $lines }` is not a range of lines of the file, whi
 diagnostic-unknown-region = `{ $path }` has no region `{ $region }`: mark it with lines holding `nml:begin { $region }` and `nml:end { $region }`
 diagnostic-listing-selection = a listing takes `lines` or `region`, not both
 diagnostic-unknown-run-data = `{ $name }` is neither a table named with `:table[lua={ $name }]` before this, nor a variable
+diagnostic-invalid-tangle-path = `{ $path }` leaves the workspace: code is tangled to files of the workspace
+diagnostic-tangle-conflict = `{ $path }` is also tangled from `{ $other }`: a file is tangled from one document
 diagnostic-invalid-reference = `{ $target }` is not a reference: write `name`, `doc#name`, `doc#` or `#name`
 diagnostic-invalid-variable-name = `{ $name }` is not a variable name
 diagnostic-unknown-variable = `{ $name }` is not a variable of NML

@@ -41,6 +41,12 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		OptionSpec::new("max_lines", OptionKind::Integer)
 			.with_default(OptionValue::Integer(0))
 			.with_doc("How many lines are shown before the rest scrolls; `0` shows them all."),
+		OptionSpec::new("tangle", OptionKind::Text)
+			.with_default(OptionValue::Text(String::new()))
+			.with_doc(
+				"A file the code is written to by `nml tangle`, relative to the document: the \
+				blocks of a file are joined in order.",
+			),
 	]);
 	let rule = Rule::new(
 		"code_block",
@@ -125,6 +131,11 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 			.strip_suffix('\n')
 			.map(|code| code.strip_suffix('\r').unwrap_or(code))
 			.unwrap_or(code);
+		if let Some(OptionValue::Text(path)) = option("tangle")
+			&& !path.is_empty()
+		{
+			tangle(lower, m, path, code);
+		}
 		let reference = m.capture("ref").map(|capture| capture.token.clone());
 		let number = reference.as_ref().map(|_| next_listing(lower));
 		let kind = ElementKind::CodeBlock {
@@ -151,6 +162,37 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		}
 	})?;
 	listing(language)
+}
+
+/// Records a block's code for the file `path`, written relative to the file being lowered.
+fn tangle(lower: &mut Lower<'_, '_>, m: &RuleMatch, path: &str, code: &str) {
+	let file = lower.files.last().unwrap().clone();
+	let options = m.capture("options").unwrap().token.clone();
+	let Some(resolved) = crate::resolve_file(&file, path) else {
+		let kind = DiagnosticKind::InvalidTanglePath { path: path.into() };
+		lower
+			.diagnostics
+			.push(Diagnostic::new(kind, DiagnosticMessage::new(options)));
+		return;
+	};
+	lower.tangles.push(Tangle {
+		path: resolved,
+		code: code.to_string(),
+		file,
+		token: m.token.clone(),
+	});
+}
+
+/// A code block's code, for a file that `nml tangle` writes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tangle {
+	/// The workspace path of the file to write.
+	pub path: String,
+	pub code: String,
+	/// The workspace path of the file the block is written in.
+	pub file: String,
+	/// The block.
+	pub token: nml_source::Token,
 }
 
 /// `:listing[file=…, lines=…]` or `[file=…, region=…]`: code from a file of the workspace,

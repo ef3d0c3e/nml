@@ -2141,3 +2141,49 @@ fn run_data() {
 	workspace.build();
 	assert!(workspace.output("a.html").contains("6\nkg"));
 }
+
+#[test]
+fn tangling() {
+	let workspace = Workspace::new(
+		"tangle",
+		&[
+			("nml.toml", "exclude = [\"lib/**\"]\n"),
+			(
+				"docs/guide.nml",
+				"```rust[tangle=../src/main.rs]\nfn main() {\n```\n\nText.\n\n:include /lib/part\n\n\
+				```rust[tangle=../src/main.rs]\n}\n```\n\n```sh[tangle=run.sh]\necho hi\n```\n",
+			),
+			(
+				"lib/part.nml",
+				"```rust[tangle=/src/main.rs]\n    helper();\n```\n",
+			),
+		],
+	);
+	let report = tangle(&workspace.0).unwrap();
+	assert_diagnostics!(report.diagnostics, []);
+	assert_eq!(report.written, ["docs/run.sh", "src/main.rs"]);
+	// In order, the included file's block counted once though it is a unit of its own.
+	let read = |path: &str| fs::read_to_string(workspace.0.join(path)).unwrap();
+	assert_eq!(read("src/main.rs"), "fn main() {\n\n    helper();\n\n}\n");
+	assert_eq!(read("docs/run.sh"), "echo hi\n");
+	// Nothing changed: nothing written.
+	let report = tangle(&workspace.0).unwrap();
+	assert!(report.written.is_empty());
+	assert_eq!(report.unchanged, ["docs/run.sh", "src/main.rs"]);
+	// Builds do not tangle.
+	workspace.write(
+		"docs/guide.nml",
+		"```sh[tangle=run.sh]\necho changed\n```\n",
+	);
+	workspace.build();
+	assert_eq!(read("docs/run.sh"), "echo hi\n");
+
+	// Two documents for one file, and a path out of the workspace.
+	workspace.write(
+		"other.nml",
+		"```sh[tangle=docs/run.sh]\nx\n```\n\n```sh[tangle=../../x]\ny\n```\n",
+	);
+	let report = tangle(&workspace.0).unwrap();
+	assert_diagnostics!(report.diagnostics, [2036, 3018]);
+	assert_eq!(read("docs/run.sh"), "echo hi\n");
+}

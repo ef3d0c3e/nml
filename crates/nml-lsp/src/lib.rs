@@ -98,6 +98,10 @@ const INCLUDE_CONTEXT_COMMAND: &str = "nml.includeContext";
 /// is the page's URI, or none for the workspace's index.
 const PREVIEW_COMMAND: &str = "nml.preview";
 
+/// Writes the code blocks with `tangle=path` to their files, as `nml tangle`: answers the
+/// files written and those unchanged.
+const TANGLE_COMMAND: &str = "nml.tangle";
+
 /// Where the editor's cursor is, `TextDocumentPositionParams`: the preview follows it.
 const CURSOR: &str = "nml/cursor";
 
@@ -152,6 +156,7 @@ pub fn run(connection: Connection) -> Result<()> {
 				structure::DEMOTE_COMMAND.into(),
 				structure::MOVE_UP_COMMAND.into(),
 				structure::MOVE_DOWN_COMMAND.into(),
+				TANGLE_COMMAND.into(),
 			],
 			..ExecuteCommandOptions::default()
 		}),
@@ -515,6 +520,25 @@ impl Server {
 			}
 			ExecuteCommand::METHOD => {
 				let params: ExecuteCommandParams = serde_json::from_value(request.params)?;
+				if params.command == TANGLE_COMMAND {
+					let Some(root) = &self.root else {
+						return Err("tangling needs a workspace with an `nml.toml`".into());
+					};
+					let report = nml_build::tangle(root)?;
+					if let Some(diagnostic) = report.diagnostics.first() {
+						return Err(self.localizer.title(&diagnostic.kind).into());
+					}
+					let message = format!(
+						"{} file(s) tangled, {} unchanged",
+						report.written.len(),
+						report.unchanged.len()
+					);
+					self.show_message(lsp_types::MessageType::INFO, message);
+					return Ok(serde_json::json!({
+						"written": report.written,
+						"unchanged": report.unchanged,
+					}));
+				}
 				if structure::COMMANDS.contains(&params.command.as_str()) {
 					self.structure_command(&params.command, &params.arguments)?;
 					return Ok(serde_json::Value::Null);

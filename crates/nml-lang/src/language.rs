@@ -164,6 +164,8 @@ pub struct Compiled {
 	pub variables: HashMap<String, Variable>,
 	/// The `:run` blocks, in order. For editors and the build.
 	pub runs: Vec<crate::RunBlock>,
+	/// The code blocks to write to files with `nml tangle`, in order.
+	pub tangles: Vec<crate::Tangle>,
 	/// Parse errors and errors found while lowering. A unit with errors is not committed to
 	/// the workspace.
 	pub diagnostics: Vec<Diagnostic>,
@@ -199,6 +201,7 @@ pub fn compile(
 		extensions: HashMap::new(),
 		finishers: Vec::new(),
 		runs: Vec::new(),
+		tangles: Vec::new(),
 	};
 	let mut parse_diagnostics = parsed.diagnostics;
 	let mut nodes = parsed.nodes;
@@ -244,6 +247,7 @@ pub fn compile(
 		extended,
 		module_exports,
 		runs,
+		tangles,
 		..
 	} = lower;
 	let mut diagnostics = parse_diagnostics;
@@ -268,6 +272,7 @@ pub fn compile(
 		module_exports,
 		variables: all_variables,
 		runs,
+		tangles,
 		diagnostics,
 	}
 }
@@ -310,6 +315,8 @@ pub struct Lower<'a, 'l> {
 	finishers: Vec<Finisher>,
 	/// The `:run` blocks so far.
 	pub runs: Vec<crate::RunBlock>,
+	/// The code blocks that `nml tangle` writes to files, so far.
+	pub tangles: Vec<crate::Tangle>,
 }
 
 /// A table as scripts see it: the text of its cells, in a rectangular grid.

@@ -2842,3 +2842,27 @@ fn footnotes_in_the_editor() {
 	let labels: Vec<_> = items.iter().map(|item| item.label.as_str()).collect();
 	assert_eq!(labels, ["other", "src"]);
 }
+
+#[test]
+fn tangle_command() {
+	let workspace = Workspace::new(
+		"tangle",
+		&[
+			("nml.toml", ""),
+			("a.nml", "```sh[tangle=out/run.sh]\necho hi\n```\n"),
+		],
+	);
+	let client = Client::start(Some(&workspace.0));
+	let result = client.request(
+		ExecuteCommand::METHOD,
+		serde_json::json!({ "command": "nml.tangle", "arguments": [] }),
+	);
+	assert_eq!(
+		result,
+		serde_json::json!({ "written": ["out/run.sh"], "unchanged": [] })
+	);
+	assert_eq!(
+		fs::read_to_string(workspace.0.join("out/run.sh")).unwrap(),
+		"echo hi\n"
+	);
+}

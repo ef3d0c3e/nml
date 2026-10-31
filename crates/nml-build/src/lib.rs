@@ -2,6 +2,7 @@
 
 mod link;
 mod preview;
+mod tangle;
 
 pub use link::LinkError;
 pub use link::Target;
@@ -12,6 +13,8 @@ pub use preview::Preview;
 pub use preview::PreviewPage;
 pub use preview::Served;
 pub use preview::content_type;
+pub use tangle::TangleReport;
+pub use tangle::tangle;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;

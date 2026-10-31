@@ -22,6 +22,7 @@ mod style;
 mod table;
 mod variable;
 
+pub use code::Tangle;
 pub use code::listing_export;
 pub use code::next_listing;
 pub use heading::heading_export;
