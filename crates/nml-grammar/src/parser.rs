@@ -467,7 +467,10 @@ impl Parser<'_> {
 				continue;
 			}
 			let rule = match self.next(Table::Inline, pos, end) {
-				Ok(rule) => rule,
+				// A rule whose guard does not match here is text.
+				Ok(rule) => {
+					rule.filter(|(rule, len)| self.guard_matches(*rule, pos..pos + len, end))
+				}
 				Err(frame) => break Stop::Frame(frame),
 			};
 			if pos >= end {
@@ -505,7 +508,8 @@ impl Parser<'_> {
 		Ok(next.filter(|(rule, len)| self.guard_matches(*rule, pos..pos + len, end)))
 	}
 
-	/// Whether the guard of a rule matches at `opener`, which leaves no trace.
+	/// Whether the guard of a rule matches at `opener`, which leaves no trace: block and
+	/// inline rules alike.
 	fn guard_matches(&mut self, rule: RuleId, opener: Range<usize>, end: usize) -> bool {
 		let guard = self.rules.get(rule).unwrap().guard;
 		if guard == 0 {
@@ -2042,6 +2046,46 @@ pub(crate) mod tests {
 		assert_diagnostics!(diagnostics, [1001]);
 		let diagnostics = check("a\n *b*", r#"P["a\n " italic(body=["b"])]"#);
 		assert_diagnostics!(diagnostics, []);
+	}
+
+	#[test]
+	fn guarded_inline_rules() {
+		let mut rules = rules();
+		let date = Rule::new(
+			"date",
+			vec![
+				lit("@"),
+				Atom::capture(
+					"year",
+					Atom::Number {
+						signed: false,
+						decimal: false,
+					},
+				),
+				lit("-"),
+				Atom::capture("rest", Atom::Text),
+				lit(">"),
+			],
+		)
+		.guarded(3);
+		rules.add(date).unwrap();
+		let check = |text: &str, expected: &str| {
+			let parsed = parse(&rules, source(text));
+			assert_eq!(show(&rules, &parsed.nodes), expected);
+			parsed.diagnostics
+		};
+		let diagnostics = check("on @2026-11>.", r#"P["on " date(year=2026 rest="11") "."]"#);
+		assert_diagnostics!(diagnostics, []);
+		// Where the guard does not match, the opener is text, and the rest is parsed.
+		let diagnostics = check(
+			"a @ b @c> @1 *x*",
+			r#"P["a @ b @c> @1 " italic(body=["x"])]"#,
+		);
+		assert_diagnostics!(diagnostics, []);
+		// Past the guard, verbatim text without its end is text and an error, as for other
+		// rules.
+		let diagnostics = check("@2026- x", r#"P["@2026- x"]"#);
+		assert_diagnostics!(diagnostics, [1001]);
 	}
 
 	#[test]

@@ -21,7 +21,8 @@ pub struct Rule {
 	/// another is an error.
 	pub replaces: Option<String>,
 	/// How many atoms, from the first, must match for the rule to apply at its opener. If
-	/// they do not, the opener is no syntax there: a block rule leaves a paragraph. Without a
+	/// they do not, the opener is no syntax there: a block rule leaves a paragraph, an inline rule
+	/// text. Without a
 	/// guard (0), the opener always applies, and a rule that fails is an error.
 	pub guard: usize,
 	/// What the syntax is, in Markdown, for editors. Empty if undocumented.
