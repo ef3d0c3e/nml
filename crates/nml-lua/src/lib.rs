@@ -32,6 +32,7 @@ pub use api::luacats;
 pub use api::write_types;
 pub use deferred::DeferredRuntime;
 pub use deferred::PageInfo;
+pub use deferred::TaskInfo;
 pub use nml_lua_macros::api;
 pub use nml_lua_macros::userdata;
 pub use runtime::Limits;
@@ -43,6 +44,7 @@ pub use script::add;
 pub const STD: &[(&str, &str)] = &[
 	("toc", include_str!("../std/toc.nml")),
 	("nav", include_str!("../std/nav.nml")),
+	("agenda", include_str!("../std/agenda.nml")),
 ];
 
 /// Where editors find the modules that come with NML, relative to the workspace root: a

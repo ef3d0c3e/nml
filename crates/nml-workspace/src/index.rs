@@ -778,15 +778,28 @@ impl Index {
 		Ok(())
 	}
 
+	/// The tasks of a unit, in order.
+	pub fn unit_tasks(&self, unit: i64) -> Result<Vec<StoredTask>> {
+		Ok(self
+			.query_tasks("WHERE tasks.unit = ?1", rusqlite::params![unit])?
+			.into_iter()
+			.map(|record| record.task)
+			.collect())
+	}
+
 	/// Every task of the workspace, by unit path then in order.
 	pub fn tasks(&self) -> Result<Vec<TaskRecord>> {
-		let mut statement = self.connection.prepare(
+		self.query_tasks("", rusqlite::params![])
+	}
+
+	fn query_tasks(&self, filter: &str, params: impl rusqlite::Params) -> Result<Vec<TaskRecord>> {
+		let mut statement = self.connection.prepare(&format!(
 			"SELECT units.path, units.title, heading, state, done, tasks.title, date, scheduled,
 			deadline, tasks.path, start, end
-			FROM tasks JOIN units ON units.id = tasks.unit ORDER BY units.path, position",
-		)?;
+			FROM tasks JOIN units ON units.id = tasks.unit {filter} ORDER BY units.path, position"
+		))?;
 		let tasks = statement
-			.query_map([], |row| {
+			.query_map(params, |row| {
 				Ok(TaskRecord {
 					unit: row.get(0)?,
 					unit_title: row.get(1)?,

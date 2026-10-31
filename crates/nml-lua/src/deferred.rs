@@ -139,6 +139,21 @@ pub struct PageInfo {
 	pub output: String,
 	/// The variables the page exports, by name, with their values as written.
 	pub variables: Vec<(String, String)>,
+	/// Its tasks, in order, its included files' included.
+	pub tasks: Vec<TaskInfo>,
+}
+
+/// A task, as the query API shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskInfo {
+	pub heading: bool,
+	/// A heading's keyword, or an item's checkbox: `todo`, `partial`, `done`.
+	pub state: String,
+	pub done: bool,
+	pub title: String,
+	pub date: Option<String>,
+	pub scheduled: Option<String>,
+	pub deadline: Option<String>,
 }
 
 /// What a deferred function can query: the workspace's pages, seen from the page being
@@ -179,6 +194,36 @@ fn pages(lua: &Lua) -> mlua::Result<Table> {
 		}
 		entry.raw_set("variables", variables)?;
 		list.raw_push(entry)?;
+	}
+	Ok(list)
+}
+
+/// The tasks of the workspace's pages, for deferred functions: a list of `{ title, state,
+/// done, heading, date, scheduled, deadline, page }`. `state` is a heading's keyword
+/// (`TODO`, …) or an item's checkbox (`todo`, `partial`, `done`); dates are `YYYY-MM-DD` or
+/// `YYYY-MM-DDTHH:MM`, or `nil`; `page` is the page as `nml.pages` shows it. Only available
+/// at link time; the page is relinked when they change.
+#[api(
+	returns = "{ title: string, state: string, done: boolean, heading: boolean, date: string?, scheduled: string?, deadline: string?, page: table }[]"
+)]
+fn tasks(lua: &Lua) -> mlua::Result<Table> {
+	let pages_list = pages(lua)?;
+	let context = lua.app_data_ref::<QueryContext>().unwrap();
+	let list = lua.create_table()?;
+	for (index, page) in context.pages.iter().enumerate() {
+		let entry: Table = pages_list.raw_get(index + 1)?;
+		for task in &page.tasks {
+			let item = lua.create_table()?;
+			item.raw_set("title", task.title.as_str())?;
+			item.raw_set("state", task.state.as_str())?;
+			item.raw_set("done", task.done)?;
+			item.raw_set("heading", task.heading)?;
+			item.raw_set("date", task.date.as_deref())?;
+			item.raw_set("scheduled", task.scheduled.as_deref())?;
+			item.raw_set("deadline", task.deadline.as_deref())?;
+			item.raw_set("page", entry.clone())?;
+			list.raw_push(item)?;
+		}
 	}
 	Ok(list)
 }
@@ -392,6 +437,7 @@ end
 			title: title.into(),
 			output: output.into(),
 			variables: Vec::new(),
+			tasks: Vec::new(),
 		};
 		// URLs go from the page's output to the others', wherever their sources are.
 		let pages = Arc::new(vec![

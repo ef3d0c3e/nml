@@ -441,6 +441,26 @@ figure.code-block {
 	background: var(--nml-tip);
 }
 
+/* `:agenda` of `std.agenda`: days, and their tasks. */
+.agenda > ul {
+	list-style: none;
+	padding-left: 0;
+}
+
+.agenda .agenda-day {
+	margin-bottom: 0.75rem;
+}
+
+.agenda .agenda-day > .timestamp {
+	font-weight: 600;
+	color: var(--nml-text);
+}
+
+.agenda-page {
+	font-size: 0.85em;
+	color: var(--nml-muted);
+}
+
 /* `<2026-11-20>`, `DEADLINE <…>`, `SCHEDULED <…>`. */
 .timestamp {
 	font-size: 0.85em;

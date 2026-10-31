@@ -2267,3 +2267,56 @@ fn tasks_in_the_index() {
 	// The states of the configuration are those of the headings.
 	assert!(workspace.output("plan.html").contains("<span class=\"task-state todo\">NEXT</span> Release <time class=\"timestamp deadline\" datetime=\"2026-11-20\">Deadline 2026-11-20 Fri</time>"));
 }
+
+#[test]
+fn agenda_pages() {
+	let workspace = Workspace::new(
+		"agenda-page",
+		&[
+			("nml.toml", ""),
+			("agenda.nml", ":import std.agenda\n\n:agenda\n"),
+			(
+				"plan.nml",
+				"# TODO Release DEADLINE <2026-11-20 Fri 18:00>\n\n * [ ] Notes <2026-11-12>\n * [x] Done\n * [ ] Someday\n",
+			),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	let html = body(&workspace.output("agenda.html")).to_string();
+	// By date, undated last, done left out, each linking to its page.
+	let mut at = 0;
+	for text in [
+		"2026-11-12 Thu",
+		"Notes",
+		"2026-11-20 Fri",
+		"TODO",
+		"Release",
+		"Deadline 2026-11-20 Fri 18:00",
+		"Undated",
+		"Someday",
+	] {
+		at += html[at..]
+			.find(text)
+			.unwrap_or_else(|| panic!("{text} after {at} in {html}"));
+	}
+	assert!(!html.contains("Done"), "{html}");
+	assert!(
+		html.contains("<a class=\"agenda-page\" href=\"plan.html\">Release</a>"),
+		"{html}"
+	);
+
+	// A task of another page changes: the agenda is linked again.
+	workspace.write(
+		"plan.nml",
+		"# DONE Release DEADLINE <2026-11-20 Fri 18:00>\n",
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	assert!(
+		report.written.contains(&"agenda.nml".to_string()),
+		"{:?}",
+		report.written
+	);
+	assert!(workspace.output("agenda.html").contains("Nothing to do."));
+}

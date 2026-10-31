@@ -114,6 +114,6 @@ fn modules_are_written_for_editors() {
 		.map(|e| e.unwrap().file_name().into_string().unwrap())
 		.collect();
 	names.sort();
-	assert_eq!(names, ["nav.nml", "toc.nml"]);
+	assert_eq!(names, ["agenda.nml", "nav.nml", "toc.nml"]);
 	let _ = std::fs::remove_dir_all(&root);
 }

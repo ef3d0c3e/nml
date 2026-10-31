@@ -84,6 +84,7 @@ pub const API: &[ApiFunction] = &[
 	crate::elements::ELEMENT,
 	crate::elements::PARSE,
 	crate::deferred::PAGES,
+	crate::deferred::TASKS,
 	crate::rules::RULE,
 	crate::rules::CAPTURE,
 	crate::rules::OPTIONAL,

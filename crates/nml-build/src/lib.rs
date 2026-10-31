@@ -895,6 +895,19 @@ impl Builder {
 				})
 			})
 			.collect();
+		// Deferred functions see the tasks of pages.
+		if file.role == Role::Page {
+			let old_tasks = match &old {
+				Some(old) => self.index.unit_tasks(old.id)?,
+				None => Vec::new(),
+			};
+			let infos = |tasks: Vec<nml_workspace::StoredTask>| -> Vec<_> {
+				tasks.into_iter().map(task_info).collect()
+			};
+			if infos(old_tasks) != infos(tasks.clone()) {
+				self.pages_changed = true;
+			}
+		}
 		let (id, changes) = self.index.commit(&StoredUnit {
 			path: &file.path,
 			name,
@@ -1000,11 +1013,19 @@ impl Builder {
 
 /// The pages of the workspace, for deferred functions.
 fn pages(index: &Index) -> Result<Vec<PageInfo>, BuildError> {
+	let mut tasks: HashMap<String, Vec<nml_lua::TaskInfo>> = HashMap::new();
+	for record in index.tasks()? {
+		tasks
+			.entry(record.unit)
+			.or_default()
+			.push(task_info(record.task));
+	}
 	let mut pages = Vec::new();
 	for unit in index.units()? {
 		if unit.role == Role::Page {
 			let variables = variables(&index.exports(unit.id)?);
 			pages.push(PageInfo {
+				tasks: tasks.remove(&unit.path).unwrap_or_default(),
 				path: unit.path,
 				name: unit.name,
 				title: unit.title,
@@ -1014,6 +1035,19 @@ fn pages(index: &Index) -> Result<Vec<PageInfo>, BuildError> {
 		}
 	}
 	Ok(pages)
+}
+
+/// A task as deferred functions see it: without where it is written.
+fn task_info(task: nml_workspace::StoredTask) -> nml_lua::TaskInfo {
+	nml_lua::TaskInfo {
+		heading: task.heading,
+		state: task.state,
+		done: task.done,
+		title: task.title,
+		date: task.date,
+		scheduled: task.scheduled,
+		deadline: task.deadline,
+	}
 }
 
 /// What filling the slots of a page's template needs.
@@ -1542,7 +1576,14 @@ fn title(document: &Document) -> Option<String> {
 	document
 		.descendants(document.root())
 		.find(|(_, element)| matches!(element.kind, ElementKind::Heading { .. }))
-		.map(|(id, _)| document.text(id))
+		// On one line, without the blanks that elements without text leave (timestamps).
+		.map(|(id, _)| {
+			document
+				.text(id)
+				.split_whitespace()
+				.collect::<Vec<_>>()
+				.join(" ")
+		})
 }
 
 /// Deletes the files under `dir` that are not in `kept`, and the directories left empty.

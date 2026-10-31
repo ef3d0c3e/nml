@@ -1,0 +1,116 @@
+:: **Agenda**: `:agenda` lists the tasks of the workspace's pages by date: list items with a
+:: checkbox, and headings with a state (`TODO`, `DONE`, …). It is made when the page is
+:: linked, so it follows the tasks as they change.
+::
+:: ```nml
+:: :import std.agenda
+::
+:: :agenda
+:: ```
+::
+:: A task's date is the earliest of its `DEADLINE <…>`, `SCHEDULED <…>` and `<…>`
+:: timestamps; tasks without one come last. Tasks that are done are left out, unless with
+:: `:agenda all`.
+::
+:: The agenda is a `<div class="agenda">` list of days, each a list of tasks linking to
+:: their page.
+
+:lua
+```
+-- When a task is due: the earliest of its deadline, scheduled date and date, and which.
+local function due(task)
+	local best, kind
+	for _, key in ipairs({ "deadline", "scheduled", "date" }) do
+		local value = task[key]
+		if value and (not best or value < best) then
+			best, kind = value, key
+		end
+	end
+	return best, kind
+end
+
+function list(all)
+	local days, names = {}, {}
+	for _, task in ipairs(nml.tasks()) do
+		if all or not task.done then
+			local date, kind = due(task)
+			local day = date and date:sub(1, 10) or ""
+			if not days[day] then
+				days[day] = {}
+				table.insert(names, day)
+			end
+			table.insert(days[day], { task = task, date = date, kind = kind })
+		end
+	end
+	-- By date; undated last.
+	table.sort(names, function(a, b)
+		if (a == "") ~= (b == "") then return b == "" end
+		return a < b
+	end)
+	local items = {}
+	for _, day in ipairs(names) do
+		local entries = days[day]
+		table.sort(entries, function(a, b)
+			if (a.date or "") ~= (b.date or "") then return (a.date or "") < (b.date or "") end
+			return a.task.title < b.task.title
+		end)
+		local tasks = {}
+		for _, entry in ipairs(entries) do
+			local task = entry.task
+			local content = {}
+			if task.heading then
+				table.insert(content, nml.element("task_state", { keyword = task.state, done = task.done }))
+			end
+			table.insert(content, task.title)
+			if entry.kind == "deadline" or entry.kind == "scheduled" then
+				table.insert(content, " ")
+				table.insert(content, nml.element("timestamp", {
+					date = entry.date:sub(1, 10),
+					time = #entry.date > 10 and entry.date:sub(12) or nil,
+					kind = entry.kind,
+				}))
+			end
+			table.insert(content, " ")
+			table.insert(content, nml.element("link", {
+				url = task.page.url,
+				classes = { "agenda-page" },
+				task.page.title,
+			}))
+			local checkbox = nil
+			if not task.heading then
+				checkbox = task.state == "done" and "checked" or task.state == "partial" and "partial" or "unchecked"
+			end
+			table.insert(tasks, nml.element("list_item", { checkbox = checkbox, content }))
+		end
+		local label = day == "" and "Undated" or nml.element("timestamp", { date = day })
+		table.insert(items, nml.element("list_item", {
+			classes = { "agenda-day" },
+			label,
+			nml.element("list", tasks),
+		}))
+	end
+	if #items == 0 then
+		return nml.element("paragraph", { classes = { "agenda" }, "Nothing to do." })
+	end
+	return {
+		nml.element("raw", { content = '<div class="agenda">', block = true }),
+		nml.element("list", items),
+		nml.element("raw", { content = "</div>", block = true }),
+	}
+end
+
+nml.rule {
+	name = "agenda",
+	atoms = {
+		nml.line_start,
+		nml.capture("command", ":agenda", "keyword"),
+		nml.optional({ " ", nml.capture("all", "all", "keyword") }),
+		nml.line_end,
+	},
+	handler = function(m, out)
+		out:add(nml.defer("std.agenda", "list", m.captures.all ~= nil))
+	end,
+	doc = "**Agenda** of the workspace's tasks by date; `:agenda all` lists done ones too.",
+	snippet = ":agenda",
+}
+```

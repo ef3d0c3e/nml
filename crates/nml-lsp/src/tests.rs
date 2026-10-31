@@ -932,7 +932,7 @@ fn std_module_completion() {
 	let result = client.request(Completion::METHOD, serde_json::to_value(params).unwrap());
 	let items: Vec<lsp_types::CompletionItem> = serde_json::from_value(result).unwrap();
 	let labels: Vec<_> = items.into_iter().map(|item| item.label).collect();
-	assert_eq!(labels, ["std.nav", "std.toc"]);
+	assert_eq!(labels, ["std.agenda", "std.nav", "std.toc"]);
 }
 
 #[test]
