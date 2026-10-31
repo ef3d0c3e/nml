@@ -40,11 +40,13 @@ pub fn tangle(root: &Path) -> Result<TangleReport, BuildError> {
 	let index = Index::open(&root.join(&config.database))?;
 	let scan = nml_workspace::scan(&root, &config, &index)?;
 	let resolver: Arc<dyn Resolver> = Arc::new(
-		WorkspaceResolver::new(root.clone(), config.modules.clone()).with_runs(
-			config.runners.clone(),
-			crate::run_cache(&root, &config),
-			false,
-		),
+		WorkspaceResolver::new(root.clone(), config.modules.clone())
+			.with_runs(
+				config.runners.clone(),
+				crate::run_cache(&root, &config),
+				false,
+			)
+			.with_task_states(config.agenda.clone()),
 	);
 	let language = crate::language();
 	let mut report = TangleReport::default();

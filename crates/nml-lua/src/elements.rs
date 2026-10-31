@@ -132,6 +132,8 @@ const KINDS: &[(&str, &str)] = &[
 	("graph", "source, layout, width"),
 	("typst", "source, block"),
 	("progress", "percent"),
+	("task_state", "keyword, done"),
+	("timestamp", "date, time, kind"),
 ];
 
 /// Builds an element. The list part of `spec` holds its children (strings, numbers,
@@ -160,6 +162,8 @@ const KINDS: &[(&str, &str)] = &[
 /// | `tex` | `source` (a LaTeX document body), `env` (an environment of `[render.tex]`, `main` by default) |
 /// | `graph` | `source` (Graphviz DOT), `layout` (`dot` by default), `width` |
 /// | `typst` | `source`, `block` |
+/// | `task_state` | `keyword` (`TODO`, …), `done`: a heading's state, before its title |
+/// | `timestamp` | `date` (`YYYY-MM-DD`), `time` (`HH:MM`), `kind` (`date`, `deadline`, `scheduled`) |
 /// | `progress` | `percent`: how many tasks of its list item or heading are done, `[2/5]`, or as a percentage, `[40%]` |
 ///
 /// Every kind takes `id` and `classes`. References, figures, numbered tables, listings and
@@ -399,6 +403,44 @@ pub(crate) fn build_with(kind: &str, spec: &Table, body: bool) -> mlua::Result<E
 				alignments,
 				header,
 			}
+		}
+		"task_state" => Content::Element(ElementKind::TaskState {
+			keyword: required("keyword")?,
+			done: spec.get::<Option<bool>>("done")?.unwrap_or(false),
+		}),
+		"timestamp" => {
+			let date: String = required("date")?;
+			let weekday = nml_lang::date_weekday(&date).ok_or_else(|| {
+				mlua::Error::runtime(format!("`{date}` is not a date: write `YYYY-MM-DD`"))
+			})?;
+			let time = text("time")?;
+			if let Some(time) = &time {
+				let valid = time.len() == 5
+					&& time.as_bytes()[2] == b':'
+					&& time[..2].parse::<u32>().is_ok_and(|hours| hours < 24)
+					&& time[3..].parse::<u32>().is_ok_and(|minutes| minutes < 60);
+				if !valid {
+					return Err(mlua::Error::runtime(format!(
+						"`{time}` is not a time: write `HH:MM`"
+					)));
+				}
+			}
+			let kind = match text("kind")?.as_deref() {
+				None | Some("date") => nml_document::TimestampKind::Date,
+				Some("deadline") => nml_document::TimestampKind::Deadline,
+				Some("scheduled") => nml_document::TimestampKind::Scheduled,
+				Some(other) => {
+					return Err(mlua::Error::runtime(format!(
+						"`{other}` is not a kind of timestamp: use date, deadline or scheduled"
+					)));
+				}
+			};
+			Content::Element(ElementKind::Timestamp {
+				kind,
+				date,
+				weekday: weekday.into(),
+				time,
+			})
 		}
 		"progress" => Content::Element(ElementKind::Progress {
 			percent: spec.get::<Option<bool>>("percent")?.unwrap_or(false),
@@ -1167,6 +1209,18 @@ mod tests {
 			body(":lua`nml.element('callout', {type = 'tip', title = 'T', 'x'})`"),
 			"<aside class=\"callout tip\">\n<p class=\"callout-title\">T</p>\nx</aside>\n"
 		);
+	}
+
+	#[test]
+	fn timestamps() {
+		assert_eq!(
+			body(
+				":lua`nml.element('timestamp', {date = '2026-11-20', time = '09:30', kind = 'deadline'})`"
+			),
+			"<p><time class=\"timestamp deadline\" datetime=\"2026-11-20T09:30\">Deadline 2026-11-20 Fri 09:30</time></p>\n"
+		);
+		let compiled = compile(":lua`nml.element('timestamp', {date = '2026-02-30'})`");
+		assert_diagnostics!(compiled.diagnostics, [4001]);
 	}
 
 	#[test]

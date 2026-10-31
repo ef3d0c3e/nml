@@ -158,6 +158,71 @@ pub enum ElementKind {
 		number: u32,
 		references: u32,
 	},
+	/// The state of a task heading, `TODO` or `DONE`: the keyword it starts with.
+	TaskState {
+		keyword: String,
+		done: bool,
+	},
+	/// A date, `<2026-11-20 Fri 14:00>`, which can be a deadline or a scheduled date.
+	Timestamp {
+		kind: TimestampKind,
+		/// `YYYY-MM-DD`.
+		date: String,
+		/// `Mon` to `Sun`.
+		weekday: String,
+		/// `HH:MM`.
+		time: Option<String>,
+	},
+}
+
+/// What a timestamp is to its task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TimestampKind {
+	/// `<…>`: when it happens.
+	Date,
+	/// `DEADLINE <…>`: when it is due.
+	Deadline,
+	/// `SCHEDULED <…>`: when to start it.
+	Scheduled,
+}
+
+impl TimestampKind {
+	pub fn name(self) -> &'static str {
+		match self {
+			TimestampKind::Date => "date",
+			TimestampKind::Deadline => "deadline",
+			TimestampKind::Scheduled => "scheduled",
+		}
+	}
+}
+
+/// The keywords of the states of task headings: those of tasks to do, and of tasks done.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskStates {
+	pub todo: Vec<String>,
+	pub done: Vec<String>,
+}
+
+impl Default for TaskStates {
+	fn default() -> Self {
+		Self {
+			todo: vec!["TODO".into()],
+			done: vec!["DONE".into()],
+		}
+	}
+}
+
+impl TaskStates {
+	/// Whether a keyword is a state, and whether it is done.
+	pub fn get(&self, keyword: &str) -> Option<bool> {
+		if self.todo.iter().any(|state| state == keyword) {
+			return Some(false);
+		}
+		self.done
+			.iter()
+			.any(|state| state == keyword)
+			.then_some(true)
+	}
 }
 
 impl ElementKind {
@@ -192,6 +257,8 @@ impl ElementKind {
 		"footnote_ref",
 		"footnotes",
 		"footnote",
+		"task_state",
+		"timestamp",
 	];
 
 	/// Whether elements of the kind are blocks, which a paragraph cannot hold. A paragraph
@@ -245,6 +312,8 @@ impl ElementKind {
 			ElementKind::FootnoteRef { .. } => "footnote_ref",
 			ElementKind::Footnotes => "footnotes",
 			ElementKind::Footnote { .. } => "footnote",
+			ElementKind::TaskState { .. } => "task_state",
+			ElementKind::Timestamp { .. } => "timestamp",
 		}
 	}
 }
@@ -546,7 +615,7 @@ mod tests {
 
 	#[test]
 	fn names() {
-		assert_eq!(ElementKind::NAMES.len(), 29);
+		assert_eq!(ElementKind::NAMES.len(), 31);
 		assert!(ElementKind::NAMES.contains(&ElementKind::Progress { percent: false }.name()));
 		assert!(ElementKind::NAMES.contains(&ElementKind::Caption.name()));
 	}

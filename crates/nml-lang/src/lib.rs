@@ -20,6 +20,7 @@ mod resolve;
 mod run;
 mod style;
 mod table;
+mod timestamp;
 mod variable;
 
 pub use code::Tangle;
@@ -71,6 +72,7 @@ pub use run::RunBlock;
 pub use run::RunUrlError;
 pub use table::next_table;
 pub use table::table_export;
+pub use timestamp::date_weekday;
 
 impl Language {
 	/// The built-in language.
@@ -80,6 +82,7 @@ impl Language {
 		heading::add(&mut language).expect("built-in rules are valid");
 		list::add(&mut language).expect("built-in rules are valid");
 		footnote::add(&mut language).expect("built-in rules are valid");
+		timestamp::add(&mut language).expect("built-in rules are valid");
 		code::add(&mut language).expect("built-in rules are valid");
 		media::add(&mut language).expect("built-in rules are valid");
 		raw::add(&mut language).expect("built-in rules are valid");

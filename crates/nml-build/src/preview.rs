@@ -197,7 +197,8 @@ impl Preview {
 					self.config.runners.clone(),
 					crate::run_cache(&self.root, &self.config),
 					false,
-				),
+				)
+				.with_task_states(self.config.agenda.clone()),
 		);
 		let compiled = nml_lang::compile(&self.language, source.clone(), path, resolver.clone());
 		let document = &compiled.unit.document;

@@ -523,6 +523,7 @@ fn dependents_are_invalidated_transitively() {
 				output: "a.html",
 				output_range: None,
 				assets: &[],
+				tasks: &[],
 			})
 			.unwrap();
 	};
@@ -2186,4 +2187,83 @@ fn tangling() {
 	let report = tangle(&workspace.0).unwrap();
 	assert_diagnostics!(report.diagnostics, [2036, 3018]);
 	assert_eq!(read("docs/run.sh"), "echo hi\n");
+}
+
+#[test]
+fn tasks_in_the_index() {
+	let workspace = Workspace::new(
+		"tasks",
+		&[
+			(
+				"nml.toml",
+				"exclude = [\"lib/**\"]\n[agenda]\ntodo = [\"TODO\", \"NEXT\"]\ndone = [\"DONE\", \"CANCELLED\"]\n",
+			),
+			(
+				"plan.nml",
+				"# NEXT Release DEADLINE <2026-11-20>\n\n * [ ] Notes\n\n:include /lib/more\n",
+			),
+			("lib/more.nml", "## CANCELLED Old idea\n"),
+		],
+	);
+	let report = workspace.build();
+	assert_diagnostics!(report.diagnostics, []);
+	let index = Index::open(&workspace.0.join(".nml/index.db")).unwrap();
+	let tasks: Vec<_> = (index.tasks().unwrap().into_iter())
+		.map(|record| {
+			let task = record.task;
+			(
+				record.unit,
+				task.state,
+				task.done,
+				task.title,
+				task.deadline,
+				task.path,
+				task.range,
+			)
+		})
+		.collect();
+	assert_eq!(
+		tasks,
+		[
+			// The included file's task is its includer's, and the file's own as a unit.
+			(
+				"lib/more.nml".to_string(),
+				"CANCELLED".to_string(),
+				true,
+				"Old idea".to_string(),
+				None,
+				"lib/more.nml".to_string(),
+				0..22
+			),
+			(
+				"plan.nml".into(),
+				"NEXT".into(),
+				false,
+				"Release".into(),
+				Some("2026-11-20".into()),
+				"plan.nml".into(),
+				0..37
+			),
+			(
+				"plan.nml".into(),
+				"todo".into(),
+				false,
+				"Notes".into(),
+				None,
+				"plan.nml".into(),
+				38..51
+			),
+			(
+				"plan.nml".into(),
+				"CANCELLED".into(),
+				true,
+				"Old idea".into(),
+				None,
+				"lib/more.nml".into(),
+				0..22
+			),
+		]
+	);
+	// The states of the configuration are those of the headings.
+	assert!(workspace.output("plan.html").contains("<span class=\"task-state todo\">NEXT</span> Release <time class=\"timestamp deadline\" datetime=\"2026-11-20\">Deadline 2026-11-20 Fri</time>"));
 }

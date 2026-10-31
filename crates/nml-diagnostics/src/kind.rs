@@ -139,6 +139,11 @@ pub enum DiagnosticKind {
 	/// Two files tangle code to the same file: `other` is the other.
 	#[diag(id = 3018, message = "diagnostic-tangle-conflict")]
 	TangleConflict { path: String, other: String },
+	#[diag(id = 2037, message = "diagnostic-invalid-timestamp")]
+	InvalidTimestamp { timestamp: String },
+	/// A timestamp's weekday is not its date's.
+	#[diag(id = 2038, message = "diagnostic-wrong-weekday", severity = warning)]
+	WrongWeekday { written: String, actual: String },
 	#[diag(id = 2003, message = "diagnostic-invalid-reference")]
 	InvalidReference { target: String },
 	#[diag(id = 2004, message = "diagnostic-invalid-variable-name")]

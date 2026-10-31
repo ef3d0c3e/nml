@@ -424,6 +424,35 @@ figure.code-block {
 	color: var(--nml-tip);
 }
 
+/* A heading's state: `TODO`, `DONE`. */
+.task-state {
+	display: inline-block;
+	padding: 0 0.35em;
+	border-radius: var(--nml-radius);
+	font-size: 0.6em;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	vertical-align: middle;
+	color: var(--nml-background);
+	background: var(--nml-warning);
+}
+
+.task-state.done {
+	background: var(--nml-tip);
+}
+
+/* `<2026-11-20>`, `DEADLINE <…>`, `SCHEDULED <…>`. */
+.timestamp {
+	font-size: 0.85em;
+	font-variant-numeric: tabular-nums;
+	color: var(--nml-muted);
+	white-space: nowrap;
+}
+
+.timestamp.deadline {
+	color: var(--nml-caution);
+}
+
 /*** Footnotes ***/
 
 .footnote-ref {

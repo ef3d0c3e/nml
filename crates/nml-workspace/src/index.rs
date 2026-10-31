@@ -22,7 +22,7 @@ use rusqlite::params;
 use serde_json::Value as Json;
 
 /// The version of the schema below. A database with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 11;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value ANY) STRICT;
@@ -104,6 +104,22 @@ CREATE TABLE assets (
 	output TEXT NOT NULL
 ) STRICT;
 CREATE INDEX assets_by_unit ON assets(unit);
+CREATE TABLE tasks (
+	unit INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+	position INTEGER NOT NULL,
+	heading INTEGER NOT NULL,
+	state TEXT NOT NULL,
+	done INTEGER NOT NULL,
+	title TEXT NOT NULL,
+	date TEXT,
+	scheduled TEXT,
+	deadline TEXT,
+	-- Where it is written: a file of the unit, an included one or its own.
+	path TEXT NOT NULL,
+	start INTEGER NOT NULL,
+	end INTEGER NOT NULL
+) STRICT;
+CREATE INDEX tasks_by_unit ON tasks(unit);
 ";
 
 /// An error of the database. Since the database can always be rebuilt from the sources,
@@ -211,6 +227,35 @@ pub struct StoredUnit<'a> {
 	pub output_range: Option<Range<usize>>,
 	/// Workspace files the page shows, copied to the output.
 	pub assets: &'a [Asset],
+	/// Its tasks, in order.
+	pub tasks: &'a [StoredTask],
+}
+
+/// A task of a unit: a list item with a checkbox, or a heading with a state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredTask {
+	pub heading: bool,
+	/// A heading's keyword, or an item's checkbox: `todo`, `partial`, `done`.
+	pub state: String,
+	pub done: bool,
+	pub title: String,
+	/// `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`.
+	pub date: Option<String>,
+	pub scheduled: Option<String>,
+	pub deadline: Option<String>,
+	/// The workspace path of the file it is written in, and its range there.
+	pub path: String,
+	pub range: Range<usize>,
+}
+
+/// A task of the workspace, with its unit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskRecord {
+	/// The path of its unit.
+	pub unit: String,
+	/// The unit's title.
+	pub unit_title: String,
+	pub task: StoredTask,
 }
 
 /// A symbol whose visible state changed, for the link stage.
@@ -733,6 +778,35 @@ impl Index {
 		Ok(())
 	}
 
+	/// Every task of the workspace, by unit path then in order.
+	pub fn tasks(&self) -> Result<Vec<TaskRecord>> {
+		let mut statement = self.connection.prepare(
+			"SELECT units.path, units.title, heading, state, done, tasks.title, date, scheduled,
+			deadline, tasks.path, start, end
+			FROM tasks JOIN units ON units.id = tasks.unit ORDER BY units.path, position",
+		)?;
+		let tasks = statement
+			.query_map([], |row| {
+				Ok(TaskRecord {
+					unit: row.get(0)?,
+					unit_title: row.get(1)?,
+					task: StoredTask {
+						heading: row.get(2)?,
+						state: row.get(3)?,
+						done: row.get(4)?,
+						title: row.get(5)?,
+						date: row.get(6)?,
+						scheduled: row.get(7)?,
+						deadline: row.get(8)?,
+						path: row.get(9)?,
+						range: row.get::<_, i64>(10)? as usize..row.get::<_, i64>(11)? as usize,
+					},
+				})
+			})?
+			.collect::<rusqlite::Result<_>>()?;
+		Ok(tasks)
+	}
+
 	/// Every copy of a workspace file the pages show, once, by output path.
 	pub fn assets(&self) -> Result<Vec<Asset>> {
 		let mut statement = self
@@ -925,6 +999,27 @@ fn commit(tx: &Transaction, unit: &StoredUnit) -> Result<i64> {
 		tx.prepare("INSERT INTO assets (unit, path, output) VALUES (?1, ?2, ?3)")?;
 	for asset in unit.assets {
 		statement.execute(params![id, asset.path, asset.output])?;
+	}
+
+	let mut statement = tx.prepare(
+		"INSERT INTO tasks (unit, position, heading, state, done, title, date, scheduled,
+		deadline, path, start, end) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+	)?;
+	for (position, task) in unit.tasks.iter().enumerate() {
+		statement.execute(params![
+			id,
+			position as i64,
+			task.heading,
+			task.state,
+			task.done,
+			task.title,
+			task.date,
+			task.scheduled,
+			task.deadline,
+			task.path,
+			task.range.start as i64,
+			task.range.end as i64,
+		])?;
 	}
 
 	let mut statement = tx.prepare(
@@ -1441,6 +1536,7 @@ mod tests {
 				output: "a.html",
 				output_range: None,
 				assets: &[],
+				tasks: &[],
 			})
 			.unwrap()
 			.0
@@ -1472,6 +1568,7 @@ mod tests {
 			output,
 			output_range,
 			assets,
+			tasks: &[],
 		};
 		index
 			.commit(&unit("a.nml", "guide/a.html", Some(18..30), &assets))
@@ -1612,6 +1709,7 @@ mod tests {
 				output: "a.html",
 				output_range: None,
 				assets: &[],
+				tasks: &[],
 			})
 			.unwrap();
 		assert!(index.exports(library).unwrap().is_empty());
@@ -1672,6 +1770,7 @@ mod tests {
 				output: "a.html",
 				output_range: None,
 				assets: &[],
+				tasks: &[],
 			})
 			.unwrap()
 			.1
@@ -1758,6 +1857,7 @@ mod tests {
 					output: "a.html",
 					output_range: None,
 					assets: &[],
+					tasks: &[],
 				})
 				.unwrap()
 				.0

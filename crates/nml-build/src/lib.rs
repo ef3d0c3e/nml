@@ -223,11 +223,9 @@ pub fn build_with(root: &Path, options: BuildOptions) -> Result<BuildReport, Bui
 	let index = Index::open(&root.join(&config.database))?;
 	let runs = run_cache(&root, &config);
 	let resolver: Arc<dyn Resolver> = Arc::new(
-		WorkspaceResolver::new(root.clone(), config.modules.clone()).with_runs(
-			config.runners.clone(),
-			runs.clone(),
-			options.run,
-		),
+		WorkspaceResolver::new(root.clone(), config.modules.clone())
+			.with_runs(config.runners.clone(), runs.clone(), options.run)
+			.with_task_states(config.agenda.clone()),
 	);
 	let scan = nml_workspace::scan(&root, &config, &index)?;
 	let mut builder = Builder {
@@ -880,6 +878,23 @@ impl Builder {
 		if file.role == Role::Page && variables(&old_exports) != variables(&unit.exports) {
 			self.pages_changed = true;
 		}
+		let tasks: Vec<nml_workspace::StoredTask> = (document.tasks().into_iter())
+			.filter_map(|task| {
+				let root = task.token.root();
+				let path = workspace_path(&self.root, root.source().location())?;
+				Some(nml_workspace::StoredTask {
+					heading: task.heading,
+					state: task.state,
+					done: task.done,
+					title: task.title,
+					date: task.date,
+					scheduled: task.scheduled,
+					deadline: task.deadline,
+					path,
+					range: root.range(),
+				})
+			})
+			.collect();
 		let (id, changes) = self.index.commit(&StoredUnit {
 			path: &file.path,
 			name,
@@ -897,6 +912,7 @@ impl Builder {
 			} else {
 				&[]
 			},
+			tasks: &tasks,
 		})?;
 		render_keys.extend(run_keys);
 		self.index.set_unit_renders(id, &render_keys)?;
@@ -1123,6 +1139,8 @@ pub struct WorkspaceResolver {
 	runners: std::collections::BTreeMap<String, nml_render::Runner>,
 	runs: Option<nml_workspace::RunCache>,
 	execute: bool,
+	/// The keywords of task states.
+	states: nml_document::TaskStates,
 	/// Contents by workspace path.
 	overlay: HashMap<String, String>,
 	/// When the resolver was created: the start of the build.
@@ -1137,6 +1155,7 @@ impl WorkspaceResolver {
 			runners: Default::default(),
 			runs: None,
 			execute: false,
+			states: nml_document::TaskStates::default(),
 			overlay: HashMap::new(),
 			time: std::time::SystemTime::now()
 				.duration_since(std::time::UNIX_EPOCH)
@@ -1155,6 +1174,12 @@ impl WorkspaceResolver {
 		self.runners = runners;
 		self.runs = Some(runs);
 		self.execute = execute;
+		self
+	}
+
+	/// The keywords of task states, from `[agenda]`.
+	pub fn with_task_states(mut self, states: nml_document::TaskStates) -> Self {
+		self.states = states;
 		self
 	}
 
@@ -1249,6 +1274,10 @@ impl Resolver for WorkspaceResolver {
 
 	fn time(&self) -> i64 {
 		self.time
+	}
+
+	fn task_states(&self) -> nml_document::TaskStates {
+		self.states.clone()
 	}
 
 	fn run(&self, from: &str, request: &RunRequest) -> Result<RunLookup, RunError> {

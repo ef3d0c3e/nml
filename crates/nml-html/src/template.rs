@@ -907,6 +907,43 @@ impl<'a> Output<'a> {
 				}
 				self.raw("</p>\n</li>\n");
 			}
+			ElementKind::TaskState { keyword, done } => {
+				let state = if *done { "done" } else { "todo" };
+				self.open_with(
+					document,
+					id,
+					"span",
+					Some(&format!("task-state {state}")),
+					"",
+				);
+				self.text(keyword);
+				self.raw("</span> ");
+			}
+			ElementKind::Timestamp {
+				kind,
+				date,
+				weekday,
+				time,
+			} => {
+				let datetime = match time {
+					Some(time) => format!("{date}T{time}"),
+					None => date.clone(),
+				};
+				let class = format!("timestamp {}", kind.name());
+				let extra = format!(" datetime=\"{datetime}\"");
+				self.open_with(document, id, "time", Some(&class), &extra);
+				let label = match kind {
+					nml_document::TimestampKind::Date => String::new(),
+					nml_document::TimestampKind::Deadline => "Deadline ".into(),
+					nml_document::TimestampKind::Scheduled => "Scheduled ".into(),
+				};
+				let time = time
+					.as_deref()
+					.map(|time| format!(" {time}"))
+					.unwrap_or_default();
+				self.text(&format!("{label}{date} {weekday}{time}"));
+				self.raw("</time>");
+			}
 			ElementKind::Progress { percent } => {
 				let (done, total) = document.progress(id).unwrap_or((0, 0));
 				let label = nml_document::progress_label(done, total, *percent);

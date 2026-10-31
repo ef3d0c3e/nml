@@ -99,7 +99,8 @@ impl Document {
 	}
 
 	/// The tasks a progress element counts, `(done, total)`: in a list item, its subitems with
-	/// a checkbox; in a heading, the items with a checkbox in its section, at any depth.
+	/// a checkbox; in a heading, the items with a checkbox and the headings with a state in
+	/// its section, at any depth.
 	/// Partly done items are not done. `None` outside of both.
 	pub fn progress(&self, id: ElementId) -> Option<(usize, usize)> {
 		let path = self.path(id)?;
@@ -111,20 +112,27 @@ impl Document {
 					ElementKind::ListItem { .. } | ElementKind::Heading { .. }
 				)
 			})?;
+		// Tasks: items with a checkbox, and headings with a state.
 		let count = |items: &mut dyn Iterator<Item = &Element>| {
-			let checkboxes: Vec<_> = items
-				.filter_map(|element| match element.kind {
+			let tasks: Vec<bool> = items
+				.filter_map(|element| match &element.kind {
 					ElementKind::ListItem {
 						checkbox: Some(checkbox),
 						..
-					} => Some(checkbox),
+					} => Some(*checkbox == Checkbox::Checked),
+					ElementKind::Heading { .. } => {
+						element
+							.children
+							.first()
+							.and_then(|first| match self.get(*first).kind {
+								ElementKind::TaskState { done, .. } => Some(done),
+								_ => None,
+							})
+					}
 					_ => None,
 				})
 				.collect();
-			let done = (checkboxes.iter())
-				.filter(|checkbox| **checkbox == Checkbox::Checked)
-				.count();
-			(done, checkboxes.len())
+			(tasks.iter().filter(|done| **done).count(), tasks.len())
 		};
 		match self.get(*owner).kind {
 			ElementKind::ListItem { .. } => {
@@ -150,6 +158,123 @@ impl Document {
 			}
 			_ => None,
 		}
+	}
+}
+
+/// A task of a document: a list item with a checkbox, or a heading with a state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Task {
+	pub heading: bool,
+	/// A heading's keyword (`TODO`, `DONE`, …), or an item's checkbox: `todo`, `partial` or
+	/// `done`.
+	pub state: String,
+	pub done: bool,
+	/// Its text, without markup and on one line.
+	pub title: String,
+	/// Its timestamps, `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`: the first of each kind.
+	pub date: Option<String>,
+	pub scheduled: Option<String>,
+	pub deadline: Option<String>,
+	/// The item or heading.
+	pub token: Token,
+}
+
+impl Document {
+	/// The tasks of the document, in order.
+	pub fn tasks(&self) -> Vec<Task> {
+		let mut tasks = Vec::new();
+		self.collect_tasks(self.root, &mut tasks);
+		tasks
+	}
+
+	fn collect_tasks(&self, id: ElementId, tasks: &mut Vec<Task>) {
+		let element = self.get(id);
+		let children = &element.children;
+		for (index, child) in children.iter().enumerate() {
+			let element = self.get(*child);
+			match &element.kind {
+				ElementKind::ListItem {
+					checkbox: Some(checkbox),
+					..
+				} => {
+					// Its own text and timestamps, not its subitems'.
+					let own: Vec<ElementId> = (element.children.iter().copied())
+						.filter(|id| !matches!(self.get(*id).kind, ElementKind::List(_)))
+						.collect();
+					let (state, done) = match checkbox {
+						Checkbox::Unchecked => ("todo", false),
+						Checkbox::Partial => ("partial", false),
+						Checkbox::Checked => ("done", true),
+					};
+					tasks.push(self.task(&own, state.into(), done, false, element.token.clone()));
+				}
+				ElementKind::Heading { .. } => {
+					if let Some(ElementKind::TaskState { keyword, done }) =
+						element.children.first().map(|first| &self.get(*first).kind)
+					{
+						let mut own = vec![*child];
+						// A paragraph of timestamps only, right after it, is its own.
+						if let Some(next) = children.get(index + 1)
+							&& matches!(self.get(*next).kind, ElementKind::Paragraph)
+							&& self.children(*next).all(|(_, part)| match &part.kind {
+								ElementKind::Timestamp { .. } => true,
+								ElementKind::Text(text) => text.trim().is_empty(),
+								_ => false,
+							}) {
+							own.push(*next);
+						}
+						let token = element.token.clone();
+						tasks.push(self.task(&own, keyword.clone(), *done, true, token));
+					}
+				}
+				_ => {}
+			}
+			self.collect_tasks(*child, tasks);
+		}
+	}
+
+	fn task(
+		&self,
+		own: &[ElementId],
+		state: String,
+		done: bool,
+		heading: bool,
+		token: Token,
+	) -> Task {
+		let mut title = String::new();
+		collect_text(&self.elements, own, &mut title);
+		let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
+		let mut task = Task {
+			heading,
+			state,
+			done,
+			title,
+			date: None,
+			scheduled: None,
+			deadline: None,
+			token,
+		};
+		for id in own {
+			for (_, element) in self.descendants(*id) {
+				let ElementKind::Timestamp {
+					kind, date, time, ..
+				} = &element.kind
+				else {
+					continue;
+				};
+				let when = match time {
+					Some(time) => format!("{date}T{time}"),
+					None => date.clone(),
+				};
+				let slot = match kind {
+					crate::TimestampKind::Date => &mut task.date,
+					crate::TimestampKind::Deadline => &mut task.deadline,
+					crate::TimestampKind::Scheduled => &mut task.scheduled,
+				};
+				slot.get_or_insert(when);
+			}
+		}
+		task
 	}
 }
 

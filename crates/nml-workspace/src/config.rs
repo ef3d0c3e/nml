@@ -33,6 +33,8 @@ pub struct Config {
 	pub html: HtmlConfig,
 	/// The external renderers: their programs and LaTeX environments.
 	pub render: nml_render::Renderers,
+	/// The keywords of task states: `[agenda]`.
+	pub agenda: nml_document::TaskStates,
 	/// The runners of `:run` blocks, by name: `[run.<name>]`.
 	pub runners: std::collections::BTreeMap<String, nml_render::Runner>,
 	pub modules: Vec<Module>,
@@ -80,6 +82,14 @@ struct RawTexEnvironment {
 	#[serde(default)]
 	block_prepend: String,
 	latex: Option<String>,
+}
+
+/// The `[agenda]` section.
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawAgenda {
+	todo: Option<Vec<String>>,
+	done: Option<Vec<String>>,
 }
 
 /// A `[run.<name>]` section.
@@ -130,6 +140,7 @@ struct Raw {
 	render: RawRender,
 	#[serde(default)]
 	run: std::collections::BTreeMap<String, RawRunner>,
+	agenda: Option<Spanned<RawAgenda>>,
 	#[serde(default, rename = "module")]
 	modules: Vec<RawModule>,
 }
@@ -270,10 +281,43 @@ impl Config {
 			runners.insert(name, runner);
 		}
 
+		let defaults = nml_document::TaskStates::default();
+		let agenda_span = raw.agenda.as_ref().map_or(0..0, Spanned::span);
+		let raw_agenda = raw.agenda.map(Spanned::into_inner).unwrap_or_default();
+		let agenda = nml_document::TaskStates {
+			todo: raw_agenda.todo.unwrap_or(defaults.todo),
+			done: raw_agenda.done.unwrap_or(defaults.done),
+		};
+		let keywords = agenda.todo.iter().chain(&agenda.done);
+		let mut seen = std::collections::HashSet::new();
+		for keyword in keywords {
+			let valid = !keyword.is_empty()
+				&& keyword
+					.chars()
+					.all(|c| c.is_alphanumeric() || c == '_' || c == '-');
+			let message = if !valid {
+				Some(format!(
+					"`{keyword}` is not a task state: it must be a single word"
+				))
+			} else if !seen.insert(keyword) {
+				Some(format!("the task state `{keyword}` is given twice"))
+			} else {
+				None
+			};
+			if let Some(message) = message {
+				let kind = DiagnosticKind::ConfigError { message };
+				diagnostics.push(Diagnostic::new(
+					kind,
+					DiagnosticMessage::new(token(agenda_span.clone())),
+				));
+			}
+		}
+
 		if !diagnostics.is_empty() {
 			return Err(diagnostics);
 		}
 		Ok(Self {
+			agenda,
 			pages: pages.into_iter().map(Spanned::into_inner).collect(),
 			exclude: raw.exclude.into_iter().map(Spanned::into_inner).collect(),
 			page_set,

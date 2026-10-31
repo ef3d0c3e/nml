@@ -36,6 +36,11 @@ pub trait Resolver: Send + Sync {
 	/// When the build started, in seconds since the Unix epoch: the same for every unit.
 	fn time(&self) -> i64;
 
+	/// The keywords of the states of task headings: `[agenda]` of the configuration.
+	fn task_states(&self) -> nml_document::TaskStates {
+		nml_document::TaskStates::default()
+	}
+
 	/// The run of a `:run` block written in the file at `from`: its key and inputs, and its
 	/// result if it ran. A build that runs blocks runs it if it has no completed result.
 	fn run(&self, from: &str, request: &RunRequest) -> Result<RunLookup, RunError> {

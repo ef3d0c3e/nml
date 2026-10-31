@@ -254,6 +254,7 @@ mod tests {
 					output: "a.html",
 					output_range: None,
 					assets: &[],
+					tasks: &[],
 				})
 				.unwrap();
 		}

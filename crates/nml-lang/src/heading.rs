@@ -6,8 +6,10 @@ use nml_document::ElementKind;
 use nml_document::Export;
 use nml_document::SymbolKind;
 use nml_grammar::Atom;
+use nml_grammar::Node;
 use nml_grammar::Rule;
 use nml_grammar::RuleError;
+use nml_source::Token;
 
 use crate::Language;
 use crate::attributes;
@@ -56,19 +58,59 @@ pub(crate) fn add(language: &mut Language) -> Result<(), RuleError> {
 		lower
 			.builder
 			.open_with(heading, m.token.clone(), attributes);
-		lower.capture(m, "title");
+		let title = match m.capture("title").map(|capture| &capture.value) {
+			Some(nml_grammar::Value::Nodes(nodes)) => nodes.clone(),
+			_ => Vec::new(),
+		};
+		// A task: the title starts with a state's keyword, which is shown apart.
+		let title = task_state(lower, title);
+		lower.nodes(&title);
 		let element = lower.builder.close();
 
 		if let Some(reference) = reference {
-			let title = match m.capture("title").map(|capture| &capture.value) {
-				Some(nml_grammar::Value::Nodes(nodes)) => plain_text(nodes),
-				_ => String::new(),
-			};
+			let title = plain_text(&title);
 			let export = heading_export(reference.content(), element, title);
 			lower.export(export, reference);
 		}
 	})?;
 	Ok(())
+}
+
+/// A title without the keyword of its task state, if it starts with one: the keyword is
+/// written as a [`TaskState`](ElementKind::TaskState).
+fn task_state(lower: &mut crate::Lower<'_, '_>, mut title: Vec<Node>) -> Vec<Node> {
+	let Some(Node::Text(first)) = title.first() else {
+		return title;
+	};
+	let content = first.content();
+	let keyword = content.split([' ', '\t']).next().unwrap_or_default();
+	let Some(done) = lower.resolver.task_states().get(keyword) else {
+		return title;
+	};
+	let rest = &content[keyword.len()..];
+	// The keyword alone, or before the rest of the title.
+	if !(rest.is_empty() && title.len() == 1 || rest.starts_with([' ', '\t'])) {
+		return title;
+	}
+	let start = first.start();
+	let keyword_token = Token::new(first.source().clone(), start..start + keyword.len());
+	let blanks = rest.len() - rest.trim_start().len();
+	let rest_token = Token::new(
+		first.source().clone(),
+		start + keyword.len() + blanks..first.end(),
+	);
+	let kind = ElementKind::TaskState {
+		keyword: keyword.into(),
+		done,
+	};
+	lower.builder.leaf(kind, keyword_token);
+	match rest_token.content().is_empty() {
+		true => {
+			title.remove(0);
+		}
+		false => title[0] = Node::Text(rest_token),
+	}
+	title
 }
 
 /// The symbol of a named heading.

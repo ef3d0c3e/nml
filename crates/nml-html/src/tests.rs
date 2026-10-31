@@ -665,3 +665,20 @@ fn footnotes() {
 		"{html}"
 	);
 }
+
+#[test]
+fn tasks_and_timestamps() {
+	let html = body("# DONE Ship <2026-11-20 Fri 14:00>\n\nSCHEDULED <2026-11-15>\n");
+	assert!(
+		html.contains(
+			"<span class=\"task-state done\">DONE</span> Ship <time class=\"timestamp date\" datetime=\"2026-11-20T14:00\">2026-11-20 Fri 14:00</time>"
+		),
+		"{html}"
+	);
+	assert!(
+		html.contains(
+			"<p><time class=\"timestamp scheduled\" datetime=\"2026-11-15\">Scheduled 2026-11-15 Sun</time></p>"
+		),
+		"{html}"
+	);
+}

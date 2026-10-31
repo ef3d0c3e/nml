@@ -755,6 +755,7 @@ impl Server {
 		WorkspaceResolver::new(root, config.modules.clone())
 			.with_overlay(overlay)
 			.with_runs(config.runners.clone(), runs, false)
+			.with_task_states(config.agenda.clone())
 	}
 
 	/// Compiles an open document from its buffer, with the other open documents as an
