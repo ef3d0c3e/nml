@@ -1626,3 +1626,25 @@ fn workspace_path(root: &Path, url: &Url) -> Option<String> {
 
 #[cfg(test)]
 mod tests;
+
+/// The tasks of the workspace, after updating the index without writing pages or running
+/// blocks, and the diagnostics of that build. A task of an included file is listed once.
+pub fn agenda(
+	root: &Path,
+) -> Result<(Vec<nml_workspace::TaskRecord>, Vec<Diagnostic>), BuildError> {
+	let report = build_with(
+		root,
+		BuildOptions {
+			write: false,
+			run: false,
+		},
+	)?;
+	let root = fs::canonicalize(root).map_err(|e| BuildError::Io(root.into(), e))?;
+	let config = config(&root)?;
+	let index = Index::open(&root.join(&config.database))?;
+	let mut seen = std::collections::HashSet::new();
+	let tasks = (index.tasks()?.into_iter())
+		.filter(|record| seen.insert((record.task.path.clone(), record.task.range.start)))
+		.collect();
+	Ok((tasks, report.diagnostics))
+}

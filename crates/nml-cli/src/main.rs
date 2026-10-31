@@ -9,6 +9,7 @@ use clap::Subcommand;
 use nml_diagnostics::Diagnostic;
 use nml_diagnostics::Localizer;
 
+mod agenda;
 mod serve;
 
 #[derive(Debug, Parser)]
@@ -38,6 +39,18 @@ enum Command {
 		output: Option<PathBuf>,
 	},
 	/// Preview a workspace in the browser, as its files change.
+	/// The tasks of the workspace by date: checkbox items and headings with a state.
+	Agenda {
+		/// The workspace root, which holds `nml.toml`.
+		#[arg(default_value = ".")]
+		root: PathBuf,
+		/// List done tasks too.
+		#[arg(long)]
+		all: bool,
+		/// Only the tasks due within this many days, overdue ones included.
+		#[arg(long)]
+		days: Option<i64>,
+	},
 	/// Write the code blocks that have `tangle=path` to their files.
 	Tangle {
 		/// The workspace root, which holds `nml.toml`.
@@ -63,6 +76,7 @@ fn main() -> ExitCode {
 		Command::Build { root, output } => build(root, output),
 		Command::Serve { root, port, open } => serve::serve(&root, port, open),
 		Command::Tangle { root } => tangle(root),
+		Command::Agenda { root, all, days } => agenda::agenda(&root, all, days),
 		Command::Lsp => match nml_lsp::run_stdio() {
 			Ok(()) => ExitCode::SUCCESS,
 			Err(error) => {
