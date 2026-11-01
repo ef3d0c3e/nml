@@ -1,4 +1,3 @@
-
 # NML
 
 [![CI](https://github.com/ef3d0c3e/nml/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ef3d0c3e/nml/actions/workflows/ci.yml?query=branch%3Amaster)
