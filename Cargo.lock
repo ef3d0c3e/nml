@@ -706,7 +706,7 @@ dependencies = [
 
 [[package]]
 name = "nml-build"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nml-diagnostics",
  "nml-document",
@@ -721,7 +721,7 @@ dependencies = [
 
 [[package]]
 name = "nml-cli"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "clap",
  "nml-build",
@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "nml-diagnostics"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "ariadne",
  "fluent-bundle",
@@ -746,7 +746,7 @@ dependencies = [
 
 [[package]]
 name = "nml-diagnostics-macros"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -755,14 +755,14 @@ dependencies = [
 
 [[package]]
 name = "nml-document"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nml-source",
 ]
 
 [[package]]
 name = "nml-grammar"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nml-diagnostics",
  "nml-source",
@@ -770,7 +770,7 @@ dependencies = [
 
 [[package]]
 name = "nml-html"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nml-diagnostics",
  "nml-document",
@@ -781,7 +781,7 @@ dependencies = [
 
 [[package]]
 name = "nml-lang"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "blake3",
  "nml-diagnostics",
@@ -793,7 +793,7 @@ dependencies = [
 
 [[package]]
 name = "nml-lsp"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "crossbeam-channel",
  "lsp-server",
@@ -816,7 +816,7 @@ dependencies = [
 
 [[package]]
 name = "nml-lua"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "blake3",
  "mlua",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "nml-lua-macros"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -840,7 +840,7 @@ dependencies = [
 
 [[package]]
 name = "nml-preview"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "crossbeam-channel",
  "nml-build",
@@ -848,21 +848,21 @@ dependencies = [
 
 [[package]]
 name = "nml-render"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "syntect",
 ]
 
 [[package]]
 name = "nml-source"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "url",
 ]
 
 [[package]]
 name = "nml-workspace"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "blake3",
  "globset",

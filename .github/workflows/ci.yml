@@ -158,5 +158,12 @@ jobs:
         run: |
           tar -czf "nml-$GITHUB_REF_NAME-docs.tar.gz" -C docs .
           sha256sum nml-* > SHA256SUMS
-          gh release create "$GITHUB_REF_NAME" nml-* SHA256SUMS \
-            --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+          # A release written by hand for the tag keeps its title and notes: the files are
+          # added to it.
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" nml-* SHA256SUMS \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" nml-* SHA256SUMS \
+              --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+          fi
