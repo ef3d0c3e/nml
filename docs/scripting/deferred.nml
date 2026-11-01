@@ -50,6 +50,17 @@ The count follows pages as they are added and removed, without parsing this page
 | `current` | Whether it is the page being linked. |
 | `variables` | The variables it [[variables#export|exports]], as written. |
 
+`nml.tasks()` lists the [[tasks#|tasks]] of the workspace's pages; the page is linked again when they change:
+
+| `nml.tasks()` field | |
+|:--------------------|:-|
+| `title` | Its text. |
+| `state` | A heading's keyword (`TODO`, …), or an item's checkbox: `todo`, `partial`, `done`. |
+| `done` | Whether it is done. |
+| `heading` | Whether it is a heading, rather than a list item. |
+| `date`, `scheduled`, `deadline` | Its timestamps: `YYYY-MM-DD`, or `YYYY-MM-DDTHH:MM` with a time; `nil` without one. |
+| `page` | Its page, as `nml.pages()` shows it. |
+
 ## What they can return {#limits}
 
 Content made after parsing cannot hold what needs parsing: references, numbered figures and tables, anchors, rendered math and graphs, and `nml.parse`. Text, links, styles, lists and the other elements are fine.

@@ -59,6 +59,21 @@ See [[cell|figure {number}]], or
 [[cell|the one titled “{title}”]].
 ```
 
+## Footnotes {#footnotes}
+
+`[^name]` refers to a note, written anywhere in the document as `[^name]:` at the start of a line. Notes are numbered in the order they are referred to, and shown at the end of the page, each with a link back to the text:
+
+:example
+```
+NML began as a regex parser[^regex], now
+a grammar that scripts extend[^bnf].
+
+[^regex]: The original, in Rust.
+[^bnf]: See *Defining syntax*.
+```
+
+On this page, the notes are at the end. Lines indented under a note's text continue it. A reference to a note that does not exist is an error, and a note that nothing refers to is a warning. The editor shows a note when its reference is hovered, and completes names after `[^`.
+
 ## Anchors {#anchor}
 
 `:anchor` marks a place to refer to, with an optional title, where there is nothing else to name:

@@ -110,6 +110,47 @@ import csv, os
 ![Sales by quarter](run:sales)
 ````
 
+## Data from the document {#vars}
+
+`vars` gives the code tables and variables of the document, as files of the directory `$NML_IN`: a table named for scripts with [[tables#scripts|`:table[lua=name]`]] is `name.csv`, and a variable `name.txt`, its value as written. When they change, the block runs again.
+
+:example
+````
+:set unit = kg
+:table[lua=weights]
+| apple | 2 |
+| pear  | 3 |
+
+:run[show=output, vars=weights unit]
+```python
+import csv, os
+d = os.environ["NML_IN"]
+rows = csv.reader(open(f"{d}/weights.csv"))
+total = sum(int(r[1]) for r in rows)
+unit = open(f"{d}/unit.txt").read()
+print(total, unit)
+```
+````
+
+## Sessions {#sessions}
+
+Blocks are independent by default. Blocks with the same `session` and runner share their state, as in a notebook: each runs after the code of the session's earlier blocks, and sees what they defined.
+
+:example
+````
+:run[session=demo]
+```python
+greeting = "Hello"
+```
+
+:run[session=demo, show=output]
+```python
+print(greeting, "from a session")
+```
+````
+
+A block shows what its own code printed and wrote: the output and files of the earlier blocks are left out. Changing a block runs it and the blocks after it again; a block whose earlier blocks failed does not run. In the editor, running a block runs the earlier blocks of its session first, if they have not run.
+
 ## When blocks run {#when}
 
 A run's result is kept in `.nml/runs/`, by what it depends on: its runner's settings, its code, and its inputs' content. `nml build` and `nml serve` run the blocks that have no result yet: an unchanged block does not run again, and one whose code or inputs changed does. Files the code reads without naming them in `inputs` do not make it run again.

@@ -77,6 +77,15 @@ Each `[[module]]` section is a root of [[documents#import|modules]]:
 | `name` | The first part of the modules' names: `name.a.b`. A workspace's own `std` replaces the standard library. |
 | `root` | The directory, relative to the workspace's root: `name.a.b` is `<root>/a/b.nml`. |
 
+## Agenda {#agenda}
+
+The `[agenda]` section sets the states of [[tasks#states|task headings]]: the keywords a heading's title can start with.
+
+| Key | Default | |
+|:----|:--------|:-|
+| `todo` | `["TODO"]` | The states of tasks to do. |
+| `done` | `["DONE"]` | The states of tasks done. |
+
 ## When it changes
 
 A change of the configuration builds every page again: it can change any of them.

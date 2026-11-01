@@ -26,6 +26,18 @@ Here is this page's:
 
 Headings with the class `unlisted` are left out, and those with `unnumbered` are listed without a number. The list is made once the whole document is parsed, so it can come before the headings.
 
+## std.agenda {#agenda}
+
+`:agenda` lists the open [[tasks#|tasks]] of the workspace's pages by date, each with its state, its deadline or schedule, and a link to its page. `:agenda all` lists those done too. Like the menu, it is made when the page is linked.
+
+```
+:import std.agenda
+
+:agenda
+```
+
+It is a `<div class="agenda">` list of days, each a list of tasks.
+
 ## std.nav {#nav}
 
 `:nav` lists the workspace's pages, grouped by category. It is made when the page is linked, so it follows pages as they are added, removed or renamed. This documentation's sidebar is a `:nav`.

@@ -50,6 +50,9 @@ Every kind takes `id` and `classes`. `ref` is a name for [[references#|reference
 | `tex` | `source`, `env` |
 | `graph` | `source`, `layout`, `width` |
 | `typst` | `source`, `block` |
+| `progress` | `percent`: how many tasks of its item or heading are done |
+| `task_state` | `keyword`, `done`: a heading's state, before its title |
+| `timestamp` | `date` (`YYYY-MM-DD`), `time` (`HH:MM`), `kind` (`date`, `deadline`, `scheduled`) |
 
 The [[text#|Writing]] pages show each kind beside the syntax it stands for.
 

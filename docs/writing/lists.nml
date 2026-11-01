@@ -41,7 +41,7 @@ An entry continues on the next lines, indented as far as its text:
  * The next one.
 ```
 
-## Checkboxes
+## Checkboxes {#checkboxes}
 
 A checkbox comes after the markers: `[ ]` unchecked, `[-]` partly, `[x]` checked.
 
@@ -51,6 +51,8 @@ A checkbox comes after the markers: `[ ]` unchecked, `[-]` partly, `[x]` checked
  * [-] Review it
  * [ ] Publish
 ```
+
+Items with a checkbox are tasks: see [[tasks#|tasks and agenda]], where `[/]` counts them.
 
 ## Options
 

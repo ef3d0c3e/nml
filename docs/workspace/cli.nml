@@ -34,6 +34,22 @@ nml serve [root] [--port 8080] [--open]
 
 Serves the workspace's pages at `http://127.0.0.1:<port>`, a free port by default, and opens the browser with `--open`. It watches the workspace: on each saved change, it builds again — without writing the output — and the pages in the browser follow. Errors are printed as they come. It stops with `Ctrl-C`.
 
+## nml tangle {#tangle}
+
+```sh
+nml tangle [root]
+```
+
+Writes the code blocks that have `tangle=path` to their files: see [[code#tangle|tangling]]. A file whose content is already the code is not written again.
+
+## nml agenda {#agenda}
+
+```sh
+nml agenda [root] [--all] [--days N]
+```
+
+Prints the [[tasks#agenda|agenda]] of the workspace: its open tasks, grouped as overdue, today, the next 7 days, later and undated. `--all` adds the tasks done, and `--days N` keeps those due within `N` days, overdue ones included. It updates the workspace's index first, without writing pages.
+
 ## nml lsp {#lsp}
 
 ```sh

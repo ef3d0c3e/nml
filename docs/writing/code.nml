@@ -65,6 +65,40 @@ fn main() {}
 [[entry]] starts the program.
 ````
 
+## Listings from files {#listing}
+
+`:listing` shows code from a file of the workspace, kept in sync with it: the page is built again when the file changes. `lines` takes some of its lines, and `region` those between a line holding `nml:begin <name>` and one holding `nml:end <name>`, in a comment of any language:
+
+:example
+```
+:listing[file=example.rs, region=greet]
+```
+
+The file is relative to the document, or to the workspace root with a leading `/`. Lines are numbered from their number in the file, and the language is told by the file's extension; `language`, `numbers` and `max_lines` are as a code block's. `lines` takes `10-20`, `10-` or `-20`. A name and a title make it a numbered listing:
+
+```
+:listing[file=src/main.rs, lines=1-20] #main The entry point
+```
+
+## Tangling {#tangle}
+
+`tangle=path` writes a code block's code to a file when [[cli#tangle|`nml tangle`]] runs: the blocks of a file are joined in the order they are written, with a blank line between them. This is literate programming: the document is the source, and the code files are made from it.
+
+````
+```rust[tangle=src/main.rs]
+fn main() {
+```
+
+The program greets:
+
+```rust[tangle=src/main.rs]
+    println!("Hello");
+}
+```
+````
+
+The path is relative to the document. A file is tangled from one document, its included files included. Builds never write these files; the editor's `nml.tangle` command does, as `nml tangle`.
+
 ## In Lua
 
 [[elements#element|`nml.element`]] builds a `code_block`: `code` is the code, `language` its language, and its children are its title. The options are fields, and `ref` names a listing, as `#name` does:

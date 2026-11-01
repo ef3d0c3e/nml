@@ -17,6 +17,9 @@
  * **Go to definition** and **references**: of headings, figures and anchors, of variables, of imported modules and of the syntax they define.
  * **Semantic highlighting**, inlay hints (the numbers of references) and code actions.
  * **Lua**: in `:lua` code, completion, hover and diagnostics come from [LuaLS](https://github.com/LuaLS/lua-language-server), with the NML API declared, when it is installed. NML finds it on the `PATH`, or where `NML_LUALS` says.
+ * **Outline**: folding of sections, blocks and lists; promoting, demoting and moving a heading's section.
+ * **Formatting** aligns [[tables#|tables]], and only them.
+ * **Tasks**: the [[tasks#agenda|agenda]] of the workspace, toggling a task, and the progress of `[/]` as you type. Hovering a [[references#footnotes|footnote]] shows its note.
  * **Code lenses** on [[runners#editor|`:run` blocks]]: whether each completed, failed or has not run, and the commands that run them.
  * The **live preview** of the page in the browser.
 
@@ -31,7 +34,7 @@ The [nml-nvim](https://github.com/ef3d0c3e/nml-nvim) plugin registers the server
 }
 ```
 
-Concealing needs `conceallevel` set to 2; the line under the cursor is always shown as written. The plugin's README lists its options.
+It adds `:NmlAgenda`, `:NmlSymbols`, `:NmlPromote`, `:NmlDemote`, `:NmlMoveUp`, `:NmlMoveDown`, `:NmlAlignTable`, `:NmlRun`, `:NmlRunOutput` and `:NmlTangle`, and folds with the server's ranges. Concealing needs `conceallevel` set to 2; the line under the cursor is always shown as written. The plugin's README lists its options.
 
 Without the plugin, the server needs only the filetype and a configuration:
 

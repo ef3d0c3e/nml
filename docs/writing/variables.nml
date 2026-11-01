@@ -4,7 +4,7 @@
 :set product = **NML** :: markup, parsed where it is used
 :path logo = /media/diagram.svg
 :export nav.category = Writing
-:export nav.order = 30
+:export nav.order = 31
 :include /template/sidebar
 
 # Variables

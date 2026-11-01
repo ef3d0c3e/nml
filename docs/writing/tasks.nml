@@ -1,0 +1,83 @@
+:import std.nav
+:import std.agenda
+:import docs.page
+:export nav.category = Writing
+:export nav.order = 30
+:export nav.title = Tasks and agenda
+:include /template/sidebar
+
+# Tasks and agenda
+
+A document can hold tasks: list items with a [[lists#checkboxes|checkbox]], and headings with a state. They can have dates, count their subtasks, and the agenda lists those of the whole workspace by date, in the editor, on the command line, and on a page.
+
+## Task headings {#states}
+
+A heading whose title starts with a state's keyword is a task. `TODO` and `DONE` are the states by default:
+
+:example
+```
+### TODO Write the release notes
+### DONE Tag the build
+```
+
+The keyword is shown apart from the title, which references and the table of contents show without it. The [[configuration#agenda|configuration]] sets other states: those of tasks to do, and of tasks done.
+
+```
+[agenda]
+todo = ["TODO", "NEXT", "WAITING"]
+done = ["DONE", "CANCELLED"]
+```
+
+## Timestamps {#timestamps}
+
+`<2026-11-20>` is a date; a weekday and a time can follow: `<2026-11-20 Fri 14:00>`. `DEADLINE <…>` is when a task is due, and `SCHEDULED <…>` when to start it:
+
+:example
+```
+ * [ ] Draft the notes SCHEDULED <2026-11-16>
+ * [ ] Send them DEADLINE <2026-11-20 Fri 18:00>
+ * [ ] Meeting <2026-11-18 Wed 10:30>
+```
+
+A timestamp belongs to the task whose text holds it; a heading's can also be on the line after it, alone. An invalid date is an error, and a weekday that is not the date's is a warning, which the editor fixes. Text such as `a < b` is no timestamp.
+
+## Progress {#progress}
+
+`[/]` and `[%]` show how many of the tasks below are done, as `[2/3]` or `[66%]`. In a list item they count its subitems with a checkbox; in a heading, the tasks of its section: items with a checkbox, and headings with a state.
+
+:example
+```
+ * Release [/]
+ ** [x] Notes
+ ** [x] Tag
+ ** [-] Announce
+```
+
+A partly done item, `[-]`, is not done. The editor shows the count as you type, and toggles the checkbox under the cursor.
+
+## The agenda {#agenda}
+
+The agenda lists the open tasks of the workspace, earliest first; a task's date is the earliest of its deadline, its scheduled date and its date, and tasks without one come last.
+
+On a page, `:agenda` from [[std#agenda|std.agenda]] shows it, made when the page is linked, so it follows the tasks of every page. This one lists the tasks of this documentation, examples included:
+
+```
+:import std.agenda
+
+:agenda
+```
+
+:agenda
+
+On the command line, [[cli#agenda|`nml agenda`]] prints it, grouped as overdue, today, the next 7 days, later and undated:
+
+```
+$ nml agenda
+Overdue (1)
+  2026-10-29                 [ ]   Write the changelog  (plan.nml)
+
+Next 7 days (1)
+  2026-11-03       deadline  TODO  Release  (plan.nml)
+```
+
+In the [[editors#|editor]], `:NmlAgenda` shows it the same way, and goes to a task or toggles it: a checkbox, or a heading from its state to the first done state, and back.
