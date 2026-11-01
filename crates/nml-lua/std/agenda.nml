@@ -82,7 +82,7 @@ function list(all)
 			end
 			table.insert(tasks, nml.element("list_item", { checkbox = checkbox, content }))
 		end
-		local label = day == "" and "Undated" or nml.element("timestamp", { date = day })
+		local label = day == "" and nml.element("bold", { "Undated" }) or nml.element("timestamp", { date = day })
 		table.insert(items, nml.element("list_item", {
 			classes = { "agenda-day" },
 			label,

@@ -442,8 +442,11 @@ figure.code-block {
 }
 
 /* `:agenda` of `std.agenda`: days, and their tasks. */
-.agenda > ul {
+.agenda ul {
 	list-style: none;
+}
+
+.agenda > ul {
 	padding-left: 0;
 }
 
