@@ -63,6 +63,30 @@ jobs:
         with:
           name: docs
           path: docs/public
+      - uses: actions/upload-pages-artifact@v5
+        if: github.ref == 'refs/heads/master'
+        with:
+          path: docs/public
+
+  # On master, once everything above passed: the documentation, on GitHub Pages. The Pages
+  # source in the repository's settings must be "GitHub Actions".
+  pages:
+    name: Publish the documentation
+    if: github.ref == 'refs/heads/master'
+    needs: [check, test, docs]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5
 
   # On a version tag, once everything above passed: the executables and the documentation, as
   # a GitHub release.
